@@ -1,0 +1,64 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type { Env } from './types';
+import { authMiddleware } from './utils/auth';
+import { log } from './utils/errors';
+import { leadsRouter } from './routes/leads';
+import { leadCallsRouter, callsRouter } from './routes/calls';
+import { prospectRouter } from './routes/prospect';
+import { enrichRouter, leadEnrichRouter } from './routes/enrich';
+import { projectsRouter } from './routes/projects';
+import { briefsRouter } from './routes/briefs';
+import { webhookRouter } from './routes/webhook';
+import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.use('*', cors({
+  origin: '*',
+  allowHeaders: ['Content-Type', 'X-API-Key'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+}));
+
+app.get('/', c => c.json({ name: 'agency-os-v2-api', version: '2.0.0', status: 'ok' }));
+app.get('/health', c => c.json({ status: 'ok', ts: new Date().toISOString() }));
+
+app.use('/api/*', authMiddleware());
+
+// Sub-routes that share /api/leads must mount before the bare leads router
+app.route('/api/leads', leadCallsRouter);
+app.route('/api/leads', leadEnrichRouter);
+app.route('/api/leads', enrichRouter); // exposes /enrich-all under /api/leads/enrich-all
+app.route('/api/leads', leadsRouter);
+app.route('/api/calls', callsRouter);
+app.route('/api/prospect', prospectRouter);
+app.route('/api/projects', projectsRouter);
+app.route('/api/briefs', briefsRouter);
+app.route('/api/webhook', webhookRouter);
+app.route('/api/reports', reportsRouter);
+
+app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
+app.onError((err, c) => {
+  log('error', 'app', 'Unhandled error', err.message);
+  return c.json({ error: 'Internal server error', code: 'SERVER_ERROR' }, 500);
+});
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    log('info', 'cron', `Scheduled trigger: ${event.cron}`);
+    if (event.cron === '0 6 * * *') {
+      // Daily 6am — refresh PageSpeed for live Tier 3 sites
+      ctx.waitUntil(refreshTier3PageSpeed(env));
+    } else if (event.cron === '0 7 1 * *') {
+      // Monthly 1st 7am — finalize prior-month snapshots + exec summaries
+      ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Monthly snapshot run`, { results: out })));
+    } else if (event.cron === '0 8 * * 1') {
+      // Weekly Monday 8am — refresh GSC for current period (intermediate progress check)
+      ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Weekly GSC refresh run`, { results: out })));
+    }
+  },
+  async queue(_batch: MessageBatch<unknown>, _env: Env) {
+    log('info', 'queue', 'Queue consumer fired (no handlers wired yet)');
+  },
+};

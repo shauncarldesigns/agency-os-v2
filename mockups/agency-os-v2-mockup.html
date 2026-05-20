@@ -1,0 +1,2054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agency OS v2 — Shaun Carl Designs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0a0a0a;--surface:#141414;--surface2:#1c1c1c;--surface3:#242424;
+  --border:#2a2a2a;--border2:#333;
+  --accent:#ff6b2b;--accent2:#ff9a5c;--accent-dim:rgba(255,107,43,0.12);
+  --text:#f0ede8;--text2:#a09b94;--text3:#5a5550;
+  --green:#3ecf8e;--green-bg:rgba(62,207,142,0.1);
+  --yellow:#f5c842;--yellow-bg:rgba(245,200,66,0.1);
+  --red:#f87171;--red-bg:rgba(248,113,113,0.1);
+  --blue:#60a5fa;--blue-bg:rgba(96,165,250,0.1);
+  --purple:#a78bfa;--purple-bg:rgba(167,139,250,0.1);
+  /* Tier colors */
+  --tier1:#3ecf8e;--tier1-bg:rgba(62,207,142,0.12);
+  --tier2:#f5c842;--tier2-bg:rgba(245,200,66,0.12);
+  --tier3:#a78bfa;--tier3-bg:rgba(167,139,250,0.12);
+  --r:6px;--rl:10px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* HEADER */
+.header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--accent);display:flex;align-items:center;gap:10px;}
+.logo-badge{font-family:'DM Sans',sans-serif;font-size:0.58rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text3);border:1px solid var(--border2);padding:2px 7px;border-radius:20px;}
+.header-right{display:flex;align-items:center;gap:14px;}
+.cowork-status{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:0.65rem;color:var(--text2);}
+.cowork-dot{width:6px;height:6px;border-radius:50%;background:var(--green);position:relative;}
+.cowork-dot::after{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--green);opacity:0.3;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:0.3;}50%{transform:scale(1.8);opacity:0;}}
+.hstat{font-size:0.7rem;color:var(--text3);}
+.hstat strong{color:var(--accent);}
+.hsep{color:var(--border2);}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:var(--accent);cursor:pointer;}
+
+/* NAV */
+.nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:2px;}
+.ntab{padding:13px 18px;cursor:pointer;font-size:0.76rem;font-weight:500;letter-spacing:0.3px;color:var(--text3);border-bottom:2px solid transparent;transition:all 0.15s;display:flex;align-items:center;gap:7px;user-select:none;}
+.ntab:hover{color:var(--text2);}
+.ntab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.ntab .nc{background:var(--accent-dim);color:var(--accent);font-size:0.6rem;font-weight:700;padding:1px 6px;border-radius:10px;}
+.ntab.active .nc{background:var(--accent);color:#fff;}
+
+/* MAIN */
+.main{padding:22px;max-width:1440px;margin:0 auto;}
+.panel{display:none;}.panel.active{display:block;}
+.sec-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px;}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:2px;color:var(--text);}
+.sec-sub{font-size:0.72rem;color:var(--text3);margin-top:2px;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-size:0.75rem;font-weight:500;cursor:pointer;transition:all 0.14s;border:none;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2);}.btn-ghost:hover{background:var(--surface2);color:var(--text);}
+.btn-tier1{background:var(--tier1-bg);color:var(--tier1);border:1px solid rgba(62,207,142,0.25);}
+.btn-tier2{background:var(--tier2-bg);color:var(--tier2);border:1px solid rgba(245,200,66,0.25);}
+.btn-tier3{background:var(--tier3-bg);color:var(--tier3);border:1px solid rgba(167,139,250,0.25);}
+.btn-sm{padding:5px 11px;font-size:0.7rem;}
+.btn-xs{padding:3px 8px;font-size:0.65rem;}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:0.63rem;font-weight:600;white-space:nowrap;}
+.badge-green{background:var(--green-bg);color:var(--green);}
+.badge-yellow{background:var(--yellow-bg);color:var(--yellow);}
+.badge-red{background:var(--red-bg);color:var(--red);}
+.badge-blue{background:var(--blue-bg);color:var(--blue);}
+.badge-gray{background:rgba(90,85,80,0.2);color:var(--text3);}
+.badge-tier1{background:var(--tier1-bg);color:var(--tier1);}
+.badge-tier2{background:var(--tier2-bg);color:var(--tier2);}
+.badge-tier3{background:var(--tier3-bg);color:var(--tier3);}
+
+/* FORMS */
+.fg{display:flex;flex-direction:column;gap:5px;}
+.flabel{font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.finput{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.8rem;outline:none;transition:border-color 0.14s;width:100%;}
+.finput:focus{border-color:var(--accent);}
+
+/* TABLE */
+.twrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead{background:var(--surface2);}
+th{padding:9px 13px;text-align:left;font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:10px 13px;font-size:0.78rem;color:var(--text2);border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surface2);}
+.td-co{color:var(--text);font-weight:500;}
+.td-mono{font-family:'DM Mono',monospace;font-size:0.7rem;}
+.stars{color:var(--yellow);font-size:10px;letter-spacing:1px;}
+
+/* STAT CARDS */
+.stats-row{display:grid;gap:10px;margin-bottom:18px;}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;position:relative;overflow:hidden;}
+.scard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:0;transition:opacity 0.18s;}
+.scard:hover::before{opacity:1;}
+.snum{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;line-height:1;color:var(--accent);margin-bottom:3px;}
+.slabel{font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.sdelta{font-size:0.65rem;color:var(--green);margin-top:3px;}
+
+/* TIER CARDS — for stats */
+.tier-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;border-left:3px solid;}
+.tier-stat.t1{border-left-color:var(--tier1);}
+.tier-stat.t2{border-left-color:var(--tier2);}
+.tier-stat.t3{border-left-color:var(--tier3);}
+.tier-num{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;line-height:1;}
+.tier-num.t1{color:var(--tier1);}
+.tier-num.t2{color:var(--tier2);}
+.tier-num.t3{color:var(--tier3);}
+
+/* FILTER BAR */
+.fbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.swrap{position:relative;flex:1;min-width:180px;}
+.swrap input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px 8px 33px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.78rem;outline:none;}
+.sicon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);}
+select.fsel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:0.76rem;outline:none;cursor:pointer;}
+
+/* SCORE */
+.score-bar{display:inline-flex;align-items:center;gap:6px;}
+.score-pip{width:6px;height:14px;border-radius:1px;background:var(--surface3);}
+.score-pip.fill-green{background:var(--green);}
+.score-pip.fill-yellow{background:var(--yellow);}
+.score-pip.fill-red{background:var(--red);}
+.score-num{font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:1px;}
+
+/* PROSPECT — search card */
+.search-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:16px;}
+.search-card h3{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--text);margin-bottom:14px;}
+.search-form{display:grid;grid-template-columns:1fr 1fr 160px auto;gap:10px;align-items:end;}
+
+/* TIER PILL */
+.tier-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:0.62rem;font-weight:700;letter-spacing:0.5px;}
+.tier-pill.t1{background:var(--tier1-bg);color:var(--tier1);border:1px solid rgba(62,207,142,0.25);}
+.tier-pill.t2{background:var(--tier2-bg);color:var(--tier2);border:1px solid rgba(245,200,66,0.25);}
+.tier-pill.t3{background:var(--tier3-bg);color:var(--tier3);border:1px solid rgba(167,139,250,0.25);}
+.tier-icon{width:7px;height:7px;border-radius:50%;background:currentColor;}
+
+/* EXPANDABLE PROSPECT ROW */
+.expand-detail{background:var(--surface2);padding:12px 16px;font-size:0.72rem;color:var(--text2);border-top:1px solid var(--border);}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.detail-section{}
+.detail-label{font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;}
+.detail-value{font-size:0.72rem;color:var(--text2);line-height:1.6;}
+.detail-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.detail-tag{background:var(--surface3);color:var(--text2);font-size:0.62rem;padding:2px 8px;border-radius:10px;}
+.detail-tag.review-found{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(255,107,43,0.2);}
+
+/* PIPELINE STAGE FUNNEL */
+.stage-flow{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:18px;}
+.sstep{flex:1;padding:13px 14px;border-right:1px solid var(--border);cursor:pointer;transition:background 0.14s;}
+.sstep:last-child{border-right:none;}
+.sstep:hover{background:var(--surface2);}
+.sstep.active{background:var(--accent-dim);}
+.sstep-label{font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.sstep.active .sstep-label{color:var(--accent);}
+.sstep-num{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;line-height:1;color:var(--text3);margin-top:2px;}
+.sstep.active .sstep-num{color:var(--accent);}
+
+/* SITES GRID */
+.sites-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;}
+.scard2{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;transition:all 0.18s;border-top:3px solid var(--border2);}
+.scard2.t1{border-top-color:var(--tier1);}
+.scard2.t2{border-top-color:var(--tier2);}
+.scard2.t3{border-top-color:var(--tier3);}
+.scard2:hover{border-color:var(--border2);transform:translateY(-1px);}
+.scard-header{padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.scard-title{font-weight:600;font-size:0.88rem;color:var(--text);margin-bottom:3px;}
+.scard-sub{font-size:0.65rem;color:var(--text3);}
+.scard-body{padding:0 16px 14px;}
+.url-row{display:flex;align-items:center;gap:7px;padding:6px 8px;background:var(--surface2);border-radius:5px;margin-bottom:6px;}
+.url-mono{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.url-link{font-size:0.65rem;color:var(--text3);cursor:pointer;}
+.url-link:hover{color:var(--accent);}
+
+/* TIER 3 SITE CARD specifics — schedule view */
+.schedule-mini{background:var(--surface2);border-radius:var(--r);padding:9px 11px;margin-bottom:10px;}
+.schedule-label{font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;}
+.schedule-item{display:flex;align-items:center;justify-content:space-between;font-size:0.7rem;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border);}
+.schedule-item:last-child{border-bottom:none;}
+.schedule-status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dot-done{background:var(--green);}
+.dot-progress{background:var(--yellow);}
+.dot-queued{background:var(--text3);}
+
+/* PROGRESS BAR (coverage / monthly) */
+.progress-row{margin-bottom:10px;}
+.progress-row-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.progress-label{font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.progress-val{font-size:0.7rem;font-weight:600;}
+.progress-bar{height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.18s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);max-width:90vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px);transition:transform 0.18s;position:relative;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.mclose{background:none;border:none;color:var(--text3);font-size:1.1rem;cursor:pointer;padding:4px;}
+.mclose:hover{color:var(--text);}
+
+/* LEAD MODAL */
+.lm-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);}
+.lm-name{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;letter-spacing:2px;color:var(--accent);line-height:1;margin-bottom:6px;}
+.lm-tier-banner{padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.lm-tier-banner.t1{background:var(--tier1-bg);border-bottom:1px solid rgba(62,207,142,0.2);}
+.lm-tier-banner.t2{background:var(--tier2-bg);border-bottom:1px solid rgba(245,200,66,0.2);}
+.lm-tier-banner.t3{background:var(--tier3-bg);border-bottom:1px solid rgba(167,139,250,0.2);}
+.lm-tier-text{font-size:0.72rem;}
+.lm-tier-text strong{font-weight:700;}
+.lm-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface2);}
+.lm-tab{padding:10px 16px;cursor:pointer;font-size:0.7rem;font-weight:500;color:var(--text3);border-bottom:2px solid transparent;transition:all 0.13s;user-select:none;}
+.lm-tab:hover{color:var(--text2);}
+.lm-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface);}
+
+/* REVIEW CARD */
+.review-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;margin-bottom:8px;}
+.review-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.review-author{font-size:0.72rem;font-weight:600;color:var(--text);}
+.review-meta{font-size:0.6rem;color:var(--text3);}
+.review-stars{color:var(--yellow);font-size:9px;letter-spacing:1px;}
+.review-text{font-size:0.7rem;color:var(--text2);line-height:1.55;font-style:italic;}
+.review-text.pitch-quote{border-left:2px solid var(--accent);padding-left:9px;color:var(--text);}
+.review-tag{display:inline-block;background:var(--accent-dim);color:var(--accent);font-size:0.55rem;font-weight:600;padding:1px 6px;border-radius:8px;margin-top:5px;}
+
+/* BRIEF EDITOR */
+.brief-editor{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--text2);line-height:1.65;max-height:380px;overflow-y:auto;white-space:pre-wrap;}
+.brief-editor strong, .brief-md-strong{color:var(--accent);font-weight:700;}
+.brief-h1{color:var(--text);font-weight:700;font-size:0.85rem;font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px;}
+.brief-h2{color:var(--text);font-weight:600;margin-top:8px;}
+.brief-divider{border-top:1px solid var(--border);margin:8px 0;}
+
+/* PIPE PILL */
+.pipe-pill{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:0.62rem;color:var(--text2);}
+.pipe-pill strong{color:var(--text);font-weight:600;}
+
+/* COWORK QUEUE */
+.queue-strip{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.queue-strip-icon{width:32px;height:32px;border-radius:50%;background:var(--purple-bg);color:var(--purple);display:flex;align-items:center;justify-content:center;font-size:1rem;}
+.queue-strip-title{font-size:0.74rem;font-weight:600;color:var(--text);margin-bottom:2px;}
+.queue-strip-sub{font-size:0.62rem;color:var(--text3);}
+.queue-item-mini{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:5px 10px;font-size:0.65rem;color:var(--text2);display:inline-flex;align-items:center;gap:6px;}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r);padding:10px 16px;font-size:0.76rem;color:var(--text);display:flex;align-items:center;gap:7px;transform:translateY(50px);opacity:0;transition:all 0.25s;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+.toast.show{transform:translateY(0);opacity:1;}
+
+/* MANAGEMENT — month-over-month cards */
+.mom-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;}
+.mom-label{font-size:0.6rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;}
+.mom-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+.mom-prev{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--text3);text-decoration:line-through;line-height:1;}
+.mom-arrow{color:var(--text3);font-size:0.85rem;}
+.mom-current{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;line-height:1;}
+.mom-delta{font-size:0.66rem;font-weight:600;margin-bottom:9px;}
+
+/* CALL PREP CARD */
+.call-prep{background:linear-gradient(135deg,var(--accent-dim),rgba(167,139,250,0.06));border:1px solid rgba(255,107,43,0.2);border-radius:var(--rl);padding:14px;}
+.cp-section{margin-bottom:10px;}
+.cp-label{font-size:0.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:5px;}
+.cp-content{font-size:0.74rem;color:var(--text);line-height:1.55;}
+
+/* COVERAGE SUMMARY (inline on site card) */
+.coverage-summary{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r);padding:9px 11px;margin-bottom:10px;
+  cursor:pointer;transition:all 0.14s;
+}
+.coverage-summary:hover{border-color:var(--tier3);background:rgba(167,139,250,0.04);}
+.cov-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.cov-label{font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.cov-val{font-size:0.7rem;color:var(--text);font-weight:600;}
+.cov-bar{height:4px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:5px;}
+.cov-fill{height:100%;border-radius:3px;}
+.cov-bottom{display:flex;justify-content:space-between;align-items:center;}
+.cov-mini-label{font-size:0.6rem;color:var(--text3);}
+.cov-cta{font-size:0.62rem;color:var(--tier3);font-weight:600;}
+
+/* MATRIX GRID */
+.matrix-grid{display:flex;flex-direction:column;gap:5px;}
+.mhead-row,.mrow{display:grid;grid-template-columns:160px repeat(3,1fr);gap:6px;align-items:center;}
+.mhead-empty{}
+.mhead-cell{font-size:0.62rem;font-weight:600;letter-spacing:0.5px;color:var(--text3);text-align:center;padding:5px 4px;line-height:1.3;}
+.mcity{font-size:0.74rem;color:var(--text2);padding:7px 10px;display:flex;align-items:center;gap:8px;}
+.mcity-tag{
+  font-size:0.55rem;font-weight:600;letter-spacing:0.5px;
+  background:var(--tier3-bg);color:var(--tier3);
+  border:1px solid rgba(167,139,250,0.25);
+  padding:1px 6px;border-radius:8px;
+}
+.mcell{
+  border-radius:5px;padding:9px 4px;
+  font-size:0.78rem;text-align:center;
+  transition:all 0.13s;font-weight:600;
+}
+.mcell.built{
+  background:rgba(62,207,142,0.1);color:var(--green);
+  border:1px solid rgba(62,207,142,0.25);
+}
+.mcell.available{
+  background:var(--surface3);color:var(--text3);
+  border:1px solid var(--border);cursor:pointer;
+}
+.mcell.available:hover{border-color:var(--accent);color:var(--accent);}
+.mcell.selected{
+  background:rgba(255,107,43,0.15);color:var(--accent);
+  border:1px solid rgba(255,107,43,0.4);cursor:pointer;
+}
+.mcell.recommended{
+  background:rgba(167,139,250,0.1);color:var(--tier3);
+  border:1px dashed rgba(167,139,250,0.5);cursor:pointer;
+}
+.mcell.recommended:hover{border-style:solid;border-color:var(--tier3);}
+
+/* CALL LOG ENTRIES */
+.call-entry{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r);padding:11px 13px;margin-bottom:8px;
+}
+.call-entry-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.call-entry-date{font-size:0.66rem;color:var(--text2);font-weight:500;}
+.call-entry-notes{font-size:0.7rem;color:var(--text2);line-height:1.55;margin-bottom:6px;}
+.call-entry-followup{font-size:0.6rem;color:var(--text3);padding-top:6px;border-top:1px solid var(--border);}
+
+/* ADD LEAD MODAL — Search results */
+.addlead-result{
+  display:flex;align-items:center;gap:11px;
+  padding:11px 12px;border:1px solid var(--border);border-radius:var(--r);
+  margin-bottom:6px;cursor:pointer;transition:all 0.13s;
+}
+.addlead-result:hover{border-color:var(--accent);background:var(--surface2);}
+
+/* GBP CLAIMED/UNCLAIMED PILL */
+.gbp-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:20px;
+  font-size:0.6rem;font-weight:600;white-space:nowrap;
+}
+.gbp-pill.claimed{background:rgba(62,207,142,0.1);color:var(--green);}
+.gbp-pill.unclaimed{background:var(--tier3-bg);color:var(--purple);border:1px solid rgba(167,139,250,0.3);}
+
+/* ENRICHMENT STATUS BADGES */
+.enrich-strip{
+  background:linear-gradient(135deg,var(--surface),var(--surface2));
+  border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:var(--rl);padding:12px 16px;margin-bottom:14px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.enrich-icon{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--accent-dim);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;flex-shrink:0;
+}
+.enrich-title{font-size:0.74rem;font-weight:600;color:var(--text);margin-bottom:2px;}
+.enrich-sub{font-size:0.66rem;color:var(--text3);}
+.enrich-sub strong{color:var(--text2);font-weight:600;}
+
+.enrich-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:20px;
+  font-size:0.6rem;font-weight:600;white-space:nowrap;
+}
+.enrich-badge.enriched{background:var(--green-bg);color:var(--green);}
+.enrich-badge.enriching{background:var(--yellow-bg);color:var(--yellow);}
+.enrich-badge.pending{background:rgba(96,165,250,0.1);color:var(--blue);}
+.enrich-badge.failed{background:var(--red-bg);color:var(--red);}
+.enrich-spin{display:inline-block;animation:spin 2s linear infinite;}
+
+/* PDF PREVIEW (Export Report Modal) */
+.pdf-preview{
+  background:#fff;border-radius:6px;padding:24px;margin:14px 0;
+  font-family:'DM Sans',sans-serif;color:#1a1a1a;line-height:1.5;
+  max-height:340px;overflow-y:auto;
+  box-shadow:0 4px 16px rgba(0,0,0,0.4);
+}
+.pdf-preview h1{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:1px;color:#a78bfa;margin-bottom:4px;}
+.pdf-preview .pdf-sub{font-size:0.68rem;color:#666;margin-bottom:14px;}
+.pdf-preview .pdf-divider{height:1px;background:#e0e0e0;margin:12px 0;}
+.pdf-preview h2{font-size:0.78rem;font-weight:700;color:#1a1a1a;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;}
+.pdf-preview .pdf-stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;}
+.pdf-preview .pdf-stat{background:#f5f5f5;border-radius:4px;padding:6px 9px;}
+.pdf-preview .pdf-stat-label{font-size:0.55rem;font-weight:700;letter-spacing:0.5px;color:#888;text-transform:uppercase;}
+.pdf-preview .pdf-stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#1a1a1a;}
+.pdf-preview .pdf-stat-delta{font-size:0.6rem;color:#0a8c5a;}
+.pdf-preview p{font-size:0.72rem;color:#333;margin-bottom:8px;}
+.pdf-preview ul{list-style:none;padding-left:0;}
+.pdf-preview li{font-size:0.7rem;color:#333;padding:4px 0;display:flex;justify-content:space-between;border-bottom:1px solid #f0f0f0;}
+.pdf-preview .pdf-foot{margin-top:14px;padding-top:8px;border-top:1px solid #e0e0e0;font-size:0.6rem;color:#999;text-align:center;}
+
+@media(max-width:900px){.search-form{grid-template-columns:1fr 1fr;}.sites-grid{grid-template-columns:1fr;}}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">SCD <span class="logo-badge">v2</span></div>
+  <div class="header-right">
+    <div class="cowork-status"><span class="cowork-dot"></span><span>Cowork worker connected</span></div>
+    <div class="hstat"><strong>33</strong> clients</div>
+    <span class="hsep">·</span>
+    <div class="hstat"><strong>$6,890</strong> MRR</div>
+    <div class="avatar">SG</div>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <div class="ntab active" onclick="switchTab('prospect')">🔍 Prospect <span class="nc">247</span></div>
+  <div class="ntab" onclick="switchTab('pipeline')">📋 Pipeline <span class="nc">204</span></div>
+  <div class="ntab" onclick="switchTab('build')">⚡ Build <span class="nc">2</span></div>
+  <div class="ntab" onclick="switchTab('sites')">🌐 Sites <span class="nc">14</span></div>
+  <div class="ntab" onclick="switchTab('manage')">📊 Reports</div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════════════════
+     PROSPECT PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-prospect">
+  <div class="sec-header">
+    <div>
+      <div class="sec-title">Prospect</div>
+      <div class="sec-sub">Search Google Places — auto-scored by website quality, GBP completeness, and review activity</div>
+    </div>
+  </div>
+
+  <div class="search-card">
+    <h3>SEARCH BUSINESSES</h3>
+    <div class="search-form">
+      <div class="fg"><label class="flabel">Location</label><input class="finput" type="text" value="Manitowoc, WI"></div>
+      <div class="fg"><label class="flabel">Industry / Type</label><input class="finput" type="text" value="plumber"></div>
+      <div class="fg"><label class="flabel">Radius</label><select class="finput"><option>10 mi</option><option selected>25 mi</option><option>50 mi</option></select></div>
+      <button class="btn btn-primary" onclick="showResults()">🔍 Search</button>
+    </div>
+  </div>
+
+  <!-- TIER FILTER PILLS -->
+  <div class="fbar" id="prospect-results" style="display:none;">
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Filter:</span>
+      <button class="tier-pill t3" onclick="filterTier('t3')" style="cursor:pointer;"><span class="tier-icon"></span>Tier 3 (4)</button>
+      <button class="tier-pill t2" onclick="filterTier('t2')" style="cursor:pointer;"><span class="tier-icon"></span>Tier 2 (5)</button>
+      <button class="tier-pill t1" onclick="filterTier('t1')" style="cursor:pointer;"><span class="tier-icon"></span>Tier 1 (3)</button>
+      <span style="color:var(--border2);">|</span>
+      <button class="gbp-pill unclaimed" onclick="filterTier('unclaimed')" style="cursor:pointer;border:1px solid rgba(167,139,250,0.3);">⭐ Unclaimed GBP (2)</button>
+      <button onclick="filterTier('no-website')" style="cursor:pointer;background:var(--red-bg);color:var(--red);border:1px solid rgba(248,113,113,0.3);font-size:0.6rem;font-weight:600;padding:2px 8px;border-radius:20px;">🚫 No Website (5)</button>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:7px;align-items:center;">
+      <span style="font-size:0.65rem;color:var(--text3);">Showing <strong style="color:var(--text);">12</strong> new · <strong style="color:var(--text3);">3</strong> filtered (in pipeline)</span>
+      <select class="fsel"><option>Sort: Opportunity score</option><option>Sort: Reviews count</option><option>Sort: PageSpeed (worst first)</option></select>
+    </div>
+  </div>
+
+  <div id="results-table" style="display:none;">
+    <div class="twrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px;"></th>
+            <th>Business</th>
+            <th>Score</th>
+            <th>Tier</th>
+            <th>GBP Status</th>
+            <th>Website</th>
+            <th>Reviews</th>
+            <th style="width:120px;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- TIER 3 candidate — established business with weak site -->
+          <tr onclick="toggleExpand(this)">
+            <td><span style="color:var(--text3);cursor:pointer;font-size:11px;">▸</span></td>
+            <td class="td-co">Lakeshore Plumbing & Heating</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier3);">87</span></div></td>
+            <td><span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-yellow">Weak (PSI 32)</span></td>
+            <td><span class="stars">★★★★★</span> 4.9 (87)</td>
+            <td><button class="btn btn-tier3 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+          <tr style="display:none;background:var(--surface2);" class="expand-row">
+            <td colspan="8" style="padding:0;">
+              <div class="expand-detail">
+                <div class="detail-grid">
+                  <div class="detail-section">
+                    <div class="detail-label">🎯 Why Tier 3</div>
+                    <div class="detail-value">Established business with strong revenue indicators — 87 reviews, 4.9 rating, multiple service categories. Has claimed GBP but website is slow (PageSpeed 32) and outdated. Ideal candidate for the $499/month growth tier.</div>
+                  </div>
+                  <div class="detail-section">
+                    <div class="detail-label">📍 Service areas (review-mined)</div>
+                    <div class="detail-list">
+                      <span class="detail-tag review-found">Manitowoc</span>
+                      <span class="detail-tag review-found">Two Rivers</span>
+                      <span class="detail-tag review-found">Sheboygan</span>
+                      <span class="detail-tag review-found">Mishicot</span>
+                      <span class="detail-tag review-found">Cleveland</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                  <div class="detail-label">💎 Pitch ammo</div>
+                  <div style="font-size:0.7rem;color:var(--text2);line-height:1.6;font-style:italic;">"Doug from Sheboygan said you saved him $6,500 on a sewer line — that should be the headline of your site, not buried in review #47."</div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- T3 — established with claimed GBP -->
+          <tr>
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Northeast Plumbing Co.</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier3);">82</span></div></td>
+            <td><span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-yellow">Weak (PSI 41)</span></td>
+            <td><span class="stars">★★★★★</span> 4.8 (62)</td>
+            <td><button class="btn btn-tier3 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+          <!-- T2 — claimed but partial -->
+          <tr>
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Riverside Drain Service</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier2);">64</span></div></td>
+            <td><span class="tier-pill t2"><span class="tier-icon"></span>Tier 2</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-red">No website</span></td>
+            <td><span class="stars">★★★★☆</span> 4.4 (28)</td>
+            <td><button class="btn btn-tier2 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+          <!-- T2 — outdated site -->
+          <tr>
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Bay City Plumbing</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier2);">58</span></div></td>
+            <td><span class="tier-pill t2"><span class="tier-icon"></span>Tier 2</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-yellow">Outdated (PSI 28)</span></td>
+            <td><span class="stars">★★★★☆</span> 4.6 (41)</td>
+            <td><button class="btn btn-tier2 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+          <!-- ⭐ UNCLAIMED — high opportunity -->
+          <tr style="background:rgba(167,139,250,0.04);" onclick="toggleExpand(this)">
+            <td><span style="color:var(--text3);cursor:pointer;font-size:11px;">▸</span></td>
+            <td class="td-co">Wisconsin Drain Pros</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier1);">52</span></div></td>
+            <td><span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span></td>
+            <td><span class="gbp-pill unclaimed">⭐ Unclaimed</span></td>
+            <td><span class="badge badge-red">No website</span></td>
+            <td><span class="stars">★★★★☆</span> 4.7 (8)</td>
+            <td><button class="btn btn-tier1 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+          <tr style="display:none;background:rgba(167,139,250,0.06);" class="expand-row">
+            <td colspan="8" style="padding:0;">
+              <div class="expand-detail">
+                <div class="detail-grid">
+                  <div class="detail-section">
+                    <div class="detail-label" style="color:var(--purple);">⭐ Why this is a great target</div>
+                    <div class="detail-value">Unclaimed Google Business Profile — owner hasn't engaged with their digital presence at all. No website, basic GBP listing only. Perfect Tier 1 candidate. Easy pitch: "Google doesn't know you exist. I can fix that for $800."</div>
+                  </div>
+                  <div class="detail-section">
+                    <div class="detail-label">📞 Available data (limited)</div>
+                    <div class="detail-value" style="font-size:0.7rem;line-height:1.6;">
+                      Phone: (920) 555-0723<br>
+                      Address: 412 N 8th St, Manitowoc<br>
+                      Category: Plumber<br>
+                      <span style="color:var(--text3);">No description, photos, hours, or services set</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- T1 candidate — small, claimed but minimal -->
+          <tr>
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Tom's Trusted Plumbing</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier1);">42</span></div></td>
+            <td><span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-red">No website</span></td>
+            <td><span class="stars">★★★★★</span> 4.9 (12)</td>
+            <td><button class="btn btn-tier1 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+          <!-- ⭐ UNCLAIMED — another high-value target -->
+          <tr style="background:rgba(167,139,250,0.04);">
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Coastal Drain & Sewer</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier1);">39</span></div></td>
+            <td><span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span></td>
+            <td><span class="gbp-pill unclaimed">⭐ Unclaimed</span></td>
+            <td><span class="badge badge-red">No website</span></td>
+            <td><span class="stars">★★★★☆</span> 4.5 (5)</td>
+            <td><button class="btn btn-tier1 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+          <!-- T1 — minimal, claimed -->
+          <tr>
+            <td><span style="color:var(--text3);font-size:11px;">▸</span></td>
+            <td class="td-co">Manitowoc Plumber LLC</td>
+            <td><div class="score-bar"><span class="score-num" style="color:var(--tier1);">38</span></div></td>
+            <td><span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span></td>
+            <td><span class="gbp-pill claimed">✓ Claimed</span></td>
+            <td><span class="badge badge-red">No website</span></td>
+            <td><span class="stars">★★★★☆</span> 4.5 (9)</td>
+            <td><button class="btn btn-tier1 btn-xs" onclick="event.stopPropagation();addToPipeline(this)">+ Add to Pipeline</button></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="prospect-empty" style="text-align:center;padding:48px 24px;color:var(--text3);">
+    <div style="font-size:2.4rem;opacity:0.2;margin-bottom:14px;">🔍</div>
+    <div style="font-size:0.86rem;color:var(--text2);font-weight:500;margin-bottom:5px;">Search for new leads</div>
+    <div style="font-size:0.7rem;line-height:1.7;">Each result is auto-scored 0–100 based on website quality, GBP completeness, and review activity.<br>Color-coded by recommended pricing tier.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PIPELINE PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-pipeline">
+  <div class="sec-header">
+    <div>
+      <div class="sec-title">Pipeline</div>
+      <div class="sec-sub">Cold call tracker — every lead has tier recommendation, review-mined data, and pitch ammo ready</div>
+    </div>
+    <div style="display:flex;gap:7px;">
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modal-import')">↑ Import CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-addlead')">+ Add Lead</button>
+    </div>
+  </div>
+
+  <!-- ENRICHMENT STATUS STRIP -->
+  <div class="enrich-strip">
+    <div class="enrich-icon">✦</div>
+    <div style="flex:1;">
+      <div class="enrich-title">CSV Import — Enrichment in progress</div>
+      <div class="enrich-sub">165 leads imported · <strong>52 enriched</strong> (scored & tiered) · <strong>12 enriching now</strong> · <strong>101 pending</strong></div>
+    </div>
+    <div style="flex:0 0 200px;">
+      <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:4px;">
+        <div style="width:31%;height:100%;background:var(--green);border-radius:3px;"></div>
+      </div>
+      <div style="font-size:0.6rem;color:var(--text3);text-align:right;">31% complete</div>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-ghost btn-xs" onclick="showToast('Pausing enrichment...')">⏸ Pause</button>
+      <button class="btn btn-primary btn-xs" onclick="showToast('Enriching all pending leads now — est. 18 minutes')">⚡ Enrich All Now</button>
+    </div>
+  </div>
+
+  <div class="stage-flow">
+    <div class="sstep" onclick="filterStage(this)"><div class="sstep-label">All</div><div class="sstep-num">204</div></div>
+    <div class="sstep active" onclick="filterStage(this)"><div class="sstep-label">Cold</div><div class="sstep-num">183</div></div>
+    <div class="sstep" onclick="filterStage(this)"><div class="sstep-label">Contacted</div><div class="sstep-num">12</div></div>
+    <div class="sstep" onclick="filterStage(this)"><div class="sstep-label">Qualified</div><div class="sstep-num">6</div></div>
+    <div class="sstep" onclick="filterStage(this)"><div class="sstep-label">Client</div><div class="sstep-num">3</div></div>
+    <div class="sstep" onclick="filterStage(this)" style="border-left:1px solid var(--border2);"><div class="sstep-label" style="color:var(--red);opacity:0.7;">Dead</div><div class="sstep-num" style="color:var(--text3);">4</div></div>
+  </div>
+
+  <!-- TIER DISTRIBUTION -->
+  <div class="stats-row" style="grid-template-columns:repeat(3,1fr);">
+    <div class="tier-stat t3"><div class="tier-num t3">9</div><div class="slabel" style="color:var(--tier3);">Tier 3 prospects</div><div class="sdelta" style="color:var(--text3);">$499/mo each potential</div></div>
+    <div class="tier-stat t2"><div class="tier-num t2">18</div><div class="slabel" style="color:var(--tier2);">Tier 2 prospects</div><div class="sdelta" style="color:var(--text3);">$400 + $79/mo each</div></div>
+    <div class="tier-stat t1"><div class="tier-num t1">12</div><div class="slabel" style="color:var(--tier1);">Tier 1 prospects</div><div class="sdelta" style="color:var(--text3);">$800 one-time each</div></div>
+  </div>
+
+  <div class="fbar">
+    <div class="swrap"><span class="sicon">🔍</span><input type="text" placeholder="Search company, city, contact..."></div>
+    <select class="fsel"><option>All Tiers</option><option>Tier 1 only</option><option>Tier 2 only</option><option>Tier 3 only</option></select>
+    <select class="fsel"><option>All Outcomes</option><option>Interested</option><option>Callback</option></select>
+  </div>
+
+  <div class="twrap">
+    <table>
+      <thead><tr><th>Company</th><th>Status</th><th>Tier</th><th>Score</th><th>City</th><th>Phone</th><th>Outcome</th><th>Stage</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="td-co">Lakeshore Plumbing & Heating</td>
+          <td><span class="enrich-badge enriched">✓ Enriched</span></td>
+          <td><span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span></td>
+          <td><span class="score-num" style="color:var(--tier3);">87</span></td>
+          <td>Manitowoc</td>
+          <td class="td-mono">(920) 555-0184</td>
+          <td><span class="badge badge-green">Interested</span></td>
+          <td><span class="badge badge-yellow">Qualified</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-tier3 btn-xs" onclick="switchTab('build');showToast('Loaded into Build tab')">⚡ Build Site</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <tr>
+          <td class="td-co">Two Rivers Plumbing LLC</td>
+          <td><span class="enrich-badge enriched">✓ Enriched</span></td>
+          <td><span class="tier-pill t2"><span class="tier-icon"></span>Tier 2</span></td>
+          <td><span class="score-num" style="color:var(--tier2);">68</span></td>
+          <td>Two Rivers</td>
+          <td class="td-mono">(920) 555-0274</td>
+          <td><span class="badge badge-yellow">Callback</span></td>
+          <td><span class="badge badge-blue">Contacted</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-ghost btn-xs" onclick="showCallPrep()">📋 Prep Call</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <!-- ENRICHING — currently being processed -->
+        <tr style="background:rgba(245,200,66,0.04);">
+          <td class="td-co" style="opacity:0.85;">Bay City Plumbing & Drain</td>
+          <td><span class="enrich-badge enriching"><span class="enrich-spin">⚙</span> Enriching...</span></td>
+          <td colspan="2" style="color:var(--text3);font-size:0.7rem;">Fetching reviews, scoring website...</td>
+          <td>Manitowoc</td>
+          <td class="td-mono" style="opacity:0.7;">(920) 555-0421</td>
+          <td><span class="badge badge-gray">—</span></td>
+          <td><span class="badge badge-gray">Cold</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-ghost btn-xs" disabled style="opacity:0.5;cursor:not-allowed;">⌛ Wait</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <!-- PENDING — raw imported, not enriched -->
+        <tr style="opacity:0.78;">
+          <td class="td-co">Riverside Drain Service</td>
+          <td><span class="enrich-badge pending">⏳ Pending</span></td>
+          <td colspan="2" style="color:var(--text3);font-size:0.7rem;font-style:italic;">Not yet enriched</td>
+          <td>De Pere</td>
+          <td class="td-mono">(920) 555-0518</td>
+          <td><span class="badge badge-gray">—</span></td>
+          <td><span class="badge badge-gray">Cold</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-primary btn-xs" onclick="enrichLead(this)">✦ Enrich</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <!-- PENDING -->
+        <tr style="opacity:0.78;">
+          <td class="td-co">Coastal Pipe Pros</td>
+          <td><span class="enrich-badge pending">⏳ Pending</span></td>
+          <td colspan="2" style="color:var(--text3);font-size:0.7rem;font-style:italic;">Not yet enriched</td>
+          <td>Sheboygan</td>
+          <td class="td-mono">(920) 555-0712</td>
+          <td><span class="badge badge-gray">—</span></td>
+          <td><span class="badge badge-gray">Cold</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-primary btn-xs" onclick="enrichLead(this)">✦ Enrich</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <!-- FAILED — couldn't find on Google Places -->
+        <tr style="opacity:0.6;background:rgba(248,113,113,0.04);">
+          <td class="td-co" style="text-decoration:line-through;color:var(--text3);">Old Plumbing Co (closed?)</td>
+          <td><span class="enrich-badge failed">⚠ Failed</span></td>
+          <td colspan="2" style="color:var(--red);font-size:0.7rem;">Not found on Google Places</td>
+          <td>Manitowoc</td>
+          <td class="td-mono" style="color:var(--text3);">(920) 555-9999</td>
+          <td><span class="badge badge-gray">—</span></td>
+          <td><span class="badge badge-gray">Cold</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-ghost btn-xs" onclick="showToast('Retrying enrichment with manual data...')">↻ Retry</button>
+            <button class="btn btn-ghost btn-xs" onclick="showToast('Marked as dead')">Mark Dead</button>
+          </div></td>
+        </tr>
+        <tr>
+          <td class="td-co">Tom's Trusted Plumbing</td>
+          <td><span class="enrich-badge enriched">✓ Enriched</span></td>
+          <td><span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span></td>
+          <td><span class="score-num" style="color:var(--tier1);">42</span></td>
+          <td>Manitowoc</td>
+          <td class="td-mono">(920) 555-0158</td>
+          <td><span class="badge badge-gray">No Answer</span></td>
+          <td><span class="badge badge-gray">Cold</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-ghost btn-xs" onclick="showCallPrep()">📋 Prep Call</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+        <tr>
+          <td class="td-co">Northshore Plumbing & Drain</td>
+          <td><span class="enrich-badge enriched">✓ Enriched</span></td>
+          <td><span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span></td>
+          <td><span class="score-num" style="color:var(--tier3);">79</span></td>
+          <td>Manitowoc</td>
+          <td class="td-mono">(920) 555-0184</td>
+          <td><span class="badge badge-green">Signed</span></td>
+          <td><span class="badge" style="background:var(--purple-bg);color:var(--purple);">Client</span></td>
+          <td><div style="display:flex;gap:5px;">
+            <button class="btn btn-ghost btn-xs" onclick="switchTab('sites')">View Site</button>
+            <button class="btn btn-ghost btn-xs" onclick="openLead('lakeshore')">View</button>
+          </div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     BUILD PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-build">
+  <div class="sec-header">
+    <div>
+      <div class="sec-title">Build</div>
+      <div class="sec-sub">Generate a site brief and queue it for Cowork to build in landingsite.ai</div>
+    </div>
+  </div>
+
+  <!-- COWORK QUEUE STATUS -->
+  <div class="queue-strip">
+    <div class="queue-strip-icon">🤖</div>
+    <div style="flex:1;">
+      <div class="queue-strip-title">Cowork Worker — Active</div>
+      <div class="queue-strip-sub">Currently processing: <strong style="color:var(--text2);">Garcia Plumbing — building "Drain Cleaning in De Pere" page (3 of 15)</strong></div>
+    </div>
+    <div style="display:flex;gap:7px;">
+      <span class="queue-item-mini"><span style="color:var(--green);">●</span> 1 active</span>
+      <span class="queue-item-mini"><span style="color:var(--yellow);">●</span> 4 queued</span>
+      <button class="btn btn-ghost btn-xs" onclick="showToast('Opening queue details...')">View Queue</button>
+    </div>
+  </div>
+
+  <!-- LEAD CONTEXT BANNER -->
+  <div style="background:var(--accent-dim);border:1px solid rgba(255,107,43,0.22);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="font-size:0.76rem;color:var(--accent);">⚡ Loaded from pipeline: <strong>Lakeshore Plumbing & Heating</strong> · <span class="tier-pill t3" style="margin-left:6px;"><span class="tier-icon"></span>Tier 3</span> · 87 reviews mined</div>
+    <button class="btn btn-ghost btn-xs">Clear</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;">
+
+    <!-- BRIEF PREVIEW -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:var(--text);">Site Brief — Tier 3 Launch</div>
+          <div style="font-size:0.62rem;color:var(--text3);margin-top:1px;">Generated by Claude · 8-10 page foundation · Markdown format for Cowork</div>
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="showToast('Regenerating brief with Claude...')">↻ Regenerate</button>
+      </div>
+
+      <div class="brief-editor"><span class="brief-h1"># Site Brief: Lakeshore Plumbing & Heating</span>
+
+<span class="brief-h2">## Business Overview</span>
+**Name:** Lakeshore Plumbing & Heating
+**Phone:** (920) 555-0184
+**Location:** Manitowoc, WI · 14 years
+**Owner:** Travis Kowalski (master plumber)
+
+<span class="brief-h2">## Brand Voice</span>
+Local, trustworthy, direct. Sounds like a real owner wrote it.
+6th-8th grade reading level. Active voice. Zero fluff.
+
+<span class="brief-h2">## Services</span>
+1. Drain Cleaning · 2. Water Heater Repair
+3. Leak Detection · 4. Emergency Plumbing
+5. Sump Pump · 6. Sewer Line Repair
+
+<span class="brief-h2">## Service Areas (review-mined)</span>
+Manitowoc · Two Rivers · Sheboygan · Mishicot · Cleveland
+
+<span class="brief-h2">## Site Structure (Tier 3 Launch)</span>
+**Homepage** + 6 service pages + **5 service-area pages**:
+- Drain Cleaning in Manitowoc, WI
+- Drain Cleaning in Two Rivers, WI
+- Drain Cleaning in Sheboygan, WI
+- Water Heater Repair in Manitowoc, WI
+- Water Heater Repair in Two Rivers, WI
++ About + Contact + FAQ = **15 pages total**
+
+<span class="brief-h2">## Customer Quotes (from reviews)</span>
+"Travis came within an hour..." — Mitchell P., Manitowoc
+"Saved us $6,500 on sewer line..." — Doug K., Sheboygan
+"On time, fair price, clean work" — Mike R., Mishicot
+
+<span class="brief-h2">## Build Instructions for Cowork</span>
+Sequential page-by-page. Send initial brief for homepage,
+then prompt for each subsequent page.</div>
+
+      <div style="display:flex;gap:7px;margin-top:14px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" onclick="showToast('Brief copied to clipboard')">📋 Copy Brief</button>
+        <button class="btn btn-tier3" onclick="showToast('Queued for Cowork — building 15 pages, est. 30 minutes')">⚡ Queue for Cowork</button>
+      </div>
+    </div>
+
+    <!-- BUILD CONFIG -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;">
+        <div style="font-size:0.62rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Tier Configuration</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--surface2);border-radius:var(--r);cursor:pointer;border:1px solid var(--border);"><input type="radio" name="tier" style="accent-color:var(--tier1);"><span style="font-size:0.74rem;color:var(--text2);"><strong style="color:var(--tier1);">Tier 1</strong> — 5 pages, $800 one-time</span></label>
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--surface2);border-radius:var(--r);cursor:pointer;border:1px solid var(--border);"><input type="radio" name="tier" style="accent-color:var(--tier2);"><span style="font-size:0.74rem;color:var(--text2);"><strong style="color:var(--tier2);">Tier 2</strong> — 5 pages, $400 + $79/mo</span></label>
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--tier3-bg);border-radius:var(--r);cursor:pointer;border:1px solid rgba(167,139,250,0.3);"><input type="radio" name="tier" checked style="accent-color:var(--tier3);"><span style="font-size:0.74rem;color:var(--text);"><strong style="color:var(--tier3);">Tier 3</strong> — 15 pages, free + $499/mo</span></label>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px;">
+        <div style="font-size:0.62rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Estimated Cowork Time</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);line-height:1;">~30 min</div>
+        <div style="font-size:0.65rem;color:var(--text3);margin-top:5px;">15 pages × ~2 min each via landingsite.ai</div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:0.65rem;color:var(--text3);line-height:1.6;">
+          <strong style="color:var(--text2);">Cost estimate:</strong><br>
+          Claude API: ~$1.20<br>
+          landingsite.ai: $0 (until hosted)<br>
+          Cowork: included
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SITES PANEL
+═══════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-sites">
+  <div class="sec-header">
+    <div>
+      <div class="sec-title">Sites</div>
+      <div class="sec-sub">All client sites managed across landingsite.ai · Tier-aware actions and scheduling</div>
+    </div>
+    <select class="fsel"><option>Sort: Tier (high to low)</option><option>Sort: Update due</option><option>Sort: A-Z</option></select>
+  </div>
+
+  <!-- TIER STATS -->
+  <div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
+    <div class="scard"><div class="snum">14</div><div class="slabel">Total Sites</div></div>
+    <div class="tier-stat t3"><div class="tier-num t3">3</div><div class="slabel" style="color:var(--tier3);">Tier 3 active</div><div class="sdelta">$1,497/mo recurring</div></div>
+    <div class="tier-stat t2"><div class="tier-num t2">7</div><div class="slabel" style="color:var(--tier2);">Tier 2 active</div><div class="sdelta">$553/mo recurring</div></div>
+    <div class="tier-stat t1"><div class="tier-num t1">4</div><div class="slabel" style="color:var(--tier1);">Tier 1 (handed off)</div><div class="sdelta">No ongoing work</div></div>
+  </div>
+
+  <div class="sites-grid">
+
+    <!-- TIER 3 SITE — full management view -->
+    <div class="scard2 t3">
+      <div class="scard-header">
+        <div>
+          <div class="scard-title">Northshore Plumbing & Drain</div>
+          <div class="scard-sub">Manitowoc, WI · Client since Jan 2026</div>
+        </div>
+        <span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span>
+      </div>
+      <div class="scard-body">
+        <div class="url-row">
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--text3);width:50px;">SITE</span>
+          <span class="url-mono">northshore-plumbing.agncy.dev</span>
+          <span class="url-link" onclick="showToast('Opening landingsite.ai...')">↗</span>
+        </div>
+
+        <!-- COVERAGE SUMMARY (inline, clickable to open matrix) -->
+        <div class="coverage-summary" onclick="openMatrix('northshore')">
+          <div class="cov-top">
+            <span class="cov-label">SEO Coverage</span>
+            <span class="cov-val">21 / 30 pages · <span style="color:var(--accent);">9 available</span></span>
+          </div>
+          <div class="cov-bar"><div class="cov-fill" style="width:70%;background:var(--tier3);"></div></div>
+          <div class="cov-bottom">
+            <span class="cov-mini-label">3 services × 10 cities matrix</span>
+            <span class="cov-cta">View matrix →</span>
+          </div>
+        </div>
+
+        <div class="schedule-mini">
+          <div class="schedule-label">May Pages — 1 of 3 Built</div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-done"></span>Drain Cleaning — Sheboygan</div><span style="font-size:0.6rem;color:var(--green);">Built May 2</span></div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-progress"></span>Water Heater — Two Rivers</div><span style="font-size:0.6rem;color:var(--yellow);">In progress</span></div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-queued"></span>Leak Detection — Mishicot</div><span style="font-size:0.6rem;color:var(--text3);">Queued</span></div>
+        </div>
+
+        <div style="display:flex;gap:7px;margin-top:10px;">
+          <button class="btn btn-tier3 btn-sm" onclick="openMatrix('northshore')">+ Add Pages</button>
+          <button class="btn btn-ghost btn-sm" onclick="switchTab('manage')">📊 Report</button>
+          <button class="btn btn-ghost btn-sm">⚙️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER 3 SITE — building -->
+    <div class="scard2 t3">
+      <div class="scard-header">
+        <div>
+          <div class="scard-title">Lakeshore Plumbing & Heating</div>
+          <div class="scard-sub">Manitowoc, WI · Just signed</div>
+        </div>
+        <span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span>
+      </div>
+      <div class="scard-body">
+        <div class="url-row">
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--text3);width:50px;">SITE</span>
+          <span class="url-mono" style="color:var(--text3);">Building...</span>
+          <span style="display:inline-block;animation:spin 2s linear infinite;font-size:11px;">⚙️</span>
+        </div>
+
+        <div class="schedule-mini">
+          <div class="schedule-label">Initial Build — 8 of 15 Pages</div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-done"></span>Homepage</div><span style="font-size:0.6rem;color:var(--green);">✓</span></div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-done"></span>About + Services + 6 service pages</div><span style="font-size:0.6rem;color:var(--green);">✓</span></div>
+          <div class="schedule-item"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-progress"></span>Service-area pages (5)</div><span style="font-size:0.6rem;color:var(--yellow);">In progress</span></div>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-row-top"><span class="progress-label">Build Progress</span><span class="progress-val" style="color:var(--yellow);">53%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:53%;background:var(--yellow);"></div></div>
+        </div>
+
+        <div style="display:flex;gap:7px;margin-top:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Viewing Cowork progress...')">View Cowork</button>
+          <button class="btn btn-ghost btn-sm">⏸ Pause</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER 2 SITE -->
+    <div class="scard2 t2">
+      <div class="scard-header">
+        <div>
+          <div class="scard-title">Coastal Plumbing & Heat</div>
+          <div class="scard-sub">Sheboygan, WI · Client since Mar 2026</div>
+        </div>
+        <span class="tier-pill t2"><span class="tier-icon"></span>Tier 2</span>
+      </div>
+      <div class="scard-body">
+        <div class="url-row">
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--text3);width:50px;">SITE</span>
+          <span class="url-mono">coastal-plumbing.agncy.dev</span>
+          <span class="url-link" onclick="showToast('Opening landingsite.ai...')">↗</span>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:var(--r);padding:9px 11px;margin-bottom:10px;font-size:0.7rem;color:var(--text2);">
+          <div style="font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;">Hosting Status</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:var(--green);">✓ Active · $79/mo</span>
+            <span style="color:var(--text3);font-size:0.62rem;">Renews May 28</span>
+          </div>
+        </div>
+
+        <div style="background:var(--accent-dim);border:1px solid rgba(255,107,43,0.2);border-radius:var(--r);padding:8px 11px;font-size:0.7rem;color:var(--accent);margin-bottom:10px;">
+          📨 1 edit request pending — "Update phone number in header"
+        </div>
+
+        <div style="display:flex;gap:7px;">
+          <button class="btn btn-tier2 btn-sm" onclick="showToast('Opening edit request in landingsite.ai...')">📝 Handle Edit</button>
+          <button class="btn btn-ghost btn-sm">View Site</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER 1 SITE — handed off -->
+    <div class="scard2 t1">
+      <div class="scard-header">
+        <div>
+          <div class="scard-title">Tom's Trusted Plumbing</div>
+          <div class="scard-sub">Manitowoc, WI · Built Feb 2026</div>
+        </div>
+        <span class="tier-pill t1"><span class="tier-icon"></span>Tier 1</span>
+      </div>
+      <div class="scard-body">
+        <div class="url-row">
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--text3);width:50px;">SITE</span>
+          <span class="url-mono">tomsplumbing.com</span>
+          <span class="url-link" onclick="showToast('Opening live site...')">↗</span>
+        </div>
+
+        <div style="background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r);padding:9px 11px;margin-bottom:10px;font-size:0.7rem;">
+          <div style="color:var(--green);font-weight:600;margin-bottom:3px;">✓ Handoff Complete</div>
+          <div style="color:var(--text3);font-size:0.62rem;">Client owns the site. No ongoing relationship. Reference only.</div>
+        </div>
+
+        <div style="display:flex;gap:7px;">
+          <button class="btn btn-ghost btn-sm">Archive</button>
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Pitching upgrade to Tier 2...')">🎯 Upsell to Tier 2</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MANAGE / REPORTS PANEL — Tier 3 only
+═══════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-manage">
+  <div class="sec-header">
+    <div>
+      <div class="sec-title">Reports</div>
+      <div class="sec-sub">Monthly performance reports for Tier 3 clients · Pulled from Search Console + PageSpeed + Cloudflare</div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openExportModal()">↓ Export Report (PDF)</button>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Client:</span>
+      <select class="finput" style="width:auto;min-width:240px;padding:6px 10px;font-size:0.78rem;">
+        <option>Northshore Plumbing & Drain (Tier 3)</option>
+        <option>Garcia Plumbing & Drain (Tier 3)</option>
+        <option>Lakeshore Plumbing & Heating (Tier 3)</option>
+      </select>
+    </div>
+    <div style="width:1px;height:20px;background:var(--border2);"></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Period:</span>
+      <select class="finput" style="width:auto;padding:6px 10px;font-size:0.78rem;">
+        <option>April 2026 vs March 2026</option>
+        <option>Last 90 days</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- EXEC SUMMARY -->
+  <div style="background:linear-gradient(135deg,var(--tier3-bg),rgba(167,139,250,0.04));border:1px solid rgba(167,139,250,0.25);border-radius:var(--rl);padding:18px 20px;margin-bottom:18px;">
+    <div style="font-size:0.6rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--tier3);margin-bottom:8px;">📊 Executive Summary — Northshore Plumbing · April 2026</div>
+    <div style="font-size:0.88rem;color:var(--text);line-height:1.7;">
+      Strongest month yet on Google. Impressions grew <strong style="color:var(--green);">52%</strong> month-over-month. The 3 service-area pages added in March (Drain Cleaning in Sheboygan, Two Rivers, Mishicot) are now ranking <strong style="color:var(--green);">#3, #5, and #8</strong> respectively. Site now ranks <strong style="color:var(--green);">#1 for "plumber Manitowoc WI"</strong>.
+    </div>
+  </div>
+
+  <!-- MoM STATS -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
+    <div class="mom-card">
+      <div class="mom-label">Impressions</div>
+      <div class="mom-row"><div class="mom-prev">8,420</div><div class="mom-arrow">→</div><div class="mom-current" style="color:var(--green);">12,847</div></div>
+      <div class="mom-delta" style="color:var(--green);">↑ 52.6%</div>
+    </div>
+    <div class="mom-card">
+      <div class="mom-label">Clicks</div>
+      <div class="mom-row"><div class="mom-prev">412</div><div class="mom-arrow">→</div><div class="mom-current" style="color:var(--green);">847</div></div>
+      <div class="mom-delta" style="color:var(--green);">↑ 105.6%</div>
+    </div>
+    <div class="mom-card">
+      <div class="mom-label">Avg Position</div>
+      <div class="mom-row"><div class="mom-prev">8.2</div><div class="mom-arrow">→</div><div class="mom-current" style="color:var(--accent);">3.4</div></div>
+      <div class="mom-delta" style="color:var(--green);">↑ 4.8 spots</div>
+    </div>
+    <div class="mom-card">
+      <div class="mom-label">CTR</div>
+      <div class="mom-row"><div class="mom-prev">4.9%</div><div class="mom-arrow">→</div><div class="mom-current" style="color:var(--green);">6.6%</div></div>
+      <div class="mom-delta" style="color:var(--green);">↑ 1.7 pp</div>
+    </div>
+  </div>
+
+  <!-- KEYWORD MOVEMENT -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:18px;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:var(--text);margin-bottom:14px;">KEYWORD WINS</div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        <th style="padding:7px 10px;text-align:left;font-size:0.58rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Query</th>
+        <th style="padding:7px 10px;text-align:right;font-size:0.58rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Last</th>
+        <th style="padding:7px 10px;text-align:right;font-size:0.58rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Now</th>
+        <th style="padding:7px 10px;text-align:right;font-size:0.58rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Δ</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border);"><td style="padding:7px 10px;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--text);">plumber manitowoc wi</td><td style="text-align:right;color:var(--text3);text-decoration:line-through;">5</td><td style="text-align:right;"><span style="display:inline-block;width:24px;height:18px;border-radius:4px;background:rgba(62,207,142,0.15);color:var(--green);font-size:0.62rem;font-weight:700;line-height:18px;text-align:center;">1</span></td><td style="text-align:right;color:var(--green);font-weight:600;">↑ 4</td></tr>
+        <tr style="border-bottom:1px solid var(--border);"><td style="padding:7px 10px;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--text);">drain cleaning sheboygan</td><td style="text-align:right;color:var(--text3);text-decoration:line-through;">—</td><td style="text-align:right;"><span style="display:inline-block;width:24px;height:18px;border-radius:4px;background:rgba(96,165,250,0.12);color:var(--blue);font-size:0.62rem;font-weight:700;line-height:18px;text-align:center;">3</span></td><td style="text-align:right;color:var(--green);font-weight:600;">NEW</td></tr>
+        <tr style="border-bottom:1px solid var(--border);"><td style="padding:7px 10px;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--text);">drain cleaning two rivers</td><td style="text-align:right;color:var(--text3);text-decoration:line-through;">—</td><td style="text-align:right;"><span style="display:inline-block;width:24px;height:18px;border-radius:4px;background:rgba(96,165,250,0.12);color:var(--blue);font-size:0.62rem;font-weight:700;line-height:18px;text-align:center;">5</span></td><td style="text-align:right;color:var(--green);font-weight:600;">NEW</td></tr>
+        <tr><td style="padding:7px 10px;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--text);">water heater manitowoc</td><td style="text-align:right;color:var(--text3);text-decoration:line-through;">12</td><td style="text-align:right;"><span style="display:inline-block;width:24px;height:18px;border-radius:4px;background:var(--yellow-bg);color:var(--yellow);font-size:0.62rem;font-weight:700;line-height:18px;text-align:center;">7</span></td><td style="text-align:right;color:var(--green);font-weight:600;">↑ 5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+</div><!-- /main -->
+
+<!-- LEAD MODAL -->
+<div class="modal-overlay" id="modal-lead">
+  <div class="modal" style="width:620px;">
+    <div class="lm-header">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div class="lm-name">LAKESHORE PLUMBING & HEATING</div>
+          <div style="display:flex;gap:7px;margin-top:7px;flex-wrap:wrap;">
+            <span class="badge badge-blue">🏠 Plumbing</span>
+            <span class="badge badge-yellow">★ 4.9 (87 reviews)</span>
+            <span style="color:var(--text3);font-size:0.66rem;">📍 Manitowoc, WI</span>
+          </div>
+        </div>
+        <button class="mclose" onclick="closeModal('modal-lead')">✕</button>
+      </div>
+    </div>
+    <div class="lm-tier-banner t3">
+      <div class="lm-tier-text">⭐ <strong>Recommended: Tier 3</strong> — score 87 · established business with weak existing site</div>
+      <span class="tier-pill t3"><span class="tier-icon"></span>Tier 3</span>
+    </div>
+
+    <div class="lm-tabs">
+      <div class="lm-tab active" onclick="switchLMTab(this,'overview')">Overview</div>
+      <div class="lm-tab" onclick="switchLMTab(this,'reviews')">Reviews (87)</div>
+      <div class="lm-tab" onclick="switchLMTab(this,'pitch')">Pitch Prep</div>
+      <div class="lm-tab" onclick="switchLMTab(this,'call')">Call Log <span style="background:var(--accent-dim);color:var(--accent);font-size:0.55rem;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;">3</span></div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="lm-overview" class="lm-pane active" style="padding:18px 20px;max-height:50vh;overflow-y:auto;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        <div class="fg"><label class="flabel">Phone</label><div style="font-family:'DM Mono',monospace;font-size:0.95rem;color:var(--accent);font-weight:500;">(920) 555-0184</div></div>
+        <div class="fg"><label class="flabel">Existing Website</label><div style="font-size:0.78rem;color:var(--text2);">lakeshoreplumbing.com <span class="badge badge-yellow" style="margin-left:5px;">PSI 32</span></div></div>
+        <div class="fg"><label class="flabel">GBP Status</label><div style="font-size:0.78rem;color:var(--green);">✓ Complete · 23 photos · responding to reviews</div></div>
+        <div class="fg"><label class="flabel">Years Active</label><div style="font-size:0.78rem;color:var(--text2);">14+ years</div></div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="flabel">Service Areas Detected</label>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">
+          <span class="detail-tag review-found">Manitowoc</span>
+          <span class="detail-tag review-found">Two Rivers</span>
+          <span class="detail-tag review-found">Sheboygan</span>
+          <span class="detail-tag review-found">Mishicot</span>
+          <span class="detail-tag review-found">Cleveland</span>
+        </div>
+        <div style="font-size:0.6rem;color:var(--text3);margin-top:4px;">5 areas mined from reviews · only Manitowoc shown on GBP</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="flabel">Services Detected</label>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">
+          <span class="detail-tag review-found">Drain Cleaning</span>
+          <span class="detail-tag review-found">Water Heater</span>
+          <span class="detail-tag review-found">Sewer Line</span>
+          <span class="detail-tag review-found">Sump Pump</span>
+          <span class="detail-tag review-found">Emergency</span>
+          <span class="detail-tag review-found">Leak Detection</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="fg"><label class="flabel">Outcome</label><select class="finput"><option>No Answer</option><option selected>Interested</option><option>Callback</option></select></div>
+        <div class="fg"><label class="flabel">Stage</label><select class="finput"><option>Cold</option><option>Contacted</option><option selected>Qualified</option><option>Client</option></select></div>
+      </div>
+    </div>
+
+    <!-- REVIEWS TAB -->
+    <div id="lm-reviews" class="lm-pane" style="padding:18px 20px;max-height:50vh;overflow-y:auto;display:none;">
+      <div style="font-size:0.7rem;color:var(--text3);margin-bottom:10px;">Showing top 5 reviews · 87 total · 4.9 avg ★</div>
+      <div class="review-card">
+        <div class="review-header"><span class="review-author">Mitchell Pugh</span><span class="review-meta">Manitowoc · 2 weeks ago</span></div>
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text pitch-quote" style="margin-top:5px;">Travis came within an hour of my call when our basement started flooding. He fixed the burst pipe, cleaned up the water damage, and even checked the rest of our pipes for free.</div>
+        <span class="review-tag">⭐ Pitch quote</span>
+      </div>
+      <div class="review-card">
+        <div class="review-header"><span class="review-author">Doug Kowalski</span><span class="review-meta">Sheboygan · 1 month ago</span></div>
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text pitch-quote" style="margin-top:5px;">Saved us $6,500 on a sewer line. Another plumber said we needed full replacement. Travis ran a camera, found the actual problem, fixed it for under $1,500.</div>
+        <span class="review-tag">⭐ Pitch quote</span>
+      </div>
+      <div class="review-card">
+        <div class="review-header"><span class="review-author">Mike Reilly</span><span class="review-meta">Mishicot · 2 months ago</span></div>
+        <div class="review-stars">★★★★★</div>
+        <div class="review-text" style="margin-top:5px;">On time, fair price, clean work. Used them three times now — drain cleaning, water heater, sump pump. They're our plumber now.</div>
+      </div>
+    </div>
+
+    <!-- PITCH PREP TAB -->
+    <div id="lm-pitch" class="lm-pane" style="padding:18px 20px;max-height:50vh;overflow-y:auto;display:none;">
+      <div class="call-prep" style="border:none;padding:0;background:transparent;">
+        <div class="cp-section">
+          <div class="cp-label">🎯 Opening line</div>
+          <div class="cp-content">"Hi Travis — I see you've been getting customers in Two Rivers, Sheboygan, and Mishicot from your reviews, but you only show service in Manitowoc on your Google profile..."</div>
+        </div>
+        <div class="cp-section">
+          <div class="cp-label">💎 Pitch ammo</div>
+          <div class="cp-content">"Doug Kowalski left you a 5-star review last month saying you saved him $6,500 on a sewer line. That should be the headline of your website, not buried in review #47."</div>
+        </div>
+        <div class="cp-section">
+          <div class="cp-label">⚠ Their pain points</div>
+          <div class="cp-content">• Site loads in 6.2 seconds (Google flags this)<br>• Missing service-area pages for 4 of 5 cities you serve<br>• 3 competitors rank above you for "plumber Two Rivers"</div>
+        </div>
+        <div class="cp-section">
+          <div class="cp-label">💰 The pitch</div>
+          <div class="cp-content">"$499/month, free build, 6-month commitment. I add 3 SEO pages every month targeting cities you already work in. Most clients see 50-100% impression growth in the first 90 days."</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CALL LOG TAB -->
+    <div id="lm-call" class="lm-pane" style="padding:0;max-height:55vh;overflow-y:auto;display:none;">
+
+      <!-- New call entry form -->
+      <div style="padding:16px 20px;background:var(--accent-dim);border-bottom:1px solid rgba(255,107,43,0.2);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:0.62rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);">📞 Log a call</div>
+          <div style="font-size:0.62rem;color:var(--text3);" id="call-date-now">Today · 10:32 AM</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px;">
+          <div class="fg">
+            <label class="flabel">Outcome</label>
+            <select class="finput" id="call-outcome">
+              <option>No Answer</option>
+              <option>Voicemail Left</option>
+              <option selected>Spoke with Owner</option>
+              <option>Callback Requested</option>
+              <option>Not Interested</option>
+              <option>Interested</option>
+              <option>Qualified for Tier</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Follow-up date</label>
+            <input type="date" class="finput" value="2026-05-14">
+          </div>
+        </div>
+
+        <div class="fg" style="margin-bottom:10px;">
+          <label class="flabel">Call notes</label>
+          <textarea class="finput" id="call-notes" rows="3" placeholder="What did they say? What's the next action? Any objections to handle?" style="resize:vertical;font-family:'DM Sans',sans-serif;"></textarea>
+        </div>
+
+        <div style="display:flex;gap:7px;justify-content:flex-end;">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('call-notes').value='';">Clear</button>
+          <button class="btn btn-primary btn-sm" onclick="saveCallLog()">💾 Save Call Entry</button>
+        </div>
+      </div>
+
+      <!-- Call history -->
+      <div style="padding:14px 20px;">
+        <div style="font-size:0.62rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Call History · 3 entries</div>
+        <div id="call-log-list">
+
+          <div class="call-entry">
+            <div class="call-entry-header">
+              <div>
+                <span class="call-entry-date">Apr 28, 2026 · 2:14 PM</span>
+                <span class="badge badge-yellow" style="margin-left:8px;">Callback Requested</span>
+              </div>
+              <button class="btn btn-ghost btn-xs" style="padding:2px 6px;">⋯</button>
+            </div>
+            <div class="call-entry-notes">Spoke with Travis briefly — he's in the middle of a job. Asked me to call back next Tuesday after 3pm. Sounded receptive when I mentioned the Two Rivers customers ranking issue. Mentioned he's been thinking about hiring someone for SEO.</div>
+            <div class="call-entry-followup">📅 Follow-up: May 5, 2026</div>
+          </div>
+
+          <div class="call-entry">
+            <div class="call-entry-header">
+              <div>
+                <span class="call-entry-date">Apr 21, 2026 · 11:08 AM</span>
+                <span class="badge badge-blue" style="margin-left:8px;">Voicemail Left</span>
+              </div>
+              <button class="btn btn-ghost btn-xs" style="padding:2px 6px;">⋯</button>
+            </div>
+            <div class="call-entry-notes">Left a voicemail mentioning Doug Kowalski's review and the $6,500 savings story. Kept it under 30 seconds. No callback yet.</div>
+            <div class="call-entry-followup">📅 Follow-up: Apr 28, 2026</div>
+          </div>
+
+          <div class="call-entry">
+            <div class="call-entry-header">
+              <div>
+                <span class="call-entry-date">Apr 14, 2026 · 9:42 AM</span>
+                <span class="badge badge-gray" style="margin-left:8px;">No Answer</span>
+              </div>
+              <button class="btn btn-ghost btn-xs" style="padding:2px 6px;">⋯</button>
+            </div>
+            <div class="call-entry-notes">First attempt. No answer, no voicemail set up.</div>
+            <div class="call-entry-followup">📅 Follow-up: Apr 21, 2026</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:13px 20px;border-top:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-lead')">Close</button>
+      <div style="display:flex;gap:7px;">
+        <button class="btn btn-ghost btn-sm" onclick="showCallPrep()">📋 Prep Call</button>
+        <button class="btn btn-tier3" onclick="closeModal('modal-lead');switchTab('build')">⚡ Build Tier 3 Site</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CALL PREP MODAL -->
+<div class="modal-overlay" id="modal-callprep">
+  <div class="modal" style="width:520px;padding:22px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--text);">Cold Call Prep</div>
+        <div style="font-size:0.65rem;color:var(--text3);margin-top:1px;">Lakeshore Plumbing & Heating · Tier 3 target</div>
+      </div>
+      <button class="mclose" onclick="closeModal('modal-callprep')">✕</button>
+    </div>
+
+    <div class="call-prep">
+      <div class="cp-section">
+        <div class="cp-label">🎯 Opening Line</div>
+        <div class="cp-content">"Hi Travis — I see you've been getting customers in Two Rivers, Sheboygan, and Mishicot from your reviews, but you only show service in Manitowoc on your Google profile..."</div>
+      </div>
+
+      <div class="cp-section">
+        <div class="cp-label">💎 Pitch Ammo</div>
+        <div class="cp-content">"Doug Kowalski left you a 5-star review last month saying you saved him $6,500 on a sewer line. That should be the headline of your website, not buried in review #47."</div>
+      </div>
+
+      <div class="cp-section">
+        <div class="cp-label">⚠ Their Pain Points</div>
+        <div class="cp-content">• Site loads in 6.2 seconds (Google flags this)<br>• Missing service-area pages for 4 of 5 cities you serve<br>• 3 competitors rank above you for "plumber Two Rivers"</div>
+      </div>
+
+      <div class="cp-section">
+        <div class="cp-label">💰 The Pitch</div>
+        <div class="cp-content">"$499/month, free build, 6-month commitment. I add 3 SEO pages every month targeting cities you already work in. You get my full agency including GBP management. Most clients see 50-100% impression growth in the first 90 days."</div>
+      </div>
+
+      <div class="cp-section" style="margin-bottom:0;">
+        <div class="cp-label">📞 Phone</div>
+        <div class="cp-content" style="font-family:'DM Mono',monospace;font-size:1rem;color:var(--accent);font-weight:500;">(920) 555-0184</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-callprep')">Close</button>
+      <button class="btn btn-primary btn-sm" onclick="showToast('Call prep copied — ready to dial');closeModal('modal-callprep')">📋 Copy & Dial</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEO COVERAGE MATRIX MODAL -->
+<div class="modal-overlay" id="modal-matrix">
+  <div class="modal" style="width:840px;">
+    <div style="padding:18px 22px 14px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text);line-height:1;">NORTHSHORE PLUMBING & DRAIN</div>
+          <div style="font-size:0.65rem;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace;">northshore-plumbing.agncy.dev</div>
+        </div>
+        <button class="mclose" onclick="closeModal('modal-matrix')">✕</button>
+      </div>
+    </div>
+
+    <div class="lm-tabs">
+      <div class="lm-tab active">+ Add Pages</div>
+      <div class="lm-tab" onclick="showToast('Edit existing pages via landingsite.ai')">Edit Pages</div>
+      <div class="lm-tab" onclick="showToast('Files reference for this site')">Files</div>
+    </div>
+
+    <div style="padding:18px 22px;max-height:70vh;overflow-y:auto;">
+
+      <!-- Coverage header with counter -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:14px;">
+        <div style="flex:1;">
+          <div style="font-size:0.6rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">SEO Coverage</div>
+          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;max-width:380px;margin-bottom:6px;">
+            <div style="width:70%;height:100%;background:var(--tier3);border-radius:3px;"></div>
+          </div>
+          <div style="font-size:0.74rem;color:var(--text2);">21 of 30 pages built — <span style="color:var(--accent);">9 available to add</span></div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:0.58rem;color:var(--text3);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase;">Add this month</div>
+          <div style="display:flex;align-items:center;gap:9px;justify-content:flex-end;">
+            <button onclick="adjMatrix(-1)" style="width:30px;height:30px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer;font-size:14px;">−</button>
+            <span id="matrix-count" style="font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:var(--accent);min-width:30px;text-align:center;line-height:1;">3</span>
+            <button onclick="adjMatrix(1)" style="width:30px;height:30px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer;font-size:14px;">+</button>
+            <span style="font-size:0.7rem;color:var(--text3);">pages</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;font-size:0.62rem;color:var(--text3);flex-wrap:wrap;">
+        <span style="font-weight:600;letter-spacing:1.5px;text-transform:uppercase;">Service × Location Matrix</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:rgba(62,207,142,0.2);border:1px solid rgba(62,207,142,0.4);border-radius:2px;"></span>Built</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:rgba(255,107,43,0.2);border:1px solid rgba(255,107,43,0.5);border-radius:2px;"></span>Selected</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:rgba(167,139,250,0.15);border:1px dashed rgba(167,139,250,0.5);border-radius:2px;"></span>Recommended</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;background:var(--surface3);border:1px solid var(--border2);border-radius:2px;"></span>Available</span>
+      </div>
+
+      <!-- The matrix -->
+      <div class="matrix-grid">
+        <!-- Header row -->
+        <div class="mhead-row">
+          <div class="mhead-empty"></div>
+          <div class="mhead-cell">Drain<br>Cleaning</div>
+          <div class="mhead-cell">Water Heater<br>Repair</div>
+          <div class="mhead-cell">Leak<br>Detection</div>
+        </div>
+
+        <!-- City rows -->
+        <div class="mrow">
+          <div class="mcity">Manitowoc</div>
+          <div class="mcell built">✓</div>
+          <div class="mcell built">✓</div>
+          <div class="mcell built">✓</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Two Rivers</div>
+          <div class="mcell built">✓</div>
+          <div class="mcell built">✓</div>
+          <div class="mcell selected" onclick="toggleCell(this)">✓</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Sheboygan</div>
+          <div class="mcell built">✓</div>
+          <div class="mcell selected" onclick="toggleCell(this)">✓</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Mishicot <span class="mcity-tag">★ in reviews</span></div>
+          <div class="mcell selected" onclick="toggleCell(this)">✓</div>
+          <div class="mcell recommended" onclick="toggleCell(this)">+</div>
+          <div class="mcell recommended" onclick="toggleCell(this)">+</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Cleveland <span class="mcity-tag">★ in reviews</span></div>
+          <div class="mcell recommended" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Plymouth</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Kiel</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+        </div>
+        <div class="mrow">
+          <div class="mcity">Sheboygan Falls</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+          <div class="mcell available" onclick="toggleCell(this)">+</div>
+        </div>
+      </div>
+
+      <!-- Recommendation note -->
+      <div style="margin-top:14px;padding:12px 14px;background:var(--tier3-bg);border:1px solid rgba(167,139,250,0.2);border-radius:var(--r);font-size:0.72rem;color:var(--text2);line-height:1.6;">
+        <strong style="color:var(--tier3);">★ Smart recommendation:</strong> Mishicot and Cleveland appear in customer reviews but have no service-area pages yet. Adding these will help the site rank in cities where you already have proven customer activity.
+      </div>
+
+    </div>
+
+    <!-- Confirmation overlay (shown after clicking Expand Site) -->
+    <div id="matrix-confirm" style="display:none;position:absolute;inset:0;background:rgba(20,20,20,0.97);align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:30px;z-index:5;">
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--tier3-bg);color:var(--tier3);display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin-bottom:14px;border:2px solid rgba(167,139,250,0.3);">✓</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text);margin-bottom:6px;">Pages Queued</div>
+      <div id="confirm-detail" style="font-size:0.78rem;color:var(--text2);margin-bottom:6px;line-height:1.6;max-width:320px;">3 page briefs generated and handed off to Cowork.</div>
+      <div id="confirm-time" style="font-size:0.7rem;color:var(--text3);margin-bottom:18px;">Estimated completion: ~11 minutes</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;font-size:0.65rem;color:var(--text3);max-width:380px;line-height:1.6;text-align:left;">
+        🤖 <strong style="color:var(--text2);">Cowork is now opening landingsite.ai</strong> and will build each page sequentially. Track progress on the site card or in the Build tab queue strip.
+      </div>
+      <button class="btn btn-tier3 btn-sm" style="margin-top:18px;" onclick="finishExpand()">View Progress on Site Card</button>
+    </div>
+
+    <div style="padding:13px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="font-size:0.7rem;color:var(--text3);" id="matrix-hint">3 cells selected · Cowork est. ~10 min</div>
+      <div style="display:flex;gap:7px;">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-matrix')">Close</button>
+        <button class="btn btn-tier3" id="expand-btn" onclick="expandSite()">⚡ Expand Site</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT REPORT MODAL -->
+<div class="modal-overlay" id="modal-export">
+  <div class="modal" style="width:580px;">
+    <div style="padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;">Export Client Report</div>
+        <div style="font-size:0.65rem;color:var(--text3);margin-top:2px;">Northshore Plumbing & Drain · April 2026 · <span class="tier-pill t3" style="margin-left:4px;"><span class="tier-icon"></span>Tier 3</span></div>
+      </div>
+      <button class="mclose" onclick="closeModal('modal-export')">✕</button>
+    </div>
+
+    <div style="padding:14px 22px 4px;">
+      <div style="font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Include in Report</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Executive summary</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Month-over-month stats</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Keyword wins & movement</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Pages built this month</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Site health metrics</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--text2);cursor:pointer;"><input type="checkbox" checked style="accent-color:var(--tier3);"> Next month plan</label>
+      </div>
+    </div>
+
+    <div style="padding:0 22px;background:var(--surface2);">
+      <div style="padding:14px 0 8px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">PDF Preview</div>
+        <div style="font-size:0.6rem;color:var(--text3);">2 pages · ~340KB</div>
+      </div>
+      <div class="pdf-preview">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <h1>NORTHSHORE PLUMBING & DRAIN</h1>
+            <div class="pdf-sub">SEO Performance Report · April 2026</div>
+          </div>
+          <div style="font-size:0.6rem;color:#999;text-align:right;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">SCD<br><span style="font-size:0.55rem;color:#bbb;font-family:'DM Sans';letter-spacing:0;">Shaun Carl Designs</span></div>
+        </div>
+        <div class="pdf-divider"></div>
+
+        <h2>Executive Summary</h2>
+        <p>Northshore Plumbing had its strongest month yet on Google. Impressions grew <strong style="color:#0a8c5a;">52%</strong> month-over-month and the site now ranks <strong style="color:#0a8c5a;">#1 for "plumber manitowoc wi"</strong>. The 3 service-area pages added in March (Drain Cleaning in Sheboygan, Two Rivers, Mishicot) are now ranking #3, #5, and #8 respectively.</p>
+
+        <div class="pdf-divider"></div>
+
+        <h2>Month-Over-Month Performance</h2>
+        <div class="pdf-stat-row">
+          <div class="pdf-stat">
+            <div class="pdf-stat-label">Impressions</div>
+            <div class="pdf-stat-val">12,847</div>
+            <div class="pdf-stat-delta">↑ 52.6% vs March (8,420)</div>
+          </div>
+          <div class="pdf-stat">
+            <div class="pdf-stat-label">Clicks</div>
+            <div class="pdf-stat-val">847</div>
+            <div class="pdf-stat-delta">↑ 105.6% vs March (412)</div>
+          </div>
+          <div class="pdf-stat">
+            <div class="pdf-stat-label">Avg Position</div>
+            <div class="pdf-stat-val">3.4</div>
+            <div class="pdf-stat-delta">↑ Improved 4.8 spots</div>
+          </div>
+          <div class="pdf-stat">
+            <div class="pdf-stat-label">Click-Through Rate</div>
+            <div class="pdf-stat-val">6.6%</div>
+            <div class="pdf-stat-delta">↑ 1.7 percentage points</div>
+          </div>
+        </div>
+
+        <div class="pdf-divider"></div>
+
+        <h2>Top Keyword Wins</h2>
+        <ul>
+          <li><span>plumber manitowoc wi</span><span style="color:#0a8c5a;font-weight:600;">↑ 4 → #1</span></li>
+          <li><span>drain cleaning sheboygan</span><span style="color:#0a8c5a;font-weight:600;">NEW → #3</span></li>
+          <li><span>drain cleaning two rivers</span><span style="color:#0a8c5a;font-weight:600;">NEW → #5</span></li>
+          <li><span>water heater manitowoc</span><span style="color:#0a8c5a;font-weight:600;">↑ 5 → #7</span></li>
+          <li><span>drain cleaning mishicot</span><span style="color:#0a8c5a;font-weight:600;">NEW → #8</span></li>
+        </ul>
+
+        <div class="pdf-divider"></div>
+
+        <h2>Pages Built This Month</h2>
+        <ul>
+          <li><span>Drain Cleaning in Sheboygan, WI</span><span style="color:#666;">May 2</span></li>
+          <li><span>Drain Cleaning in Two Rivers, WI</span><span style="color:#666;">May 3</span></li>
+          <li><span>Drain Cleaning in Mishicot, WI</span><span style="color:#666;">May 4</span></li>
+        </ul>
+
+        <div class="pdf-divider"></div>
+
+        <h2>Recommended for May 2026</h2>
+        <ul>
+          <li><span>Add 3 service-area pages targeting Cleveland and Plymouth (mentioned in reviews)</span></li>
+          <li><span>Refresh "water heater repair" page — Google flagged content age</span></li>
+          <li><span>GBP: Continue weekly post cadence and review responses</span></li>
+        </ul>
+
+        <div class="pdf-foot">Prepared by Shaun Carl Designs · scd-agency.com · Generated May 7, 2026</div>
+      </div>
+    </div>
+
+    <div style="padding:14px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:0.65rem;color:var(--text3);">📧 travis@northshoreplumbingwi.com</div>
+      <div style="display:flex;gap:7px;">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-export')">Cancel</button>
+        <button class="btn btn-ghost btn-sm" onclick="showToast('PDF generated and downloaded');closeModal('modal-export')">↓ Download PDF</button>
+        <button class="btn btn-tier3 btn-sm" onclick="showToast('PDF generated and emailed to travis@northshoreplumbingwi.com');closeModal('modal-export')">📧 Email to Client</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT CSV MODAL -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" style="width:560px;">
+    <div style="padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;">Import Leads from CSV</div>
+        <div style="font-size:0.65rem;color:var(--text3);margin-top:2px;">Drop a CSV — auto-detected columns will be mapped to your pipeline</div>
+      </div>
+      <button class="mclose" onclick="closeModal('modal-import')">✕</button>
+    </div>
+
+    <div style="padding:18px 22px;">
+
+      <!-- Drop zone -->
+      <div style="border:2px dashed var(--border2);border-radius:var(--rl);padding:24px;text-align:center;cursor:pointer;transition:all 0.14s;margin-bottom:14px;" onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-dim)';" onmouseout="this.style.borderColor='var(--border2)';this.style.background='';">
+        <div style="font-size:1.6rem;margin-bottom:8px;opacity:0.4;">📁</div>
+        <div style="font-size:0.86rem;color:var(--text2);font-weight:500;margin-bottom:3px;">Drop your CSV here or click to upload</div>
+        <div style="font-size:0.66rem;color:var(--text3);">Up to 1,000 leads · Auto-detects column names</div>
+      </div>
+
+      <!-- Detected columns preview (post-upload state) -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);">Detected: leads.csv · 165 rows</div>
+          <span class="badge badge-green">✓ Format recognized</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:0.7rem;">
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">company</span><span style="color:var(--green);">→ company ✓</span></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">phone</span><span style="color:var(--green);">→ phone ✓</span></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">city</span><span style="color:var(--green);">→ city ✓</span></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">contact</span><span style="color:var(--green);">→ contact ✓</span></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">outcome</span><span style="color:var(--green);">→ outcome ✓</span></div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;"><span style="color:var(--text3);">notes</span><span style="color:var(--green);">→ notes ✓</span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text3);">industry</span><span style="color:var(--green);">→ industry ✓</span></div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text3);">followup</span><span style="color:var(--green);">→ followup ✓</span></div>
+        </div>
+      </div>
+
+      <!-- Enrichment strategy -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px;">
+        <div style="font-size:0.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Enrichment Strategy</div>
+        <label style="display:flex;align-items:flex-start;gap:9px;padding:9px;background:var(--accent-dim);border:1px solid rgba(255,107,43,0.2);border-radius:var(--r);cursor:pointer;margin-bottom:6px;">
+          <input type="radio" name="enrich" checked style="margin-top:2px;accent-color:var(--accent);">
+          <div>
+            <div style="font-size:0.74rem;font-weight:600;color:var(--accent);margin-bottom:2px;">⚡ On-demand (recommended)</div>
+            <div style="font-size:0.65rem;color:var(--text3);line-height:1.5;">Import all 165 leads now. Each one gets enriched (scored, tiered, reviews mined) when you click "Enrich" or change its stage. Saves API budget for leads you actually work.</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:9px;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;margin-bottom:6px;">
+          <input type="radio" name="enrich" style="margin-top:2px;accent-color:var(--accent);">
+          <div>
+            <div style="font-size:0.74rem;font-weight:600;color:var(--text2);margin-bottom:2px;">🌙 Background drip</div>
+            <div style="font-size:0.65rem;color:var(--text3);line-height:1.5;">Auto-enrich 25 leads per night via overnight cron. All 165 enriched within 7 days. ~$1.50 total in API costs.</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:9px;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;">
+          <input type="radio" name="enrich" style="margin-top:2px;accent-color:var(--accent);">
+          <div>
+            <div style="font-size:0.74rem;font-weight:600;color:var(--text2);margin-bottom:2px;">⚡⚡ Enrich all now</div>
+            <div style="font-size:0.65rem;color:var(--text3);line-height:1.5;">Process all 165 at once. ~18 min, ~$1.50 in API costs. Dashboard usable while it runs.</div>
+          </div>
+        </label>
+      </div>
+
+    </div>
+
+    <div style="padding:13px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="font-size:0.65rem;color:var(--text3);">⚠ Duplicates checked by company + phone</div>
+      <div style="display:flex;gap:7px;">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-import')">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal('modal-import');showToast('165 leads imported · enrichment will run on demand')">↑ Import 165 Leads</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD LEAD MODAL — Simple Places Search -->
+<div class="modal-overlay" id="modal-addlead">
+  <div class="modal" style="width:540px;">
+    <div style="padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;">Add Lead</div>
+        <div style="font-size:0.65rem;color:var(--text3);margin-top:2px;">Search Google Places to find and import a business</div>
+      </div>
+      <button class="mclose" onclick="closeModal('modal-addlead')">✕</button>
+    </div>
+
+    <div style="padding:18px 22px;">
+
+      <!-- Search bar -->
+      <div style="margin-bottom:14px;">
+        <label class="flabel" style="margin-bottom:6px;display:block;">Business name + city</label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text3);">🔍</span>
+          <input type="text" class="finput" placeholder="e.g. Lakeshore Plumbing Manitowoc" style="padding-left:36px;" oninput="showAddLeadResults(this.value)" autofocus>
+        </div>
+        <div style="font-size:0.62rem;color:var(--text3);margin-top:5px;">Both claimed and unclaimed GBP listings show up — unclaimed are highlighted</div>
+      </div>
+
+      <!-- Search results -->
+      <div id="addlead-results" style="display:none;">
+        <div style="font-size:0.6rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Matches</div>
+
+        <div class="addlead-result" onclick="selectLeadResult(this)">
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;color:var(--text);font-weight:500;margin-bottom:2px;">Lakeshore Plumbing & Heating</div>
+            <div style="font-size:0.65rem;color:var(--text3);">412 N 8th St, Manitowoc, WI · (920) 555-0184</div>
+          </div>
+          <span class="gbp-pill claimed" style="flex-shrink:0;">✓ Claimed</span>
+        </div>
+
+        <div class="addlead-result" onclick="selectLeadResult(this)" style="background:rgba(167,139,250,0.04);border-color:rgba(167,139,250,0.2);">
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;color:var(--text);font-weight:500;margin-bottom:2px;">Wisconsin Drain Pros</div>
+            <div style="font-size:0.65rem;color:var(--text3);">Manitowoc, WI · (920) 555-0723</div>
+          </div>
+          <span class="gbp-pill unclaimed" style="flex-shrink:0;">⭐ Unclaimed</span>
+        </div>
+
+        <div class="addlead-result" onclick="selectLeadResult(this)">
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;color:var(--text);font-weight:500;margin-bottom:2px;">Manitowoc Plumber LLC</div>
+            <div style="font-size:0.65rem;color:var(--text3);">823 Washington St, Manitowoc, WI · (920) 555-0451</div>
+          </div>
+          <span class="gbp-pill claimed" style="flex-shrink:0;">✓ Claimed</span>
+        </div>
+
+        <div class="addlead-result" onclick="selectLeadResult(this)" style="background:rgba(167,139,250,0.04);border-color:rgba(167,139,250,0.2);">
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;color:var(--text);font-weight:500;margin-bottom:2px;">Coastal Drain & Sewer</div>
+            <div style="font-size:0.65rem;color:var(--text3);">Manitowoc, WI · (920) 555-0867</div>
+          </div>
+          <span class="gbp-pill unclaimed" style="flex-shrink:0;">⭐ Unclaimed</span>
+        </div>
+
+        <div style="text-align:center;font-size:0.6rem;color:var(--text3);margin-top:10px;">Showing top 4 of 12 matches · Refine your search to narrow</div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="addlead-empty" style="text-align:center;padding:24px 14px;color:var(--text3);">
+        <div style="font-size:1.6rem;opacity:0.3;margin-bottom:8px;">🔎</div>
+        <div style="font-size:0.74rem;color:var(--text2);font-weight:500;margin-bottom:3px;">Start typing to search Google Places</div>
+        <div style="font-size:0.62rem;line-height:1.6;">Lead data, GBP details, and reviews will be imported automatically</div>
+      </div>
+
+    </div>
+
+    <div style="padding:13px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:0.65rem;color:var(--text3);">Can't find them? Add manually after import.</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-addlead')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span style="color:var(--green);">✓</span><span id="toast-msg"></span></div>
+
+<script>
+function switchTab(name){
+  const tabs=['prospect','pipeline','build','sites','manage'];
+  document.querySelectorAll('.ntab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));
+}
+function showResults(){
+  document.getElementById('prospect-empty').style.display='none';
+  document.getElementById('prospect-results').style.display='flex';
+  document.getElementById('results-table').style.display='block';
+  showToast('Found 15 results — 3 already in pipeline · 12 new leads scored');
+}
+function toggleExpand(row){
+  const next=row.nextElementSibling;
+  if(next && next.classList.contains('expand-row')){
+    const open=next.style.display!=='none';
+    next.style.display=open?'none':'table-row';
+    row.querySelector('span').textContent=open?'▸':'▾';
+  }
+}
+function filterTier(t){showToast('Filtered to '+t.toUpperCase()+' candidates');}
+function filterStage(el){document.querySelectorAll('.sstep').forEach(s=>s.classList.remove('active'));el.classList.add('active');}
+function openLead(){document.getElementById('modal-lead').classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function showCallPrep(){closeModal('modal-lead');document.getElementById('modal-callprep').classList.add('open');}
+function switchLMTab(el, name){
+  document.querySelectorAll('.lm-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.lm-pane').forEach(p=>{
+    p.style.display = p.id === 'lm-' + name ? '' : 'none';
+  });
+}
+
+function addToPipeline(btn){
+  const row = btn.closest('tr');
+  const company = row.querySelector('.td-co').textContent;
+  // Visually fade out the row to confirm
+  row.style.transition = 'all 0.4s';
+  row.style.opacity = '0.3';
+  btn.disabled = true;
+  btn.innerHTML = '✓ Added';
+  btn.style.opacity = '0.6';
+  showToast(company + ' added to pipeline as Cold lead');
+}
+
+function saveCallLog(){
+  const outcome = document.getElementById('call-outcome').value;
+  const notes = document.getElementById('call-notes').value;
+  if(!notes.trim()){
+    showToast('⚠ Please add notes before saving');
+    return;
+  }
+  // Add new entry to top of call list
+  const list = document.getElementById('call-log-list');
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' · ' + now.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true});
+  const newEntry = document.createElement('div');
+  newEntry.className = 'call-entry';
+  newEntry.style.background = 'rgba(62,207,142,0.06)';
+  newEntry.style.borderColor = 'rgba(62,207,142,0.25)';
+  newEntry.innerHTML = `
+    <div class="call-entry-header">
+      <div>
+        <span class="call-entry-date">${dateStr}</span>
+        <span class="badge badge-green" style="margin-left:8px;">${outcome}</span>
+        <span class="badge" style="background:rgba(62,207,142,0.15);color:var(--green);font-size:0.55rem;margin-left:4px;">JUST ADDED</span>
+      </div>
+      <button class="btn btn-ghost btn-xs" style="padding:2px 6px;">⋯</button>
+    </div>
+    <div class="call-entry-notes">${notes}</div>
+    <div class="call-entry-followup">📅 Follow-up: May 14, 2026</div>
+  `;
+  list.insertBefore(newEntry, list.firstChild);
+  // Clear form
+  document.getElementById('call-notes').value = '';
+  showToast('✓ Call entry saved · follow-up scheduled');
+}
+
+function openMatrix(){document.getElementById('modal-matrix').classList.add('open');}
+function openExportModal(){document.getElementById('modal-export').classList.add('open');}
+function openModal(id){document.getElementById(id).classList.add('open');}
+
+function showAddLeadResults(val){
+  const results = document.getElementById('addlead-results');
+  const empty = document.getElementById('addlead-empty');
+  if(val.length >= 2){
+    results.style.display = 'block';
+    empty.style.display = 'none';
+  } else {
+    results.style.display = 'none';
+    empty.style.display = 'block';
+  }
+}
+
+function selectLeadResult(el){
+  const name = el.querySelector('div div').textContent;
+  closeModal('modal-addlead');
+  showToast(name + ' imported · enriching now...');
+}
+
+function enrichLead(btn){
+  const row = btn.closest('tr');
+  const badge = row.querySelector('.enrich-badge');
+  badge.className = 'enrich-badge enriching';
+  badge.innerHTML = '<span class="enrich-spin">⚙</span> Enriching...';
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  btn.textContent = '⌛ Wait';
+  showToast('Enriching ' + row.querySelector('.td-co').textContent + ' — fetching reviews, scoring website...');
+}
+
+function expandSite(){
+  // Show loading state on button briefly
+  const btn = document.getElementById('expand-btn');
+  btn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;">⚙</span> Generating briefs...';
+  btn.style.pointerEvents = 'none';
+  btn.style.opacity = '0.7';
+
+  // After ~1.2s, show the confirmation overlay
+  setTimeout(() => {
+    const selected = document.querySelectorAll('.mcell.selected').length;
+    const time = Math.round(selected * 3.5);
+    document.getElementById('confirm-detail').textContent =
+      selected + ' page brief' + (selected !== 1 ? 's' : '') + ' generated and handed off to Cowork.';
+    document.getElementById('confirm-time').textContent =
+      'Estimated completion: ~' + time + ' minutes';
+    const overlay = document.getElementById('matrix-confirm');
+    overlay.style.display = 'flex';
+  }, 1200);
+}
+
+function finishExpand(){
+  // Update the Northshore site card to reflect new pages queued
+  updateNorthshoreCard();
+  // Reset matrix state
+  closeModal('modal-matrix');
+  setTimeout(() => {
+    document.getElementById('matrix-confirm').style.display = 'none';
+    const btn = document.getElementById('expand-btn');
+    btn.innerHTML = '⚡ Expand Site';
+    btn.style.pointerEvents = '';
+    btn.style.opacity = '';
+  }, 300);
+  // Switch to Sites tab
+  switchTab('sites');
+  showToast('Cowork started — building 3 pages in landingsite.ai');
+}
+
+function updateNorthshoreCard(){
+  // Update the Northshore site card schedule mini-view to show newly queued pages
+  const scheduleLabels = document.querySelectorAll('.schedule-label');
+  scheduleLabels.forEach(label => {
+    if(label.textContent.includes('May Pages')){
+      label.textContent = 'May Pages — 1 of 6 Built';
+      const scheduleMini = label.parentElement;
+      // Add 3 new queued items
+      const newItems = `
+        <div class="schedule-item" style="background:rgba(167,139,250,0.06);"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-queued"></span>Drain Cleaning — Cleveland</div><span style="font-size:0.6rem;color:var(--purple);">Just queued</span></div>
+        <div class="schedule-item" style="background:rgba(167,139,250,0.06);"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-queued"></span>Water Heater — Mishicot</div><span style="font-size:0.6rem;color:var(--purple);">Just queued</span></div>
+        <div class="schedule-item" style="background:rgba(167,139,250,0.06);"><div style="display:flex;align-items:center;gap:7px;"><span class="schedule-status-dot dot-queued"></span>Leak Detection — Mishicot</div><span style="font-size:0.6rem;color:var(--purple);">Just queued</span></div>
+      `;
+      scheduleMini.insertAdjacentHTML('beforeend', newItems);
+    }
+  });
+  // Update coverage summary to reflect 3 more pages added to "in progress"
+  const covVals = document.querySelectorAll('.cov-val');
+  covVals.forEach(v => {
+    if(v.textContent.includes('21 / 30')){
+      v.innerHTML = '21 / 30 pages · <span style="color:var(--purple);">+3 queued</span>';
+    }
+  });
+}
+
+let matrixCount = 3;
+function adjMatrix(d){
+  matrixCount = Math.max(1, Math.min(9, matrixCount + d));
+  document.getElementById('matrix-count').textContent = matrixCount;
+  updateMatrixHint();
+}
+
+function toggleCell(el){
+  if(el.classList.contains('selected')){
+    el.classList.remove('selected');
+    el.classList.add('available');
+    el.textContent = '+';
+  } else if(el.classList.contains('available') || el.classList.contains('recommended')){
+    el.classList.remove('available','recommended');
+    el.classList.add('selected');
+    el.textContent = '✓';
+  }
+  // Recount selected cells
+  const selected = document.querySelectorAll('.mcell.selected').length;
+  matrixCount = selected || 1;
+  document.getElementById('matrix-count').textContent = matrixCount;
+  updateMatrixHint();
+}
+
+function updateMatrixHint(){
+  const selected = document.querySelectorAll('.mcell.selected').length;
+  const time = Math.round(selected * 3.5);
+  const hint = document.getElementById('matrix-hint');
+  if(selected > 0){
+    hint.textContent = selected + ' cells selected · Cowork est. ~' + time + ' min';
+    hint.style.color = 'var(--accent)';
+  } else {
+    hint.textContent = matrixCount + ' pages auto-selected by SEO priority';
+    hint.style.color = 'var(--text3)';
+  }
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+let toastT;
+function showToast(msg){const t=document.getElementById('toast');document.getElementById('toast-msg').textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2800);}
+</script>
+</body>
+</html>

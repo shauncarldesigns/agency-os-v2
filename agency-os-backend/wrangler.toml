@@ -1,0 +1,39 @@
+name = "agency-os-v2-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agency-os-v2"
+database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
+
+[[queues.producers]]
+binding = "BRIEF_QUEUE"
+queue = "brief-jobs"
+
+[[queues.consumers]]
+queue = "brief-jobs"
+max_batch_size = 1
+max_batch_timeout = 30
+
+[triggers]
+crons = [
+  "0 6 * * *",
+  "0 7 1 * *",
+  "0 8 * * 1"
+]
+
+[vars]
+ENV = "production"
+
+# Secrets (set via `wrangler secret put`):
+# CLAUDE_API_KEY
+# GOOGLE_PLACES_API_KEY
+# GOOGLE_OAUTH_CLIENT_ID
+# GOOGLE_OAUTH_CLIENT_SECRET
+# GOOGLE_OAUTH_REFRESH_TOKEN
+# CLOUDFLARE_API_TOKEN
+# CLOUDFLARE_ACCOUNT_ID
+# DASHBOARD_API_KEY
+# RESEND_API_KEY

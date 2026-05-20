@@ -1,0 +1,220 @@
+import { Hono } from 'hono';
+import type { Env, Lead } from '../types';
+import { badRequest, notFound, serverError, log } from '../utils/errors';
+import { getPlaceDetails, searchPlaces } from '../services/places';
+import { getPageSpeedReport } from '../services/pagespeed';
+import { mineReviews } from '../services/reviewMiner';
+import { calculateOpportunityScore, recentReviewActivity } from '../services/scoring';
+
+export const enrichRouter = new Hono<{ Bindings: Env }>();
+
+// Bulk enrich — runs all 'pending' leads sequentially (one at a time so we don't blow API quotas)
+enrichRouter.post('/enrich-all', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as { limit?: number };
+    const limit = Math.min(body.limit ?? 25, 100);
+
+    const pending = await c.env.DB
+      .prepare("SELECT id FROM leads WHERE enrichment_status = 'pending' AND status != 'dead' LIMIT ?")
+      .bind(limit)
+      .all();
+
+    const ids = (pending.results as Array<{ id: number }>).map(r => r.id);
+    let succeeded = 0;
+    let failed = 0;
+    const failures: Array<{ id: number; error: string }> = [];
+
+    for (const id of ids) {
+      try {
+        await enrichLead(c.env, id);
+        succeeded++;
+      } catch (err) {
+        failed++;
+        const msg = (err as Error).message;
+        failures.push({ id, error: msg });
+        log('error', 'enrich', `Lead ${id} enrichment failed`, err);
+        await c.env.DB
+          .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(msg.slice(0, 500), id)
+          .run();
+      }
+    }
+
+    return c.json({ total: ids.length, succeeded, failed, failures: failures.slice(0, 10) });
+  } catch (err) {
+    log('error', 'enrich', 'POST /enrich-all failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// Single-lead enrich (mounted at /api/leads/:id/enrich via leadEnrichRouter below)
+export const leadEnrichRouter = new Hono<{ Bindings: Env }>();
+
+leadEnrichRouter.post('/:id/enrich', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(id).first();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  try {
+    const updated = await enrichLead(c.env, id);
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'enrich', `POST /leads/${id}/enrich failed`, err);
+    await c.env.DB
+      .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind((err as Error).message.slice(0, 500), id)
+      .run();
+    return c.json(serverError(`Enrichment failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// Core enrichment pipeline — Places (resolve if no place_id) → PageSpeed → review mining → scoring
+export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
+  const lead = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
+  if (!lead) throw new Error('Lead not found');
+
+  // Mark enriching
+  await env.DB
+    .prepare("UPDATE leads SET enrichment_status = 'enriching', enrichment_error = NULL, updated_at = datetime('now') WHERE id = ?")
+    .bind(leadId)
+    .run();
+
+  // 1. Resolve place_id if missing (best-effort, search by company + city)
+  let placeId = lead.place_id;
+  if (!placeId && lead.city) {
+    try {
+      const matches = await searchPlaces(env.GOOGLE_PLACES_API_KEY, lead.company, lead.city);
+      const best = matches.find(m => fuzzyMatchName(m.name, lead.company)) ?? matches[0];
+      if (best) placeId = best.placeId;
+    } catch (err) {
+      log('warn', 'enrich', `Place resolve failed for lead ${leadId}`, err);
+    }
+  }
+
+  // 2. Pull GBP details (reviews, photos, hours, claimed signals)
+  let placeData: Awaited<ReturnType<typeof getPlaceDetails>> | null = null;
+  if (placeId) {
+    try {
+      placeData = await getPlaceDetails(env.GOOGLE_PLACES_API_KEY, placeId);
+    } catch (err) {
+      log('warn', 'enrich', `Place detail failed for lead ${leadId}`, err);
+    }
+  }
+
+  // 3. PageSpeed (only if has website)
+  const websiteUrl = placeData?.website ?? lead.website;
+  let pagespeedMobile: number | null = lead.pagespeed_mobile;
+  let pagespeedDesktop: number | null = lead.pagespeed_desktop;
+  if (websiteUrl) {
+    try {
+      const ps = await getPageSpeedReport(env.GOOGLE_PLACES_API_KEY, websiteUrl);
+      pagespeedMobile = ps.mobile;
+      pagespeedDesktop = ps.desktop;
+    } catch (err) {
+      log('warn', 'enrich', `PageSpeed failed for lead ${leadId}`, err);
+    }
+  }
+
+  // 4. Review mining via Claude (only if we have reviews)
+  let mined: Awaited<ReturnType<typeof mineReviews>> | null = null;
+  if (placeData?.reviews?.length) {
+    try {
+      mined = await mineReviews(
+        env.CLAUDE_API_KEY,
+        placeData.name || lead.company,
+        placeData.city ?? lead.city ?? 'Unknown',
+        placeData.reviews
+      );
+    } catch (err) {
+      log('warn', 'enrich', `Review mining failed for lead ${leadId}`, err);
+    }
+  }
+
+  // 5. Score
+  const score = calculateOpportunityScore({
+    hasWebsite: !!websiteUrl,
+    pagespeedMobile,
+    pagespeedDesktop,
+    gbpClaimed: placeData?.claimed ?? !!lead.gbp_claimed,
+    gbpPhotos: placeData?.photoCount ?? lead.gbp_photos_count ?? 0,
+    gbpHasDescription: placeData?.hasDescription ?? false,
+    gbpHasHours: placeData?.hasHours ?? false,
+    reviewCount: placeData?.reviewCount ?? lead.google_review_count ?? 0,
+    rating: placeData?.rating ?? lead.google_rating,
+    recentReviewActivity: placeData?.reviews ? recentReviewActivity(placeData.reviews) : false,
+    yearsInBusiness: null,
+  });
+
+  // 6. Persist
+  await env.DB.prepare(`
+    UPDATE leads SET
+      place_id = ?,
+      gbp_claimed = ?,
+      gbp_photos_count = ?,
+      gbp_categories = ?,
+      gbp_hours = ?,
+      google_rating = ?,
+      google_review_count = ?,
+      google_reviews = ?,
+      reviews_fetched_at = ?,
+      website = COALESCE(?, website),
+      has_website = ?,
+      pagespeed_mobile = ?,
+      pagespeed_desktop = ?,
+      address = COALESCE(?, address),
+      city = COALESCE(?, city),
+      state = COALESCE(?, state),
+      phone = COALESCE(?, phone),
+      industry = COALESCE(?, industry),
+      extracted_services = ?,
+      extracted_service_areas = ?,
+      extracted_strengths = ?,
+      pitch_quotes = ?,
+      owner_names = ?,
+      opportunity_score = ?,
+      recommended_tier = ?,
+      enrichment_status = 'enriched',
+      enrichment_error = NULL,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    placeId ?? lead.place_id,
+    placeData ? (placeData.claimed ? 1 : 0) : lead.gbp_claimed,
+    placeData?.photoCount ?? lead.gbp_photos_count,
+    placeData?.types ? JSON.stringify(placeData.types) : lead.gbp_categories,
+    placeData?.hours ? JSON.stringify(placeData.hours) : lead.gbp_hours,
+    placeData?.rating ?? lead.google_rating,
+    placeData?.reviewCount ?? lead.google_review_count,
+    placeData?.reviews ? JSON.stringify(placeData.reviews) : lead.google_reviews,
+    placeData?.reviews ? new Date().toISOString() : lead.reviews_fetched_at,
+    websiteUrl ?? null,
+    websiteUrl ? 1 : 0,
+    pagespeedMobile,
+    pagespeedDesktop,
+    placeData?.address ?? null,
+    placeData?.city ?? null,
+    placeData?.state ?? null,
+    placeData?.phone ?? null,
+    placeData?.primaryType ?? null,
+    mined ? JSON.stringify(mined.services_performed) : null,
+    mined ? JSON.stringify(mined.service_areas) : null,
+    mined ? JSON.stringify(mined.strengths) : null,
+    mined ? JSON.stringify(mined.pitch_quotes) : null,
+    mined ? JSON.stringify(mined.owner_names) : null,
+    score.score,
+    score.tier,
+    leadId,
+  ).run();
+
+  const updated = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
+  if (!updated) throw new Error('Lead disappeared after update');
+  log('info', 'enrich', `Lead ${leadId} enriched`, { score: score.score, tier: score.tier });
+  return updated;
+}
+
+function fuzzyMatchName(a: string, b: string): boolean {
+  const n = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  return n(a) === n(b) || n(a).includes(n(b)) || n(b).includes(n(a));
+}
