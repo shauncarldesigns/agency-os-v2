@@ -91,13 +91,24 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
     }
   }
 
-  async function handleMarkDead() {
+  async function handleDelete() {
+    if (!window.confirm(`Move "${lead.company}" to trash? You can restore it later.`)) return;
     try {
       await api.leads.delete(lead.id);
-      showToast(`Marked ${lead.company} as dead`, 'default');
+      showToast(`${lead.company} moved to trash`, 'default');
       onLeadUpdated();
     } catch (err) {
-      showToast(`Failed: ${(err as Error).message}`, 'error');
+      showToast(`Delete failed: ${(err as Error).message}`, 'error');
+    }
+  }
+
+  async function handleRestore() {
+    try {
+      await api.leads.restore(lead.id);
+      showToast(`${lead.company} restored`, 'success');
+      onLeadUpdated();
+    } catch (err) {
+      showToast(`Restore failed: ${(err as Error).message}`, 'error');
     }
   }
 
@@ -166,12 +177,14 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
             <Button variant="ghost" size="xs" disabled>⌛ Wait</Button>
           )}
           {lead.enrichment_status === 'failed' && (
-            <>
-              <Button variant="ghost" size="xs" disabled={enriching} onClick={handleEnrich}>↻ Retry</Button>
-              <Button variant="ghost" size="xs" onClick={handleMarkDead}>Mark Dead</Button>
-            </>
+            <Button variant="ghost" size="xs" disabled={enriching} onClick={handleEnrich}>↻ Retry</Button>
           )}
           <Button variant="ghost" size="xs" onClick={() => onOpenLead(lead.id)}>View</Button>
+          {lead.deleted_at ? (
+            <Button variant="ghost" size="xs" onClick={handleRestore} title="Restore from trash">↺ Restore</Button>
+          ) : (
+            <Button variant="ghost" size="xs" onClick={handleDelete} title="Move to trash">🗑</Button>
+          )}
         </div>
       </td>
     </tr>

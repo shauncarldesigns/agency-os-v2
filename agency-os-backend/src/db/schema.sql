@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS leads (
   source          TEXT,
   -- Relationships
   project_id      INTEGER,
+  -- Soft delete (v2.1)
+  deleted_at      TEXT,
   -- Timestamps
   created_at      TEXT DEFAULT (datetime('now')),
   updated_at      TEXT DEFAULT (datetime('now'))
@@ -60,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_lead_tier ON leads(recommended_tier);
 CREATE INDEX IF NOT EXISTS idx_lead_place ON leads(place_id);
 CREATE INDEX IF NOT EXISTS idx_lead_enrich ON leads(enrichment_status);
+CREATE INDEX IF NOT EXISTS idx_lead_active ON leads(deleted_at) WHERE deleted_at IS NULL;
 
 -- ==================================================
 -- CALL_LOG — Per-lead call history
@@ -92,12 +95,22 @@ CREATE TABLE IF NOT EXISTS projects (
   email           TEXT,
   description     TEXT,
   years_in_business INTEGER,
+  founded_year    INTEGER,
+  owner_name      TEXT,
+  owner_credentials TEXT,
   -- Brand
   primary_color   TEXT,
+  accent_color    TEXT,
+  tagline         TEXT,
+  photography_direction TEXT,
   brand_voice_notes TEXT,
   -- Services + areas (frozen for site brief)
   services        TEXT,
   service_areas   TEXT,
+  -- v2.1: monthly cadence + scrape data
+  monthly_pages_target INTEGER DEFAULT 0,
+  scrape_completed_at TEXT,
+  scrape_data     TEXT,
   -- landingsite.ai
   landingsite_project_id TEXT,
   landingsite_url TEXT,
@@ -139,13 +152,71 @@ CREATE TABLE IF NOT EXISTS pages (
   url             TEXT,
   title           TEXT,
   meta_description TEXT,
-  status          TEXT DEFAULT 'queued',
+  status          TEXT DEFAULT 'planned',
   brief_content   TEXT,
   cowork_job_id   TEXT,
   built_at        TEXT,
+  -- v2.1: brief linkage + manual completion tracking
+  brief_id        INTEGER REFERENCES briefs(id),
+  batch_period    TEXT,
+  published_url   TEXT,
+  marked_complete_at TEXT,
+  operator_notes  TEXT,
   created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pages_proj ON pages(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_pages_batch ON pages(project_id, batch_period);
+
+-- ==================================================
+-- BRIEFS — Master / homepage-demo / monthly-batch briefs (v2.1)
+-- ==================================================
+CREATE TABLE IF NOT EXISTS briefs (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind                TEXT NOT NULL,  -- 'homepage_demo' | 'master' | 'monthly_batch'
+  content_markdown    TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'generated',  -- 'generated' | 'in_progress' | 'completed' | 'archived'
+  batch_period        TEXT,
+  generated_by_model  TEXT,
+  generation_input    TEXT,
+  generated_at        TEXT DEFAULT (datetime('now')),
+  completed_at        TEXT,
+  supersedes_brief_id INTEGER REFERENCES briefs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_briefs_project ON briefs(project_id, kind, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_briefs_monthly
+  ON briefs(project_id, batch_period)
+  WHERE batch_period IS NOT NULL;
+
+-- ==================================================
+-- BRAND_ATTRIBUTES — operator/scrape/claude-supplied brand voice signals (v2.1)
+-- ==================================================
+CREATE TABLE IF NOT EXISTS brand_attributes (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  category        TEXT NOT NULL,
+  value           TEXT NOT NULL,
+  source          TEXT,
+  weight          INTEGER DEFAULT 1,
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_brand_attr_proj ON brand_attributes(project_id, category);
+
+-- ==================================================
+-- TESTIMONIALS — curated customer quotes per project (v2.1)
+-- ==================================================
+CREATE TABLE IF NOT EXISTS testimonials (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  author_name     TEXT NOT NULL,
+  author_location TEXT,
+  quote           TEXT NOT NULL,
+  rating          INTEGER,
+  source          TEXT,
+  is_featured     INTEGER DEFAULT 0,
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_testimonials_proj ON testimonials(project_id, is_featured);
 
 -- ==================================================
 -- BRIEF_JOBS — Cowork queue tracking

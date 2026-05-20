@@ -30,3 +30,12 @@ wrangler.local.toml
 
 # Logs
 *.log
+
+# Generated build info
+**/tsconfig.tsbuildinfo
+
+# Local archives / unpacked spec drops
+files.zip
+
+# Agent-local config
+.claude/launch.json

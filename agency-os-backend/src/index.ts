@@ -9,7 +9,9 @@ import { prospectRouter } from './routes/prospect';
 import { enrichRouter, leadEnrichRouter } from './routes/enrich';
 import { projectsRouter } from './routes/projects';
 import { briefsRouter } from './routes/briefs';
-import { webhookRouter } from './routes/webhook';
+import { brandAttributesRouter } from './routes/brand-attributes';
+import { testimonialsRouter } from './routes/testimonials';
+import { scrapeRouter } from './routes/scrape';
 import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -33,8 +35,11 @@ app.route('/api/leads', leadsRouter);
 app.route('/api/calls', callsRouter);
 app.route('/api/prospect', prospectRouter);
 app.route('/api/projects', projectsRouter);
-app.route('/api/briefs', briefsRouter);
-app.route('/api/webhook', webhookRouter);
+// v2.1 brief routes span /api/projects/:id/briefs, /api/briefs/:id, and /api/pages/:id/complete
+app.route('/api', briefsRouter);
+app.route('/api', brandAttributesRouter);
+app.route('/api', testimonialsRouter);
+app.route('/api', scrapeRouter);
 app.route('/api/reports', reportsRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
@@ -57,8 +62,5 @@ export default {
       // Weekly Monday 8am — refresh GSC for current period (intermediate progress check)
       ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Weekly GSC refresh run`, { results: out })));
     }
-  },
-  async queue(_batch: MessageBatch<unknown>, _env: Env) {
-    log('info', 'queue', 'Queue consumer fired (no handlers wired yet)');
   },
 };

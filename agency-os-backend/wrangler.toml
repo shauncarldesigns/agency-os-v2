@@ -8,15 +8,6 @@ binding = "DB"
 database_name = "agency-os-v2"
 database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
 
-[[queues.producers]]
-binding = "BRIEF_QUEUE"
-queue = "brief-jobs"
-
-[[queues.consumers]]
-queue = "brief-jobs"
-max_batch_size = 1
-max_batch_timeout = 30
-
 [triggers]
 crons = [
   "0 6 * * *",

@@ -1,4 +1,8 @@
-import type { Lead, CallEntry, ProspectResult, Project, Page, QueueStatus, ReportSummary } from './types';
+import type {
+  Lead, CallEntry, ProspectResult, Project, Page, ReportSummary,
+  Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
+  Testimonial, TestimonialSource,
+} from './types';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
 const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
@@ -37,15 +41,18 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
 export const api = {
   leads: {
-    list: (filters?: { status?: string; tier?: number; enrichment?: string; search?: string }) =>
+    list: (filters?: { status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>
       apiFetch<{ leads: Lead[]; total: number }>(`/api/leads${qs(filters)}`),
+    industries: () => apiFetch<{ industries: string[] }>('/api/leads/industries'),
     get: (id: number) => apiFetch<{ lead: Lead; calls: CallEntry[] }>(`/api/leads/${id}`),
     create: (data: Partial<Lead>) =>
       apiFetch<{ lead: Lead }>('/api/leads', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Lead>) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) =>
-      apiFetch<{ success: boolean }>(`/api/leads/${id}`, { method: 'DELETE' }),
+      apiFetch<void>(`/api/leads/${id}`, { method: 'DELETE' }),
+    restore: (id: number) =>
+      apiFetch<{ lead: Lead }>(`/api/leads/${id}/restore`, { method: 'POST' }),
     importCsv: (csv: string) =>
       apiFetch<{ imported: number; skipped: number; errors: string[] }>('/api/leads/import', {
         method: 'POST',
@@ -68,8 +75,8 @@ export const api = {
       apiFetch<{ success: boolean }>(`/api/calls/${id}`, { method: 'DELETE' }),
   },
   prospect: {
-    search: (input: { location: string; industry: string; radius?: number }) =>
-      apiFetch<{ results: ProspectResult[]; total: number }>('/api/prospect/search', {
+    search: (input: { location: string; industry: string; radius?: number; pageToken?: string | null; maxPages?: number }) =>
+      apiFetch<{ results: ProspectResult[]; total: number; nextPageToken: string | null; pagesFetched: number }>('/api/prospect/search', {
         method: 'POST',
         body: JSON.stringify(input),
       }),
@@ -97,41 +104,71 @@ export const api = {
         matrix: Array<{ city: string; inReviews: boolean; cells: Array<{ service: string; city: string; state: 'built' | 'building' | 'queued' | 'recommended' | 'available' }> }>;
         summary: { total: number; built: number; available: number; pct: number };
       }>(`/api/projects/${id}/coverage`),
-    expand: (id: number, pages: Array<{ type: string; service?: string; city?: string }>) =>
-      apiFetch<{ created: number; skipped: number; estimatedMinutes: number; pages: Array<{ pageId: number; jobId: number; service?: string; city?: string }>; errors: string[] }>(
-        `/api/projects/${id}/expand`,
-        { method: 'POST', body: JSON.stringify({ pages }) },
-      ),
   },
   briefs: {
-    generate: (input: { projectId?: number; leadId?: number; tier?: 1 | 2 | 3; type?: 'initial' | 'add-page'; page?: { type: string; service?: string; city?: string } }) =>
-      apiFetch<{ markdown: string; source: 'claude' | 'template' }>('/api/briefs/generate', {
+    listForProject: (projectId: number) =>
+      apiFetch<{ briefs: BriefSummary[] }>(`/api/projects/${projectId}/briefs`),
+    get: (id: number) => apiFetch<Brief>(`/api/briefs/${id}`),
+    master: (projectId: number, mode: 'homepage_only' | 'full_site') =>
+      apiFetch<Brief>(`/api/projects/${projectId}/briefs/master?mode=${mode}`, { method: 'POST' }),
+    monthlyBatch: (projectId: number, batchPeriod: string, pages: Array<{ service: string; city: string }>) =>
+      apiFetch<Brief>(`/api/projects/${projectId}/briefs/monthly-batch`, {
         method: 'POST',
-        body: JSON.stringify(input),
+        body: JSON.stringify({ batchPeriod, pages }),
       }),
-    queue: (input: { projectId: number; briefMarkdown: string; jobType?: 'initial-build' | 'add-page'; pageId?: number }) =>
-      apiFetch<{ jobId: number; status: string }>('/api/briefs/queue', {
+    regenerate: (id: number, feedback?: string) =>
+      apiFetch<Brief>(`/api/briefs/${id}/regenerate`, {
         method: 'POST',
-        body: JSON.stringify(input),
+        body: JSON.stringify(feedback ? { feedback } : {}),
       }),
-    queueStatus: () => apiFetch<QueueStatus>('/api/briefs/queue/status'),
   },
-  cowork: {
-    markStarted: (jobId: number) =>
-      apiFetch<{ ok: boolean }>('/api/webhook/cowork/started', {
-        method: 'POST',
-        body: JSON.stringify({ jobId }),
+  pages: {
+    complete: (pageId: number, input: { publishedUrl: string; notes?: string }) =>
+      apiFetch<Page>(`/api/pages/${pageId}/complete`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
       }),
-    markDone: (jobId: number, pageUrl?: string) =>
-      apiFetch<{ ok: boolean }>('/api/webhook/cowork/manual-complete', {
+  },
+  scrape: {
+    run: (projectId: number, input?: { url?: string; force?: boolean }) =>
+      apiFetch<{
+        ok: boolean;
+        reason: string | null;
+        pages_fetched: number;
+        bytes: number;
+        brand_attributes_inserted: number;
+        extracted: unknown;
+      }>(`/api/projects/${projectId}/scrape`, {
         method: 'POST',
-        body: JSON.stringify({ jobId, pageUrl }),
+        body: JSON.stringify(input ?? {}),
       }),
-    markFailed: (jobId: number, error: string) =>
-      apiFetch<{ ok: boolean }>('/api/webhook/cowork/completed', {
+  },
+  brandAttributes: {
+    list: (projectId: number) =>
+      apiFetch<{ brandAttributes: BrandAttribute[] }>(`/api/projects/${projectId}/brand-attributes`),
+    create: (projectId: number, input: { category: BrandAttributeCategory; value: string; source?: BrandAttributeSource; weight?: number }) =>
+      apiFetch<BrandAttribute>(`/api/projects/${projectId}/brand-attributes`, {
         method: 'POST',
-        body: JSON.stringify({ jobId, success: false, error }),
+        body: JSON.stringify(input),
       }),
+    delete: (id: number) =>
+      apiFetch<void>(`/api/brand-attributes/${id}`, { method: 'DELETE' }),
+  },
+  testimonials: {
+    list: (projectId: number) =>
+      apiFetch<{ testimonials: Testimonial[] }>(`/api/projects/${projectId}/testimonials`),
+    create: (projectId: number, input: { authorName: string; authorLocation?: string; quote: string; rating?: number; source?: TestimonialSource; isFeatured?: boolean }) =>
+      apiFetch<Testimonial>(`/api/projects/${projectId}/testimonials`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    update: (id: number, input: Partial<{ authorName: string; authorLocation: string | null; quote: string; rating: number | null; source: TestimonialSource | null; isFeatured: boolean }>) =>
+      apiFetch<Testimonial>(`/api/testimonials/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    delete: (id: number) =>
+      apiFetch<void>(`/api/testimonials/${id}`, { method: 'DELETE' }),
   },
   reports: {
     summary: (projectId: number, period?: string) =>

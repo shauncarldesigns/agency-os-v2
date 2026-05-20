@@ -85,7 +85,8 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   let placeId = lead.place_id;
   if (!placeId && lead.city) {
     try {
-      const matches = await searchPlaces(env.GOOGLE_PLACES_API_KEY, lead.company, lead.city);
+      const searchRes = await searchPlaces(env.GOOGLE_PLACES_API_KEY, lead.company, lead.city, { maxPages: 1 });
+      const matches = searchRes.places;
       const best = matches.find(m => fuzzyMatchName(m.name, lead.company)) ?? matches[0];
       if (best) placeId = best.placeId;
     } catch (err) {

@@ -4,6 +4,8 @@ import { api, ApiError } from '../../lib/api';
 import { SearchForm } from './SearchForm';
 import { ResultsTable } from './ResultsTable';
 import { FilterPills, type ProspectFilter, type SortBy } from './FilterPills';
+import { Button } from '../shared/Button';
+import { Spinner } from '../shared/Spinner';
 
 interface ProspectPanelProps {
   showToast: ShowToast;
@@ -12,7 +14,10 @@ interface ProspectPanelProps {
 
 export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [results, setResults] = useState<ProspectResult[]>([]);
+  const [lastSearch, setLastSearch] = useState<{ location: string; industry: string; radius: number } | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [filter, setFilter] = useState<ProspectFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('score');
@@ -22,14 +27,18 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   async function handleSearch(input: { location: string; industry: string; radius: number }) {
     setSearching(true);
     try {
-      const res = await api.prospect.search(input);
+      // First call: pull a single page so the user sees results fast;
+      // the Load More button below can pull additional pages on demand.
+      const res = await api.prospect.search({ ...input, maxPages: 1 });
       setResults(res.results);
       setHasSearched(true);
       setAddedIds(new Set());
+      setLastSearch(input);
+      setNextPageToken(res.nextPageToken);
       const newCount = res.results.filter(r => !r.alreadyInPipeline).length;
       const dupCount = res.total - newCount;
       showToast(
-        `Found ${res.total} result${res.total === 1 ? '' : 's'}${dupCount > 0 ? ` · ${dupCount} already in pipeline` : ''}`,
+        `Found ${res.total} result${res.total === 1 ? '' : 's'}${dupCount > 0 ? ` · ${dupCount} already in pipeline` : ''}${res.nextPageToken ? ' · more available' : ''}`,
         res.total > 0 ? 'success' : 'default',
       );
     } catch (err) {
@@ -37,6 +46,25 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
       showToast(`Search failed: ${msg}`, 'error');
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function handleLoadMore() {
+    if (!lastSearch || !nextPageToken) return;
+    setLoadingMore(true);
+    try {
+      const res = await api.prospect.search({ ...lastSearch, pageToken: nextPageToken, maxPages: 1 });
+      // Dedupe by placeId in case Google returns overlaps.
+      const seen = new Set(results.map(r => r.placeId));
+      const merged = [...results, ...res.results.filter(r => !seen.has(r.placeId))];
+      setResults(merged);
+      setNextPageToken(res.nextPageToken);
+      showToast(`+${res.results.length} more${res.nextPageToken ? ' · more available' : ' · end of results'}`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Load more failed: ${msg}`, 'error');
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -108,6 +136,13 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
             addingIds={addingIds}
             onAdd={handleAdd}
           />
+          {(nextPageToken || loadingMore) && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 8px' }}>
+              <Button variant="ghost" size="sm" disabled={loadingMore} onClick={handleLoadMore}>
+                {loadingMore ? <><Spinner /> Loading more…</> : `Load more results · ${results.length} so far`}
+              </Button>
+            </div>
+          )}
         </>
       )}
 

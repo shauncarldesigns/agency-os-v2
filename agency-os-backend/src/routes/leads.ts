@@ -17,13 +17,22 @@ const LEAD_FIELDS = [
 
 leadsRouter.get('/', async (c) => {
   try {
-    const { status, tier, enrichment, search } = c.req.query();
+    const { status, tier, enrichment, search, industry, include_deleted, only_deleted } = c.req.query();
     let query = 'SELECT * FROM leads WHERE 1=1';
     const params: unknown[] = [];
+
+    // Soft-delete handling: default to active rows. `only_deleted=true` flips
+    // to the trash view; `include_deleted=true` shows both.
+    if (only_deleted === 'true' || only_deleted === '1') {
+      query += ' AND deleted_at IS NOT NULL';
+    } else if (include_deleted !== 'true' && include_deleted !== '1') {
+      query += ' AND deleted_at IS NULL';
+    }
 
     if (status) { query += ' AND status = ?'; params.push(status); }
     if (tier) { query += ' AND recommended_tier = ?'; params.push(parseInt(tier, 10)); }
     if (enrichment) { query += ' AND enrichment_status = ?'; params.push(enrichment); }
+    if (industry) { query += ' AND industry = ?'; params.push(industry); }
     if (search) {
       query += ' AND (company LIKE ? OR contact LIKE ? OR phone LIKE ? OR city LIKE ?)';
       const like = `%${search}%`;
@@ -35,6 +44,19 @@ leadsRouter.get('/', async (c) => {
     return c.json({ leads: result.results, total: result.results.length });
   } catch (err) {
     log('error', 'leads', 'GET /leads failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// GET /api/leads/industries — distinct industry values (for filter dropdown)
+leadsRouter.get('/industries', async (c) => {
+  try {
+    const result = await c.env.DB
+      .prepare("SELECT DISTINCT industry FROM leads WHERE industry IS NOT NULL AND industry != '' AND deleted_at IS NULL ORDER BY industry ASC")
+      .all<{ industry: string }>();
+    return c.json({ industries: (result.results ?? []).map((r) => r.industry) });
+  } catch (err) {
+    log('error', 'leads', 'GET /leads/industries failed', err);
     return c.json(serverError(), 500);
   }
 });
@@ -162,7 +184,35 @@ leadsRouter.put('/:id', async (c) => {
   }
 });
 
+// Soft delete — sets deleted_at. Use POST /:id/restore to undo, or pass
+// ?hard=true for a permanent delete (only allowed when the lead is already
+// soft-deleted, to avoid accidental destruction).
 leadsRouter.delete('/:id', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+  const hard = c.req.query('hard') === 'true';
+
+  const existing = await c.env.DB.prepare('SELECT id, deleted_at FROM leads WHERE id = ?').bind(id).first<{ id: number; deleted_at: string | null }>();
+  if (!existing) return c.json(notFound('Lead'), 404);
+
+  if (hard) {
+    if (!existing.deleted_at) {
+      return c.json(badRequest('Soft-delete the lead first before permanent deletion'), 400);
+    }
+    await c.env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(id).run();
+    log('info', 'leads', `Lead ${id} hard-deleted`);
+    return c.body(null, 204);
+  }
+
+  await c.env.DB
+    .prepare("UPDATE leads SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+    .bind(id)
+    .run();
+  log('info', 'leads', `Lead ${id} soft-deleted`);
+  return c.body(null, 204);
+});
+
+leadsRouter.post('/:id/restore', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
 
@@ -170,11 +220,12 @@ leadsRouter.delete('/:id', async (c) => {
   if (!existing) return c.json(notFound('Lead'), 404);
 
   await c.env.DB
-    .prepare("UPDATE leads SET status = 'dead', updated_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE leads SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ?")
     .bind(id)
     .run();
-  log('info', 'leads', `Lead ${id} marked dead`);
-  return c.json({ success: true });
+  log('info', 'leads', `Lead ${id} restored`);
+  const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first();
+  return c.json({ lead });
 });
 
 // CSV import — header-based parser, dedupes by company+phone or place_id
