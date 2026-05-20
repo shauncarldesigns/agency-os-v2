@@ -112,36 +112,76 @@ function mapPlace(p: Record<string, unknown>): PlaceResult {
   };
 }
 
+export interface SearchPlacesResult {
+  places: PlaceResult[];
+  /** Token to request the next page from Google. Empty when no more results. */
+  nextPageToken: string | null;
+  /** Number of upstream API pages we actually pulled this call. */
+  pagesFetched: number;
+}
+
+/**
+ * Search Google Places Text Search (New).
+ *
+ * Bug fix history (v2.1):
+ *  - Removed broken locationBias circle anchored at (lat=0, lng=0) — text query
+ *    "<industry> in <location>" handles location filtering on its own.
+ *  - Paginates via pageToken up to MAX_PAGES (3 pages × 20 = up to 60 results).
+ *  - Caller may pass `pageToken` to continue from where a previous call stopped.
+ */
 export async function searchPlaces(
   apiKey: string,
   query: string,
   location: string,
-  radiusMeters = 8000
-): Promise<PlaceResult[]> {
-  const res = await fetch(`${PLACES_BASE}/places:searchText`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': SEARCH_FIELD_MASK,
-    },
-    body: JSON.stringify({
-      textQuery: `${query} in ${location}`,
-      locationBias: radiusMeters
-        ? { circle: { center: { latitude: 0, longitude: 0 }, radius: radiusMeters } }
-        : undefined,
-      maxResultCount: 20,
-    }),
-  });
+  options?: { pageToken?: string | null; maxPages?: number }
+): Promise<SearchPlacesResult> {
+  const MAX_PAGES = options?.maxPages ?? 3;
+  let pageToken: string | null | undefined = options?.pageToken ?? null;
+  let pagesFetched = 0;
+  const all: PlaceResult[] = [];
 
-  if (!res.ok) {
-    const err = await res.text();
-    log('error', 'places', `searchText failed: ${res.status}`, { err });
-    throw new Error(`Google Places API error: ${res.status}`);
+  while (pagesFetched < MAX_PAGES) {
+    const body: Record<string, unknown> = {
+      textQuery: `${query} in ${location}`,
+      maxResultCount: 20,
+    };
+    if (pageToken) body.pageToken = pageToken;
+
+    const res = await fetch(`${PLACES_BASE}/places:searchText`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': `${SEARCH_FIELD_MASK},nextPageToken`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      log('error', 'places', `searchText failed: ${res.status}`, { err, page: pagesFetched });
+      throw new Error(`Google Places API error: ${res.status}`);
+    }
+
+    const data = (await res.json()) as {
+      places?: Array<Record<string, unknown>>;
+      nextPageToken?: string;
+    };
+    all.push(...(data.places ?? []).map(mapPlace));
+    pagesFetched++;
+
+    pageToken = data.nextPageToken ?? null;
+    if (!pageToken) break;
+
+    // Google requires a brief delay before the pageToken becomes valid.
+    if (pagesFetched < MAX_PAGES) await sleep(2000);
   }
 
-  const data = await res.json() as { places?: Array<Record<string, unknown>> };
-  return (data.places ?? []).map(mapPlace);
+  return { places: all, nextPageToken: pageToken ?? null, pagesFetched };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 export async function getPlaceDetails(apiKey: string, placeId: string): Promise<PlaceDetails> {

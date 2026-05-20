@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  BRIEF_QUEUE: Queue<BriefJobMessage>;
   ENV: string;
   CLAUDE_API_KEY: string;
   GOOGLE_PLACES_API_KEY: string;
@@ -11,14 +10,6 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID: string;
   DASHBOARD_API_KEY: string;
   RESEND_API_KEY: string;
-}
-
-export interface BriefJobMessage {
-  jobId: number;
-  projectId: number;
-  pageId?: number;
-  jobType: 'initial-build' | 'add-page';
-  briefMarkdown: string;
 }
 
 export interface Lead {
@@ -60,6 +51,7 @@ export interface Lead {
   notes: string | null;
   source: string | null;
   project_id: number | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -87,10 +79,19 @@ export interface Project {
   email: string | null;
   description: string | null;
   years_in_business: number | null;
+  founded_year: number | null;
+  owner_name: string | null;
+  owner_credentials: string | null;
   primary_color: string | null;
+  accent_color: string | null;
+  tagline: string | null;
+  photography_direction: string | null;
   brand_voice_notes: string | null;
   services: string | null;
   service_areas: string | null;
+  monthly_pages_target: number;
+  scrape_completed_at: string | null;
+  scrape_data: string | null;
   landingsite_project_id: string | null;
   landingsite_url: string | null;
   custom_domain: string | null;
@@ -107,4 +108,84 @@ export interface Project {
   reviews_snapshot: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================================
+// v2.1 entities
+// ============================================================================
+
+export type BriefKind = 'homepage_demo' | 'master' | 'monthly_batch';
+export type BriefStatus = 'generated' | 'in_progress' | 'completed' | 'archived';
+
+export interface Brief {
+  id: number;
+  project_id: number;
+  kind: BriefKind;
+  content_markdown: string;
+  status: BriefStatus;
+  batch_period: string | null;
+  generated_by_model: string | null;
+  generation_input: string | null;
+  generated_at: string;
+  completed_at: string | null;
+  supersedes_brief_id: number | null;
+}
+
+export type BrandAttributeCategory =
+  | 'tagline'
+  | 'certification'
+  | 'review_theme'
+  | 'photography_direction'
+  | 'positioning'
+  | 'differentiator'
+  | 'value'
+  | 'other';
+
+export type BrandAttributeSource = 'scrape' | 'reviews' | 'operator' | 'claude';
+
+export interface BrandAttribute {
+  id: number;
+  project_id: number;
+  category: BrandAttributeCategory;
+  value: string;
+  source: BrandAttributeSource | null;
+  weight: number;
+  created_at: string;
+}
+
+export type TestimonialSource = 'google' | 'operator' | 'website' | 'other';
+
+export interface Testimonial {
+  id: number;
+  project_id: number;
+  author_name: string;
+  author_location: string | null;
+  quote: string;
+  rating: number | null;
+  source: TestimonialSource | null;
+  is_featured: number;
+  created_at: string;
+}
+
+export type PageStatus = 'planned' | 'briefed' | 'in_progress' | 'complete' | 'archived';
+
+export interface Page {
+  id: number;
+  project_id: number;
+  type: string;
+  service: string | null;
+  city: string | null;
+  slug: string | null;
+  url: string | null;
+  title: string | null;
+  meta_description: string | null;
+  status: string;
+  brief_content: string | null;
+  built_at: string | null;
+  brief_id: number | null;
+  batch_period: string | null;
+  published_url: string | null;
+  marked_complete_at: string | null;
+  operator_notes: string | null;
+  created_at: string;
 }

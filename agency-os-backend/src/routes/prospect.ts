@@ -15,27 +15,36 @@ interface ProspectSearchResult extends PlaceResult {
 
 prospectRouter.post('/search', async (c) => {
   try {
-    const body = await c.req.json() as { location?: string; industry?: string; radius?: number };
-    const { location, industry, radius = 8000 } = body;
+    const body = await c.req.json() as {
+      location?: string;
+      industry?: string;
+      radius?: number; // retained for API compat; no longer used (was the broken locationBias)
+      pageToken?: string | null;
+      maxPages?: number;
+    };
+    const { location, industry, pageToken } = body;
 
     if (!location) return c.json(badRequest('location is required'), 400);
     if (!industry) return c.json(badRequest('industry is required'), 400);
 
-    const places = await searchPlaces(c.env.GOOGLE_PLACES_API_KEY, industry, location, radius);
+    const search = await searchPlaces(c.env.GOOGLE_PLACES_API_KEY, industry, location, {
+      pageToken: pageToken ?? null,
+      maxPages: body.maxPages ?? 3,
+    });
 
     // Look up which place_ids are already in pipeline (don't filter — flag them)
-    const placeIds = places.map(p => p.placeId).filter(Boolean);
+    const placeIds = search.places.map(p => p.placeId).filter(Boolean);
     let existing = new Set<string>();
     if (placeIds.length > 0) {
       const placeholders = placeIds.map(() => '?').join(',');
       const rows = await c.env.DB
-        .prepare(`SELECT place_id FROM leads WHERE place_id IN (${placeholders})`)
+        .prepare(`SELECT place_id FROM leads WHERE place_id IN (${placeholders}) AND deleted_at IS NULL`)
         .bind(...placeIds)
         .all();
       existing = new Set((rows.results as Array<{ place_id: string }>).map(r => r.place_id));
     }
 
-    const results: ProspectSearchResult[] = places.map(p => {
+    const results: ProspectSearchResult[] = search.places.map(p => {
       const score = calculateOpportunityScore({
         hasWebsite: !!p.website,
         pagespeedMobile: null,
@@ -65,7 +74,12 @@ prospectRouter.post('/search', async (c) => {
       return b.opportunityScore - a.opportunityScore;
     });
 
-    return c.json({ results, total: results.length });
+    return c.json({
+      results,
+      total: results.length,
+      nextPageToken: search.nextPageToken,
+      pagesFetched: search.pagesFetched,
+    });
   } catch (err) {
     log('error', 'prospect', 'POST /prospect/search failed', err);
     return c.json(serverError(`Search failed: ${(err as Error).message}`), 500);

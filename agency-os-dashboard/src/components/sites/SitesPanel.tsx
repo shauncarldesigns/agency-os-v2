@@ -5,6 +5,7 @@ import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
 import { SiteCard } from './SiteCard';
 import { MatrixModal } from './MatrixModal';
+import { SiteDetailPanel } from './SiteDetailPanel';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -20,6 +21,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
   const [matrixProject, setMatrixProject] = useState<Project | null>(null);
+  const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +59,22 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
     const t2Mrr = t2.length * TIER_MRR[2];
     return { total: live.length, t3: t3.length, t2: t2.length, t1: t1.length, t3Mrr, t2Mrr };
   }, [projects]);
+
+  // If we're in detail view, render that instead of the grid.
+  const detailProject = detailProjectId != null
+    ? projects.find((p) => p.id === detailProjectId) ?? null
+    : null;
+  if (detailProject) {
+    return (
+      <SiteDetailPanel
+        project={detailProject}
+        showToast={showToast}
+        onSwitchTab={onSwitchTab}
+        onBack={() => setDetailProjectId(null)}
+        onProjectChanged={load}
+      />
+    );
+  }
 
   return (
     <>
@@ -99,7 +117,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
         <EmptyState
           icon="🌐"
           title="No client sites yet"
-          sub="Convert a Tier 3 lead in Pipeline to its first project, generate a brief in Build, then queue it for Cowork."
+          sub="Convert a Tier 3 lead in Pipeline to its first project, then generate a master brief in the Briefs tab."
         />
       ) : (
         <div className="sites-grid">
@@ -110,6 +128,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
               showToast={showToast}
               onSwitchTab={onSwitchTab}
               onOpenMatrix={() => setMatrixProject(p)}
+              onOpenDetail={() => setDetailProjectId(p.id)}
             />
           ))}
         </div>

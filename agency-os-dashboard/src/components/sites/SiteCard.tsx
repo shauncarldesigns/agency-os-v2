@@ -8,9 +8,10 @@ interface SiteCardProps {
   showToast: ShowToast;
   onSwitchTab: (tab: Tab) => void;
   onOpenMatrix: () => void;
+  onOpenDetail: () => void;
 }
 
-export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix }: SiteCardProps) {
+export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix, onOpenDetail }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const isBuilding = project.status === 'building';
@@ -25,7 +26,13 @@ export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix }: Site
 
   return (
     <div className={`scard2 t${tier}`}>
-      <div className="scard-header">
+      <div
+        className="scard-header"
+        onClick={onOpenDetail}
+        role="button"
+        title="Open site detail"
+        style={{ cursor: 'pointer' }}
+      >
         <div>
           <div className="scard-title">{project.business_name}</div>
           <div className="scard-sub">{subtitle}</div>
@@ -102,10 +109,10 @@ export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix }: Site
           {tier === 3 && (
             <>
               <Button variant="tier3" size="sm" onClick={onOpenMatrix}>
-                + Add Pages
+                📊 View matrix
               </Button>
               <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
-                📊 Report
+                📈 Report
               </Button>
             </>
           )}

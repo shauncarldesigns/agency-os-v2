@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import type { Tab, HeaderStats, NavCounts, BuildContext, Lead } from './lib/types';
+import type { Tab, HeaderStats, NavCounts, BriefsContext, Lead } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { Header } from './components/layout/Header';
 import { Nav } from './components/layout/Nav';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
-import { BuildPanel } from './components/build/BuildPanel';
+import { BriefsPanel } from './components/briefs/BriefsPanel';
 import { SitesPanel } from './components/sites/SitesPanel';
 import { ReportsPanel } from './components/reports/ReportsPanel';
 import { ToastContainer } from './components/shared/Toast';
@@ -16,22 +16,17 @@ const TIER_MRR = { 1: 0, 2: 79, 3: 499 };
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('pipeline');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
-  const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, pipeline: 0, build: 0, sites: 0 });
-  const [buildContext, setBuildContext] = useState<BuildContext | null>(null);
+  const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, pipeline: 0, briefs: 0, sites: 0 });
+  const [briefsContext, setBriefsContext] = useState<BriefsContext | null>(null);
   const { toasts, showToast } = useToast();
 
   function handleBuildSite(lead: Lead) {
-    if (lead.recommended_tier == null || ![1, 2, 3].includes(lead.recommended_tier)) {
-      showToast('Lead has no recommended tier — enrich first', 'error');
-      return;
-    }
-    setBuildContext({
+    setBriefsContext({
       leadId: lead.id,
+      projectId: lead.project_id ?? undefined,
       businessName: lead.company,
-      tier: lead.recommended_tier as 1 | 2 | 3,
-      reviewCount: lead.google_review_count,
     });
-    setActiveTab('build');
+    setActiveTab('briefs');
   }
 
   useEffect(() => { loadStats(); }, []);
@@ -45,12 +40,14 @@ export default function App() {
       const activeLeads = leadsRes.leads.filter(l => l.status !== 'dead' && l.status !== 'client').length;
       const clients = projectsRes.projects.filter(p => p.status === 'live' || p.status === 'building');
       const mrr = clients.reduce((sum, p) => sum + (TIER_MRR[p.tier] ?? 0), 0);
-      const buildingCount = projectsRes.projects.filter(p => p.status === 'building').length;
+      // Briefs count = leads ready for a homepage demo + projects without a master brief.
+      const eligibleLeads = leadsRes.leads.filter(l => (l.status === 'qualified' || l.status === 'contacted') && l.project_id == null).length;
+      const briefsCount = eligibleLeads + projectsRes.projects.filter(p => p.status === 'building').length;
       setStats({ totalClients: clients.length, mrrUsd: mrr });
       setNavCounts({
         prospect: null,
         pipeline: activeLeads,
-        build: buildingCount,
+        briefs: briefsCount,
         sites: clients.length,
       });
     } catch (err) {
@@ -64,7 +61,7 @@ export default function App() {
 
   return (
     <>
-      <Header stats={stats} coworkConnected={false} />
+      <Header stats={stats} />
       <Nav active={activeTab} onChange={setActiveTab} counts={navCounts} />
       <main className="main">
         {activeTab === 'prospect' && (
@@ -80,11 +77,11 @@ export default function App() {
             onBuildSite={handleBuildSite}
           />
         )}
-        {activeTab === 'build' && (
-          <BuildPanel
-            context={buildContext}
+        {activeTab === 'briefs' && (
+          <BriefsPanel
+            context={briefsContext}
             showToast={showToast}
-            onClearContext={() => setBuildContext(null)}
+            onClearContext={() => setBriefsContext(null)}
             onProjectCreated={loadStats}
           />
         )}
