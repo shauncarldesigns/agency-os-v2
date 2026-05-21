@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS leads (
   owner_names     TEXT,
   -- Scoring + tier
   opportunity_score INTEGER,
+  opportunity_reasoning TEXT,
   recommended_tier INTEGER,
   -- Pipeline state
   enrichment_status TEXT DEFAULT 'pending',

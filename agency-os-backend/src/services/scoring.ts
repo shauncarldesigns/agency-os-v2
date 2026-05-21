@@ -69,8 +69,8 @@ export function calculateOpportunityScore(input: ScoringInput): ScoringResult {
   score = Math.min(100, score);
 
   let tier: 1 | 2 | 3;
-  if (score >= 75 && input.reviewCount >= 30) tier = 3;
-  else if (score >= 50 || (input.hasWebsite && input.pagespeedMobile !== null && input.pagespeedMobile < 60)) tier = 2;
+  if (score >= 60 && input.reviewCount >= 5) tier = 3;
+  else if (score >= 40 || (input.hasWebsite && input.pagespeedMobile !== null && input.pagespeedMobile < 50)) tier = 2;
   else tier = 1;
 
   return { score, tier, reasoning: factors.join(' · '), factors };

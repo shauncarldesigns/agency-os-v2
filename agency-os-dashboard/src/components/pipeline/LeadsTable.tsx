@@ -3,6 +3,7 @@ import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
+import { ScoreHover } from '../shared/ScoreHover';
 import { formatPhone, scoreColor, statusBadge, outcomeBadge, tierColor } from '../../lib/format';
 
 interface LeadsTableProps {
@@ -160,9 +161,12 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
           </td>
           <td>
             {lead.opportunity_score != null ? (
-              <span className="score-num" style={{ color: tierColor(lead.recommended_tier as 1 | 2 | 3 | null) }}>
-                {lead.opportunity_score}
-              </span>
+              <ScoreHover
+                score={lead.opportunity_score}
+                reasoning={lead.opportunity_reasoning}
+                color={tierColor(lead.recommended_tier as 1 | 2 | 3 | null)}
+                meta={lead.recommended_tier ? `Recommended Tier ${lead.recommended_tier}` : undefined}
+              />
             ) : <span style={{ color: 'var(--text3)' }}>—</span>}
           </td>
         </>
