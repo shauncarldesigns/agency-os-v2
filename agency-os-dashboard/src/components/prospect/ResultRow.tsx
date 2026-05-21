@@ -3,6 +3,7 @@ import type { ProspectResult } from '../../lib/types';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
 import { TierPill } from '../shared/TierPill';
+import { ScoreHover } from '../shared/ScoreHover';
 import { stars, formatPhone, tierColor } from '../../lib/format';
 
 interface ResultRowProps {
@@ -40,7 +41,12 @@ export function ResultRow({ result, added, adding, onAdd }: ResultRowProps) {
           )}
         </td>
         <td>
-          <span className="score-num" style={{ color: tierColor(tier) }}>{result.opportunityScore}</span>
+          <ScoreHover
+            score={result.opportunityScore}
+            reasoning={result.reasoning}
+            color={tierColor(tier)}
+            meta="Prospect score · enrich for the full breakdown"
+          />
         </td>
         <td><TierPill tier={tier} /></td>
         <td>

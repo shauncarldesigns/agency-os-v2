@@ -3,6 +3,7 @@ import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
+import { ScoreHover } from '../shared/ScoreHover';
 import { TierPill } from '../shared/TierPill';
 import { formatPhone, scoreColor, statusBadge, outcomeBadge, tierColor } from '../../lib/format';
 
@@ -70,10 +71,10 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
   const outcome = outcomeBadge(lead.outcome);
 
   // Row visual state varies by enrichment status
-  let rowStyle: React.CSSProperties | undefined;
-  if (lead.enrichment_status === 'enriching') rowStyle = { background: 'rgba(245,200,66,0.04)' };
-  else if (lead.enrichment_status === 'pending') rowStyle = { opacity: 0.78 };
-  else if (lead.enrichment_status === 'failed') rowStyle = { opacity: 0.6, background: 'rgba(248,113,113,0.04)' };
+  let rowStyle: React.CSSProperties = { cursor: 'pointer' };
+  if (lead.enrichment_status === 'enriching') rowStyle = { ...rowStyle, background: 'rgba(245,200,66,0.04)' };
+  else if (lead.enrichment_status === 'pending') rowStyle = { ...rowStyle, opacity: 0.78 };
+  else if (lead.enrichment_status === 'failed') rowStyle = { ...rowStyle, opacity: 0.6, background: 'rgba(248,113,113,0.04)' };
 
   const enrichmentBadge = renderEnrichmentBadge(lead);
 
@@ -112,8 +113,12 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
     }
   }
 
+  // stopPropagation wrapper so action-cell clicks don't trigger the row's
+  // open-modal behaviour
+  const stop = (e: React.MouseEvent | React.ChangeEvent) => e.stopPropagation();
+
   return (
-    <tr style={rowStyle}>
+    <tr style={rowStyle} onClick={() => onOpenLead(lead.id)}>
       <td className="td-co" style={lead.status === 'dead' ? { textDecoration: 'line-through', color: 'var(--text3)' } : undefined}>
         {lead.company}
       </td>
@@ -139,9 +144,12 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
           </td>
           <td>
             {lead.opportunity_score != null ? (
-              <span className="score-num" style={{ color: tierColor(lead.recommended_tier as 1 | 2 | 3 | null) }}>
-                {lead.opportunity_score}
-              </span>
+              <ScoreHover
+                score={lead.opportunity_score}
+                reasoning={lead.opportunity_reasoning}
+                color={tierColor(lead.recommended_tier as 1 | 2 | 3 | null)}
+                meta={lead.recommended_tier ? `Recommended Tier ${lead.recommended_tier}` : undefined}
+              />
             ) : <span style={{ color: 'var(--text3)' }}>—</span>}
           </td>
         </>
@@ -153,7 +161,7 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
       </td>
       <td><Badge color={outcome.color}>{outcome.label}</Badge></td>
       <td><Badge color={stage.color}>{stage.label}</Badge></td>
-      <td>
+      <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
           {lead.enrichment_status === 'enriched'
             && lead.recommended_tier
@@ -179,7 +187,6 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
           {lead.enrichment_status === 'failed' && (
             <Button variant="ghost" size="xs" disabled={enriching} onClick={handleEnrich}>↻ Retry</Button>
           )}
-          <Button variant="ghost" size="xs" onClick={() => onOpenLead(lead.id)}>View</Button>
           {lead.deleted_at ? (
             <Button variant="ghost" size="xs" onClick={handleRestore} title="Restore from trash">↺ Restore</Button>
           ) : (

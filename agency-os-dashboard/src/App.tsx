@@ -20,7 +20,22 @@ export default function App() {
   const [briefsContext, setBriefsContext] = useState<BriefsContext | null>(null);
   const { toasts, showToast } = useToast();
 
-  function handleBuildSite(lead: Lead) {
+  async function handleBuildSite(lead: Lead) {
+    // The Briefs panel only lists leads with status 'qualified' or 'contacted'
+    // (and no project yet). Anything earlier in the funnel won't appear there,
+    // so auto-promote on Build to avoid the operator having to flip the status
+    // manually before going to the brief page.
+    if (lead.status !== 'qualified' && lead.status !== 'contacted' && lead.status !== 'client') {
+      try {
+        await api.leads.update(lead.id, { status: 'qualified' });
+        showToast(`${lead.company} marked qualified`, 'success');
+        loadStats();
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : (err as Error).message;
+        showToast(`Couldn't auto-qualify: ${msg}`, 'error');
+        // Non-blocking — still navigate so the operator can recover from the Briefs tab
+      }
+    }
     setBriefsContext({
       leadId: lead.id,
       projectId: lead.project_id ?? undefined,

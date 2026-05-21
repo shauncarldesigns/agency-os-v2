@@ -175,6 +175,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
       pitch_quotes = ?,
       owner_names = ?,
       opportunity_score = ?,
+      opportunity_reasoning = ?,
       recommended_tier = ?,
       enrichment_status = 'enriched',
       enrichment_error = NULL,
@@ -205,6 +206,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
     mined ? JSON.stringify(mined.pitch_quotes) : null,
     mined ? JSON.stringify(mined.owner_names) : null,
     score.score,
+    score.reasoning || null,
     score.tier,
     leadId,
   ).run();

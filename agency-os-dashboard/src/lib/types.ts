@@ -28,6 +28,7 @@ export interface Lead {
   pitch_quotes: string | null;
   owner_names: string | null;
   opportunity_score: number | null;
+  opportunity_reasoning: string | null;
   recommended_tier: number | null;
   enrichment_status: 'pending' | 'enriching' | 'enriched' | 'failed';
   enrichment_error: string | null;
