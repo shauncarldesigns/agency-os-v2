@@ -53,10 +53,10 @@ export function LeadModal({ open, leadId, onClose, showToast, onLeadUpdated, onB
     }
   }
 
-  async function handleStatusChange(field: 'status' | 'outcome', value: string) {
+  async function handleFieldChange(field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) {
     if (!data) return;
     const original = data.lead;
-    setData({ ...data, lead: { ...original, [field]: value as Lead['status'] | string } });
+    setData({ ...data, lead: { ...original, [field]: value } as Lead });
     try {
       await api.leads.update(original.id, { [field]: value } as Partial<Lead>);
       onLeadUpdated();
@@ -80,7 +80,7 @@ export function LeadModal({ open, leadId, onClose, showToast, onLeadUpdated, onB
           tab={tab}
           setTab={setTab}
           onClose={onClose}
-          onStatusChange={handleStatusChange}
+          onFieldChange={handleFieldChange}
           onCallsChanged={() => loadLead(data.lead.id)}
           onBuildSite={onBuildSite}
           showToast={showToast}
@@ -95,14 +95,14 @@ interface LeadModalBodyProps {
   tab: LMTab;
   setTab: (t: LMTab) => void;
   onClose: () => void;
-  onStatusChange: (field: 'status' | 'outcome', value: string) => void;
+  onFieldChange: (field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) => void;
   onCallsChanged: () => void;
   onBuildSite: (lead: Lead) => void;
   showToast: ShowToast;
 }
 
 function LeadModalBody({
-  detail, tab, setTab, onClose, onStatusChange, onCallsChanged, onBuildSite, showToast,
+  detail, tab, setTab, onClose, onFieldChange, onCallsChanged, onBuildSite, showToast,
 }: LeadModalBodyProps) {
   const { lead, calls } = detail;
   const tier = lead.recommended_tier && [1, 2, 3].includes(lead.recommended_tier)
@@ -157,7 +157,7 @@ function LeadModalBody({
         </button>
       </div>
 
-      {tab === 'overview' && <OverviewPane lead={lead} onStatusChange={onStatusChange} />}
+      {tab === 'overview' && <OverviewPane lead={lead} onFieldChange={onFieldChange} />}
       {tab === 'reviews' && <ReviewsPane lead={lead} />}
       {tab === 'pitch' && <PitchPrepPane lead={lead} />}
       {tab === 'call' && (
@@ -188,7 +188,7 @@ function LeadModalBody({
 
 const PANE_STYLE: React.CSSProperties = { padding: '18px 20px', maxHeight: '50vh', overflowY: 'auto' };
 
-function OverviewPane({ lead, onStatusChange }: { lead: Lead; onStatusChange: (field: 'status' | 'outcome', value: string) => void }) {
+function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) => void }) {
   const services = parseList<string>(lead.extracted_services);
   const areas = parseList<string>(lead.extracted_service_areas);
   const ownerNames = parseList<string>(lead.owner_names);
@@ -251,10 +251,10 @@ function OverviewPane({ lead, onStatusChange }: { lead: Lead; onStatusChange: (f
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         <div className="fg">
           <label className="flabel">Outcome</label>
-          <select className="finput" value={lead.outcome ?? ''} onChange={e => onStatusChange('outcome', e.target.value)}>
+          <select className="finput" value={lead.outcome ?? ''} onChange={e => onFieldChange('outcome', e.target.value)}>
             <option value="">—</option>
             <option>No Answer</option>
             <option>Voicemail Left</option>
@@ -267,12 +267,28 @@ function OverviewPane({ lead, onStatusChange }: { lead: Lead; onStatusChange: (f
         </div>
         <div className="fg">
           <label className="flabel">Stage</label>
-          <select className="finput" value={lead.status} onChange={e => onStatusChange('status', e.target.value)}>
+          <select className="finput" value={lead.status} onChange={e => onFieldChange('status', e.target.value)}>
             <option value="cold">Cold</option>
             <option value="contacted">Contacted</option>
             <option value="qualified">Qualified</option>
             <option value="client">Client</option>
             <option value="dead">Dead</option>
+          </select>
+        </div>
+        <div className="fg">
+          <label className="flabel">Tier</label>
+          <select
+            className="finput"
+            value={lead.recommended_tier ?? ''}
+            onChange={(e) => {
+              const v = e.target.value ? parseInt(e.target.value, 10) : null;
+              if (v === null || v === 1 || v === 2 || v === 3) onFieldChange('recommended_tier', v);
+            }}
+          >
+            <option value="">— (no tier)</option>
+            <option value="1">Tier 1</option>
+            <option value="2">Tier 2</option>
+            <option value="3">Tier 3</option>
           </select>
         </div>
       </div>

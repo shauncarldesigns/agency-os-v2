@@ -4,6 +4,7 @@ import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
 import { ScoreHover } from '../shared/ScoreHover';
+import { TierPill } from '../shared/TierPill';
 import { formatPhone, scoreColor, statusBadge, outcomeBadge, tierColor } from '../../lib/format';
 
 interface LeadsTableProps {
@@ -66,7 +67,6 @@ interface LeadRowProps {
 
 function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
-  const [savingTier, setSavingTier] = useState(false);
   const stage = statusBadge(lead.status);
   const outcome = outcomeBadge(lead.outcome);
 
@@ -113,21 +113,6 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
     }
   }
 
-  async function handleTierChange(next: 1 | 2 | 3) {
-    if (next === lead.recommended_tier) return;
-    setSavingTier(true);
-    try {
-      await api.leads.update(lead.id, { recommended_tier: next });
-      showToast(`${lead.company} → Tier ${next}`, 'success');
-      onLeadUpdated();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Tier update failed: ${msg}`, 'error');
-    } finally {
-      setSavingTier(false);
-    }
-  }
-
   // stopPropagation wrapper so action-cell clicks don't trigger the row's
   // open-modal behaviour
   const stop = (e: React.MouseEvent | React.ChangeEvent) => e.stopPropagation();
@@ -152,12 +137,10 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
         </td>
       ) : (
         <>
-          <td onClick={stop}>
-            <TierSelect
-              value={lead.recommended_tier as 1 | 2 | 3 | null}
-              disabled={savingTier}
-              onChange={handleTierChange}
-            />
+          <td>
+            {lead.recommended_tier && [1, 2, 3].includes(lead.recommended_tier) ? (
+              <TierPill tier={lead.recommended_tier as 1 | 2 | 3} />
+            ) : <span style={{ color: 'var(--text3)' }}>—</span>}
           </td>
           <td>
             {lead.opportunity_score != null ? (
@@ -212,49 +195,6 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
         </div>
       </td>
     </tr>
-  );
-}
-
-interface TierSelectProps {
-  value: 1 | 2 | 3 | null;
-  disabled?: boolean;
-  onChange: (next: 1 | 2 | 3) => void;
-}
-
-function TierSelect({ value, disabled, onChange }: TierSelectProps) {
-  return (
-    <select
-      value={value ?? ''}
-      disabled={disabled}
-      onChange={(e) => {
-        const next = parseInt(e.target.value, 10);
-        if (next === 1 || next === 2 || next === 3) onChange(next);
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className={value ? `tier-pill t${value} tier-select` : 'tier-select'}
-      style={{
-        fontFamily: 'inherit',
-        fontSize: '0.65rem',
-        padding: '2px 18px 2px 8px',
-        borderRadius: 999,
-        border: '1px solid var(--border2)',
-        background: 'var(--surface2)',
-        color: 'var(--text2)',
-        cursor: disabled ? 'wait' : 'pointer',
-        appearance: 'none',
-        WebkitAppearance: 'none',
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%23999' stroke-width='1.4' d='M1 1l4 4 4-4'/></svg>\")",
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 5px center',
-      }}
-      title="Click to change tier"
-    >
-      {value == null && <option value="" disabled>—</option>}
-      <option value="1">Tier 1</option>
-      <option value="2">Tier 2</option>
-      <option value="3">Tier 3</option>
-    </select>
   );
 }
 
