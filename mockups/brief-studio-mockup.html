@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agency OS — Brief Studio Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1115;
+    color: #e8e8ea;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; color: #a0a0a8; text-transform: uppercase; letter-spacing: 0.5px; }
+  h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .muted { color: #777; }
+  .small { font-size: 11px; }
+  .row { display: flex; gap: 16px; }
+  .card {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #262932;
+    margin-bottom: 24px;
+  }
+  .topbar .project { display: flex; gap: 12px; align-items: center; }
+  .topbar .breadcrumb { color: #777; font-size: 12px; }
+  .topbar .tier-badge {
+    background: #2a3340;
+    color: #5db4f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .stat-num { font-size: 20px; font-weight: 600; }
+  .stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+
+  /* Master brief card */
+  .master-brief {
+    border-left: 3px solid #f5b85d;
+  }
+  .master-brief .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .btn {
+    background: #2a3340;
+    color: #e8e8ea;
+    border: 1px solid #353a47;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn:hover { background: #353a47; }
+  .btn-primary { background: #5db4f5; color: #0f1115; border-color: #5db4f5; }
+  .btn-primary:hover { background: #7cc4ff; }
+  .btn-danger { color: #ff7676; }
+  .btn-ghost { background: transparent; border-color: #353a47; }
+
+  /* Matrix */
+  .matrix-section { margin-top: 16px; }
+  .matrix-section .section-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 12px 0 8px;
+  }
+
+  /* Page cells - generic */
+  .cell-row {
+    display: grid;
+    grid-template-columns: 200px repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .cell-label { font-size: 12px; color: #c0c0c8; padding-right: 8px; }
+  .cell-label .meta { font-size: 10px; color: #666; }
+  .cell {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+    min-height: 52px;
+  }
+  .cell:hover { border-color: #5db4f5; }
+  .cell .city { font-weight: 500; color: #e0e0e8; font-size: 11px; }
+  .cell .status { font-size: 10px; margin-top: 4px; }
+
+  /* Cell statuses */
+  .cell.empty .city { color: #555; }
+  .cell.empty .status { color: #444; }
+  .cell.recommended { border-color: #f5b85d44; background: #1f1d18; }
+  .cell.recommended .status { color: #f5b85d; }
+  .cell.briefed { border-color: #5db4f544; background: #18222b; }
+  .cell.briefed .status { color: #5db4f5; }
+  .cell.pasted { border-color: #c084fc44; background: #1f1a26; }
+  .cell.pasted .status { color: #c084fc; }
+  .cell.live { border-color: #4ade8044; background: #182218; }
+  .cell.live .status { color: #4ade80; }
+  .cell .billing {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 9px;
+    color: #666;
+  }
+
+  /* Standalone pages row (flat) */
+  .standalone-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+  }
+
+  /* Section headers in matrix */
+  .matrix-header {
+    display: grid;
+    grid-template-columns: 200px repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid #262932;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .matrix-header .col-label {
+    padding: 0 10px;
+  }
+
+  /* Side panel for brief editor */
+  .brief-panel {
+    position: fixed;
+    right: 24px;
+    top: 24px;
+    bottom: 24px;
+    width: 460px;
+    background: #1a1d24;
+    border: 1px solid #353a47;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.4);
+  }
+  .brief-panel-header {
+    padding: 16px;
+    border-bottom: 1px solid #262932;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .brief-panel-header .close {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .brief-panel-title { font-size: 14px; font-weight: 600; }
+  .brief-panel-meta { font-size: 11px; color: #888; margin-top: 4px; }
+
+  .brief-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #262932;
+    background: #16191f;
+  }
+  .status-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #666;
+    flex: 1;
+    justify-content: center;
+  }
+  .status-step.done { color: #4ade80; }
+  .status-step.current { color: #5db4f5; font-weight: 600; }
+  .status-step .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #353a47;
+  }
+  .status-step.done .dot { background: #4ade80; }
+  .status-step.current .dot { background: #5db4f5; box-shadow: 0 0 0 3px #5db4f522; }
+  .status-step .arrow { color: #353a47; margin: 0 4px; }
+
+  .brief-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .brief-textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
+    background: #0f1115;
+    border: 1px solid #262932;
+    border-radius: 4px;
+    color: #e8e8ea;
+    font-family: ui-monospace, "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 12px;
+    resize: none;
+  }
+  .tbd { background: #5d3a1850; color: #f5b85d; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+
+  .brief-panel-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #262932;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-left { display: flex; gap: 8px; }
+  .footer-right { display: flex; gap: 8px; }
+
+  /* TBD checklist */
+  .tbd-checklist {
+    background: #1f1d18;
+    border: 1px solid #f5b85d44;
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .tbd-checklist-title {
+    font-size: 11px;
+    color: #f5b85d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .tbd-checklist .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #c0c0c8;
+    margin: 4px 0;
+  }
+  .tbd-checklist .item .check {
+    color: #4ade80;
+  }
+  .tbd-checklist .item .pending {
+    color: #f5b85d;
+  }
+
+  /* Annotations */
+  .note {
+    background: #18222b;
+    border: 1px solid #5db4f544;
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: #b0c8d8;
+    font-size: 11px;
+    margin: 8px 0;
+  }
+  .note strong { color: #5db4f5; }
+
+  /* Layout container */
+  .main-content {
+    margin-right: 484px;
+  }
+
+  /* Action bar at top of completion section */
+  .completion-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #262932;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #888;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+  .legend-empty { background: #1a1d24; border-color: #262932; }
+  .legend-recommended { background: #1f1d18; border-color: #f5b85d44; }
+  .legend-briefed { background: #18222b; border-color: #5db4f544; }
+  .legend-pasted { background: #1f1a26; border-color: #c084fc44; }
+  .legend-live { background: #182218; border-color: #4ade8044; }
+
+  /* Annotation overlay */
+  .callout {
+    position: relative;
+    border: 1px dashed #f5b85d66;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 12px 0;
+    background: #1f1d1855;
+  }
+  .callout::before {
+    content: "📝 What's new";
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    background: #0f1115;
+    color: #f5b85d;
+    padding: 0 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .callout p { font-size: 11px; color: #c0a878; margin: 2px 0; }
+
+  hr.divider {
+    border: none;
+    border-top: 1px solid #262932;
+    margin: 32px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="project">
+    <div>
+      <div class="breadcrumb">Sites › Northshore Plumbing & Drain</div>
+      <h1>Brief Studio</h1>
+    </div>
+  </div>
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <span class="tier-badge">TIER 3 · $499/mo</span>
+    <span class="muted small">Manitowoc, WI · 12 pages built</span>
+  </div>
+</div>
+
+<div class="main-content">
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">1</div>
+      <div class="stat-label">Master Brief</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">12 / 47</div>
+      <div class="stat-label">Pages Live · 47 possible</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">3</div>
+      <div class="stat-label">Pasted · awaiting "live" mark</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">5 / 5</div>
+      <div class="stat-label">Tier 3 monthly target</div>
+    </div>
+  </div>
+
+  <!-- MASTER BRIEF -->
+  <div class="card master-brief">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div>
+        <h3>📋 Master Brief <span class="muted small">· v3 · Updated 2 days ago</span></h3>
+        <p class="muted small">Source of truth. Defines services, areas, brand voice. Drives the matrix below.</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-ghost">View history (3)</button>
+        <button class="btn">✎ Edit</button>
+        <button class="btn btn-primary">↻ Regenerate</button>
+      </div>
+    </div>
+    <div class="tbd-checklist" style="margin-top: 12px;">
+      <div class="tbd-checklist-title">⚠ 2 TBDs in master brief</div>
+      <div class="item"><span class="pending">○</span> Founded year — operator needs to confirm</div>
+      <div class="item"><span class="pending">○</span> Photography direction — operator needs to choose</div>
+      <div class="item"><span class="check">✓</span> Owner credentials — filled in</div>
+      <div class="item"><span class="check">✓</span> Primary color — filled in</div>
+    </div>
+  </div>
+
+  <!-- MATRIX -->
+  <h2>Page Matrix</h2>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot legend-empty"></div>Not started</div>
+    <div class="legend-item"><div class="legend-dot legend-recommended"></div>Recommended</div>
+    <div class="legend-item"><div class="legend-dot legend-briefed"></div>Brief generated</div>
+    <div class="legend-item"><div class="legend-dot legend-pasted"></div>Pasted into landingsite.ai</div>
+    <div class="legend-item"><div class="legend-dot legend-live"></div>Live</div>
+  </div>
+
+  <div class="callout">
+    <p><strong>Tier no longer gates the matrix.</strong> All cells are clickable regardless of plan. Each generated page tracks a billing status: <code>included</code> (in tier), <code>add-on</code> (billed extra), or <code>comp</code> (gifted).</p>
+  </div>
+
+  <!-- Standalone pages (single-instance) -->
+  <div class="card">
+    <div class="matrix-section">
+      <div class="section-label">Foundation Pages</div>
+      <div class="standalone-row">
+        <div class="cell live">
+          <span class="billing">incl</span>
+          <div class="city">Homepage</div>
+          <div class="status">● Live · /</div>
+        </div>
+        <div class="cell live">
+          <span class="billing">incl</span>
+          <div class="city">About</div>
+          <div class="status">● Live · /about</div>
+        </div>
+        <div class="cell pasted">
+          <span class="billing">incl</span>
+          <div class="city">Services Overview</div>
+          <div class="status">⏱ Pasted · awaiting verify</div>
+        </div>
+        <div class="cell live">
+          <span class="billing">incl</span>
+          <div class="city">Contact</div>
+          <div class="status">● Live · /contact</div>
+        </div>
+        <div class="cell briefed">
+          <span class="billing">incl</span>
+          <div class="city">FAQ</div>
+          <div class="status">📋 Briefed</div>
+        </div>
+        <div class="cell empty">
+          <div class="city">+ Add page</div>
+          <div class="status">e.g. Financing</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="matrix-section">
+      <div class="section-label">Individual Service Pages (parent pages)</div>
+      <div class="standalone-row">
+        <div class="cell live">
+          <span class="billing">incl</span>
+          <div class="city">Drain Cleaning</div>
+          <div class="status">● Live · /services/drain-cleaning</div>
+        </div>
+        <div class="cell live">
+          <span class="billing">incl</span>
+          <div class="city">Water Heater</div>
+          <div class="status">● Live</div>
+        </div>
+        <div class="cell briefed">
+          <span class="billing">incl</span>
+          <div class="city">Leak Detection</div>
+          <div class="status">📋 Briefed</div>
+        </div>
+        <div class="cell empty">
+          <span class="billing">add-on</span>
+          <div class="city">Sump Pump</div>
+          <div class="status">+ Generate brief</div>
+        </div>
+        <div class="cell empty">
+          <div class="city">Sewer Line</div>
+          <div class="status">+ Generate brief</div>
+        </div>
+        <div class="cell empty">
+          <div class="city">+ Add service</div>
+          <div class="status">From master brief</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Service-area grid -->
+    <div class="matrix-section">
+      <div class="section-label">Service Area Pages (service × city)</div>
+
+      <div class="matrix-header">
+        <div></div>
+        <div class="col-label">Manitowoc</div>
+        <div class="col-label">Cleveland</div>
+        <div class="col-label">Plymouth</div>
+        <div class="col-label">Two Rivers</div>
+        <div class="col-label">Mishicot</div>
+        <div class="col-label">+ City</div>
+      </div>
+
+      <div class="cell-row">
+        <div class="cell-label">Drain Cleaning <div class="meta">5 of 5 areas covered</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Manitowoc</div><div class="status">● Live</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Cleveland</div><div class="status">● Live</div></div>
+        <div class="cell pasted"><span class="billing">incl</span><div class="city">Plymouth</div><div class="status">⏱ Pasted</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Two Rivers</div><div class="status">● Live</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Mishicot</div><div class="status">● Live</div></div>
+        <div class="cell empty"><div class="city">—</div></div>
+      </div>
+
+      <div class="cell-row">
+        <div class="cell-label">Water Heater <div class="meta">2 of 5</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Manitowoc</div><div class="status">● Live</div></div>
+        <div class="cell recommended"><div class="city">Cleveland</div><div class="status">★ Recommended</div></div>
+        <div class="cell empty"><div class="city">Plymouth</div><div class="status">+ Brief</div></div>
+        <div class="cell live"><span class="billing">incl</span><div class="city">Two Rivers</div><div class="status">● Live</div></div>
+        <div class="cell empty"><div class="city">Mishicot</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">—</div></div>
+      </div>
+
+      <div class="cell-row">
+        <div class="cell-label">Leak Detection <div class="meta">0 of 5</div></div>
+        <div class="cell recommended"><div class="city">Manitowoc</div><div class="status">★ Recommended</div></div>
+        <div class="cell empty"><div class="city">Cleveland</div><div class="status">+ Brief</div></div>
+        <div class="cell briefed"><span class="billing">incl</span><div class="city">Plymouth</div><div class="status">📋 Briefed</div></div>
+        <div class="cell empty"><div class="city">Two Rivers</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">Mishicot</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">—</div></div>
+      </div>
+
+      <div class="cell-row">
+        <div class="cell-label">Sump Pump <div class="meta">0 of 5 · add-on</div></div>
+        <div class="cell empty"><span class="billing">add-on</span><div class="city">Manitowoc</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">Cleveland</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">Plymouth</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">Two Rivers</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">Mishicot</div><div class="status">+ Brief</div></div>
+        <div class="cell empty"><div class="city">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p><strong>The completion flow is 4 steps.</strong> Each cell moves through them: <em>Empty → Briefed → Pasted → Live</em>. Status changes happen via explicit operator action — no guessing. See the panel on the right for what each transition looks like.</p>
+  </div>
+
+</div>
+
+<!-- BRIEF EDITOR PANEL -->
+<div class="brief-panel">
+
+  <div class="brief-panel-header">
+    <div>
+      <div class="brief-panel-title">Water Heater · Cleveland</div>
+      <div class="brief-panel-meta">Service-area page · v1 · Generated 4 min ago</div>
+    </div>
+    <button class="close">×</button>
+  </div>
+
+  <!-- Status bar showing 4-step flow -->
+  <div class="brief-status-bar">
+    <div class="status-step done">
+      <div class="dot"></div>Briefed
+    </div>
+    <span class="arrow">→</span>
+    <div class="status-step current">
+      <div class="dot"></div>Pasted
+    </div>
+    <span class="arrow">→</span>
+    <div class="status-step">
+      <div class="dot"></div>Live
+    </div>
+  </div>
+
+  <div class="brief-content">
+
+    <div class="note">
+      <strong>Quick guide:</strong> Edit the brief below if needed (fill in TBDs, tweak voice). When you paste it into landingsite.ai, click <em>"Mark as pasted"</em>. When the page is published, click <em>"Mark as live"</em> and paste the URL.
+    </div>
+
+    <div class="tbd-checklist">
+      <div class="tbd-checklist-title">⚠ 1 TBD remaining</div>
+      <div class="item"><span class="pending">○</span> Cleveland-specific testimonial — no review mentioned this city directly</div>
+    </div>
+
+    <textarea class="brief-textarea">## Water Heater Repair in Cleveland, WI
+
+**URL:** /service-areas/water-heater-repair-cleveland-wi
+**Meta title:** Water Heater Repair in Cleveland, WI | Northshore Plumbing
+**Meta description:** Fast water heater repair and replacement in Cleveland, WI. Same-day service, transparent pricing. Call (920) 555-0184.
+
+### Local context
+Cleveland is a smaller community along Lake Michigan in Manitowoc County, just 12 minutes south of our Manitowoc HQ. The area has a mix of older Victorian homes near the lakeshore, mid-century neighborhoods on Center Street, and newer subdivisions toward the Highway LS junction. Older Cleveland homes — particularly those built before 1980 — often have aging tank water heaters past their 10-year service life. Hard water from the local aquifer accelerates sediment buildup, shortening heater lifespan further.
+
+### Page focus
+This page should communicate:
+- We service Cleveland regularly (we're already 12 min away)
+- Why Cleveland homes specifically have water heater issues (age + hard water)
+- Our same-day response capability
+- Tankless vs traditional tank options for older homes
+- Transparent pricing — no service-call gimmicks
+
+### Brand voice (from master brief)
+Family-owned, direct, no-fluff. 6th-8th grade reading level. Sounds like a local plumber, not a marketing agency.
+
+### Testimonial
+[TBD: no Cleveland-specific testimonial available — operator may add one, or use the Manitowoc testimonial from the master brief]
+
+### Internal links
+- Parent: /services/water-heater
+- Related areas: /service-areas/water-heater-repair-manitowoc-wi, /service-areas/water-heater-repair-two-rivers-wi
+- Homepage: /
+
+### CTA
+Phone: (920) 555-0184 — above the fold and footer.
+Form: "Schedule a Free Estimate" with name, address, brief description.</textarea>
+
+  </div>
+
+  <div class="brief-panel-footer">
+    <div class="footer-left">
+      <button class="btn btn-ghost">Save edits</button>
+      <button class="btn btn-ghost">↻ Regenerate</button>
+    </div>
+    <div class="footer-right">
+      <button class="btn">📋 Copy</button>
+      <button class="btn btn-primary">✓ Mark as pasted</button>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

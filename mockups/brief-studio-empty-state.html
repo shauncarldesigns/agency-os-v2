@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Brief Studio — Empty State with Master Brief Modal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1115;
+    color: #e8e8ea;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 24px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; color: #a0a0a8; text-transform: uppercase; letter-spacing: 0.5px; }
+  h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .muted { color: #777; }
+  .small { font-size: 11px; }
+  .row { display: flex; gap: 16px; }
+
+  .card {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Topbar (matches brief-studio-mockup.html exactly) */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #262932;
+    margin-bottom: 24px;
+  }
+  .topbar .project { display: flex; gap: 12px; align-items: center; }
+  .topbar .breadcrumb { color: #777; font-size: 12px; }
+  .topbar .tier-badge {
+    background: #2a3340;
+    color: #5db4f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .stat-num { font-size: 20px; font-weight: 600; }
+  .stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+  .stat.muted-state .stat-num { color: #555; }
+  .stat.muted-state .stat-label { color: #666; }
+
+  /* Empty-state callout (replaces master brief card position) */
+  .empty-callout {
+    background: linear-gradient(135deg, #1f1d18 0%, #251f15 100%);
+    border: 1px solid #f5b85d44;
+    border-left: 3px solid #f5b85d;
+    border-radius: 6px;
+    padding: 28px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+  .empty-callout::before {
+    content: "📋 Master Brief · Not yet generated";
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    font-size: 11px;
+    color: #f5b85d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .empty-callout-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    margin-top: 14px;
+  }
+  .empty-callout h3 {
+    font-size: 17px;
+    font-weight: 600;
+    color: #e8e8ea;
+    margin-bottom: 6px;
+  }
+  .empty-callout p {
+    font-size: 12px;
+    color: #a0a0a8;
+    max-width: 480px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+  }
+
+  /* Buttons */
+  .btn {
+    background: #2a3340;
+    color: #e8e8ea;
+    border: 1px solid #353a47;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { background: #353a47; }
+  .btn-primary { background: #5db4f5; color: #0f1115; border-color: #5db4f5; font-weight: 600; }
+  .btn-primary:hover { background: #7cc4ff; }
+  .btn-ghost { background: transparent; border-color: #353a47; }
+  .btn-yellow {
+    background: #f5b85d;
+    color: #0f1115;
+    border-color: #f5b85d;
+    font-weight: 600;
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+  .btn-yellow:hover { background: #f7c47a; }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+  /* Matrix skeleton (greyed out / disabled state) */
+  .matrix-skeleton {
+    position: relative;
+  }
+  .matrix-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 17, 21, 0.6);
+    border-radius: 6px;
+    pointer-events: none;
+  }
+  .matrix-skeleton-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1a1d24;
+    border: 1px solid #353a47;
+    border-radius: 6px;
+    padding: 14px 20px;
+    z-index: 1;
+    font-size: 12px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .matrix-skeleton-overlay .lock { color: #f5b85d; }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #888;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+  .legend-empty { background: #1a1d24; border-color: #262932; }
+  .legend-recommended { background: #1f1d18; border-color: #f5b85d44; }
+  .legend-briefed { background: #18222b; border-color: #5db4f544; }
+  .legend-pasted { background: #1f1a26; border-color: #c084fc44; }
+  .legend-live { background: #182218; border-color: #4ade8044; }
+
+  /* Skeleton matrix cells */
+  .matrix-section { margin-top: 16px; }
+  .section-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 12px 0 8px;
+  }
+  .standalone-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+  }
+  .cell-skel {
+    background: #16191f;
+    border: 1px dashed #262932;
+    border-radius: 4px;
+    padding: 12px 10px;
+    min-height: 52px;
+  }
+  .cell-skel .skel-line {
+    height: 8px;
+    background: #262932;
+    border-radius: 2px;
+    margin-bottom: 6px;
+  }
+  .cell-skel .skel-line.short { width: 60%; }
+  .cell-skel .skel-line.tiny { width: 40%; height: 6px; }
+
+  .matrix-header {
+    display: grid;
+    grid-template-columns: 200px repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid #262932;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .matrix-header .col-label { padding: 0 10px; }
+  .cell-row {
+    display: grid;
+    grid-template-columns: 200px repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .cell-label-skel {
+    padding-right: 8px;
+  }
+  .cell-label-skel .skel-line {
+    height: 8px;
+    background: #262932;
+    border-radius: 2px;
+    margin-bottom: 4px;
+  }
+  .cell-label-skel .skel-line.main { width: 70%; }
+  .cell-label-skel .skel-line.sub { width: 40%; height: 6px; }
+
+  /* Sidebar */
+  .main-content {
+    margin-right: 484px;
+  }
+  .sidebar-panel {
+    position: fixed;
+    right: 24px;
+    top: 24px;
+    bottom: 24px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .side-card {
+    background: #1a1d24;
+    border: 1px solid #262932;
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .side-card-title {
+    font-size: 11px;
+    color: #a0a0a8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .side-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #262932;
+    font-size: 12px;
+    color: #c0c0c8;
+  }
+  .side-row:last-child { border-bottom: none; }
+  .side-row .status-ok { color: #4ade80; font-weight: 500; }
+  .side-row .status-na { color: #666; }
+  .side-row .status-action {
+    color: #5db4f5;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .side-row .status-action:hover { text-decoration: underline; }
+
+  .legend-card-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: #c0c0c8;
+  }
+  .legend-card-row .swatch {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+
+  .quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .quick-actions .btn {
+    text-align: left;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .quick-actions .btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* === MODAL === */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    overflow-y: auto;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: #1a1d24;
+    border: 1px solid #353a47;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 920px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  }
+  .modal-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid #262932;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #16191f;
+    border-radius: 8px 8px 0 0;
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 6px;
+  }
+  .modal-close:hover { color: #e8e8ea; }
+
+  .modal-body {
+    padding: 20px 22px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* Scrape banner */
+  .scrape-banner {
+    background: #16191f;
+    border: 1px solid #262932;
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+
+  /* Form section heading */
+  .form-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8e8ea;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #262932;
+  }
+  .form-section { margin-bottom: 22px; }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label {
+    font-size: 10px;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .field input, .field textarea, .field select {
+    background: #0f1115;
+    border: 1px solid #262932;
+    color: #e8e8ea;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .field input::placeholder, .field textarea::placeholder { color: #555; }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    outline: none;
+    border-color: #5db4f5;
+  }
+  .field textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+
+  /* Modal footer */
+  .modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid #262932;
+    background: #16191f;
+    border-radius: 0 0 8px 8px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .btn-orange {
+    background: #ea7942;
+    color: #fff;
+    border: 1px solid #ea7942;
+    padding: 9px 16px;
+    font-weight: 600;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+  }
+  .btn-orange:hover { background: #f1885a; }
+  .btn-cancel {
+    background: transparent;
+    color: #c0c0c8;
+    border: 1px solid #353a47;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  @media (max-width: 1200px) {
+    .main-content { margin-right: 0; }
+    .sidebar-panel { position: relative; right: auto; top: auto; bottom: auto; width: 100%; margin-top: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="project">
+    <div>
+      <div class="breadcrumb">Sites › Beno Plumbing</div>
+      <h1>Brief Studio</h1>
+    </div>
+  </div>
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <span class="tier-badge">TIER 3 · $499/mo</span>
+    <span class="muted small">Green Bay, WI · 0 pages built</span>
+  </div>
+</div>
+
+<div class="main-content">
+
+  <div class="stats">
+    <div class="stat muted-state">
+      <div class="stat-num">—</div>
+      <div class="stat-label">Master Brief · not yet generated</div>
+    </div>
+    <div class="stat muted-state">
+      <div class="stat-num">0 / —</div>
+      <div class="stat-label">Pages Live · matrix locked</div>
+    </div>
+    <div class="stat muted-state">
+      <div class="stat-num">0</div>
+      <div class="stat-label">Pasted · awaiting "live" mark</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">0 / 5</div>
+      <div class="stat-label">Tier 3 monthly target</div>
+    </div>
+  </div>
+
+  <!-- Empty state callout where master brief card lives -->
+  <div class="empty-callout">
+    <div class="empty-callout-icon">🧭</div>
+    <h3>Start with the Master Brief</h3>
+    <p>The master brief defines services, service areas, brand voice, and customer testimonials. Once it's saved, the page matrix below populates and you can generate briefs for individual pages on demand.</p>
+    <button class="btn-yellow" onclick="document.getElementById('master-modal').style.display='grid'">+ Generate Master Brief</button>
+  </div>
+
+  <!-- Matrix -->
+  <h2>Page Matrix</h2>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot legend-empty"></div>Not started</div>
+    <div class="legend-item"><div class="legend-dot legend-recommended"></div>Recommended</div>
+    <div class="legend-item"><div class="legend-dot legend-briefed"></div>Brief generated</div>
+    <div class="legend-item"><div class="legend-dot legend-pasted"></div>Pasted into landingsite.ai</div>
+    <div class="legend-item"><div class="legend-dot legend-live"></div>Live</div>
+  </div>
+
+  <!-- Matrix skeleton (greyed) -->
+  <div class="card matrix-skeleton">
+    <div class="matrix-skeleton-overlay">
+      <span class="lock">🔒</span>
+      <span>Generate the master brief to unlock the matrix</span>
+    </div>
+
+    <div class="matrix-section">
+      <div class="section-label">Foundation Pages</div>
+      <div class="standalone-row">
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div><div class="skel-line tiny"></div></div>
+      </div>
+    </div>
+
+    <div class="matrix-section">
+      <div class="section-label">Individual Service Pages (parent pages)</div>
+      <div class="standalone-row">
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+        <div class="cell-skel"><div class="skel-line"></div><div class="skel-line tiny"></div></div>
+      </div>
+    </div>
+
+    <div class="matrix-section">
+      <div class="section-label">Service Area Pages (service × city)</div>
+      <div class="matrix-header">
+        <div></div>
+        <div class="col-label">—</div>
+        <div class="col-label">—</div>
+        <div class="col-label">—</div>
+        <div class="col-label">—</div>
+        <div class="col-label">—</div>
+      </div>
+      <div class="cell-row">
+        <div class="cell-label-skel"><div class="skel-line main"></div><div class="skel-line sub"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+      </div>
+      <div class="cell-row">
+        <div class="cell-label-skel"><div class="skel-line main"></div><div class="skel-line sub"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+      </div>
+      <div class="cell-row">
+        <div class="cell-label-skel"><div class="skel-line main"></div><div class="skel-line sub"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+        <div class="cell-skel"><div class="skel-line short"></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar-panel">
+
+  <div class="side-card">
+    <div class="side-card-title">Status Legend</div>
+    <div class="legend-card-row"><div class="swatch legend-empty"></div>Planned — no brief yet</div>
+    <div class="legend-card-row"><div class="swatch legend-briefed"></div>Briefed — ready to paste</div>
+    <div class="legend-card-row"><div class="swatch legend-live"></div>Live — published in landingsite.ai</div>
+  </div>
+
+  <div class="side-card">
+    <div class="side-card-title">Quick Actions</div>
+    <div class="quick-actions">
+      <button class="btn disabled">↗ Open landingsite.ai project</button>
+      <button class="btn disabled">📊 View Reports</button>
+      <button class="btn btn-ghost">✎ Edit Project Info</button>
+    </div>
+  </div>
+
+  <div class="side-card">
+    <div class="side-card-title">Data Sources</div>
+    <div class="side-row"><span>Google Places</span><span class="status-ok">✓ Synced</span></div>
+    <div class="side-row"><span>Reviews mined</span><span class="status-ok">✓ 8 reviews</span></div>
+    <div class="side-row"><span>PageSpeed</span><span class="status-ok">✓ Desktop 71</span></div>
+    <div class="side-row"><span>Website scrape</span><span class="status-action">Run scrape →</span></div>
+  </div>
+
+</div>
+
+<!-- === Master Brief Modal === -->
+<div class="modal-overlay" id="master-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Master Brief — Beno Plumbing</div>
+      <button class="modal-close" onclick="document.getElementById('master-modal').style.display='none'">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="scrape-banner">Website already scraped — re-run from project settings if needed.</div>
+
+      <!-- Business Details -->
+      <div class="form-section">
+        <div class="form-section-title">Business Details</div>
+        <div class="row-2">
+          <div class="field">
+            <label>Business name</label>
+            <input type="text" value="Beno Plumbing">
+          </div>
+          <div class="field">
+            <label>Founded year</label>
+            <input type="number" value="2008">
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label>City</label>
+            <input type="text" value="Green Bay">
+          </div>
+          <div class="field">
+            <label>State</label>
+            <input type="text" value="WI">
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label>Phone</label>
+            <input type="tel" value="(920) 468-4777">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" placeholder="service@example.com">
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label>Owner name</label>
+            <input type="text" value="Dan Kovacs">
+          </div>
+          <div class="field">
+            <label>Tagline (optional)</label>
+            <input type="text" placeholder="Honest plumbing, done right.">
+          </div>
+        </div>
+        <div class="field">
+          <label>Owner credentials (free text)</label>
+          <textarea placeholder='e.g. "Master Plumber, WI License #234567, 22 years in trade. Bradford White Pro Service partner."'></textarea>
+        </div>
+      </div>
+
+      <!-- Truncated indicator -->
+      <div style="text-align:center; color:#555; font-size:11px; padding:14px 0; border-top:1px dashed #262932; border-bottom:1px dashed #262932;">
+        Brand · Services · Service Areas · Testimonials · Brand Attributes sections continue below ↓
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="document.getElementById('master-modal').style.display='none'">Cancel</button>
+      <button class="btn-orange">✦ Save & generate master brief</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
