@@ -2,8 +2,15 @@ import { useState } from 'react';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 
+export interface SearchInput {
+  location: string;
+  industry: string;
+  radius: number;
+  noWebsiteOnly: boolean;
+}
+
 interface SearchFormProps {
-  onSearch: (input: { location: string; industry: string; radius: number }) => Promise<void>;
+  onSearch: (input: SearchInput) => Promise<void>;
   loading: boolean;
 }
 
@@ -14,14 +21,15 @@ const RADIUS_OPTIONS: Array<{ label: string; value: number }> = [
 ];
 
 export function SearchForm({ onSearch, loading }: SearchFormProps) {
-  const [location, setLocation] = useState('Manitowoc, WI');
+  const [location, setLocation] = useState('Green Bay, WI');
   const [industry, setIndustry] = useState('');
   const [radius, setRadius] = useState<number>(40234); // 25 mi default
+  const [noWebsiteOnly, setNoWebsiteOnly] = useState<boolean>(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!location.trim() || !industry.trim() || loading) return;
-    onSearch({ location: location.trim(), industry: industry.trim(), radius });
+    onSearch({ location: location.trim(), industry: industry.trim(), radius, noWebsiteOnly });
   }
 
   return (
@@ -58,6 +66,28 @@ export function SearchForm({ onSearch, loading }: SearchFormProps) {
           {loading ? <><Spinner /> Searching…</> : <>🔍 Search</>}
         </Button>
       </form>
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          marginTop: 10,
+          fontSize: '0.72rem',
+          color: 'var(--text2)',
+          cursor: 'pointer',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={noWebsiteOnly}
+          onChange={(e) => setNoWebsiteOnly(e.target.checked)}
+          disabled={loading}
+        />
+        🚫 Only businesses <strong>without a website</strong>
+        <span style={{ fontSize: '0.62rem', color: 'var(--text3)', marginLeft: 4 }}>
+          (pulls up to 60 candidates so the filter has results to work with)
+        </span>
+      </label>
     </div>
   );
 }
