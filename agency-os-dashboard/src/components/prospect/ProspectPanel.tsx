@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { ProspectResult, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
-import { SearchForm } from './SearchForm';
+import { SearchForm, type SearchInput } from './SearchForm';
 import { ResultsTable } from './ResultsTable';
 import { FilterPills, type ProspectFilter, type SortBy } from './FilterPills';
 import { Button } from '../shared/Button';
@@ -16,7 +16,7 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [results, setResults] = useState<ProspectResult[]>([]);
-  const [lastSearch, setLastSearch] = useState<{ location: string; industry: string; radius: number } | null>(null);
+  const [lastSearch, setLastSearch] = useState<SearchInput | null>(null);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [filter, setFilter] = useState<ProspectFilter>('all');
@@ -24,23 +24,33 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
 
-  async function handleSearch(input: { location: string; industry: string; radius: number }) {
+  async function handleSearch(input: SearchInput) {
     setSearching(true);
     try {
-      // First call: pull a single page so the user sees results fast;
-      // the Load More button below can pull additional pages on demand.
-      const res = await api.prospect.search({ ...input, maxPages: 1 });
+      // When the "no website only" checkbox is on, most candidates will be
+      // filtered out — auto-fetch all 3 pages so the operator sees a useful
+      // count without having to click Load More repeatedly.
+      const maxPages = input.noWebsiteOnly ? 3 : 1;
+      const res = await api.prospect.search({
+        location: input.location,
+        industry: input.industry,
+        radius: input.radius,
+        maxPages,
+      });
       setResults(res.results);
       setHasSearched(true);
       setAddedIds(new Set());
       setLastSearch(input);
       setNextPageToken(res.nextPageToken);
+      // Auto-apply the no-website pill so the operator sees only the target audience.
+      setFilter(input.noWebsiteOnly ? 'no-website' : 'all');
       const newCount = res.results.filter(r => !r.alreadyInPipeline).length;
       const dupCount = res.total - newCount;
-      showToast(
-        `Found ${res.total} result${res.total === 1 ? '' : 's'}${dupCount > 0 ? ` · ${dupCount} already in pipeline` : ''}${res.nextPageToken ? ' · more available' : ''}`,
-        res.total > 0 ? 'success' : 'default',
-      );
+      const noWebsiteCount = res.results.filter(r => !r.website && !r.alreadyInPipeline).length;
+      const summary = input.noWebsiteOnly
+        ? `Found ${res.total} candidate${res.total === 1 ? '' : 's'} · ${noWebsiteCount} without a website`
+        : `Found ${res.total} result${res.total === 1 ? '' : 's'}${dupCount > 0 ? ` · ${dupCount} already in pipeline` : ''}${res.nextPageToken ? ' · more available' : ''}`;
+      showToast(summary, res.total > 0 ? 'success' : 'default');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Search failed: ${msg}`, 'error');
@@ -53,7 +63,13 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
     if (!lastSearch || !nextPageToken) return;
     setLoadingMore(true);
     try {
-      const res = await api.prospect.search({ ...lastSearch, pageToken: nextPageToken, maxPages: 1 });
+      const res = await api.prospect.search({
+        location: lastSearch.location,
+        industry: lastSearch.industry,
+        radius: lastSearch.radius,
+        pageToken: nextPageToken,
+        maxPages: 1,
+      });
       // Dedupe by placeId in case Google returns overlaps.
       const seen = new Set(results.map(r => r.placeId));
       const merged = [...results, ...res.results.filter(r => !seen.has(r.placeId))];
