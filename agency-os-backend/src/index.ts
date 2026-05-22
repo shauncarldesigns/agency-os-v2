@@ -19,7 +19,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: '*',
   allowHeaders: ['Content-Type', 'X-API-Key'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
 
 app.get('/', c => c.json({ name: 'agency-os-v2-api', version: '2.0.0', status: 'ok' }));

@@ -61,6 +61,11 @@ export const api = {
       }),
     enrich: (id: number) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/enrich`, { method: 'POST' }),
+    generateHomepageDemo: (id: number) =>
+      apiFetch<{ markdown: string; generatedAt: string; model: string }>(
+        `/api/leads/${id}/homepage-demo`,
+        { method: 'POST' }
+      ),
     enrichAll: (limit = 25) =>
       apiFetch<{ total: number; succeeded: number; failed: number; failures: Array<{ id: number; error: string }> }>(
         '/api/leads/enrich-all',

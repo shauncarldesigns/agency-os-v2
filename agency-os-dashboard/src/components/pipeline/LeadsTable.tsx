@@ -12,10 +12,10 @@ interface LeadsTableProps {
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
-  onBuildSite: (lead: Lead) => void;
+  onHomepageDemo: (lead: Lead) => void;
 }
 
-export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onBuildSite }: LeadsTableProps) {
+export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }: LeadsTableProps) {
   if (leads.length === 0) {
     return (
       <div className="twrap" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
@@ -48,7 +48,7 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onBuil
               showToast={showToast}
               onLeadUpdated={onLeadUpdated}
               onOpenLead={onOpenLead}
-              onBuildSite={onBuildSite}
+              onHomepageDemo={onHomepageDemo}
             />
           ))}
         </tbody>
@@ -62,10 +62,10 @@ interface LeadRowProps {
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
-  onBuildSite: (lead: Lead) => void;
+  onHomepageDemo: (lead: Lead) => void;
 }
 
-function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: LeadRowProps) {
+function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
   const stage = statusBadge(lead.status);
   const outcome = outcomeBadge(lead.outcome);
@@ -164,16 +164,15 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onBuildSite }: Le
       <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
           {lead.enrichment_status === 'enriched'
-            && lead.recommended_tier
-            && [1, 2, 3].includes(lead.recommended_tier)
-            && lead.status !== 'client'
-            && lead.status !== 'dead' && (
+            && lead.status === 'qualified'
+            && !lead.deleted_at && (
               <Button
-                variant={`tier${lead.recommended_tier}` as 'tier1' | 'tier2' | 'tier3'}
+                variant="primary"
                 size="xs"
-                onClick={() => onBuildSite(lead)}
+                onClick={() => onHomepageDemo(lead)}
+                title="Generate an ephemeral homepage demo brief — paste into landingsite.ai for the next call"
               >
-                ⚡ Build
+                📋 Demo
               </Button>
           )}
           {lead.enrichment_status === 'pending' && (

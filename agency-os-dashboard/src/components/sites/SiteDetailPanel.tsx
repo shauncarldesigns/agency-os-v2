@@ -4,7 +4,8 @@ import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
-import { BriefViewerModal } from '../briefs/BriefViewerModal';
+import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
+import { BriefStudioMatrix } from './BriefStudioMatrix';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -119,7 +120,32 @@ export function SiteDetailPanel({
                 <EmptyCallout onOpenForm={() => setOperatorFormOpen(true)} />
               )}
 
-              <MatrixSection hasMaster={!!master} />
+              <h2 className="bs-section-h">Page Matrix</h2>
+              <div className="bs-matrix-legend">
+                <LegendDot color="empty" label="Not started" />
+                <LegendDot color="recommended" label="Recommended" />
+                <LegendDot color="briefed" label="Brief generated" />
+                <LegendDot color="live" label="Live" />
+              </div>
+
+              <div className="bs-matrix-card">
+                {!master && (
+                  <div className="bs-matrix-overlay">
+                    <span className="bs-matrix-lock">🔒</span>
+                    <span>Generate the master brief to unlock the matrix</span>
+                  </div>
+                )}
+                {master ? (
+                  <BriefStudioMatrix
+                    projectId={project.id}
+                    reloadToken={master.updated_at ?? master.generated_at ?? ''}
+                    showToast={showToast}
+                    onOpenBrief={(b) => setViewerBriefId(b.id)}
+                  />
+                ) : (
+                  <MatrixSkeleton />
+                )}
+              </div>
             </>
           )}
         </main>
@@ -151,11 +177,12 @@ export function SiteDetailPanel({
         />
       )}
 
-      <BriefViewerModalLoader
+      <BriefEditorPanelLoader
         briefId={viewerBriefId}
         onClose={() => setViewerBriefId(null)}
         showToast={showToast}
-        onRegenerated={() => void reload()}
+        onChanged={() => void reload()}
+        onPageCompleted={() => { void reload(); onProjectChanged(); }}
       />
     </>
   );
@@ -256,68 +283,44 @@ function MasterBriefCard({ master, onClick }: { master: Brief; onClick: () => vo
 }
 
 // ============================================================================
-// Matrix section
+// Matrix skeleton (empty state only — live matrix lives in BriefStudioMatrix)
 // ============================================================================
 
-function MatrixSection({ hasMaster }: { hasMaster: boolean }) {
+function MatrixSkeleton() {
   return (
     <>
-      <h2 className="bs-section-h">Page Matrix</h2>
-      <div className="bs-matrix-legend">
-        <LegendDot color="empty" label="Not started" />
-        <LegendDot color="recommended" label="Recommended" />
-        <LegendDot color="briefed" label="Brief generated" />
-        <LegendDot color="live" label="Live" />
+      <div className="bs-matrix-section">
+        <div className="bs-matrix-section-label">Foundation Pages</div>
+        <div className="bs-matrix-row-flat">
+          {['Homepage', 'About', 'Services Overview', 'Contact', 'FAQ', '+ Add'].map((l) => (
+            <CellSkeleton key={l} label={l} />
+          ))}
+        </div>
       </div>
 
-      <div className="bs-matrix-card">
-        {!hasMaster && (
-          <div className="bs-matrix-overlay">
-            <span className="bs-matrix-lock">🔒</span>
-            <span>Generate the master brief to unlock the matrix</span>
-          </div>
-        )}
-        {hasMaster && (
-          <div className="bs-matrix-pending">
-            <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
-              📐 Matrix population ships in Phase 4 — for now the master brief above is the source of truth.
-            </span>
-          </div>
-        )}
-
-        <div className="bs-matrix-section">
-          <div className="bs-matrix-section-label">Foundation Pages</div>
-          <div className="bs-matrix-row-flat">
-            {['Homepage', 'About', 'Services Overview', 'Contact', 'FAQ', '+ Add'].map((l) => (
-              <CellSkeleton key={l} label={l} />
-            ))}
-          </div>
+      <div className="bs-matrix-section">
+        <div className="bs-matrix-section-label">Individual Service Pages</div>
+        <div className="bs-matrix-row-flat">
+          {[1, 2, 3, 4].map((i) => (
+            <CellSkeleton key={i} />
+          ))}
         </div>
+      </div>
 
-        <div className="bs-matrix-section">
-          <div className="bs-matrix-section-label">Individual Service Pages</div>
-          <div className="bs-matrix-row-flat">
-            {[1, 2, 3, 4].map((i) => (
-              <CellSkeleton key={i} />
-            ))}
-          </div>
-        </div>
-
-        <div className="bs-matrix-section">
-          <div className="bs-matrix-section-label">Service Area Pages (service × city)</div>
-          <div className="bs-matrix-grid">
-            {[0, 1, 2].map((row) => (
-              <div className="bs-matrix-grid-row" key={row}>
-                <div className="bs-matrix-grid-label">
-                  <div className="bs-skel-line bs-skel-main" />
-                  <div className="bs-skel-line bs-skel-sub" />
-                </div>
-                {[0, 1, 2, 3, 4].map((col) => (
-                  <CellSkeleton key={col} compact />
-                ))}
+      <div className="bs-matrix-section">
+        <div className="bs-matrix-section-label">Service Area Pages (service × city)</div>
+        <div className="bs-matrix-grid">
+          {[0, 1, 2].map((row) => (
+            <div className="bs-matrix-grid-row" key={row}>
+              <div className="bs-matrix-grid-label">
+                <div className="bs-skel-line bs-skel-main" />
+                <div className="bs-skel-line bs-skel-sub" />
               </div>
-            ))}
-          </div>
+              {[0, 1, 2, 3, 4].map((col) => (
+                <CellSkeleton key={col} compact />
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </>
@@ -448,16 +451,17 @@ function formatRelative(ts: string | null | undefined): string {
 }
 
 // ============================================================================
-// Brief viewer wrapper (fetches by id then renders the existing modal)
+// Brief editor wrapper (fetches by id then renders the slide-in panel)
 // ============================================================================
 
-function BriefViewerModalLoader({
-  briefId, onClose, showToast, onRegenerated,
+function BriefEditorPanelLoader({
+  briefId, onClose, showToast, onChanged, onPageCompleted,
 }: {
   briefId: number | null;
   onClose: () => void;
   showToast: ShowToast;
-  onRegenerated: () => void;
+  onChanged: () => void;
+  onPageCompleted: () => void;
 }) {
   const [brief, setBrief] = useState<Brief | null>(null);
 
@@ -474,12 +478,13 @@ function BriefViewerModalLoader({
   }, [briefId, onClose, showToast]);
 
   return (
-    <BriefViewerModal
+    <BriefEditorPanel
       open={briefId !== null && brief !== null}
       brief={brief}
       onClose={onClose}
       showToast={showToast}
-      onRegenerated={(b) => { setBrief(b); onRegenerated(); }}
+      onChanged={(b) => { setBrief(b); onChanged(); }}
+      onPageCompleted={onPageCompleted}
     />
   );
 }

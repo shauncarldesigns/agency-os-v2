@@ -161,7 +161,10 @@ briefsRouter.post('/projects/:projectId/pages/:pageId/brief', async (c) => {
       systemPrompt: system,
       cacheSystem: true,
       maxTokens: 4000,
-      temperature: 0.4,
+      // 0.8 (vs the earlier 0.4) gives the angle-led prompt room to actually
+      // differentiate businesses. Lower temp here was the main reason briefs
+      // felt template-filled even when the underlying data varied.
+      temperature: 0.8,
       timeoutMs: 90_000,
     });
 
