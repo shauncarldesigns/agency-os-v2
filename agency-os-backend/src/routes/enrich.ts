@@ -3,6 +3,7 @@ import type { Env, Lead } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
 import { getPlaceDetails, searchPlaces } from '../services/places';
 import { getPageSpeedReport } from '../services/pagespeed';
+import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import { mineReviews } from '../services/reviewMiner';
 import { calculateOpportunityScore, recentReviewActivity } from '../services/scoring';
 
@@ -101,6 +102,24 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
       placeData = await getPlaceDetails(env.GOOGLE_PLACES_API_KEY, placeId);
     } catch (err) {
       log('warn', 'enrich', `Place detail failed for lead ${leadId}`, err);
+    }
+  }
+
+  // 2b. Backfill reviews via Outscraper (Google caps Places API at 5).
+  // Best-effort: if the key is missing or the call fails, we keep Google's 5
+  // and let the rest of the pipeline run unchanged.
+  if (placeData && placeId && env.OUTSCRAPER_API_KEY) {
+    try {
+      const extra = await fetchOutscraperReviews(env.OUTSCRAPER_API_KEY, placeId, 50);
+      const merged = mergeReviews(placeData.reviews, extra);
+      log('info', 'enrich', `Outscraper reviews for lead ${leadId}`, {
+        googleCount: placeData.reviews.length,
+        outscraperCount: extra.length,
+        mergedCount: merged.length,
+      });
+      placeData = { ...placeData, reviews: merged };
+    } catch (err) {
+      log('warn', 'enrich', `Outscraper fetch failed for lead ${leadId} — falling back to Google reviews`, err);
     }
   }
 

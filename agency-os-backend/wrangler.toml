@@ -18,7 +18,7 @@ crons = [
 [vars]
 ENV = "production"
 
-# Secrets (set via `wrangler secret put`):
+# Secrets (set via `npx wrangler secret put`):
 # CLAUDE_API_KEY
 # GOOGLE_PLACES_API_KEY
 # GOOGLE_OAUTH_CLIENT_ID
@@ -28,3 +28,5 @@ ENV = "production"
 # CLOUDFLARE_ACCOUNT_ID
 # DASHBOARD_API_KEY
 # RESEND_API_KEY
+# OUTSCRAPER_API_KEY  (optional — fetches up to 50 Google reviews per lead;
+#                     without it, enrichment falls back to Google's 5)
