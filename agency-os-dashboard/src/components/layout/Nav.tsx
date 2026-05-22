@@ -9,7 +9,6 @@ interface NavProps {
 const TABS: Array<{ key: Tab; icon: string; label: string; countKey: keyof NavCounts | null }> = [
   { key: 'prospect', icon: '🔍', label: 'Prospect', countKey: 'prospect' },
   { key: 'pipeline', icon: '📋', label: 'Pipeline', countKey: 'pipeline' },
-  { key: 'briefs', icon: '⚡', label: 'Briefs', countKey: 'briefs' },
   { key: 'sites', icon: '🌐', label: 'Sites', countKey: 'sites' },
   { key: 'reports', icon: '📊', label: 'Reports', countKey: null },
 ];

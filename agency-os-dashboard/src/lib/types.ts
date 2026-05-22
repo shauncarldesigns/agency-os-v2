@@ -128,7 +128,6 @@ export interface HeaderStats {
 export interface NavCounts {
   prospect: number | null;
   pipeline: number;
-  briefs: number;
   sites: number;
 }
 
@@ -262,13 +261,7 @@ export interface ReportSummary {
   keywordWins: KeywordWin[];
 }
 
-export interface BriefsContext {
-  leadId?: number;
-  projectId?: number;
-  businessName: string;
-}
-
-export type Tab = 'prospect' | 'pipeline' | 'briefs' | 'sites' | 'reports';
+export type Tab = 'prospect' | 'pipeline' | 'sites' | 'reports';
 
 export type ToastType = 'default' | 'success' | 'error';
 export type ShowToast = (message: string, type?: ToastType) => void;

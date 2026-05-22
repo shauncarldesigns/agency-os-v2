@@ -10,16 +10,16 @@ import { LeadsTable } from './LeadsTable';
 import { LeadModal } from './LeadModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { AddLeadModal } from './AddLeadModal';
+import { HomepageDemoModal } from './HomepageDemoModal';
 
 interface PipelinePanelProps {
   showToast: ShowToast;
   onLeadCountChanged?: () => void;
-  onBuildSite?: (lead: Lead) => void;
 }
 
 type TierFilter = 'all' | '1' | '2' | '3';
 
-export function PipelinePanel({ showToast, onLeadCountChanged, onBuildSite }: PipelinePanelProps) {
+export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<StageFilter>('all');
@@ -32,6 +32,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onBuildSite }: Pi
   const [openLeadId, setOpenLeadId] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [demoLead, setDemoLead] = useState<Lead | null>(null);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -154,10 +155,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onBuildSite }: Pi
           showToast={showToast}
           onLeadUpdated={handleLeadUpdated}
           onOpenLead={setOpenLeadId}
-          onBuildSite={lead => {
-            if (onBuildSite) onBuildSite(lead);
-            else showToast('Build tab is not available in this view', 'default');
-          }}
+          onHomepageDemo={setDemoLead}
         />
       )}
 
@@ -167,10 +165,14 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onBuildSite }: Pi
         onClose={() => setOpenLeadId(null)}
         showToast={showToast}
         onLeadUpdated={handleLeadUpdated}
-        onBuildSite={lead => {
-          if (onBuildSite) onBuildSite(lead);
-          else showToast('Build tab is not available in this view', 'default');
-        }}
+        onHomepageDemo={setDemoLead}
+      />
+
+      <HomepageDemoModal
+        open={demoLead !== null}
+        lead={demoLead}
+        onClose={() => setDemoLead(null)}
+        showToast={showToast}
       />
 
       <ImportCsvModal

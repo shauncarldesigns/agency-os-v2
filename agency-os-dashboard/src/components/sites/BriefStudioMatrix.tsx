@@ -18,8 +18,7 @@ import { Spinner } from '../shared/Spinner';
  *     page_id and open the existing one. We look it up by page_id via the
  *     project brief list.
  *
- * The slide-in editor panel ships in Phase 5; for now the brief renders
- * in the existing BriefViewerModal via the parent.
+ * The opened brief is rendered by the parent in the slide-in BriefEditorPanel.
  */
 
 interface MatrixData {

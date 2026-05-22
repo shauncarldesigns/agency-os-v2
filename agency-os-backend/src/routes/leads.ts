@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
-import type { Env } from '../types';
+import type { Env, Lead } from '../types';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
+import { callClaude } from '../services/claude';
+import { buildHomepageDemoBriefPrompt, type HomepageDemoInput } from '../prompts/homepageDemoBrief';
+import { generateProjectSlug } from '../utils/slug';
+import type { GoogleReview } from '../services/places';
+import type { MinedReviewData } from '../services/reviewMiner';
 
 export const leadsRouter = new Hono<{ Bindings: Env }>();
 
@@ -155,7 +160,7 @@ leadsRouter.put('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
 
-  const existing = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(id).first();
+  const existing = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
   if (!existing) return c.json(notFound('Lead'), 404);
 
   try {
@@ -176,6 +181,24 @@ leadsRouter.put('/:id', async (c) => {
 
     await c.env.DB.prepare(`UPDATE leads SET ${setClause} WHERE id = ?`).bind(...values).run();
 
+    // Auto-create project when the operator marks the lead 'client' (= signed).
+    // The lead lands on the Sites tab immediately — no separate "Convert" click.
+    const becameClient = body.status === 'client' && existing.status !== 'client';
+    const noProjectYet = existing.project_id == null;
+    if (becameClient && noProjectYet) {
+      try {
+        const projectId = await createProjectFromLead(c.env, existing);
+        await c.env.DB
+          .prepare("UPDATE leads SET project_id = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(projectId, id)
+          .run();
+        log('info', 'leads', `Lead ${id} marked client → auto-created project ${projectId}`);
+      } catch (err) {
+        log('error', 'leads', `Lead ${id} auto-project creation failed`, err);
+        // Don't fail the PUT — the status update is still valid, operator can convert manually
+      }
+    }
+
     const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first();
     return c.json({ lead: updated });
   } catch (err) {
@@ -183,6 +206,108 @@ leadsRouter.put('/:id', async (c) => {
     return c.json(serverError(), 500);
   }
 });
+
+/** Minimum-viable project insert from an existing enriched lead. */
+async function createProjectFromLead(env: Env, lead: Lead): Promise<number> {
+  const tier = (lead.recommended_tier ?? 1) as 1 | 2 | 3;
+  const slug = generateProjectSlug(lead.company, lead.city ?? '', lead.state ?? 'WI');
+  const now = new Date();
+  const contractStart = tier === 3 ? now.toISOString() : null;
+  const contractMinEnd = tier === 3
+    ? new Date(now.getFullYear(), now.getMonth() + 6, now.getDate()).toISOString()
+    : null;
+
+  const insert = await env.DB.prepare(`
+    INSERT INTO projects (
+      lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
+      services, service_areas, pages_planned,
+      contract_start, contract_min_end, status, reviews_snapshot
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'building', ?)
+  `).bind(
+    lead.id,
+    lead.company,
+    slug,
+    tier,
+    lead.company,
+    lead.industry ?? null,
+    lead.city ?? 'Unknown',
+    lead.state ?? 'WI',
+    lead.phone ?? null,
+    lead.email ?? null,
+    lead.extracted_services ?? null,
+    lead.extracted_service_areas ?? null,
+    tier === 3 ? 15 : 5,
+    contractStart,
+    contractMinEnd,
+    lead.google_reviews ?? null,
+  ).run();
+
+  return insert.meta.last_row_id as number;
+}
+
+// POST /api/leads/:id/homepage-demo
+// Generates an ephemeral homepage-only brief from the lead's mined data.
+// Not persisted — operator copies, pastes into landingsite.ai, regenerates as needed.
+leadsRouter.post('/:id/homepage-demo', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  if (lead.enrichment_status !== 'enriched') {
+    return c.json(badRequest('Lead must be enriched before generating a homepage demo'), 400);
+  }
+
+  try {
+    const mined: MinedReviewData = {
+      services_performed: safeArr(lead.extracted_services),
+      service_areas: safeArr(lead.extracted_service_areas),
+      owner_names: safeArr(lead.owner_names),
+      strengths: safeArr(lead.extracted_strengths),
+      pitch_quotes: safeArr(lead.pitch_quotes),
+      differentiators: [],
+    };
+    const reviews = safeArr<GoogleReview>(lead.google_reviews);
+
+    const input: HomepageDemoInput = {
+      business_name: lead.company,
+      city: lead.city,
+      state: lead.state,
+      phone: lead.phone,
+      website: lead.website,
+      google_rating: lead.google_rating,
+      google_review_count: lead.google_review_count,
+      mined,
+      reviews,
+    };
+
+    const { system, user } = buildHomepageDemoBriefPrompt(input);
+    const markdown = await callClaude(c.env.CLAUDE_API_KEY, user, {
+      model: 'claude-sonnet-4-6',
+      systemPrompt: system,
+      cacheSystem: true,
+      maxTokens: 4000,
+      temperature: 0.4,
+      timeoutMs: 90_000,
+    });
+
+    return c.json({ markdown, generatedAt: new Date().toISOString(), model: 'claude-sonnet-4-6' });
+  } catch (err) {
+    log('error', 'leads', `POST /leads/${id}/homepage-demo failed`, err);
+    return c.json(serverError(`Homepage demo generation failed: ${(err as Error).message}`), 500);
+  }
+});
+
+function safeArr<T = unknown>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? (v as T[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 // Soft delete — sets deleted_at. Use POST /:id/restore to undo, or pass
 // ?hard=true for a permanent delete (only allowed when the lead is already

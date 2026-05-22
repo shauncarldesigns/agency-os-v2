@@ -153,13 +153,14 @@ CREATE TABLE IF NOT EXISTS pages (
   url             TEXT,
   title           TEXT,
   meta_description TEXT,
-  status          TEXT DEFAULT 'planned',
-  brief_content   TEXT,
-  cowork_job_id   TEXT,
+  status          TEXT DEFAULT 'planned',  -- 'planned' | 'briefed' | 'complete'
+  brief_content   TEXT,                    -- deprecated; brief_id points to the briefs table now
+  cowork_job_id   TEXT,                    -- deprecated; retained for back-compat on old rows
   built_at        TEXT,
-  -- v2.1: brief linkage + manual completion tracking
+  -- v2.1+: brief linkage + manual completion tracking
   brief_id        INTEGER REFERENCES briefs(id),
-  batch_period    TEXT,
+  batch_period    TEXT,                    -- deprecated; retained for back-compat
+  billing_status  TEXT DEFAULT 'included', -- 'included' | 'add_on' | 'comp'
   published_url   TEXT,
   marked_complete_at TEXT,
   operator_notes  TEXT,
@@ -169,25 +170,30 @@ CREATE INDEX IF NOT EXISTS idx_pages_proj ON pages(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_pages_batch ON pages(project_id, batch_period);
 
 -- ==================================================
--- BRIEFS — Master / homepage-demo / monthly-batch briefs (v2.1)
+-- BRIEFS — Master + Page briefs (v2.2)
 -- ==================================================
 CREATE TABLE IF NOT EXISTS briefs (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  kind                TEXT NOT NULL,  -- 'homepage_demo' | 'master' | 'monthly_batch'
+  kind                TEXT NOT NULL,  -- 'master' | 'page'
+  page_id             INTEGER REFERENCES pages(id),  -- NULL for master briefs
   content_markdown    TEXT NOT NULL,
-  status              TEXT NOT NULL DEFAULT 'generated',  -- 'generated' | 'in_progress' | 'completed' | 'archived'
-  batch_period        TEXT,
+  status              TEXT NOT NULL DEFAULT 'saved',  -- 'briefed' | 'complete' (page); 'draft' | 'saved' | 'archived' (master)
+  version             INTEGER NOT NULL DEFAULT 1,
+  tbd_count           INTEGER DEFAULT 0,
+  batch_period        TEXT,           -- deprecated; retained for back-compat
   generated_by_model  TEXT,
   generation_input    TEXT,
   generated_at        TEXT DEFAULT (datetime('now')),
+  updated_at          TEXT,
   completed_at        TEXT,
   supersedes_brief_id INTEGER REFERENCES briefs(id)
 );
 CREATE INDEX IF NOT EXISTS idx_briefs_project ON briefs(project_id, kind, status);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_briefs_monthly
-  ON briefs(project_id, batch_period)
-  WHERE batch_period IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_briefs_page ON briefs(page_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_briefs_master_per_project
+  ON briefs(project_id)
+  WHERE kind = 'master' AND supersedes_brief_id IS NULL;
 
 -- ==================================================
 -- BRAND_ATTRIBUTES — operator/scrape/claude-supplied brand voice signals (v2.1)
@@ -219,23 +225,8 @@ CREATE TABLE IF NOT EXISTS testimonials (
 );
 CREATE INDEX IF NOT EXISTS idx_testimonials_proj ON testimonials(project_id, is_featured);
 
--- ==================================================
--- BRIEF_JOBS — Cowork queue tracking
--- ==================================================
-CREATE TABLE IF NOT EXISTS brief_jobs (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  page_id         INTEGER REFERENCES pages(id),
-  job_type        TEXT NOT NULL,
-  brief_markdown  TEXT NOT NULL,
-  status          TEXT DEFAULT 'queued',
-  cowork_started_at TEXT,
-  cowork_completed_at TEXT,
-  error_message   TEXT,
-  retries         INTEGER DEFAULT 0,
-  created_at      TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON brief_jobs(status, created_at);
+-- (Legacy `brief_jobs` table was dropped in 2026-05-brief-studio migration —
+-- replaced by the `briefs` table with explicit kind/status/version columns.)
 
 -- ==================================================
 -- SEO_SNAPSHOTS — Monthly metrics for Tier 3 reports
