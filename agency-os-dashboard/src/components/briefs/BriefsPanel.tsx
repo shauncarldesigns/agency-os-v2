@@ -8,7 +8,6 @@ import { Spinner } from '../shared/Spinner';
 import { TierPill } from '../shared/TierPill';
 import { BriefViewerModal } from './BriefViewerModal';
 import { OperatorInputForm } from './OperatorInputForm';
-import { MonthlyBatchModal } from './MonthlyBatchModal';
 
 interface BriefsPanelProps {
   context: BriefsContext | null;
@@ -24,9 +23,8 @@ interface ProjectWithBriefs {
 }
 
 const KIND_LABEL: Record<BriefKind, string> = {
-  homepage_demo: 'Homepage Demo',
   master: 'Master',
-  monthly_batch: 'Monthly Batch',
+  page: 'Page',
 };
 
 export function BriefsPanel({ context, showToast, onClearContext, onProjectCreated }: BriefsPanelProps) {
@@ -36,7 +34,6 @@ export function BriefsPanel({ context, showToast, onClearContext, onProjectCreat
   const [generatingFor, setGeneratingFor] = useState<number | null>(null);   // lead id while creating demo
   const [viewerBrief, setViewerBrief] = useState<Brief | null>(null);
   const [operatorFormFor, setOperatorFormFor] = useState<ProjectWithBriefs | null>(null);
-  const [monthlyBatchFor, setMonthlyBatchFor] = useState<ProjectWithBriefs | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -102,9 +99,10 @@ export function BriefsPanel({ context, showToast, onClearContext, onProjectCreat
       const newProjectId = projRes.project.id;
       onProjectCreated();
 
-      // Step 2: generate homepage demo brief.
-      const brief = await api.briefs.master(newProjectId, 'homepage_only');
-      showToast(`Homepage demo generated for ${lead.company}`, 'success');
+      // Step 2: generate master brief for the new project.
+      // Homepage demo briefs (pre-signing) are moving to Pipeline in Phase 6.
+      const brief = await api.briefs.master(newProjectId);
+      showToast(`Master brief generated for ${lead.company}`, 'success');
       setViewerBrief(brief);
       await reload();
     } catch (err) {
@@ -197,7 +195,6 @@ export function BriefsPanel({ context, showToast, onClearContext, onProjectCreat
                     row={row}
                     onOpenBrief={openBrief}
                     onOpenMasterForm={() => setOperatorFormFor(row)}
-                    onOpenMonthlyBatch={() => setMonthlyBatchFor(row)}
                   />
                 ))}
               </div>
@@ -229,19 +226,6 @@ export function BriefsPanel({ context, showToast, onClearContext, onProjectCreat
         />
       )}
 
-      {monthlyBatchFor && (
-        <MonthlyBatchModal
-          open={true}
-          project={monthlyBatchFor.project}
-          showToast={showToast}
-          onClose={() => setMonthlyBatchFor(null)}
-          onBriefGenerated={(b) => {
-            setMonthlyBatchFor(null);
-            setViewerBrief(b);
-            void reload();
-          }}
-        />
-      )}
     </>
   );
 }
@@ -296,17 +280,14 @@ function LeadDemoRow({ lead, generating, onGenerate }: { lead: Lead; generating:
 }
 
 function ProjectBriefCard({
-  row, onOpenBrief, onOpenMasterForm, onOpenMonthlyBatch,
+  row, onOpenBrief, onOpenMasterForm,
 }: {
   row: ProjectWithBriefs;
   onOpenBrief: (briefId: number) => void;
   onOpenMasterForm: () => void;
-  onOpenMonthlyBatch: () => void;
 }) {
   const { project, briefs } = row;
   const activeMaster = briefs.find((b) => b.kind === 'master' && b.status !== 'archived');
-  const isTier3 = project.tier === 3;
-  const monthlyEnabled = isTier3 && !!activeMaster;
 
   return (
     <div
@@ -343,15 +324,6 @@ function ProjectBriefCard({
               📄 View Master Brief
             </Button>
           )}
-          <Button
-            variant={monthlyEnabled ? 'tier3' : 'ghost'}
-            size="sm"
-            disabled={!monthlyEnabled}
-            onClick={onOpenMonthlyBatch}
-            title={!isTier3 ? 'Tier 3 only' : !activeMaster ? 'Generate the master brief first' : 'Pick pages and generate this month\'s batch'}
-          >
-            🗓 Monthly Batch
-          </Button>
         </div>
       </div>
 
@@ -395,7 +367,7 @@ function BriefHistory({ briefs, onOpen }: { briefs: BriefSummary[]; onOpen: (id:
             }}
           >
             <span style={{ fontWeight: 600, color: 'var(--text)' }}>{KIND_LABEL[b.kind] ?? b.kind}</span>
-            {b.batch_period && <span>· {b.batch_period}</span>}
+            {b.version > 1 && <span>· v{b.version}</span>}
             <span style={{ marginLeft: 'auto', fontSize: '0.62rem', color: 'var(--text3)' }}>
               {b.status} · {b.generated_at}
             </span>

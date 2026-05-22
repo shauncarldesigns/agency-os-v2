@@ -1,17 +1,15 @@
 import { Hono } from 'hono';
-import type { Env, Project, Lead, Brief, BrandAttribute, Testimonial, BriefKind } from '../types';
+import type { Env, Project, Lead, Brief, BrandAttribute, Testimonial } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
 import { callClaude } from '../services/claude';
 import {
   buildMasterBriefPrompt,
   type MasterBriefInput,
-  type MasterBriefMode,
 } from '../prompts/masterBrief';
-import {
-  buildMonthlyBatchBriefPrompt,
-  type MonthlyBatchInput,
-  type MonthlyBatchPageRequest,
-} from '../prompts/monthlyBatchBrief';
+import { buildPageBriefPrompt, type PageSpec, type PageType } from '../prompts/pageBrief';
+import { buildMatrixForProject } from '../services/matrix';
+import { slugify } from '../utils/slug';
+import { countTbds } from '../utils/tbd';
 import type { GoogleReview } from '../services/places';
 import type { MinedReviewData } from '../services/reviewMiner';
 
@@ -20,110 +18,144 @@ const BRIEF_MODEL = 'claude-sonnet-4-6';
 export const briefsRouter = new Hono<{ Bindings: Env }>();
 
 // ============================================================================
-// POST /api/projects/:projectId/briefs/master?mode=homepage_only|full_site
+// MASTER BRIEF
 // ============================================================================
+
+// POST /api/projects/:projectId/briefs/master
+// Generates the project's master brief (first version).
 briefsRouter.post('/projects/:projectId/briefs/master', async (c) => {
   try {
     const projectId = Number(c.req.param('projectId'));
     if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
 
-    const modeRaw = (c.req.query('mode') ?? 'full_site').toLowerCase();
-    if (modeRaw !== 'homepage_only' && modeRaw !== 'full_site') {
-      return c.json(badRequest("mode must be 'homepage_only' or 'full_site'"), 400);
+    const ctx = await loadProjectContext(c.env, projectId);
+    if (!ctx) return c.json(notFound('Project'), 404);
+
+    const existing = await c.env.DB
+      .prepare("SELECT id FROM briefs WHERE project_id = ? AND kind = 'master' AND supersedes_brief_id IS NULL")
+      .bind(projectId)
+      .first<{ id: number }>();
+    if (existing) {
+      return c.json(
+        badRequest('Master brief already exists. Use /master/regenerate to create a new version.'),
+        409
+      );
     }
-    const mode = modeRaw as MasterBriefMode;
+
+    const input = buildMasterBriefInput(ctx);
+    const brief = await generateMasterBrief(c.env, projectId, input, /* version */ 1);
+    return c.json(brief, 201);
+  } catch (err) {
+    log('error', 'briefs', 'POST master failed', err);
+    return c.json(serverError(`Master brief generation failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// GET /api/projects/:projectId/briefs/master — current master (any version > 0, supersedes IS NULL)
+briefsRouter.get('/projects/:projectId/briefs/master', async (c) => {
+  try {
+    const projectId = Number(c.req.param('projectId'));
+    if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
+
+    const brief = await c.env.DB
+      .prepare(
+        `SELECT * FROM briefs
+         WHERE project_id = ? AND kind = 'master' AND supersedes_brief_id IS NULL
+         LIMIT 1`
+      )
+      .bind(projectId)
+      .first<Brief>();
+    if (!brief) return c.json(notFound('Master brief'), 404);
+    return c.json(brief);
+  } catch (err) {
+    log('error', 'briefs', 'GET master failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// POST /api/projects/:projectId/briefs/master/regenerate
+// Body: { feedback?: string }
+// Archives the current master and generates v+1 with optional feedback.
+briefsRouter.post('/projects/:projectId/briefs/master/regenerate', async (c) => {
+  try {
+    const projectId = Number(c.req.param('projectId'));
+    if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
+    const body = (await c.req.json().catch(() => ({}))) as { feedback?: string };
+
+    const current = await c.env.DB
+      .prepare(
+        `SELECT * FROM briefs
+         WHERE project_id = ? AND kind = 'master' AND supersedes_brief_id IS NULL`
+      )
+      .bind(projectId)
+      .first<Brief>();
+    if (!current) return c.json(notFound('Master brief'), 404);
 
     const ctx = await loadProjectContext(c.env, projectId);
     if (!ctx) return c.json(notFound('Project'), 404);
 
     const input = buildMasterBriefInput(ctx);
-    const brief = await generateAndPersistBrief(c.env, {
-      projectId,
-      kind: mode === 'homepage_only' ? 'homepage_demo' : 'master',
-      input,
-      mode,
-    });
 
-    return c.json(brief, 201);
+    // Archive the current one first so the partial-unique-index doesn't reject the insert.
+    await c.env.DB
+      .prepare("UPDATE briefs SET status = 'archived', supersedes_brief_id = ? WHERE id = ?")
+      .bind(current.id, current.id) // chained on itself; supersedes_brief_id no longer NULL
+      .run();
+
+    const next = await generateMasterBrief(
+      c.env,
+      projectId,
+      input,
+      current.version + 1,
+      body.feedback?.trim() || undefined
+    );
+
+    return c.json(next, 201);
   } catch (err) {
-    log('error', 'briefs', 'POST master brief failed', err);
-    return c.json(serverError(`Brief generation failed: ${(err as Error).message}`), 500);
+    log('error', 'briefs', 'POST master/regenerate failed', err);
+    return c.json(serverError(`Regenerate failed: ${(err as Error).message}`), 500);
   }
 });
 
 // ============================================================================
-// POST /api/projects/:projectId/briefs/monthly-batch
-// Body: { batchPeriod: '2026-06', pages: [{ service, city }, ...] }
+// PAGE BRIEFS
 // ============================================================================
-briefsRouter.post('/projects/:projectId/briefs/monthly-batch', async (c) => {
+
+// POST /api/projects/:projectId/pages/:pageId/brief
+// Generates a brief for the given page using the project's master brief as context.
+briefsRouter.post('/projects/:projectId/pages/:pageId/brief', async (c) => {
   try {
     const projectId = Number(c.req.param('projectId'));
-    if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
-
-    const body = (await c.req.json()) as {
-      batchPeriod?: string;
-      pages?: Array<{ service?: string; city?: string }>;
-    };
-    if (!body.batchPeriod || !/^\d{4}-\d{2}$/.test(body.batchPeriod)) {
-      return c.json(badRequest("batchPeriod required in 'YYYY-MM' format"), 400);
-    }
-    if (!Array.isArray(body.pages) || body.pages.length === 0) {
-      return c.json(badRequest('pages required: non-empty array of { service, city }'), 400);
-    }
-    for (const p of body.pages) {
-      if (!p.service || !p.city) return c.json(badRequest('each page requires service and city'), 400);
+    const pageId = Number(c.req.param('pageId'));
+    if (!Number.isFinite(projectId) || !Number.isFinite(pageId)) {
+      return c.json(badRequest('Invalid projectId or pageId'), 400);
     }
 
-    const project = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?')
+    const page = await c.env.DB
+      .prepare('SELECT * FROM pages WHERE id = ? AND project_id = ?')
+      .bind(pageId, projectId)
+      .first<{
+        id: number;
+        type: string;
+        service: string | null;
+        city: string | null;
+        status: string;
+      }>();
+    if (!page) return c.json(notFound('Page'), 404);
+
+    const master = await c.env.DB
+      .prepare(
+        `SELECT content_markdown FROM briefs
+         WHERE project_id = ? AND kind = 'master' AND supersedes_brief_id IS NULL`
+      )
       .bind(projectId)
-      .first<Project>();
-    if (!project) return c.json(notFound('Project'), 404);
+      .first<{ content_markdown: string }>();
+    if (!master) {
+      return c.json(badRequest('Generate the master brief before page briefs.'), 400);
+    }
 
-    const lead = project.lead_id
-      ? await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(project.lead_id).first<Lead>()
-      : null;
-
-    // Pull the most recent master brief for voice recap.
-    const masterBrief = await c.env.DB.prepare(
-      `SELECT * FROM briefs
-       WHERE project_id = ? AND kind = 'master' AND status != 'archived'
-       ORDER BY generated_at DESC LIMIT 1`
-    )
-      .bind(projectId)
-      .first<Brief>();
-
-    // Pages already built for this project (for internal-linking context).
-    const builtRows = await c.env.DB.prepare(
-      `SELECT service, city, published_url
-       FROM pages
-       WHERE project_id = ? AND status = 'complete' AND service IS NOT NULL AND city IS NOT NULL`
-    )
-      .bind(projectId)
-      .all<{ service: string; city: string; published_url: string | null }>();
-
-    const reviews = collectReviews(project, lead);
-
-    const monthlyInput: MonthlyBatchInput = {
-      business_name: project.business_name,
-      state: project.state,
-      phone: project.phone,
-      batch_period: body.batchPeriod,
-      monthly_pages_target: project.monthly_pages_target ?? 0,
-      brand_voice_summary: project.brand_voice_notes,
-      master_brief_excerpt: masterBrief?.content_markdown ?? null,
-      already_built_pages: (builtRows.results ?? []).map((r) => ({
-        service: r.service,
-        city: r.city,
-        url: r.published_url,
-      })),
-      pages: (body.pages as Array<{ service: string; city: string }>).map((p) => ({
-        service: p.service,
-        city: p.city,
-        city_review_quotes: matchReviewsToCity(reviews, p.city),
-      })) satisfies MonthlyBatchPageRequest[],
-    };
-
-    const { system, user } = buildMonthlyBatchBriefPrompt(monthlyInput);
+    const spec = pageSpecFromRow(page);
+    const { system, user } = buildPageBriefPrompt(master.content_markdown, spec);
     const markdown = await callClaude(c.env.CLAUDE_API_KEY, user, {
       model: BRIEF_MODEL,
       systemPrompt: system,
@@ -133,51 +165,126 @@ briefsRouter.post('/projects/:projectId/briefs/monthly-batch', async (c) => {
       timeoutMs: 90_000,
     });
 
-    // Insert brief row (unique on project_id + batch_period — caller must use regenerate to replace).
-    const insert = await c.env.DB.prepare(
-      `INSERT INTO briefs (project_id, kind, content_markdown, status, batch_period, generated_by_model, generation_input)
-       VALUES (?, 'monthly_batch', ?, 'generated', ?, ?, ?)`
-    )
-      .bind(projectId, markdown, body.batchPeriod, BRIEF_MODEL, JSON.stringify(monthlyInput))
-      .run();
+    const tbds = countTbds(markdown);
 
+    const insert = await c.env.DB
+      .prepare(
+        `INSERT INTO briefs
+           (project_id, kind, page_id, content_markdown, status, version, tbd_count,
+            generated_by_model, generation_input, updated_at)
+         VALUES (?, 'page', ?, ?, 'briefed', 1, ?, ?, ?, datetime('now'))`
+      )
+      .bind(projectId, pageId, markdown, tbds, BRIEF_MODEL, JSON.stringify({ spec }))
+      .run();
     const briefId = insert.meta.last_row_id as number;
 
-    // Create page rows (status='briefed') for each requested page.
-    for (const p of body.pages as Array<{ service: string; city: string }>) {
-      await c.env.DB.prepare(
-        `INSERT INTO pages (project_id, type, service, city, status, brief_id, batch_period)
-         VALUES (?, 'service-area', ?, ?, 'briefed', ?, ?)`
+    // Wire the page to its brief and flip status to 'briefed'.
+    await c.env.DB
+      .prepare(
+        `UPDATE pages SET brief_id = ?, status = 'briefed' WHERE id = ?`
       )
-        .bind(projectId, p.service, p.city, briefId, body.batchPeriod)
-        .run();
-    }
+      .bind(briefId, pageId)
+      .run();
 
     const brief = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
     return c.json(brief, 201);
   } catch (err) {
-    log('error', 'briefs', 'POST monthly-batch failed', err);
-    return c.json(serverError(`Monthly batch generation failed: ${(err as Error).message}`), 500);
+    log('error', 'briefs', 'POST page brief failed', err);
+    return c.json(serverError(`Page brief generation failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// POST /api/projects/:projectId/pages — create a page row (used when the
+// matrix needs to materialize a cell before generating its brief).
+// Body: { type, service?, city?, customTitle? }
+briefsRouter.post('/projects/:projectId/pages', async (c) => {
+  try {
+    const projectId = Number(c.req.param('projectId'));
+    if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
+
+    const body = (await c.req.json()) as {
+      type?: string;
+      service?: string;
+      city?: string;
+      customTitle?: string;
+    };
+    if (!body.type) return c.json(badRequest('type required'), 400);
+
+    const project = await c.env.DB.prepare('SELECT state FROM projects WHERE id = ?')
+      .bind(projectId)
+      .first<{ state: string | null }>();
+    if (!project) return c.json(notFound('Project'), 404);
+
+    const state = (project.state ?? 'wi').toLowerCase();
+    const slug =
+      body.type === 'service-area' && body.service && body.city
+        ? `/service-areas/${slugify(body.service)}-${slugify(body.city)}-${state}`
+        : body.type === 'service' && body.service
+          ? `/services/${slugify(body.service)}`
+          : body.type === 'custom' && body.customTitle
+            ? `/${slugify(body.customTitle)}`
+            : `/${slugify(body.type)}`;
+
+    // De-dupe on (project_id, type, service, city)
+    const existing = await c.env.DB
+      .prepare(
+        `SELECT id FROM pages
+         WHERE project_id = ? AND type = ?
+           AND (service IS ? OR service = ?)
+           AND (city IS ? OR city = ?)`
+      )
+      .bind(projectId, body.type, body.service ?? null, body.service ?? '', body.city ?? null, body.city ?? '')
+      .first<{ id: number }>();
+    if (existing) {
+      const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(existing.id).first();
+      return c.json(page, 200);
+    }
+
+    const insert = await c.env.DB
+      .prepare(
+        `INSERT INTO pages (project_id, type, service, city, slug, status, billing_status)
+         VALUES (?, ?, ?, ?, ?, 'planned', 'included')`
+      )
+      .bind(
+        projectId,
+        body.type,
+        body.service ?? body.customTitle ?? null,
+        body.city ?? null,
+        slug
+      )
+      .run();
+
+    const page = await c.env.DB
+      .prepare('SELECT * FROM pages WHERE id = ?')
+      .bind(insert.meta.last_row_id)
+      .first();
+    return c.json(page, 201);
+  } catch (err) {
+    log('error', 'briefs', 'POST page failed', err);
+    return c.json(serverError(`Page create failed: ${(err as Error).message}`), 500);
   }
 });
 
 // ============================================================================
-// GET /api/projects/:projectId/briefs — list all briefs for a project
+// BRIEF FETCH / UPDATE
 // ============================================================================
+
+// GET /api/projects/:projectId/briefs — list all briefs (summary)
 briefsRouter.get('/projects/:projectId/briefs', async (c) => {
   try {
     const projectId = Number(c.req.param('projectId'));
     if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
 
-    const rows = await c.env.DB.prepare(
-      `SELECT id, project_id, kind, status, batch_period, generated_by_model, generated_at, completed_at, supersedes_brief_id
-       FROM briefs
-       WHERE project_id = ?
-       ORDER BY generated_at DESC`
-    )
+    const rows = await c.env.DB
+      .prepare(
+        `SELECT id, project_id, kind, page_id, status, version, tbd_count,
+                generated_by_model, generated_at, updated_at, completed_at, supersedes_brief_id
+         FROM briefs
+         WHERE project_id = ?
+         ORDER BY kind ASC, generated_at DESC`
+      )
       .bind(projectId)
-      .all<Omit<Brief, 'content_markdown' | 'generation_input'>>();
-
+      .all();
     return c.json({ briefs: rows.results ?? [] });
   } catch (err) {
     log('error', 'briefs', 'GET project briefs failed', err);
@@ -185,14 +292,11 @@ briefsRouter.get('/projects/:projectId/briefs', async (c) => {
   }
 });
 
-// ============================================================================
-// GET /api/briefs/:briefId
-// ============================================================================
+// GET /api/briefs/:briefId — get a single brief (full markdown)
 briefsRouter.get('/briefs/:briefId', async (c) => {
   try {
     const briefId = Number(c.req.param('briefId'));
     if (!Number.isFinite(briefId)) return c.json(badRequest('Invalid briefId'), 400);
-
     const brief = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
     if (!brief) return c.json(notFound('Brief'), 404);
     return c.json(brief);
@@ -202,96 +306,135 @@ briefsRouter.get('/briefs/:briefId', async (c) => {
   }
 });
 
-// ============================================================================
-// POST /api/briefs/:briefId/regenerate
-// Body: { feedback?: string }
-// Archives the old brief, generates a new one with supersedes_brief_id set.
-// ============================================================================
-briefsRouter.post('/briefs/:briefId/regenerate', async (c) => {
+// PATCH /api/briefs/:briefId
+// Body: { content_markdown: string }
+// Used by the editor on inline TBD fill or freeform edits. Recounts tbd_count.
+briefsRouter.patch('/briefs/:briefId', async (c) => {
   try {
     const briefId = Number(c.req.param('briefId'));
     if (!Number.isFinite(briefId)) return c.json(badRequest('Invalid briefId'), 400);
 
-    const body = (await c.req.json().catch(() => ({}))) as { feedback?: string };
-
-    const old = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
-    if (!old) return c.json(notFound('Brief'), 404);
-
-    if (old.kind === 'monthly_batch') {
-      return c.json(badRequest('Use POST /projects/:id/briefs/monthly-batch to regenerate a batch brief'), 400);
+    const body = (await c.req.json()) as { content_markdown?: string };
+    if (typeof body.content_markdown !== 'string') {
+      return c.json(badRequest('content_markdown (string) required'), 400);
     }
 
-    const ctx = await loadProjectContext(c.env, old.project_id);
-    if (!ctx) return c.json(notFound('Project'), 404);
+    const existing = await c.env.DB
+      .prepare('SELECT id FROM briefs WHERE id = ?')
+      .bind(briefId)
+      .first<{ id: number }>();
+    if (!existing) return c.json(notFound('Brief'), 404);
 
-    const mode: MasterBriefMode = old.kind === 'homepage_demo' ? 'homepage_only' : 'full_site';
-    const input = buildMasterBriefInput(ctx);
+    const tbds = countTbds(body.content_markdown);
+    await c.env.DB
+      .prepare(
+        `UPDATE briefs
+         SET content_markdown = ?, tbd_count = ?, updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .bind(body.content_markdown, tbds, briefId)
+      .run();
 
-    const newBrief = await generateAndPersistBrief(c.env, {
-      projectId: old.project_id,
-      kind: old.kind,
-      input,
-      mode,
-      supersedesBriefId: old.id,
-      feedback: body.feedback,
-    });
-
-    // Archive the old brief.
-    await c.env.DB.prepare("UPDATE briefs SET status = 'archived' WHERE id = ?").bind(old.id).run();
-
-    return c.json(newBrief, 201);
+    const updated = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
+    return c.json(updated);
   } catch (err) {
-    log('error', 'briefs', 'POST regenerate failed', err);
-    return c.json(serverError(`Regenerate failed: ${(err as Error).message}`), 500);
+    log('error', 'briefs', 'PATCH brief failed', err);
+    return c.json(serverError(`Brief update failed: ${(err as Error).message}`), 500);
   }
 });
 
 // ============================================================================
-// PATCH /api/pages/:pageId/complete — operator manually marks a page live
-// Body: { publishedUrl: string, notes?: string }
+// PAGE STATUS / BILLING
 // ============================================================================
-briefsRouter.patch('/pages/:pageId/complete', async (c) => {
+
+// PATCH /api/pages/:pageId/status — Body: { status: 'planned' | 'briefed' | 'complete' }
+briefsRouter.patch('/pages/:pageId/status', async (c) => {
   try {
     const pageId = Number(c.req.param('pageId'));
     if (!Number.isFinite(pageId)) return c.json(badRequest('Invalid pageId'), 400);
-
-    const body = (await c.req.json()) as { publishedUrl?: string; notes?: string };
-    if (!body.publishedUrl || typeof body.publishedUrl !== 'string') {
-      return c.json(badRequest('publishedUrl required'), 400);
+    const body = (await c.req.json()) as { status?: string };
+    const valid = ['planned', 'briefed', 'complete'];
+    if (!body.status || !valid.includes(body.status)) {
+      return c.json(badRequest(`status must be one of: ${valid.join(', ')}`), 400);
     }
 
-    const page = await c.env.DB.prepare(
-      'SELECT id, project_id FROM pages WHERE id = ?'
-    )
-      .bind(pageId)
-      .first<{ id: number; project_id: number }>();
+    const page = await c.env.DB.prepare('SELECT id, project_id FROM pages WHERE id = ?').bind(pageId).first<{
+      id: number; project_id: number;
+    }>();
     if (!page) return c.json(notFound('Page'), 404);
 
-    await c.env.DB.prepare(
-      `UPDATE pages
-       SET status = 'complete',
-           published_url = ?,
-           marked_complete_at = datetime('now'),
-           operator_notes = COALESCE(?, operator_notes)
-       WHERE id = ?`
-    )
-      .bind(body.publishedUrl, body.notes ?? null, pageId)
+    const setComplete = body.status === 'complete';
+    await c.env.DB
+      .prepare(
+        `UPDATE pages
+         SET status = ?,
+             marked_complete_at = CASE WHEN ? = 1 THEN datetime('now') ELSE marked_complete_at END
+         WHERE id = ?`
+      )
+      .bind(body.status, setComplete ? 1 : 0, pageId)
       .run();
 
-    await c.env.DB.prepare(
-      `UPDATE projects
-       SET pages_built = (SELECT COUNT(*) FROM pages WHERE project_id = ? AND status = 'complete'),
-           updated_at = datetime('now')
-       WHERE id = ?`
-    )
+    await c.env.DB
+      .prepare(
+        `UPDATE projects
+         SET pages_built = (SELECT COUNT(*) FROM pages WHERE project_id = ? AND status = 'complete'),
+             updated_at = datetime('now')
+         WHERE id = ?`
+      )
       .bind(page.project_id, page.project_id)
       .run();
 
     const updated = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first();
     return c.json(updated);
   } catch (err) {
-    log('error', 'briefs', 'PATCH page complete failed', err);
-    return c.json(serverError(`Page completion failed: ${(err as Error).message}`), 500);
+    log('error', 'briefs', 'PATCH page status failed', err);
+    return c.json(serverError(`Status update failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// PATCH /api/pages/:pageId/billing — Body: { billing_status: 'included' | 'add_on' | 'comp' }
+briefsRouter.patch('/pages/:pageId/billing', async (c) => {
+  try {
+    const pageId = Number(c.req.param('pageId'));
+    if (!Number.isFinite(pageId)) return c.json(badRequest('Invalid pageId'), 400);
+    const body = (await c.req.json()) as { billing_status?: string };
+    const valid = ['included', 'add_on', 'comp'];
+    if (!body.billing_status || !valid.includes(body.billing_status)) {
+      return c.json(badRequest(`billing_status must be one of: ${valid.join(', ')}`), 400);
+    }
+
+    const exists = await c.env.DB.prepare('SELECT id FROM pages WHERE id = ?').bind(pageId).first();
+    if (!exists) return c.json(notFound('Page'), 404);
+
+    await c.env.DB
+      .prepare('UPDATE pages SET billing_status = ? WHERE id = ?')
+      .bind(body.billing_status, pageId)
+      .run();
+
+    const updated = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first();
+    return c.json(updated);
+  } catch (err) {
+    log('error', 'briefs', 'PATCH page billing failed', err);
+    return c.json(serverError(`Billing update failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// ============================================================================
+// MATRIX
+// ============================================================================
+
+// GET /api/projects/:projectId/matrix
+briefsRouter.get('/projects/:projectId/matrix', async (c) => {
+  try {
+    const projectId = Number(c.req.param('projectId'));
+    if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid projectId'), 400);
+
+    const matrix = await buildMatrixForProject(c.env.DB, projectId);
+    if (!matrix) return c.json(notFound('Project'), 404);
+    return c.json(matrix);
+  } catch (err) {
+    log('error', 'briefs', 'GET matrix failed', err);
+    return c.json(serverError(`Matrix build failed: ${(err as Error).message}`), 500);
   }
 });
 
@@ -314,15 +457,13 @@ async function loadProjectContext(env: Env, projectId: number): Promise<ProjectC
     ? await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(project.lead_id).first<Lead>()
     : null;
 
-  const ba = await env.DB.prepare(
-    'SELECT * FROM brand_attributes WHERE project_id = ? ORDER BY weight DESC, id ASC'
-  )
+  const ba = await env.DB
+    .prepare('SELECT * FROM brand_attributes WHERE project_id = ? ORDER BY weight DESC, id ASC')
     .bind(projectId)
     .all<BrandAttribute>();
 
-  const ts = await env.DB.prepare(
-    'SELECT * FROM testimonials WHERE project_id = ? ORDER BY is_featured DESC, id ASC'
-  )
+  const ts = await env.DB
+    .prepare('SELECT * FROM testimonials WHERE project_id = ? ORDER BY is_featured DESC, id ASC')
     .bind(projectId)
     .all<Testimonial>();
 
@@ -377,28 +518,20 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
 }
 
 function collectReviews(project: Project, lead: Lead | null): GoogleReview[] {
-  // Prefer reviews_snapshot stored on the project (frozen at signing); fall back to lead.
-  const candidates = [project.reviews_snapshot, lead?.google_reviews];
-  for (const raw of candidates) {
+  for (const raw of [project.reviews_snapshot, lead?.google_reviews]) {
     if (!raw) continue;
     try {
       const v = JSON.parse(raw);
       if (Array.isArray(v)) return v as GoogleReview[];
-    } catch {
-      // ignore malformed
-    }
+    } catch { /* ignore */ }
   }
   return [];
 }
 
 function collectMinedData(lead: Lead | null): MinedReviewData {
   const empty: MinedReviewData = {
-    service_areas: [],
-    services_performed: [],
-    owner_names: [],
-    strengths: [],
-    pitch_quotes: [],
-    differentiators: [],
+    service_areas: [], services_performed: [], owner_names: [],
+    strengths: [], pitch_quotes: [], differentiators: [],
   };
   if (!lead) return empty;
   return {
@@ -407,22 +540,34 @@ function collectMinedData(lead: Lead | null): MinedReviewData {
     owner_names: safeArr(lead.owner_names),
     strengths: safeArr(lead.extracted_strengths),
     pitch_quotes: safeArr(lead.pitch_quotes),
-    differentiators: [], // not yet stored on leads
+    differentiators: [],
   };
 }
 
-function matchReviewsToCity(
-  reviews: GoogleReview[],
-  city: string
-): Array<{ author: string; quote: string }> {
-  const needle = city.toLowerCase();
-  const matches: Array<{ author: string; quote: string }> = [];
-  for (const r of reviews) {
-    if (r.text && r.text.toLowerCase().includes(needle)) {
-      matches.push({ author: r.author, quote: r.text });
-    }
+function pageSpecFromRow(page: {
+  type: string;
+  service: string | null;
+  city: string | null;
+}): PageSpec {
+  // Page table uses 'service-area' (hyphenated) historically; pageBrief prompt uses 'service_area'
+  const t = page.type === 'service-area' ? 'service_area' : page.type;
+  switch (t) {
+    case 'homepage':
+    case 'about':
+    case 'services_overview':
+    case 'contact':
+    case 'faq':
+      return { type: t as PageType };
+    case 'service':
+      return { type: 'service', service: page.service ?? '' };
+    case 'service_area':
+      return { type: 'service_area', service: page.service ?? '', city: page.city ?? '' };
+    case 'custom':
+      return { type: 'custom', customTitle: page.service ?? `Page ${page.type}` };
+    default:
+      // Unknown legacy types — fall back to custom with the row's type label
+      return { type: 'custom', customTitle: page.service ?? t };
   }
-  return matches.slice(0, 3);
 }
 
 function safeArr<T = unknown>(raw: string | null | undefined): T[] {
@@ -435,19 +580,16 @@ function safeArr<T = unknown>(raw: string | null | undefined): T[] {
   }
 }
 
-interface GenerateOpts {
-  projectId: number;
-  kind: BriefKind;
-  input: MasterBriefInput;
-  mode: MasterBriefMode;
-  supersedesBriefId?: number;
-  feedback?: string;
-}
-
-async function generateAndPersistBrief(env: Env, opts: GenerateOpts): Promise<Brief> {
-  const { system, user: baseUser } = buildMasterBriefPrompt(opts.input, opts.mode);
-  const user = opts.feedback
-    ? `${baseUser}\n\n## Operator feedback on the previous draft\n${opts.feedback}\n\nIncorporate the feedback above when producing this revised draft.`
+async function generateMasterBrief(
+  env: Env,
+  projectId: number,
+  input: MasterBriefInput,
+  version: number,
+  feedback?: string,
+): Promise<Brief> {
+  const { system, user: baseUser } = buildMasterBriefPrompt(input);
+  const user = feedback
+    ? `${baseUser}\n\n## Operator feedback on the previous draft\n${feedback}\n\nIncorporate the feedback above when producing this revised draft.`
     : baseUser;
 
   const markdown = await callClaude(env.CLAUDE_API_KEY, user, {
@@ -459,22 +601,20 @@ async function generateAndPersistBrief(env: Env, opts: GenerateOpts): Promise<Br
     timeoutMs: 90_000,
   });
 
-  const insert = await env.DB.prepare(
-    `INSERT INTO briefs (project_id, kind, content_markdown, status, generated_by_model, generation_input, supersedes_brief_id)
-     VALUES (?, ?, ?, 'generated', ?, ?, ?)`
-  )
-    .bind(
-      opts.projectId,
-      opts.kind,
-      markdown,
-      BRIEF_MODEL,
-      JSON.stringify(opts.input),
-      opts.supersedesBriefId ?? null
+  const tbds = countTbds(markdown);
+
+  const insert = await env.DB
+    .prepare(
+      `INSERT INTO briefs
+         (project_id, kind, content_markdown, status, version, tbd_count,
+          generated_by_model, generation_input, updated_at)
+       VALUES (?, 'master', ?, 'saved', ?, ?, ?, ?, datetime('now'))`
     )
+    .bind(projectId, markdown, version, tbds, BRIEF_MODEL, JSON.stringify({ input }))
     .run();
 
   const briefId = insert.meta.last_row_id as number;
   const brief = await env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
-  if (!brief) throw new Error('Insert succeeded but row not found');
+  if (!brief) throw new Error('Brief insert succeeded but row not found');
   return brief;
 }

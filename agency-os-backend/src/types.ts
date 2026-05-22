@@ -115,19 +115,29 @@ export interface Project {
 // v2.1 entities
 // ============================================================================
 
-export type BriefKind = 'homepage_demo' | 'master' | 'monthly_batch';
-export type BriefStatus = 'generated' | 'in_progress' | 'completed' | 'archived';
+export type BriefKind = 'master' | 'page';
+/**
+ * Brief status values:
+ *  - 'briefed': page brief generated, not yet marked live by operator
+ *  - 'complete': page brief's page is live (operator marked the page complete)
+ *  - 'draft' / 'saved': master brief states (kept loose; master never goes to complete)
+ *  - 'archived': prior version after regenerate (chained via supersedes_brief_id)
+ */
+export type BriefStatus = 'briefed' | 'complete' | 'draft' | 'saved' | 'archived';
 
 export interface Brief {
   id: number;
   project_id: number;
   kind: BriefKind;
+  page_id: number | null;
   content_markdown: string;
   status: BriefStatus;
-  batch_period: string | null;
+  version: number;
+  tbd_count: number;
   generated_by_model: string | null;
   generation_input: string | null;
   generated_at: string;
+  updated_at: string | null;
   completed_at: string | null;
   supersedes_brief_id: number | null;
 }
@@ -168,7 +178,8 @@ export interface Testimonial {
   created_at: string;
 }
 
-export type PageStatus = 'planned' | 'briefed' | 'in_progress' | 'complete' | 'archived';
+export type PageStatus = 'planned' | 'briefed' | 'complete';
+export type PageBillingStatus = 'included' | 'add_on' | 'comp';
 
 export interface Page {
   id: number;
@@ -180,11 +191,12 @@ export interface Page {
   url: string | null;
   title: string | null;
   meta_description: string | null;
-  status: string;
+  status: PageStatus | string;
   brief_content: string | null;
   built_at: string | null;
   brief_id: number | null;
-  batch_period: string | null;
+  batch_period: string | null;        // legacy column from v2.1, no longer written
+  billing_status: PageBillingStatus | string;
   published_url: string | null;
   marked_complete_at: string | null;
   operator_notes: string | null;

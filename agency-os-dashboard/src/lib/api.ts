@@ -109,25 +109,58 @@ export const api = {
     listForProject: (projectId: number) =>
       apiFetch<{ briefs: BriefSummary[] }>(`/api/projects/${projectId}/briefs`),
     get: (id: number) => apiFetch<Brief>(`/api/briefs/${id}`),
-    master: (projectId: number, mode: 'homepage_only' | 'full_site') =>
-      apiFetch<Brief>(`/api/projects/${projectId}/briefs/master?mode=${mode}`, { method: 'POST' }),
-    monthlyBatch: (projectId: number, batchPeriod: string, pages: Array<{ service: string; city: string }>) =>
-      apiFetch<Brief>(`/api/projects/${projectId}/briefs/monthly-batch`, {
-        method: 'POST',
-        body: JSON.stringify({ batchPeriod, pages }),
-      }),
-    regenerate: (id: number, feedback?: string) =>
-      apiFetch<Brief>(`/api/briefs/${id}/regenerate`, {
+
+    // Master brief
+    getMaster: (projectId: number) =>
+      apiFetch<Brief>(`/api/projects/${projectId}/briefs/master`),
+    master: (projectId: number) =>
+      apiFetch<Brief>(`/api/projects/${projectId}/briefs/master`, { method: 'POST' }),
+    regenerateMaster: (projectId: number, feedback?: string) =>
+      apiFetch<Brief>(`/api/projects/${projectId}/briefs/master/regenerate`, {
         method: 'POST',
         body: JSON.stringify(feedback ? { feedback } : {}),
       }),
+
+    // Page briefs
+    generatePage: (projectId: number, pageId: number) =>
+      apiFetch<Brief>(`/api/projects/${projectId}/pages/${pageId}/brief`, { method: 'POST' }),
+
+    // Brief content edits (inline TBD fill / manual edits)
+    updateContent: (briefId: number, content_markdown: string) =>
+      apiFetch<Brief>(`/api/briefs/${briefId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content_markdown }),
+      }),
   },
   pages: {
-    complete: (pageId: number, input: { publishedUrl: string; notes?: string }) =>
-      apiFetch<Page>(`/api/pages/${pageId}/complete`, {
-        method: 'PATCH',
+    /** Create a page row (used to materialize a matrix cell). */
+    create: (projectId: number, input: { type: string; service?: string; city?: string; customTitle?: string }) =>
+      apiFetch<Page>(`/api/projects/${projectId}/pages`, {
+        method: 'POST',
         body: JSON.stringify(input),
       }),
+    setStatus: (pageId: number, status: 'planned' | 'briefed' | 'complete') =>
+      apiFetch<Page>(`/api/pages/${pageId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    setBilling: (pageId: number, billing_status: 'included' | 'add_on' | 'comp') =>
+      apiFetch<Page>(`/api/pages/${pageId}/billing`, {
+        method: 'PATCH',
+        body: JSON.stringify({ billing_status }),
+      }),
+  },
+  matrix: {
+    get: (projectId: number) =>
+      apiFetch<{
+        foundationPages: Array<{ type: string; label: string; pageId: number | null; status: string; billingStatus: string }>;
+        servicePages: Array<{ service: string; pageId: number | null; status: string; billingStatus: string }>;
+        serviceAreaGrid: {
+          services: string[];
+          cities: string[];
+          cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string }>;
+        };
+      }>(`/api/projects/${projectId}/matrix`),
   },
   scrape: {
     run: (projectId: number, input?: { url?: string; force?: boolean }) =>

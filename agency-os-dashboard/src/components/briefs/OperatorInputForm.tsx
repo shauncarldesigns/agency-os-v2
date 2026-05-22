@@ -241,7 +241,7 @@ export function OperatorInputForm({ open, onClose, project, lead, showToast, onB
       }
 
       // 4) Generate master brief (full_site).
-      const brief = await api.briefs.master(project.id, 'full_site');
+      const brief = await api.briefs.master(project.id);
       showToast('Master brief generated', 'success');
       onBriefGenerated(brief);
       onClose();
