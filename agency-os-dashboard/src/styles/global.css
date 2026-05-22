@@ -554,3 +554,51 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
   .bs-sidebar{position:static;}
   .bs-stats{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ============================================================================
+   BRIEF STUDIO — Phase 4 (live matrix cells)
+   ============================================================================ */
+
+.bs-cell{
+  position:relative;background:var(--surface);
+  border:1px solid var(--border);border-radius:4px;
+  padding:10px 11px;font-family:inherit;text-align:left;
+  cursor:pointer;transition:border-color 0.14s, background 0.14s;
+  min-height:54px;display:flex;flex-direction:column;justify-content:center;
+}
+.bs-cell:hover:not(:disabled){border-color:var(--accent);}
+.bs-cell:disabled{cursor:wait;opacity:0.7;}
+.bs-cell-compact{padding:8px 9px;min-height:46px;}
+.bs-cell-title{font-size:0.72rem;color:var(--text);font-weight:500;}
+.bs-cell-status{font-size:0.6rem;color:var(--text3);margin-top:3px;}
+.bs-cell-billing{
+  position:absolute;top:4px;right:6px;
+  font-size:0.55rem;color:var(--text3);letter-spacing:0.5px;
+}
+
+.bs-cell-empty{background:var(--surface);border-color:var(--border);}
+.bs-cell-empty .bs-cell-title{color:var(--text2);}
+.bs-cell-empty:hover .bs-cell-status{color:var(--accent);}
+
+.bs-cell-briefed{background:rgba(96,165,250,0.06);border-color:rgba(96,165,250,0.35);}
+.bs-cell-briefed .bs-cell-status{color:var(--blue);}
+
+.bs-cell-live{background:rgba(62,207,142,0.06);border-color:rgba(62,207,142,0.35);}
+.bs-cell-live .bs-cell-status{color:var(--green);}
+
+.bs-cell-recommended{background:rgba(245,184,93,0.06);border-color:rgba(245,184,93,0.4);}
+.bs-cell-recommended .bs-cell-status{color:var(--yellow);}
+
+/* Service-area grid layout */
+.bs-grid-wrap{display:flex;flex-direction:column;gap:5px;}
+.bs-grid-header{
+  display:grid;gap:6px;align-items:center;padding-bottom:6px;
+  border-bottom:1px solid var(--border);font-size:0.55rem;
+  color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;
+}
+.bs-grid-col-label{padding:0 8px;}
+.bs-grid-row{display:grid;gap:6px;align-items:stretch;}
+.bs-grid-row-label{
+  padding:8px 0;font-size:0.72rem;color:var(--text2);
+}
+.bs-grid-row-meta{font-size:0.58rem;color:var(--text3);margin-top:2px;}
