@@ -13,7 +13,14 @@ import { countTbds } from '../utils/tbd';
 import type { GoogleReview } from '../services/places';
 import type { MinedReviewData } from '../services/reviewMiner';
 
-const BRIEF_MODEL = 'claude-sonnet-4-6';
+// Opus 4.7 for brief generation. Briefs are synthesis-heavy (mining quotes,
+// picking angles, weighing differentiators) and run a handful of times per
+// project, not in a hot loop — the quality bump is worth the ~5x cost vs
+// Sonnet 4.6. Prompt caching is on, so the system prompt is paid once per
+// cache window. If cost becomes a concern, the split-model option is:
+// keep Opus for master (1 call/project, biggest synthesis lift) and drop
+// page briefs back to Sonnet (N calls/project, just extracts from master).
+const BRIEF_MODEL = 'claude-opus-4-7';
 
 export const briefsRouter = new Hono<{ Bindings: Env }>();
 
