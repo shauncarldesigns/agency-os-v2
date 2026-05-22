@@ -105,36 +105,47 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
     }
   }
 
-  // 2b. Backfill reviews via Outscraper (Google caps Places API at 5).
-  // Best-effort: if the key is missing or the call fails, we keep Google's 5
-  // and let the rest of the pipeline run unchanged.
-  if (placeData && placeId && env.OUTSCRAPER_API_KEY) {
-    try {
-      const extra = await fetchOutscraperReviews(env.OUTSCRAPER_API_KEY, placeId, 50);
-      const merged = mergeReviews(placeData.reviews, extra);
-      log('info', 'enrich', `Outscraper reviews for lead ${leadId}`, {
-        googleCount: placeData.reviews.length,
-        outscraperCount: extra.length,
-        mergedCount: merged.length,
-      });
-      placeData = { ...placeData, reviews: merged };
-    } catch (err) {
-      log('warn', 'enrich', `Outscraper fetch failed for lead ${leadId} — falling back to Google reviews`, err);
-    }
-  }
-
-  // 3. PageSpeed (only if has website)
+  // 2b + 3. Outscraper review backfill and PageSpeed both depend only on
+  // step-2 outputs and don't touch each other, so run them in parallel —
+  // each can take 30–90s on its own and serializing them roughly doubled
+  // wall-clock enrich time. Promise.allSettled so one's failure doesn't
+  // poison the other.
   const websiteUrl = placeData?.website ?? lead.website;
   let pagespeedMobile: number | null = lead.pagespeed_mobile;
   let pagespeedDesktop: number | null = lead.pagespeed_desktop;
-  if (websiteUrl) {
-    try {
-      const ps = await getPageSpeedReport(env.GOOGLE_PLACES_API_KEY, websiteUrl);
-      pagespeedMobile = ps.mobile;
-      pagespeedDesktop = ps.desktop;
-    } catch (err) {
-      log('warn', 'enrich', `PageSpeed failed for lead ${leadId}`, err);
-    }
+
+  const outscraperTask: Promise<typeof placeData> = (placeData && placeId && env.OUTSCRAPER_API_KEY)
+    ? fetchOutscraperReviews(env.OUTSCRAPER_API_KEY, placeId, 50).then(extra => {
+        const merged = mergeReviews(placeData!.reviews, extra);
+        log('info', 'enrich', `Outscraper reviews for lead ${leadId}`, {
+          googleCount: placeData!.reviews.length,
+          outscraperCount: extra.length,
+          mergedCount: merged.length,
+        });
+        return { ...placeData!, reviews: merged };
+      })
+    : Promise.resolve(placeData);
+
+  const pagespeedTask: Promise<{ mobile: number; desktop: number } | null> = websiteUrl
+    ? getPageSpeedReport(env.GOOGLE_PLACES_API_KEY, websiteUrl).then(ps => ({
+        mobile: ps.mobile,
+        desktop: ps.desktop,
+      }))
+    : Promise.resolve(null);
+
+  const [outscraperResult, pagespeedResult] = await Promise.allSettled([outscraperTask, pagespeedTask]);
+
+  if (outscraperResult.status === 'fulfilled') {
+    placeData = outscraperResult.value;
+  } else {
+    log('warn', 'enrich', `Outscraper fetch failed for lead ${leadId} — falling back to Google reviews`, outscraperResult.reason);
+  }
+
+  if (pagespeedResult.status === 'fulfilled' && pagespeedResult.value) {
+    pagespeedMobile = pagespeedResult.value.mobile;
+    pagespeedDesktop = pagespeedResult.value.desktop;
+  } else if (pagespeedResult.status === 'rejected') {
+    log('warn', 'enrich', `PageSpeed failed for lead ${leadId}`, pagespeedResult.reason);
   }
 
   // 4. Review mining via Claude (only if we have reviews)
