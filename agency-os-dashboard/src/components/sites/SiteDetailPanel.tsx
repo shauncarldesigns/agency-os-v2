@@ -4,7 +4,7 @@ import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
-import { BriefViewerModal } from '../briefs/BriefViewerModal';
+import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
 
 interface SiteDetailPanelProps {
@@ -177,11 +177,12 @@ export function SiteDetailPanel({
         />
       )}
 
-      <BriefViewerModalLoader
+      <BriefEditorPanelLoader
         briefId={viewerBriefId}
         onClose={() => setViewerBriefId(null)}
         showToast={showToast}
-        onRegenerated={() => void reload()}
+        onChanged={() => void reload()}
+        onPageCompleted={() => { void reload(); onProjectChanged(); }}
       />
     </>
   );
@@ -450,16 +451,17 @@ function formatRelative(ts: string | null | undefined): string {
 }
 
 // ============================================================================
-// Brief viewer wrapper (fetches by id then renders the existing modal)
+// Brief editor wrapper (fetches by id then renders the slide-in panel)
 // ============================================================================
 
-function BriefViewerModalLoader({
-  briefId, onClose, showToast, onRegenerated,
+function BriefEditorPanelLoader({
+  briefId, onClose, showToast, onChanged, onPageCompleted,
 }: {
   briefId: number | null;
   onClose: () => void;
   showToast: ShowToast;
-  onRegenerated: () => void;
+  onChanged: () => void;
+  onPageCompleted: () => void;
 }) {
   const [brief, setBrief] = useState<Brief | null>(null);
 
@@ -476,12 +478,13 @@ function BriefViewerModalLoader({
   }, [briefId, onClose, showToast]);
 
   return (
-    <BriefViewerModal
+    <BriefEditorPanel
       open={briefId !== null && brief !== null}
       brief={brief}
       onClose={onClose}
       showToast={showToast}
-      onRegenerated={(b) => { setBrief(b); onRegenerated(); }}
+      onChanged={(b) => { setBrief(b); onChanged(); }}
+      onPageCompleted={onPageCompleted}
     />
   );
 }
