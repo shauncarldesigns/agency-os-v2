@@ -15,9 +15,8 @@ interface BriefViewerModalProps {
 }
 
 const KIND_LABELS: Record<string, string> = {
-  homepage_demo: 'Homepage Demo Brief',
   master: 'Master Brief',
-  monthly_batch: 'Monthly Batch Brief',
+  page: 'Page Brief',
 };
 
 export function BriefViewerModal({ open, onClose, brief, showToast, onRegenerated }: BriefViewerModalProps) {
@@ -36,11 +35,11 @@ export function BriefViewerModal({ open, onClose, brief, showToast, onRegenerate
   }
 
   async function handleRegenerate() {
-    if (!brief) return;
+    if (!brief || brief.kind !== 'master') return;
     setRegenerating(true);
     try {
-      const newBrief = await api.briefs.regenerate(brief.id, feedback.trim() || undefined);
-      showToast('Brief regenerated — old version archived', 'success');
+      const newBrief = await api.briefs.regenerateMaster(brief.project_id, feedback.trim() || undefined);
+      showToast('Master brief regenerated — old version archived', 'success');
       setFeedback('');
       setShowFeedback(false);
       onRegenerated?.(newBrief);
@@ -54,7 +53,9 @@ export function BriefViewerModal({ open, onClose, brief, showToast, onRegenerate
 
   if (!brief) return null;
   const title = KIND_LABELS[brief.kind] ?? 'Brief';
-  const canRegenerate = brief.kind === 'homepage_demo' || brief.kind === 'master';
+  // Only master briefs support regenerate; page briefs are regenerated via the
+  // Brief Studio editor (Phase 5) by re-running POST /pages/:id/brief.
+  const canRegenerate = brief.kind === 'master';
 
   return (
     <Modal open={open} onClose={onClose} width={860}>

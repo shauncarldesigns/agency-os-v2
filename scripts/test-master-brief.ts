@@ -15,171 +15,146 @@ import { callClaude } from '../agency-os-backend/src/services/claude';
 import {
   buildMasterBriefPrompt,
   type MasterBriefInput,
-  type MasterBriefMode,
 } from '../agency-os-backend/src/prompts/masterBrief';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
-function parseArgs(argv: string[]): { mode: MasterBriefMode; model: string } {
-  let mode: MasterBriefMode = 'full_site';
+function parseArgs(argv: string[]): { model: string } {
   let model = DEFAULT_MODEL;
   for (const arg of argv.slice(2)) {
     if (arg.startsWith('--mode=')) {
-      const val = arg.split('=')[1];
-      if (val !== 'homepage_only' && val !== 'full_site') {
-        throw new Error(`Invalid --mode value: ${val}`);
-      }
-      mode = val;
+      // Legacy flag from v2.1; the master prompt no longer branches on mode.
+      // Ignore silently so existing wrappers don't break.
+      continue;
     } else if (arg.startsWith('--model=')) {
       model = arg.split('=')[1];
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  return { mode, model };
+  return { model };
 }
 
 // ---------------------------------------------------------------------------
-// Hardcoded test data: Northshore Plumbing (fake but realistic Wisconsin SMB)
+// Test fixture: Beno Plumbing (real Green Bay, WI lead — actual enriched data)
+//
+// This mirrors the operator-form state RIGHT AFTER signing, where most
+// structured fields are still empty and we expect the prompt to emit
+// per-field [TBD: <field>] tokens for the operator to fill inline.
 // ---------------------------------------------------------------------------
 
 const TEST_INPUT: MasterBriefInput = {
   project: {
-    business_name: 'Northshore Plumbing',
-    city: 'Mequon',
+    business_name: 'Beno Plumbing',
+    city: 'Green Bay',
     state: 'WI',
-    phone: '(262) 555-0142',
-    email: 'service@northshoreplumbingwi.com',
-    website: 'https://northshoreplumbingwi.com',
-    founded_year: 2008,
-    owner_name: 'Dan Kovacs',
-    owner_credentials: 'Master Plumber, 22 years in trade, WI License #234567',
-    tagline: null, // intentionally missing — should produce [TBD]
-    primary_color: '#1B3A5C',
-    accent_color: '#E8A33D',
-    photography_direction: 'Real crews on real jobs, no stock. Show trucks, tools, and the homeowner handoff.',
-    monthly_pages_target: 5,
-    tier: 'tier_3',
+    phone: '(920) 468-4777',
+    email: null,                       // intentionally missing → [TBD: email]
+    website: 'https://www.benoplumbing.com/',
+    founded_year: null,                // → [TBD: founded year]
+    owner_name: null,                  // multiple owners — operator picks lead → [TBD: owner name]
+    owner_credentials: null,           // → [TBD: owner credentials]
+    tagline: null,                     // → [TBD: tagline]
+    primary_color: null,               // → [TBD: primary color]
+    accent_color: null,                // → [TBD: accent color]
+    photography_direction: null,       // → [TBD: photography direction]
+    monthly_pages_target: 0,
+    tier: 'tier_2',
   },
   mined: {
     services_performed: [
-      'water heater replacement',
-      'sewer line repair',
-      'sump pump installation',
-      'frozen pipe thaw',
-      'bathroom remodel plumbing',
-      'drain cleaning',
-      'gas line repair',
+      'Complete house renovation plumbing',
+      'Tankless water heater installation',
+      'Water heater replacement',
+      'Kitchen and bath remodel plumbing',
+      'Water heater repair',
+      'Leaking water heater replacement',
+      'General plumbing repairs',
     ],
-    service_areas: ['Mequon', 'Cedarburg', 'Thiensville', 'Grafton', 'Bayside', 'Fox Point', 'Whitefish Bay'],
-    owner_names: ['Dan', 'Dan Kovacs'],
+    service_areas: ['Green Bay', 'GB area'],
+    owner_names: ['Kory', 'Brad', 'Corey', 'Dustin'],
     strengths: [
-      'arrives on time',
-      'explains the work before starting',
-      'fair pricing without surprise upcharges',
-      'cleans up after the job',
-      'available for emergencies on weekends',
+      'Quick scheduling and responsiveness',
+      'On-time arrival and punctuality',
+      'Professional craftsmanship and quality work',
+      'Customer-centric problem-solving (troubleshooting before service calls)',
+      'Manufacturer advocacy and warranty support',
+      'Attention to detail and going above and beyond',
     ],
     pitch_quotes: [
       {
-        author: 'Linda M.',
-        location: 'Cedarburg',
-        quote:
-          "Dan came out on a Sunday morning when our basement was flooding. He didn't try to upsell us — just fixed the sump and showed us what failed. Total pro.",
-        why: 'demonstrates emergency response + honesty',
+        author: 'Tom Wiesner',
+        location: 'Green Bay',
+        quote: 'Beno was in our corner communicating with the manufacturer and eventually the manufacturer broke down and gave us a new unit... I would recommend them as a fine local company with very knowledgeable employees.',
+        why: 'Demonstrates willingness to fight for customers even outside warranty period, building trust and loyalty.',
       },
       {
-        author: 'Robert T.',
-        location: 'Mequon',
-        quote:
-          "Quoted me $1,800 for a water heater. Three other plumbers wanted $2,400+. Same brand, same warranty. Dan's been our guy for six years now.",
-        why: 'price differentiator + loyalty',
+        author: 'Pete Warmenhoven',
+        location: 'Green Bay',
+        quote: 'Rather than try to sell me a new one or book a service call right away, he gave me troubleshooting advice and we determined it was plugged into a bad circuit breaker. I really appreciate that he saved me the cost and wait for a service trip.',
+        why: 'Shows integrity and customer-first mentality that differentiates from competitors focused on upselling.',
       },
       {
-        author: 'Anita P.',
-        location: 'Thiensville',
-        quote:
-          "He found a pinhole leak in our copper that two other companies missed. Walked me through every step. I trust him with anything plumbing now.",
-        why: 'diagnostic skill + communication',
+        author: 'Jared Olsen',
+        location: 'Green Bay',
+        quote: 'Always responded quickly and gave me options on my project so I could get exactly what I needed with the budget I had. The craftsmanship quality was top notch.',
+        why: 'Combines responsiveness, flexibility, and quality—three critical decision factors for renovation projects.',
+      },
+      {
+        author: 'SchoeME',
+        location: 'Green Bay',
+        quote: "He wasn't cussing or angry and he even cleaned some dirt and spiderwebs up while he was in our old basement... Above and beyond fasho!",
+        why: 'Authentic voice highlighting professionalism and unexpected service recovery that creates word-of-mouth momentum.',
+      },
+      {
+        author: 'Robin H',
+        location: 'Green Bay',
+        quote: 'Kory got me scheduled very quickly for a water heater replacement and some other issues. Brad showed up precisely on time and did an excellent job with the installation and repairs, in a very timely manner.',
+        why: 'Stacks multiple value propositions (speed, punctuality, quality) in one customer journey.',
       },
     ],
-    differentiators: [
-      'master plumber on every job (not apprentices)',
-      'flat-rate quotes given before work starts',
-      '24/7 emergency availability',
-      'family-run, second-generation',
-    ],
+    differentiators: [],
   },
   reviews: [
     {
-      author: 'Linda M.',
+      author: 'Jared Olsen',
       rating: 5,
-      text:
-        "Dan came out on a Sunday morning when our basement was flooding. He didn't try to upsell us — just fixed the sump and showed us what failed. Total pro.",
-      relativeTime: '2 weeks ago',
-      publishTime: '2026-05-04T00:00:00Z',
-    },
-    {
-      author: 'Robert T.',
-      rating: 5,
-      text:
-        "Quoted me $1,800 for a water heater. Three other plumbers wanted $2,400+. Same brand, same warranty. Dan's been our guy for six years now.",
-      relativeTime: 'a month ago',
-      publishTime: '2026-04-15T00:00:00Z',
-    },
-    {
-      author: 'Anita P.',
-      rating: 5,
-      text:
-        "He found a pinhole leak in our copper that two other companies missed. Walked me through every step. I trust him with anything plumbing now.",
-      relativeTime: '2 months ago',
-      publishTime: '2026-03-10T00:00:00Z',
-    },
-    {
-      author: 'Greg H.',
-      rating: 5,
-      text:
-        "Replaced our old galvanized line to the street. Crew was on time, polite, cleaned up the lawn after they trenched. Price was exactly what was quoted.",
-      relativeTime: '3 months ago',
-      publishTime: '2026-02-20T00:00:00Z',
-    },
-    {
-      author: 'Susan K.',
-      rating: 4,
-      text:
-        "Had to wait two days for an appointment which was the only downside. But the work was excellent — new toilet install and they fixed the wax ring leak the previous plumber missed.",
+      text: 'Beno helped me with a complete house renovation and did an outstanding job. From the earliest stages of the project, Kory was great to work with. Always responded quickly and gave me options on my project so I could get exactly what I needed with the budget I had. The craftsmanship quality was top notch. One of the jobs they did was install a tankless water heater. What a great investment! Saves water and heating costs. If you need any plumbing services done in the GB area I recommend Beno.',
       relativeTime: '4 months ago',
-      publishTime: '2026-01-18T00:00:00Z',
-    },
-  ],
-  brand_attributes: [
-    { category: 'positioning', value: 'The plumber you call when you want it done right the first time.', source: 'operator' },
-    { category: 'certification', value: 'WI Master Plumber License #234567', source: 'operator' },
-    { category: 'certification', value: 'Bradford White Pro Service partner (water heaters)', source: 'operator' },
-    { category: 'differentiator', value: 'Family-run since 2008, second-generation Kovacs plumbers.', source: 'operator' },
-    { category: 'value', value: 'Flat-rate quotes — no hourly surprise.', source: 'operator' },
-  ],
-  testimonials: [
-    {
-      author_name: 'Linda M.',
-      author_location: 'Cedarburg, WI',
-      quote:
-        "Dan came out on a Sunday morning when our basement was flooding. He didn't try to upsell us — just fixed the sump and showed us what failed. Total pro.",
-      rating: 5,
-      source: 'google',
-      is_featured: true,
+      publishTime: '2025-12-22T12:48:15.925Z',
     },
     {
-      author_name: 'Robert T.',
-      author_location: 'Mequon, WI',
-      quote:
-        "Quoted me $1,800 for a water heater. Three other plumbers wanted $2,400+. Same brand, same warranty. Dan's been our guy for six years now.",
+      author: 'Tom Wiesner',
       rating: 5,
-      source: 'google',
-      is_featured: true,
+      text: 'Purchased a Tankless hot Water heater from Bemo plumbing a few years back. The heater worked fine until one day it started heating the water intermittently, going from hot to ice cold and back to hot. Although the unit\'s warranty was out of date, Beno worked with us and the manufacturer to repair it. Beno was in our corner communicating with the manufacturer and eventually the manufacturer broke down and gave us a new unit. We were more than impressed! The new unit was installed and it has been working fine for well over a year now. Beno also worked with our contractor on our kitchen and bath remodel and did a great job. I would recommend them as a fine local company with very knowledgeable employees.',
+      relativeTime: '3 months ago',
+      publishTime: '2026-01-13T22:20:31.741Z',
+    },
+    {
+      author: 'Robin H',
+      rating: 5,
+      text: 'AWESOME! Kory got me scheduled very quickly for a water heater replacement and some other issues. Brad showed up precisely on time and did an excellent job with the installation and repairs, in a very timely manner. These guys are great!',
+      relativeTime: '3 months ago',
+      publishTime: '2026-01-28T16:38:13.898Z',
+    },
+    {
+      author: 'Pete Warmenhoven',
+      rating: 5,
+      text: 'We purchased our water heater from Beno in 2019. It stopped working yesterday so I called Beno and spoke with Corey. Rather than try to sell me a new one or book a service call right away, he gave me troubleshooting advice and we determined it was plugged into a bad circuit breaker. I really appreciate that he saved me the cost and wait for a service trip and we got it working with just a phone call! Thanks, Corey!',
+      relativeTime: '3 months ago',
+      publishTime: '2026-01-21T16:44:38.844Z',
+    },
+    {
+      author: 'SchoeME',
+      rating: 5,
+      text: "Over this past week, we had to call Beno for a leaking water heater. Dustin came out the next day and did a very professional job replacing it. He wasn't cussing or angry and he even cleaned some dirt and spiderwebs up while he was in our old basement... Above and beyond fasho! Will definitely go through Beno again!",
+      relativeTime: '3 months ago',
+      publishTime: '2026-01-22T21:26:38.073Z',
     },
   ],
-  scrape_data: null, // pre-scrape (homepage_demo timeframe) or scrape didn't run
+  brand_attributes: [],   // empty — operator hasn't supplied extras yet
+  testimonials: [],       // empty — operator hasn't curated yet; prompt should fall back to raw reviews
+  scrape_data: null,      // scrape not run yet at form-open time
 };
 
 // ---------------------------------------------------------------------------
@@ -187,16 +162,16 @@ const TEST_INPUT: MasterBriefInput = {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const { mode, model } = parseArgs(process.argv);
+  const { model } = parseArgs(process.argv);
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error('ERROR: ANTHROPIC_API_KEY env var not set.');
     process.exit(1);
   }
 
-  const { system, user } = buildMasterBriefPrompt(TEST_INPUT, mode);
+  const { system, user } = buildMasterBriefPrompt(TEST_INPUT);
 
-  console.error(`[test-master-brief] mode=${mode} model=${model}`);
+  console.error(`[test-master-brief] model=${model}`);
   console.error(`[test-master-brief] system prompt: ${system.length} chars`);
   console.error(`[test-master-brief] user prompt:   ${user.length} chars`);
   console.error(`[test-master-brief] calling Claude…`);

@@ -1,8 +1,6 @@
 import type { GoogleReview } from '../services/places';
 import type { MinedReviewData } from '../services/reviewMiner';
 
-export type MasterBriefMode = 'homepage_only' | 'full_site';
-
 export interface BrandAttribute {
   category:
     | 'tagline'
@@ -115,30 +113,16 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 
 const FULL_SITE_SECTIONS = `Business Overview, Brand Voice, Brand Style, Services Offered, Service Areas, Key Differentiators, Customer Reviews to Reference, Site Structure Required, SEO Requirements, Important Build Instructions`;
 
-const HOMEPAGE_ONLY_SECTIONS = `Business Overview, Brand Voice, Brand Style, Services Offered, Service Areas, Key Differentiators, Customer Reviews to Reference, Site Structure Required (homepage only), Important Build Instructions (homepage-relevant only)`;
-
-export function buildMasterBriefPrompt(
-  input: MasterBriefInput,
-  mode: MasterBriefMode
-): BuiltMasterBriefPrompt {
-  const system = buildSystemPrompt(mode);
-  const user = buildUserPrompt(input, mode);
+export function buildMasterBriefPrompt(input: MasterBriefInput): BuiltMasterBriefPrompt {
+  const system = buildSystemPrompt();
+  const user = buildUserPrompt(input);
   return { system, user };
 }
 
-function buildSystemPrompt(mode: MasterBriefMode): string {
-  const sections = mode === 'homepage_only' ? HOMEPAGE_ONLY_SECTIONS : FULL_SITE_SECTIONS;
+function buildSystemPrompt(): string {
+  const sections = FULL_SITE_SECTIONS;
 
-  const modeDirective =
-    mode === 'homepage_only'
-      ? `MODE: homepage_only
-This brief is for generating a single homepage demo on landingsite.ai before the prospect is signed. The site structure section must list ONLY "Homepage". Omit per-page SEO rules for non-existent pages. Build Instructions should be trimmed to what matters for a single homepage.`
-      : `MODE: full_site
-This brief is for the full multi-page site build after the prospect has signed. Include the complete site structure: homepage, about, services overview, one page per service, service-area pages for every (service × city) combination, lead-gen/insurance pages if relevant to the trade, contact, FAQ. Include the full SEO Requirements section.`;
-
-  return `You are writing a site brief for a local-service web design agency. The brief is pasted into landingsite.ai (an AI website builder) and Cowork (an AI prompt-driver). The format below is the proven template — match it exactly.
-
-${modeDirective}
+  return `You are writing the master site brief for a local-service web design agency. It is the source of truth for the project — every per-page brief is derived from it. The format below is the proven template — match it exactly.
 
 OUTPUT FORMAT — produce a markdown document with exactly these sections, in this order:
 ${sections}
@@ -148,7 +132,7 @@ Reference template (structure to mirror; placeholders in {curly braces} show wha
 ${APEX_FORMAT_EXAMPLE}
 
 HARD RULES:
-1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. If a field is missing, write \`[TBD: operator to fill in]\` in its place. Never fabricate.
+1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. Where a specific field is missing, emit a labelled TBD token so the operator can fill it inline later — use \`[TBD: <field name>]\`. Examples: \`[TBD: founded year]\`, \`[TBD: owner credentials]\`, \`[TBD: tagline]\`, \`[TBD: email]\`, \`[TBD: primary color]\`, \`[TBD: accent color]\`, \`[TBD: photography direction]\`. One TBD token per missing field, kept short and lowercase. Never fabricate.
 2. Synthesize brand voice from review themes — voice descriptors should come from the actual language customers use about this business, not generic adjectives.
 3. Reading level for the resulting site copy must be 6th-8th grade. State this in the Brand Voice section.
 4. Customer reviews must be quoted verbatim. Do not paraphrase or "improve" them. Cite author name and location exactly as given.
@@ -166,11 +150,11 @@ QUALITY BAR:
 - Build Instructions are direct imperatives to the site builder: "Use the customer quote from {Author} on the homepage hero." "Link every service-area page back to the parent service page."`;
 }
 
-function buildUserPrompt(input: MasterBriefInput, mode: MasterBriefMode): string {
+function buildUserPrompt(input: MasterBriefInput): string {
   const p = input.project;
   const lines: string[] = [];
 
-  lines.push(`Generate the master brief in ${mode} mode for the following business.`);
+  lines.push(`Generate the master brief for the following business.`);
   lines.push('');
   lines.push('## Project data');
   lines.push(`- Business name: ${p.business_name}`);
@@ -247,11 +231,7 @@ function buildUserPrompt(input: MasterBriefInput, mode: MasterBriefMode): string
   lines.push('');
 
   lines.push('## Now produce the brief');
-  lines.push(
-    mode === 'homepage_only'
-      ? 'Output the brief with Site Structure containing ONLY "Homepage". Build Instructions should focus on homepage-relevant items.'
-      : 'Output the full brief with every section. Enumerate every service-area page (service × city) combination in Site Structure.'
-  );
+  lines.push('Output the full master brief with every section. Enumerate every service-area page (service × city) combination in Site Structure.');
 
   return lines.join('\n');
 }

@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Project, Page, BriefSummary, BriefKind, ShowToast, Tab } from '../../lib/types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { Project, Brief, BriefSummary, BriefKind, ShowToast, Tab, Lead } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
-import { TierPill } from '../shared/TierPill';
+import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { BriefViewerModal } from '../briefs/BriefViewerModal';
-import { MatrixModal } from './MatrixModal';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -15,132 +14,141 @@ interface SiteDetailPanelProps {
   onProjectChanged: () => void;
 }
 
+const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
+const TIER_LABEL = { 1: 'TIER 1', 2: 'TIER 2', 3: 'TIER 3' } as const;
+
 const KIND_LABEL: Record<BriefKind, string> = {
-  homepage_demo: 'Homepage Demo',
   master: 'Master',
-  monthly_batch: 'Monthly Batch',
+  page: 'Page',
 };
 
+/**
+ * Brief Studio (lives inside Site Detail).
+ *
+ * Empty state — no master brief: yellow callout invites the operator to
+ * generate one, the matrix renders as a locked skeleton.
+ * Active state — master brief exists: master brief card shows version, last
+ * updated, TBD chip; matrix population is wired in Phase 4 (still skeleton
+ * with a placeholder note for now).
+ */
 export function SiteDetailPanel({
   project, showToast, onSwitchTab, onBack, onProjectChanged,
 }: SiteDetailPanelProps) {
   const [briefs, setBriefs] = useState<BriefSummary[]>([]);
-  const [pages, setPages] = useState<Page[]>([]);
+  const [master, setMaster] = useState<Brief | null>(null);
+  const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerBriefId, setViewerBriefId] = useState<number | null>(null);
-  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [operatorFormOpen, setOperatorFormOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [briefsRes, projDetailRes] = await Promise.all([
+      const [briefsRes, masterRes, leadRes] = await Promise.all([
         api.briefs.listForProject(project.id),
-        api.projects.get(project.id),
+        api.briefs.getMaster(project.id).catch((err) => {
+          if (err instanceof ApiError && err.status === 404) return null;
+          throw err;
+        }),
+        project.lead_id
+          ? api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
+          : Promise.resolve(null),
       ]);
       setBriefs(briefsRes.briefs);
-      setPages(projDetailRes.pages);
+      setMaster(masterRes);
+      setLead(leadRes);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not load site detail: ${msg}`, 'error');
+      showToast(`Could not load Brief Studio: ${msg}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [project.id, showToast]);
+  }, [project.id, project.lead_id, showToast]);
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const liveUrl = project.custom_domain ?? project.landingsite_url;
-  const pendingPages = pages.filter((p) => p.status === 'briefed' || p.status === 'in_progress');
-  const completedPages = pages.filter((p) => p.status === 'complete');
-  const masterBriefExists = briefs.some((b) => b.kind === 'master' && b.status !== 'archived');
+  const tier = (project.tier ?? 1) as 1 | 2 | 3;
+  const mrr = TIER_MRR[tier] ?? 0;
+
+  const stats = useMemo(() => {
+    const completePages = 0;       // Phase 4 populates from the matrix endpoint
+    const briefedPages = briefs.filter((b) => b.kind === 'page' && b.status === 'briefed').length;
+    return {
+      masterCount: master ? 1 : 0,
+      pagesLive: completePages,
+      pagesPasted: briefedPages,
+      monthlyTarget: project.monthly_pages_target ?? (tier === 3 ? 5 : 0),
+    };
+  }, [master, briefs, project.monthly_pages_target, tier]);
 
   return (
     <>
-      <div className="sec-header">
+      <div className="bs-topbar">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              type="button"
-              onClick={onBack}
-              style={{
-                background: 'none', border: 'none', color: 'var(--text3)',
-                fontSize: '0.7rem', cursor: 'pointer', padding: 0,
-              }}
-            >
-              ← All sites
-            </button>
-          </div>
-          <div className="sec-title" style={{ marginTop: 4 }}>{project.business_name}</div>
-          <div className="sec-sub">
-            {[project.city, project.state].filter(Boolean).join(', ')}
-            {' · '}{project.status}
-            {project.pages_built ? ` · ${project.pages_built} pages built` : ''}
-          </div>
+          <button type="button" className="bs-back" onClick={onBack}>← All sites</button>
+          <div className="bs-breadcrumb">Sites › {project.business_name}</div>
+          <h1 className="bs-title">Brief Studio</h1>
         </div>
-        <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-          <TierPill tier={project.tier} />
-          {liveUrl && (
-            <Button variant="ghost" size="sm" onClick={() => window.open(liveUrl, '_blank')}>
-              ↗ Open in landingsite.ai
-            </Button>
-          )}
+        <div className="bs-topbar-meta">
+          <span className={`bs-tier-badge bs-tier-${tier}`}>
+            {TIER_LABEL[tier]}{mrr > 0 ? ` · $${mrr}/mo` : ''}
+          </span>
+          <span className="bs-topbar-sub">
+            {[project.city, project.state].filter(Boolean).join(', ') || '—'}
+            {project.pages_built ? ` · ${project.pages_built} pages built` : ' · 0 pages built'}
+          </span>
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
-          <Spinner /> Loading site detail…
-        </div>
-      ) : (
-        <>
-          <QuickStats
+      <div className="bs-layout">
+        <main className="bs-main">
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
+              <Spinner /> Loading Brief Studio…
+            </div>
+          ) : (
+            <>
+              <StatsRow stats={stats} hasMaster={!!master} />
+
+              {master ? (
+                <MasterBriefCard
+                  master={master}
+                  onClick={() => setViewerBriefId(master.id)}
+                />
+              ) : (
+                <EmptyCallout onOpenForm={() => setOperatorFormOpen(true)} />
+              )}
+
+              <MatrixSection hasMaster={!!master} />
+            </>
+          )}
+        </main>
+
+        <aside className="bs-sidebar">
+          <Sidebar
             project={project}
-            briefsCount={briefs.length}
-            pendingPagesCount={pendingPages.length}
-            completedPagesCount={completedPages.length}
-            onOpenMatrix={() => setMatrixOpen(true)}
-            onOpenReports={() => onSwitchTab('reports')}
-          />
-
-          <BuildChecklist
-            pages={pendingPages}
+            lead={lead}
+            hasMaster={!!master}
+            onSwitchTab={onSwitchTab}
             showToast={showToast}
-            onPageUpdated={() => { void reload(); onProjectChanged(); }}
           />
+        </aside>
+      </div>
 
-          <SectionCard title={`Brief history (${briefs.length})`} sub="All briefs generated for this project, most recent first.">
-            {briefs.length === 0 ? (
-              <div style={{ fontSize: '0.7rem', color: 'var(--text3)', fontStyle: 'italic' }}>
-                {masterBriefExists
-                  ? 'No additional briefs yet.'
-                  : 'No briefs yet. Open the Briefs tab to generate the master brief.'}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {briefs.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setViewerBriefId(b.id)}
-                    style={{
-                      background: 'transparent', border: '1px solid var(--border)',
-                      borderRadius: 'var(--r)', padding: '7px 10px',
-                      fontSize: '0.72rem', color: 'var(--text2)', cursor: 'pointer',
-                      textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-                      opacity: b.status === 'archived' ? 0.55 : 1,
-                    }}
-                  >
-                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{KIND_LABEL[b.kind] ?? b.kind}</span>
-                    {b.batch_period && <span>· {b.batch_period}</span>}
-                    <span style={{ marginLeft: 'auto', fontSize: '0.62rem', color: 'var(--text3)' }}>
-                      {b.status} · {b.generated_at}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </>
+      {operatorFormOpen && (
+        <OperatorInputForm
+          open={true}
+          onClose={() => setOperatorFormOpen(false)}
+          project={project}
+          lead={lead}
+          showToast={showToast}
+          onBriefGenerated={(b) => {
+            setOperatorFormOpen(false);
+            setViewerBriefId(b.id);
+            void reload();
+            onProjectChanged();
+          }}
+        />
       )}
 
       <BriefViewerModalLoader
@@ -149,225 +157,298 @@ export function SiteDetailPanel({
         showToast={showToast}
         onRegenerated={() => void reload()}
       />
-
-      <MatrixModal
-        open={matrixOpen}
-        projectId={matrixOpen ? project.id : null}
-        projectName={project.business_name}
-        projectUrl={liveUrl}
-        onClose={() => setMatrixOpen(false)}
-        showToast={showToast}
-        onExpanded={() => { void reload(); onProjectChanged(); }}
-      />
     </>
   );
 }
 
 // ============================================================================
+// Topbar stats
+// ============================================================================
 
-function QuickStats({
-  project, briefsCount, pendingPagesCount, completedPagesCount, onOpenMatrix, onOpenReports,
+function StatsRow({
+  stats, hasMaster,
+}: {
+  stats: { masterCount: number; pagesLive: number; pagesPasted: number; monthlyTarget: number };
+  hasMaster: boolean;
+}) {
+  return (
+    <div className="bs-stats">
+      <StatTile
+        value={hasMaster ? String(stats.masterCount) : '—'}
+        label={hasMaster ? 'Master Brief' : 'Master Brief · not yet generated'}
+        muted={!hasMaster}
+      />
+      <StatTile
+        value={hasMaster ? `${stats.pagesLive} / —` : '0 / —'}
+        label={hasMaster ? 'Pages live' : 'Pages live · matrix locked'}
+        muted={!hasMaster}
+      />
+      <StatTile
+        value={String(stats.pagesPasted)}
+        label={'Briefed · awaiting complete'}
+        muted={!hasMaster && stats.pagesPasted === 0}
+      />
+      <StatTile
+        value={stats.monthlyTarget > 0 ? `0 / ${stats.monthlyTarget}` : '—'}
+        label={stats.monthlyTarget > 0 ? 'Monthly target this period' : 'No monthly target set'}
+      />
+    </div>
+  );
+}
+
+function StatTile({ value, label, muted }: { value: string; label: string; muted?: boolean }) {
+  return (
+    <div className={`bs-stat ${muted ? 'bs-stat-muted' : ''}`}>
+      <div className="bs-stat-num">{value}</div>
+      <div className="bs-stat-label">{label}</div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Empty state callout
+// ============================================================================
+
+function EmptyCallout({ onOpenForm }: { onOpenForm: () => void }) {
+  return (
+    <div className="bs-empty-callout">
+      <div className="bs-empty-tag">📋 Master Brief · Not yet generated</div>
+      <div className="bs-empty-icon">🧭</div>
+      <div className="bs-empty-title">Start with the Master Brief</div>
+      <div className="bs-empty-sub">
+        The master brief defines services, service areas, brand voice, and customer testimonials.
+        Once it's saved, the page matrix below populates and you can generate briefs for individual
+        pages on demand.
+      </div>
+      <Button variant="primary" onClick={onOpenForm}>+ Generate Master Brief</Button>
+    </div>
+  );
+}
+
+// ============================================================================
+// Master brief card
+// ============================================================================
+
+function MasterBriefCard({ master, onClick }: { master: Brief; onClick: () => void }) {
+  const updatedFromGenerated = master.updated_at ?? master.generated_at;
+  const shortDate = formatRelative(updatedFromGenerated);
+  return (
+    <div className="bs-master-card" role="button" tabIndex={0} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}>
+      <div className="bs-master-header">
+        <div>
+          <div className="bs-master-title">📋 Master Brief</div>
+          <div className="bs-master-meta">
+            <span className="bs-master-chip">v{master.version}</span>
+            <span>Updated {shortDate}</span>
+            {master.tbd_count > 0 && (
+              <span className="bs-master-tbd">⚠ {master.tbd_count} TBD{master.tbd_count === 1 ? '' : 's'}</span>
+            )}
+            {master.tbd_count === 0 && <span className="bs-master-ok">✓ no TBDs</span>}
+          </div>
+        </div>
+        <span className="bs-master-cta">Click to open in editor →</span>
+      </div>
+      <div className="bs-master-sub">
+        Source of truth. Defines services, areas, brand voice. Drives the matrix below.
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Matrix section
+// ============================================================================
+
+function MatrixSection({ hasMaster }: { hasMaster: boolean }) {
+  return (
+    <>
+      <h2 className="bs-section-h">Page Matrix</h2>
+      <div className="bs-matrix-legend">
+        <LegendDot color="empty" label="Not started" />
+        <LegendDot color="recommended" label="Recommended" />
+        <LegendDot color="briefed" label="Brief generated" />
+        <LegendDot color="live" label="Live" />
+      </div>
+
+      <div className="bs-matrix-card">
+        {!hasMaster && (
+          <div className="bs-matrix-overlay">
+            <span className="bs-matrix-lock">🔒</span>
+            <span>Generate the master brief to unlock the matrix</span>
+          </div>
+        )}
+        {hasMaster && (
+          <div className="bs-matrix-pending">
+            <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+              📐 Matrix population ships in Phase 4 — for now the master brief above is the source of truth.
+            </span>
+          </div>
+        )}
+
+        <div className="bs-matrix-section">
+          <div className="bs-matrix-section-label">Foundation Pages</div>
+          <div className="bs-matrix-row-flat">
+            {['Homepage', 'About', 'Services Overview', 'Contact', 'FAQ', '+ Add'].map((l) => (
+              <CellSkeleton key={l} label={l} />
+            ))}
+          </div>
+        </div>
+
+        <div className="bs-matrix-section">
+          <div className="bs-matrix-section-label">Individual Service Pages</div>
+          <div className="bs-matrix-row-flat">
+            {[1, 2, 3, 4].map((i) => (
+              <CellSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+
+        <div className="bs-matrix-section">
+          <div className="bs-matrix-section-label">Service Area Pages (service × city)</div>
+          <div className="bs-matrix-grid">
+            {[0, 1, 2].map((row) => (
+              <div className="bs-matrix-grid-row" key={row}>
+                <div className="bs-matrix-grid-label">
+                  <div className="bs-skel-line bs-skel-main" />
+                  <div className="bs-skel-line bs-skel-sub" />
+                </div>
+                {[0, 1, 2, 3, 4].map((col) => (
+                  <CellSkeleton key={col} compact />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CellSkeleton({ label, compact }: { label?: string; compact?: boolean }) {
+  return (
+    <div className={`bs-cell-skel ${compact ? 'bs-cell-skel-compact' : ''}`}>
+      {label ? (
+        <div className="bs-cell-skel-label">{label}</div>
+      ) : (
+        <>
+          <div className="bs-skel-line" />
+          <div className="bs-skel-line bs-skel-sub" />
+        </>
+      )}
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="bs-legend-item">
+      <span className={`bs-legend-dot bs-legend-${color}`} />
+      {label}
+    </span>
+  );
+}
+
+// ============================================================================
+// Sidebar
+// ============================================================================
+
+function Sidebar({
+  project, lead, hasMaster, onSwitchTab, showToast,
 }: {
   project: Project;
-  briefsCount: number;
-  pendingPagesCount: number;
-  completedPagesCount: number;
-  onOpenMatrix: () => void;
-  onOpenReports: () => void;
-}) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: 10,
-      marginBottom: 18,
-    }}>
-      <StatTile label="Pages built" value={completedPagesCount} hint={`${pendingPagesCount} in progress`} />
-      <StatTile label="Briefs generated" value={briefsCount} hint="Master + monthly batches" />
-      <StatTile
-        label="SEO Coverage"
-        value={project.tier === 3 ? '→ Matrix' : '—'}
-        hint={project.tier === 3 ? 'Service × City grid' : 'Tier 3 only'}
-        onClick={project.tier === 3 ? onOpenMatrix : undefined}
-      />
-      <StatTile
-        label="Monthly batch"
-        value={project.monthly_pages_target ? `${project.monthly_pages_target}/mo` : '—'}
-        hint={project.next_pages_due ? `Next due ${project.next_pages_due.slice(0, 10)}` : 'No schedule set'}
-        onClick={project.tier === 3 ? onOpenReports : undefined}
-      />
-    </div>
-  );
-}
-
-function StatTile({
-  label, value, hint, onClick,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--rl)',
-        padding: 14,
-        cursor: onClick ? 'pointer' : 'default',
-      }}
-    >
-      <div style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.6rem', color: 'var(--accent)', marginTop: 4, lineHeight: 1.1 }}>
-        {value}
-      </div>
-      {hint && (
-        <div style={{ fontSize: '0.62rem', color: 'var(--text3)', marginTop: 4 }}>{hint}</div>
-      )}
-    </div>
-  );
-}
-
-function SectionCard({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--rl)',
-      padding: 18,
-      marginBottom: 14,
-    }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1rem', letterSpacing: '1.5px', color: 'var(--text)' }}>{title}</div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginTop: 2 }}>{sub}</div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ============================================================================
-// Build Checklist — pages with status='briefed' or 'in_progress', mark complete
-// with published URL.
-// ============================================================================
-
-interface BuildChecklistProps {
-  pages: Page[];
+  lead: Lead | null;
+  hasMaster: boolean;
+  onSwitchTab: (tab: Tab) => void;
   showToast: ShowToast;
-  onPageUpdated: () => void;
-}
-
-function BuildChecklist({ pages, showToast, onPageUpdated }: BuildChecklistProps) {
-  return (
-    <SectionCard
-      title={`Build checklist (${pages.length})`}
-      sub="Pages briefed in Cowork. Paste the published URL when each goes live and mark it complete."
-    >
-      {pages.length === 0 ? (
-        <div style={{ fontSize: '0.7rem', color: 'var(--text3)', fontStyle: 'italic' }}>
-          Nothing pending. Generate a monthly batch from the Briefs tab to add more pages.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {pages.map((p) => (
-            <ChecklistRow key={p.id} page={p} showToast={showToast} onUpdated={onPageUpdated} />
-          ))}
-        </div>
-      )}
-    </SectionCard>
-  );
-}
-
-function ChecklistRow({
-  page, showToast, onUpdated,
-}: {
-  page: Page;
-  showToast: ShowToast;
-  onUpdated: () => void;
 }) {
-  const [url, setUrl] = useState<string>(page.published_url ?? page.url ?? '');
-  const [notes, setNotes] = useState<string>(page.operator_notes ?? '');
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleComplete() {
-    if (!url.trim()) {
-      showToast('Published URL required', 'error');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await api.pages.complete(page.id, { publishedUrl: url.trim(), notes: notes.trim() || undefined });
-      showToast(`Marked complete: ${describe(page)}`, 'success');
-      onUpdated();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Mark complete failed: ${msg}`, 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const liveUrl = project.custom_domain ?? project.landingsite_url;
+  const reviewCount = lead?.google_review_count ?? 0;
+  const pagespeed = lead?.pagespeed_desktop;
+  const scrapeDone = !!project.scrape_completed_at;
 
   return (
-    <div style={{
-      background: 'var(--surface2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--r)',
-      padding: 10,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 600, fontSize: '0.78rem', color: 'var(--text)' }}>{describe(page)}</span>
-        <span style={{ fontSize: '0.6rem', color: 'var(--text3)' }}>
-          {page.type}
-          {page.batch_period ? ` · batch ${page.batch_period}` : ''}
-          {' · status: '}
-          <strong style={{ color: page.status === 'briefed' ? 'var(--yellow)' : 'var(--text2)' }}>{page.status}</strong>
-        </span>
+    <>
+      <div className="bs-side-card">
+        <div className="bs-side-title">Status Legend</div>
+        <div className="bs-side-row">
+          <span className="bs-legend-dot bs-legend-empty" /> Planned — no brief yet
+        </div>
+        <div className="bs-side-row">
+          <span className="bs-legend-dot bs-legend-briefed" /> Briefed — ready to paste
+        </div>
+        <div className="bs-side-row">
+          <span className="bs-legend-dot bs-legend-live" /> Complete — published in landingsite.ai
+        </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr auto', gap: 6 }}>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://site.com/service-areas/…"
-          style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 'var(--r)', padding: '7px 9px',
-            color: 'var(--text)', fontSize: '0.72rem', fontFamily: "'DM Mono', monospace",
-          }}
-        />
-        <input
-          type="text"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes (optional)"
-          style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 'var(--r)', padding: '7px 9px',
-            color: 'var(--text)', fontSize: '0.72rem', fontFamily: 'inherit',
-          }}
-        />
-        <Button variant="primary" size="sm" disabled={submitting || !url.trim()} onClick={handleComplete}>
-          {submitting ? <><Spinner /> Saving…</> : '✓ Mark complete'}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
-function describe(page: Page): string {
-  if (page.service && page.city) return `${page.service} in ${page.city}`;
-  if (page.service) return page.service;
-  if (page.title) return page.title;
-  return `Page #${page.id}`;
+      <div className="bs-side-card">
+        <div className="bs-side-title">Quick Actions</div>
+        <div className="bs-quick-actions">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!liveUrl}
+            onClick={() => liveUrl && window.open(liveUrl, '_blank')}
+          >
+            ↗ Open landingsite.ai project
+          </Button>
+          <Button variant="ghost" size="sm" disabled={!hasMaster} onClick={() => onSwitchTab('reports')}>
+            📊 View Reports
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => showToast('Project info editor lands in a later pass', 'default')}>
+            ✎ Edit Project Info
+          </Button>
+        </div>
+      </div>
+
+      <div className="bs-side-card">
+        <div className="bs-side-title">Data Sources</div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Google Places</span>
+          <span className="bs-side-status-ok">{lead?.place_id ? '✓ Synced' : '— not yet'}</span>
+        </div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Reviews mined</span>
+          <span className={reviewCount > 0 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+            {reviewCount > 0 ? `✓ ${reviewCount} reviews` : '— none mined'}
+          </span>
+        </div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>PageSpeed</span>
+          <span className={pagespeed != null ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+            {pagespeed != null ? `✓ Desktop ${pagespeed}` : '— not run'}
+          </span>
+        </div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Website scrape</span>
+          <span className={scrapeDone ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+            {scrapeDone ? '✓ Done' : '— not run'}
+          </span>
+        </div>
+      </div>
+    </>
+  );
 }
 
 // ============================================================================
-// BriefViewerModalLoader — fetches the brief by id then renders the viewer.
-// Wrapping it here keeps SiteDetailPanel from owning brief data directly.
+// Helpers
+// ============================================================================
+
+function formatRelative(ts: string | null | undefined): string {
+  if (!ts) return 'never';
+  const date = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
+  const diff = Date.now() - date.getTime();
+  if (isNaN(diff)) return ts;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day ago';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return `${months} month${months === 1 ? '' : 's'} ago`;
+}
+
+// ============================================================================
+// Brief viewer wrapper (fetches by id then renders the existing modal)
 // ============================================================================
 
 function BriefViewerModalLoader({
@@ -378,7 +459,7 @@ function BriefViewerModalLoader({
   showToast: ShowToast;
   onRegenerated: () => void;
 }) {
-  const [brief, setBrief] = useState<import('../../lib/types').Brief | null>(null);
+  const [brief, setBrief] = useState<Brief | null>(null);
 
   useEffect(() => {
     if (briefId == null) {
@@ -402,3 +483,6 @@ function BriefViewerModalLoader({
     />
   );
 }
+
+// (Unused KIND_LABEL kept in case the editor surfaces brief kinds later.)
+void KIND_LABEL;

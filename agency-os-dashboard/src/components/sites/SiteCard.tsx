@@ -7,14 +7,18 @@ interface SiteCardProps {
   project: Project;
   showToast: ShowToast;
   onSwitchTab: (tab: Tab) => void;
-  onOpenMatrix: () => void;
   onOpenDetail: () => void;
 }
 
-export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix, onOpenDetail }: SiteCardProps) {
+const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
+
+export function SiteCard({ project, onSwitchTab, onOpenDetail, showToast: _showToast }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const isBuilding = project.status === 'building';
+  const mrr = TIER_MRR[tier] ?? 0;
+  const pagesBuilt = project.pages_built ?? 0;
+  const monthlyTarget = project.monthly_pages_target ?? (tier === 3 ? 5 : 0);
 
   const subtitle = (() => {
     const where = [project.city, project.state].filter(Boolean).join(', ');
@@ -30,7 +34,7 @@ export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix, onOpen
         className="scard-header"
         onClick={onOpenDetail}
         role="button"
-        title="Open site detail"
+        title="Open Brief Studio"
         style={{ cursor: 'pointer' }}
       >
         <div>
@@ -50,80 +54,46 @@ export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix, onOpen
           ) : liveUrl ? (
             <>
               <span className="url-mono">{liveUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
-              <a href={liveUrl} target="_blank" rel="noreferrer" className="url-link" aria-label="Open site">↗</a>
+              <a
+                href={liveUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="url-link"
+                aria-label="Open site"
+                onClick={(e) => e.stopPropagation()}
+              >↗</a>
             </>
           ) : (
             <span className="url-mono" style={{ color: 'var(--text3)' }}>—</span>
           )}
         </div>
 
-        {/* Tier 3 — coverage summary + schedule mini */}
-        {tier === 3 && (
-          <CoverageSummaryStub project={project} onClick={onOpenMatrix} />
-        )}
+        {/* MRR + pages-this-month — uniform across all tiers (no tier-gating in v2.2) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 10,
+          marginTop: 10,
+        }}>
+          <MetricChip
+            label="MRR"
+            value={mrr > 0 ? `$${mrr}/mo` : '— '}
+            tone={mrr > 0 ? 'green' : 'muted'}
+          />
+          <MetricChip
+            label={monthlyTarget > 0 ? 'This month' : 'Pages built'}
+            value={monthlyTarget > 0 ? `${pagesBuilt} / ${monthlyTarget}` : String(pagesBuilt)}
+            tone={pagesBuilt > 0 ? 'accent' : 'muted'}
+          />
+        </div>
 
-        {tier === 3 && project.next_pages_due && (
-          <div className="schedule-mini">
-            <div className="schedule-label">
-              Next batch due {formatDate(project.next_pages_due, { month: 'short', day: 'numeric' })}
-            </div>
-            <div className="schedule-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span className="schedule-status-dot dot-queued" />
-                3 service-area pages queued
-              </div>
-              <span style={{ fontSize: '0.6rem', color: 'var(--text3)' }}>Auto</span>
-            </div>
-          </div>
-        )}
-
-        {/* Tier 1 handoff banner */}
-        {tier === 1 && project.status === 'live' && (
-          <div style={{
-            background: 'rgba(62,207,142,0.06)',
-            border: '1px solid rgba(62,207,142,0.2)',
-            borderRadius: 'var(--r)',
-            padding: '9px 11px',
-            marginBottom: 10,
-            fontSize: '0.7rem',
-          }}>
-            <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 3 }}>✓ Handoff Complete</div>
-            <div style={{ color: 'var(--text3)', fontSize: '0.62rem' }}>Client owns the site. No ongoing relationship. Reference only.</div>
-          </div>
-        )}
-
-        {/* Tier 2 hosting status */}
-        {tier === 2 && project.status === 'live' && (
-          <div style={{ background: 'var(--surface2)', borderRadius: 'var(--r)', padding: '9px 11px', marginBottom: 10, fontSize: '0.7rem', color: 'var(--text2)' }}>
-            <div style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 5 }}>
-              Hosting Status
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'var(--green)' }}>✓ Active · $79/mo</span>
-            </div>
-          </div>
-        )}
-
-        {/* Action buttons — tier-aware */}
-        <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 7, marginTop: 12 }}>
+          <Button variant="primary" size="sm" onClick={onOpenDetail}>
+            📋 Brief Studio
+          </Button>
           {tier === 3 && (
-            <>
-              <Button variant="tier3" size="sm" onClick={onOpenMatrix}>
-                📊 View matrix
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
-                📈 Report
-              </Button>
-            </>
-          )}
-          {tier === 2 && (
-            <Button variant="ghost" size="sm" disabled={!liveUrl} onClick={() => liveUrl && window.open(liveUrl, '_blank')}>
-              View Site
-            </Button>
-          )}
-          {tier === 1 && project.status === 'live' && (
-            <Button variant="ghost" size="sm" onClick={() => showToast('Upsell flow lands in a future phase', 'default')}>
-              🎯 Upsell to Tier 2
+            <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
+              📈 Report
             </Button>
           )}
         </div>
@@ -132,23 +102,24 @@ export function SiteCard({ project, showToast, onSwitchTab, onOpenMatrix, onOpen
   );
 }
 
-function CoverageSummaryStub({ project, onClick }: { project: Project; onClick: () => void }) {
-  const built = project.pages_built ?? 0;
-  const planned = Math.max(project.pages_planned ?? 0, built);
-  const pct = planned > 0 ? Math.round((built / planned) * 100) : 0;
-
+function MetricChip({
+  label, value, tone,
+}: {
+  label: string; value: string; tone: 'accent' | 'green' | 'muted';
+}) {
+  const color = tone === 'green' ? 'var(--green)' : tone === 'accent' ? 'var(--accent)' : 'var(--text3)';
   return (
-    <div className="coverage-summary" onClick={onClick} role="button">
-      <div className="cov-top">
-        <span className="cov-label">SEO Coverage</span>
-        <span className="cov-val">{built} / {planned} pages</span>
+    <div style={{
+      background: 'var(--surface2)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--r)',
+      padding: '8px 11px',
+    }}>
+      <div style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
+        {label}
       </div>
-      <div className="cov-bar">
-        <div className="cov-fill" style={{ width: `${pct}%`, background: 'var(--tier3)' }} />
-      </div>
-      <div className="cov-bottom">
-        <span className="cov-mini-label">Click to open coverage matrix</span>
-        <span className="cov-cta">View matrix →</span>
+      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.15rem', color, lineHeight: 1.2 }}>
+        {value}
       </div>
     </div>
   );

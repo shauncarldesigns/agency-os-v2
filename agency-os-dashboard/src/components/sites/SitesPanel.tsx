@@ -4,7 +4,6 @@ import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
 import { SiteCard } from './SiteCard';
-import { MatrixModal } from './MatrixModal';
 import { SiteDetailPanel } from './SiteDetailPanel';
 
 interface SitesPanelProps {
@@ -20,7 +19,6 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
-  const [matrixProject, setMatrixProject] = useState<Project | null>(null);
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -81,7 +79,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
       <div className="sec-header">
         <div>
           <div className="sec-title">Sites</div>
-          <div className="sec-sub">All client sites managed across landingsite.ai · Tier-aware actions and scheduling</div>
+          <div className="sec-sub">All client sites · Click a card to open its Brief Studio</div>
         </div>
         <select className="fsel" value={sort} onChange={e => setSort(e.target.value as Sort)}>
           <option value="tier">Sort: Tier (high to low)</option>
@@ -117,7 +115,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
         <EmptyState
           icon="🌐"
           title="No client sites yet"
-          sub="Convert a Tier 3 lead in Pipeline to its first project, then generate a master brief in the Briefs tab."
+          sub="Mark a Pipeline lead as 'client' to convert it into a project. The Brief Studio for that project opens here."
         />
       ) : (
         <div className="sites-grid">
@@ -127,22 +125,11 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
               project={p}
               showToast={showToast}
               onSwitchTab={onSwitchTab}
-              onOpenMatrix={() => setMatrixProject(p)}
               onOpenDetail={() => setDetailProjectId(p.id)}
             />
           ))}
         </div>
       )}
-
-      <MatrixModal
-        open={matrixProject !== null}
-        projectId={matrixProject?.id ?? null}
-        projectName={matrixProject?.business_name ?? ''}
-        projectUrl={matrixProject?.custom_domain ?? matrixProject?.landingsite_url ?? null}
-        onClose={() => setMatrixProject(null)}
-        showToast={showToast}
-        onExpanded={load}
-      />
     </>
   );
 }

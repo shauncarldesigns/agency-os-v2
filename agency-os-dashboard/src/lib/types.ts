@@ -158,19 +158,22 @@ export interface Page {
 // v2.1 brief / brand-attribute / testimonial types
 // ============================================================================
 
-export type BriefKind = 'homepage_demo' | 'master' | 'monthly_batch';
-export type BriefStatus = 'generated' | 'in_progress' | 'completed' | 'archived';
+export type BriefKind = 'master' | 'page';
+export type BriefStatus = 'briefed' | 'complete' | 'draft' | 'saved' | 'archived';
 
 export interface Brief {
   id: number;
   project_id: number;
   kind: BriefKind;
+  page_id: number | null;
   content_markdown: string;
   status: BriefStatus;
-  batch_period: string | null;
+  version: number;
+  tbd_count: number;
   generated_by_model: string | null;
   generation_input: string | null;
   generated_at: string;
+  updated_at: string | null;
   completed_at: string | null;
   supersedes_brief_id: number | null;
 }
