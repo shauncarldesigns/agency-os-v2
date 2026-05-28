@@ -1,5 +1,3 @@
-// CI smoke test: this comment exists to confirm the deploy-worker workflow
-// fires on backend changes and deploys the Worker. Safe to remove.
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
