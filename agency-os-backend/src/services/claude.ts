@@ -3,6 +3,11 @@ import { log } from '../utils/errors';
 const HAIKU = 'claude-haiku-4-5-20251001';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 
+// Some newer models (e.g. Opus 4.7) reject the `temperature` param outright
+// ("temperature is deprecated for this model"). Strip it for those so callers
+// can keep passing a temperature harmlessly without a 400.
+const TEMPERATURE_UNSUPPORTED = /opus-4-7/;
+
 export interface ClaudeCallOptions {
   model?: string;
   systemPrompt?: string;
@@ -26,7 +31,9 @@ export async function callClaude(
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: userPrompt }],
   };
-  if (opts.temperature !== undefined) body.temperature = opts.temperature;
+  if (opts.temperature !== undefined && !TEMPERATURE_UNSUPPORTED.test(model)) {
+    body.temperature = opts.temperature;
+  }
   if (opts.systemPrompt) {
     body.system = opts.cacheSystem
       ? [{ type: 'text', text: opts.systemPrompt, cache_control: { type: 'ephemeral' } }]

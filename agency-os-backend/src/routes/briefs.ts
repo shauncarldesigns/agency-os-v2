@@ -168,9 +168,10 @@ briefsRouter.post('/projects/:projectId/pages/:pageId/brief', async (c) => {
       systemPrompt: system,
       cacheSystem: true,
       maxTokens: 4000,
-      // 0.8 (vs the earlier 0.4) gives the angle-led prompt room to actually
-      // differentiate businesses. Lower temp here was the main reason briefs
-      // felt template-filled even when the underlying data varied.
+      // NOTE: Opus 4.7 ignores temperature (the Claude service strips it), so
+      // brief variance now comes entirely from the angle-led prompt, not this
+      // value. Kept for the case where BRIEF_MODEL is downgraded to a model
+      // that does honor it (e.g. Sonnet), where 0.8 gave good differentiation.
       temperature: 0.8,
       timeoutMs: 90_000,
     });
