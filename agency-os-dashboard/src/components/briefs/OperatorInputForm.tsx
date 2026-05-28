@@ -157,6 +157,10 @@ export function OperatorInputForm({ open, onClose, project, lead, showToast, onB
     setTestimonials((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
   }
 
+  function setAllFeatured(featured: boolean) {
+    setTestimonials((prev) => prev.map((t) => ({ ...t, is_featured: featured })));
+  }
+
   function addBlankTestimonial() {
     setTestimonials((prev) => [
       ...prev,
@@ -252,6 +256,10 @@ export function OperatorInputForm({ open, onClose, project, lead, showToast, onB
       setSubmitting(false);
     }
   }
+
+  // True only when every testimonial is featured — drives the bulk toggle's
+  // label/behavior (Select all vs Deselect all).
+  const allFeatured = testimonials.length > 0 && testimonials.every((t) => t.is_featured);
 
   return (
     <Modal open={open} onClose={submitting ? () => undefined : onClose} width={780}>
@@ -383,8 +391,20 @@ export function OperatorInputForm({ open, onClose, project, lead, showToast, onB
         </div>
 
         <SectionTitle>Testimonials</SectionTitle>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginBottom: 10 }}>
-          Mark which reviews to feature on the site. Edit text inline if needed. Add new ones the owner supplied.
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>
+            Mark which reviews to feature on the site. Edit text inline if needed. Add new ones the owner supplied.
+          </div>
+          {testimonials.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAllFeatured(!allFeatured)}
+              title={allFeatured ? 'Uncheck every testimonial' : 'Check every testimonial'}
+            >
+              {allFeatured ? 'Deselect all' : `Select all (${testimonials.length})`}
+            </Button>
+          )}
         </div>
         {testimonials.map((t, idx) => (
           <TestimonialRow
