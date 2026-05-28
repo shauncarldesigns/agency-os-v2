@@ -14,7 +14,16 @@ import type { GoogleReview } from './places';
 
 const BASE = 'https://api.app.outscraper.com/maps/reviews-v3';
 const POLL_INTERVAL_MS = 2000;
-const POLL_TIMEOUT_MS = 45_000;
+// Outscraper async jobs for 50 reviews legitimately take 1.5–2 min (observed
+// ~118s in prod for 43 reviews). 45s was clipping real jobs and forcing a
+// fallback to Google's 5. 120s lets review-heavy leads complete; the per-fetch
+// timeouts below bound any single hung request.
+const POLL_TIMEOUT_MS = 120_000;
+// Per-request timeouts. Without these the overall POLL_TIMEOUT_MS deadline is
+// only checked *between* fetches, so a single hung request to Outscraper can
+// blow far past 45s and tie up the Worker request (observed ~118s in prod).
+const ENQUEUE_FETCH_TIMEOUT_MS = 15_000;
+const POLL_FETCH_TIMEOUT_MS = 10_000;
 
 interface OutscraperEnqueueResponse {
   id: string;
@@ -56,6 +65,7 @@ export async function fetchOutscraperReviews(
     headers: {
       'X-API-KEY': apiKey,
     },
+    signal: AbortSignal.timeout(ENQUEUE_FETCH_TIMEOUT_MS),
   });
 
   if (!enqueueRes.ok) {
@@ -79,9 +89,18 @@ async function pollResults(apiKey: string, resultsUrl: string): Promise<Outscrap
   while (Date.now() < deadline) {
     await sleep(POLL_INTERVAL_MS);
 
-    const res = await fetch(resultsUrl, {
-      headers: { 'X-API-KEY': apiKey },
-    });
+    let res: Response;
+    try {
+      res = await fetch(resultsUrl, {
+        headers: { 'X-API-KEY': apiKey },
+        signal: AbortSignal.timeout(POLL_FETCH_TIMEOUT_MS),
+      });
+    } catch (err) {
+      // A single hung/aborted poll shouldn't kill the job — log and let the
+      // deadline check decide whether to keep trying.
+      log('warn', 'outscraper', `poll fetch errored, retrying`, { message: (err as Error).message });
+      continue;
+    }
 
     if (!res.ok) {
       const errText = await res.text();
