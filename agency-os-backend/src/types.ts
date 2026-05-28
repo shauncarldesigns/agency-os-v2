@@ -10,6 +10,7 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID: string;
   DASHBOARD_API_KEY: string;
   RESEND_API_KEY: string;
+  OUTSCRAPER_API_KEY?: string;
 }
 
 export interface Lead {

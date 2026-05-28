@@ -13,7 +13,11 @@ export interface PageSpeedReport {
 
 async function runPageSpeed(apiKey: string, url: string, strategy: 'mobile' | 'desktop'): Promise<PageSpeedResult> {
   const endpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=${strategy}&key=${apiKey}&category=performance`;
-  const res = await fetch(endpoint, { signal: AbortSignal.timeout(45_000) });
+  // PageSpeed Insights can legitimately take 60–90s for slow sites — and slow
+  // sites are exactly the leads worth scoring. 90s timeout per strategy. The
+  // two strategies run via Promise.all in getPageSpeedReport, so worst-case
+  // wall time is still ~90s, not 180s.
+  const res = await fetch(endpoint, { signal: AbortSignal.timeout(90_000) });
 
   if (!res.ok) {
     const err = await res.text();
