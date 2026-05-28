@@ -18,12 +18,14 @@ interface PipelinePanelProps {
 }
 
 type TierFilter = 'all' | '1' | '2' | '3';
+type WebsiteFilter = 'all' | 'has' | 'none';
 
 export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<StageFilter>('all');
   const [tier, setTier] = useState<TierFilter>('all');
+  const [website, setWebsite] = useState<WebsiteFilter>('all');
   const [industry, setIndustry] = useState<string>('');
   const [industries, setIndustries] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -69,6 +71,11 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
     let list = leads;
     if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
+    // Website presence is only known after enrichment, so both filters scope to
+    // enriched leads — this keeps the filtered set in sync with what the
+    // Website column actually shows ("No site" badge vs domain).
+    if (website === 'none') list = list.filter(l => l.enrichment_status === 'enriched' && !l.website);
+    if (website === 'has') list = list.filter(l => l.enrichment_status === 'enriched' && !!l.website);
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter(l =>
@@ -79,7 +86,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
       );
     }
     return list;
-  }, [leads, stage, tier, search]);
+  }, [leads, stage, tier, website, search]);
 
   return (
     <>
@@ -141,6 +148,13 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
             <option value="3">Tier 3 only</option>
             <option value="2">Tier 2 only</option>
             <option value="1">Tier 1 only</option>
+          </select>
+        )}
+        {view === 'active' && (
+          <select className="fsel" value={website} onChange={e => setWebsite(e.target.value as WebsiteFilter)}>
+            <option value="all">All Websites</option>
+            <option value="none">No website</option>
+            <option value="has">Has website</option>
           </select>
         )}
       </div>
