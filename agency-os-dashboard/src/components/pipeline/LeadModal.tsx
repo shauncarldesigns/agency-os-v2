@@ -193,10 +193,23 @@ function LeadModalBody({
 
 const PANE_STYLE: React.CSSProperties = { padding: '18px 20px', maxHeight: '50vh', overflowY: 'auto' };
 
+// Build a Google Maps link for the lead. When we have a place_id we use the
+// official Maps URL format with query_place_id so it resolves to the exact
+// listing; otherwise we fall back to a name + location text search.
+function googleMapsUrl(lead: Lead): string | null {
+  const locationText = lead.address ?? [lead.city, lead.state].filter(Boolean).join(', ');
+  const query = [lead.company, locationText].filter(Boolean).join(' ').trim();
+  if (!query && !lead.place_id) return null;
+  const params = new URLSearchParams({ api: '1', query: query || lead.company });
+  if (lead.place_id) params.set('query_place_id', lead.place_id);
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
 function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) => void }) {
   const services = parseList<string>(lead.extracted_services);
   const areas = parseList<string>(lead.extracted_service_areas);
   const ownerNames = parseList<string>(lead.owner_names);
+  const mapsUrl = googleMapsUrl(lead);
 
   return (
     <div style={PANE_STYLE}>
@@ -234,6 +247,35 @@ function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (fie
           </div>
         </div>
       </div>
+
+      {mapsUrl && (
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            marginBottom: 14,
+            padding: '10px 14px',
+            background: 'rgba(62,207,142,0.08)',
+            border: '1px solid rgba(62,207,142,0.2)',
+            borderRadius: 8,
+            textDecoration: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.3rem' }}>🗺️</span>
+            <div>
+              <div style={{ color: 'var(--green)', fontWeight: 600, fontSize: '0.8rem' }}>View on Google Maps</div>
+              <div style={{ color: 'var(--text3)', fontSize: '0.68rem' }}>Check reviews, hours &amp; photos before your call</div>
+            </div>
+          </div>
+          <span style={{ color: 'var(--green)', fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap' }}>OPEN LISTING →</span>
+        </a>
+      )}
 
       {areas.length > 0 && (
         <div style={{ marginBottom: 14 }}>
