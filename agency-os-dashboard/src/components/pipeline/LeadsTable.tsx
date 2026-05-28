@@ -34,6 +34,7 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onHome
             <th>Tier</th>
             <th>Score</th>
             <th>City</th>
+            <th>Website</th>
             <th>Phone</th>
             <th>Outcome</th>
             <th>Stage</th>
@@ -156,6 +157,7 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }:
       )}
 
       <td>{lead.city ?? <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+      <td onClick={stop}>{renderWebsiteCell(lead)}</td>
       <td className="td-mono" style={lead.enrichment_status === 'enriching' ? { opacity: 0.7 } : lead.enrichment_status === 'failed' ? { color: 'var(--text3)' } : undefined}>
         {formatPhone(lead.phone)}
       </td>
@@ -195,6 +197,40 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }:
       </td>
     </tr>
   );
+}
+
+// Website cell. No-website leads are the priority targets, so they get a
+// prominent "No site" badge; leads with a site show a muted clickable domain.
+// Only enriched leads have a reliable website signal — for everything else we
+// don't yet know, so show a neutral dash rather than a misleading "No site".
+function renderWebsiteCell(lead: Lead): React.ReactNode {
+  if (lead.enrichment_status !== 'enriched') {
+    return <span style={{ color: 'var(--text3)' }}>—</span>;
+  }
+  if (lead.website) {
+    const href = lead.website.startsWith('http') ? lead.website : `https://${lead.website}`;
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="td-mono"
+        style={{ color: 'var(--text3)', textDecoration: 'none' }}
+        title={lead.website}
+      >
+        {cleanDomain(lead.website)} ↗
+      </a>
+    );
+  }
+  return <Badge color="blue">No site</Badge>;
+}
+
+// Strip protocol, www., and trailing path so the column stays scannable.
+function cleanDomain(url: string): string {
+  return url
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/.*$/, '');
 }
 
 function renderEnrichmentBadge(lead: Lead): React.ReactNode {
