@@ -12,10 +12,10 @@ interface LeadsTableProps {
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
-  onHomepageDemo: (lead: Lead) => void;
+  onQualify: (lead: Lead) => void;
 }
 
-export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }: LeadsTableProps) {
+export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onQualify }: LeadsTableProps) {
   if (leads.length === 0) {
     return (
       <div className="twrap" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
@@ -49,7 +49,7 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onHome
               showToast={showToast}
               onLeadUpdated={onLeadUpdated}
               onOpenLead={onOpenLead}
-              onHomepageDemo={onHomepageDemo}
+              onQualify={onQualify}
             />
           ))}
         </tbody>
@@ -63,10 +63,10 @@ interface LeadRowProps {
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
-  onHomepageDemo: (lead: Lead) => void;
+  onQualify: (lead: Lead) => void;
 }
 
-function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }: LeadRowProps) {
+function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onQualify }: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
   const stage = statusBadge(lead.status);
   const outcome = outcomeBadge(lead.outcome);
@@ -166,15 +166,16 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onHomepageDemo }:
       <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
           {lead.enrichment_status === 'enriched'
-            && lead.status === 'qualified'
+            && lead.status !== 'client'
+            && lead.status !== 'dead'
             && !lead.deleted_at && (
               <Button
                 variant="primary"
                 size="xs"
-                onClick={() => onHomepageDemo(lead)}
-                title="Generate an ephemeral homepage demo brief — paste into landingsite.ai for the next call"
+                onClick={() => onQualify(lead)}
+                title="Convert this lead into a Sites project at a chosen tier"
               >
-                📋 Demo
+                → Qualify
               </Button>
           )}
           {lead.enrichment_status === 'pending' && (

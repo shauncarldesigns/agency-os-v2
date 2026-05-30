@@ -140,6 +140,40 @@ projectsRouter.post('/', async (c) => {
   }
 });
 
+// DELETE /api/projects/:id
+// Hard-delete a project. Cascades to pages/briefs/brand_attributes/testimonials
+// via ON DELETE CASCADE in the schema. Reverts the linked lead back to
+// 'qualified' status with project_id cleared so the operator can re-qualify or
+// move on. Used when a client churns — the project disappears from Sites and
+// their lead is recoverable in the Pipeline.
+projectsRouter.delete('/:id', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+
+  const project = await c.env.DB
+    .prepare('SELECT id, lead_id FROM projects WHERE id = ?')
+    .bind(id)
+    .first<{ id: number; lead_id: number | null }>();
+  if (!project) return c.json(notFound('Project'), 404);
+
+  try {
+    // Revert the lead first so it survives even if the project delete races
+    // with another request reading lead.project_id.
+    if (project.lead_id) {
+      await c.env.DB.prepare(
+        "UPDATE leads SET project_id = NULL, status = 'qualified', updated_at = datetime('now') WHERE id = ?"
+      ).bind(project.lead_id).run();
+    }
+
+    await c.env.DB.prepare('DELETE FROM projects WHERE id = ?').bind(id).run();
+    log('info', 'projects', `Project ${id} deleted; lead ${project.lead_id ?? '(none)'} reverted to qualified`);
+    return c.body(null, 204);
+  } catch (err) {
+    log('error', 'projects', `DELETE /projects/${id} failed`, err);
+    return c.json(serverError(`${(err as Error).message}`), 500);
+  }
+});
+
 projectsRouter.put('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);

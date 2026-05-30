@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Lead, ShowToast } from '../../lib/types';
+import type { Lead, Project, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
@@ -10,17 +10,21 @@ import { LeadsTable } from './LeadsTable';
 import { LeadModal } from './LeadModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { AddLeadModal } from './AddLeadModal';
-import { HomepageDemoModal } from './HomepageDemoModal';
+import { QualifyLeadModal } from './QualifyLeadModal';
 
 interface PipelinePanelProps {
   showToast: ShowToast;
   onLeadCountChanged?: () => void;
+  /** Called when a lead is qualified into a project. App-level handler decides
+   *  whether to switch to the Sites tab and (for Tier 3) deep-link to the new
+   *  project's Brief Studio. */
+  onQualified?: (project: Project, tier: 1 | 2 | 3) => void;
 }
 
 type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
 
-export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelProps) {
+export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: PipelinePanelProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<StageFilter>('all');
@@ -34,7 +38,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
   const [openLeadId, setOpenLeadId] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [demoLead, setDemoLead] = useState<Lead | null>(null);
+  const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -169,7 +173,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
           showToast={showToast}
           onLeadUpdated={handleLeadUpdated}
           onOpenLead={setOpenLeadId}
-          onHomepageDemo={setDemoLead}
+          onQualify={setQualifyLead}
         />
       )}
 
@@ -179,14 +183,18 @@ export function PipelinePanel({ showToast, onLeadCountChanged }: PipelinePanelPr
         onClose={() => setOpenLeadId(null)}
         showToast={showToast}
         onLeadUpdated={handleLeadUpdated}
-        onHomepageDemo={setDemoLead}
+        onQualify={setQualifyLead}
       />
 
-      <HomepageDemoModal
-        open={demoLead !== null}
-        lead={demoLead}
-        onClose={() => setDemoLead(null)}
+      <QualifyLeadModal
+        open={qualifyLead !== null}
+        lead={qualifyLead}
+        onClose={() => setQualifyLead(null)}
         showToast={showToast}
+        onQualified={(project, tier) => {
+          handleLeadUpdated();
+          onQualified?.(project, tier);
+        }}
       />
 
       <ImportCsvModal

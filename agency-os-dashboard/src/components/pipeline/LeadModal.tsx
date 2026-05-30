@@ -17,7 +17,7 @@ interface LeadModalProps {
   onClose: () => void;
   showToast: ShowToast;
   onLeadUpdated: () => void;
-  onHomepageDemo: (lead: Lead) => void;
+  onQualify: (lead: Lead) => void;
 }
 
 interface LeadDetail {
@@ -25,7 +25,7 @@ interface LeadDetail {
   calls: CallEntry[];
 }
 
-export function LeadModal({ open, leadId, onClose, showToast, onLeadUpdated, onHomepageDemo }: LeadModalProps) {
+export function LeadModal({ open, leadId, onClose, showToast, onLeadUpdated, onQualify }: LeadModalProps) {
   const [tab, setTab] = useState<LMTab>('overview');
   const [data, setData] = useState<LeadDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,7 @@ export function LeadModal({ open, leadId, onClose, showToast, onLeadUpdated, onH
           onClose={onClose}
           onFieldChange={handleFieldChange}
           onCallsChanged={() => loadLead(data.lead.id)}
-          onHomepageDemo={onHomepageDemo}
+          onQualify={onQualify}
           showToast={showToast}
         />
       )}
@@ -97,12 +97,12 @@ interface LeadModalBodyProps {
   onClose: () => void;
   onFieldChange: (field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) => void;
   onCallsChanged: () => void;
-  onHomepageDemo: (lead: Lead) => void;
+  onQualify: (lead: Lead) => void;
   showToast: ShowToast;
 }
 
 function LeadModalBody({
-  detail, tab, setTab, onClose, onFieldChange, onCallsChanged, onHomepageDemo, showToast,
+  detail, tab, setTab, onClose, onFieldChange, onCallsChanged, onQualify, showToast,
 }: LeadModalBodyProps) {
   const { lead, calls } = detail;
   const tier = lead.recommended_tier && [1, 2, 3].includes(lead.recommended_tier)
@@ -171,17 +171,20 @@ function LeadModalBody({
 
       <div style={{ padding: '13px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
-        {lead.status === 'qualified' && lead.enrichment_status === 'enriched' && (
+        {lead.enrichment_status === 'enriched'
+          && lead.status !== 'client'
+          && lead.status !== 'dead' && (
           <Button
             variant="primary"
-            onClick={() => { onHomepageDemo(lead); onClose(); }}
+            onClick={() => { onQualify(lead); onClose(); }}
+            title="Convert this lead into a Sites project at a chosen tier"
           >
-            📋 Generate Homepage Demo
+            → Qualify & Send to Sites
           </Button>
         )}
         {lead.status === 'client' && lead.project_id && (
-          <Button variant="ghost" size="sm" disabled title="Opens in Sites tab → Brief Studio">
-            ✓ Converted to project · view in Sites
+          <Button variant="ghost" size="sm" disabled title="Open in the Sites tab to manage this project">
+            ✓ Converted to project · open in Sites
           </Button>
         )}
       </div>
@@ -314,11 +317,20 @@ function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (fie
         </div>
         <div className="fg">
           <label className="flabel">Stage</label>
-          <select className="finput" value={lead.status} onChange={e => onFieldChange('status', e.target.value)}>
+          <select
+            className="finput"
+            value={lead.status}
+            onChange={e => onFieldChange('status', e.target.value)}
+            disabled={lead.status === 'client'}
+            title={lead.status === 'client' ? 'Already converted — manage from Sites tab' : undefined}
+          >
             <option value="cold">Cold</option>
             <option value="contacted">Contacted</option>
             <option value="qualified">Qualified</option>
-            <option value="client">Client</option>
+            {/* 'client' status is reserved for the Qualify flow which atomically
+                creates a Sites project. Once a lead is a client, the dropdown
+                locks — to undo, delete the project from Sites. */}
+            {lead.status === 'client' && <option value="client">Client (locked)</option>}
             <option value="dead">Dead</option>
           </select>
         </div>

@@ -61,11 +61,13 @@ export const api = {
       }),
     enrich: (id: number) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/enrich`, { method: 'POST' }),
-    generateHomepageDemo: (id: number) =>
-      apiFetch<{ markdown: string; generatedAt: string; model: string }>(
-        `/api/leads/${id}/homepage-demo`,
-        { method: 'POST' }
-      ),
+    // Qualify a lead → creates a Sites project at the chosen tier and marks
+    // the lead as 'client'. Optional note is prepended to the lead's notes.
+    qualify: (id: number, input: { tier: 1 | 2 | 3; note?: string }) =>
+      apiFetch<{ lead: Lead; project: Project }>(`/api/leads/${id}/qualify`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     enrichAll: (limit = 25) =>
       apiFetch<{ total: number; succeeded: number; failed: number; failures: Array<{ id: number; error: string }> }>(
         '/api/leads/enrich-all',
@@ -102,6 +104,10 @@ export const api = {
       apiFetch<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Project>) =>
       apiFetch<{ project: Project }>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    // Hard-delete a project. Cascades to its pages/briefs/etc; the linked lead
+    // is reverted to status='qualified' with project_id cleared.
+    delete: (id: number) =>
+      apiFetch<void>(`/api/projects/${id}`, { method: 'DELETE' }),
     coverage: (id: number) =>
       apiFetch<{
         services: string[];
