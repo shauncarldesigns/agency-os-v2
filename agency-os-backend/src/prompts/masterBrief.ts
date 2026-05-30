@@ -78,7 +78,6 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 - **Primary color:** {hex}
 - **Accent color:** {hex}
 - **Vibe:** {short description}
-- **Photography:** {direction}
 
 ## Services Offered
 1. **{Service}** — {description}
@@ -132,7 +131,7 @@ Reference template (structure to mirror; placeholders in {curly braces} show wha
 ${APEX_FORMAT_EXAMPLE}
 
 HARD RULES:
-1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. Where a specific field is missing, emit a labelled TBD token so the operator can fill it inline later — use \`[TBD: <field name>]\`. Examples: \`[TBD: founded year]\`, \`[TBD: owner credentials]\`, \`[TBD: tagline]\`, \`[TBD: email]\`, \`[TBD: primary color]\`, \`[TBD: accent color]\`, \`[TBD: photography direction]\`. One TBD token per missing field, kept short and lowercase. Never fabricate.
+1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. Where a specific field is missing, emit a labelled TBD token so the operator can fill it inline later — use \`[TBD: <field name>]\`. Examples: \`[TBD: founded year]\`, \`[TBD: owner credentials]\`, \`[TBD: tagline]\`, \`[TBD: email]\`, \`[TBD: primary color]\`, \`[TBD: accent color]\`. One TBD token per missing field, kept short and lowercase. Never fabricate.
 2. Synthesize brand voice from review themes — voice descriptors should come from the actual language customers use about this business, not generic adjectives.
 3. Reading level for the resulting site copy must be 6th-8th grade. State this in the Brand Voice section.
 4. Customer reviews must be quoted verbatim. Do not paraphrase or "improve" them. Cite author name and location exactly as given.
@@ -168,7 +167,6 @@ function buildUserPrompt(input: MasterBriefInput): string {
   lines.push(`- Tagline: ${p.tagline ?? '[missing]'}`);
   lines.push(`- Primary color: ${p.primary_color ?? '[missing]'}`);
   lines.push(`- Accent color: ${p.accent_color ?? '[missing]'}`);
-  lines.push(`- Photography direction: ${p.photography_direction ?? '[missing]'}`);
   if (p.tier) lines.push(`- Tier: ${p.tier}`);
   if (p.monthly_pages_target) lines.push(`- Monthly pages target: ${p.monthly_pages_target}`);
   lines.push('');

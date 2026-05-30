@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Brief, Page, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
@@ -37,14 +37,20 @@ interface BriefStudioMatrixProps {
   reloadToken?: string | number;
   showToast: ShowToast;
   onOpenBrief: (brief: Brief) => void;
+  /** Fired after the matrix mutates the project (e.g. operator adds a
+   *  service or service area inline). Parent reloads its project + master
+   *  brief so the "matrix may be stale" hint recomputes against the fresh
+   *  project.updated_at. */
+  onProjectChanged?: () => void;
 }
 
 export function BriefStudioMatrix({
-  projectId, reloadToken, showToast, onOpenBrief,
+  projectId, reloadToken, showToast, onOpenBrief, onProjectChanged,
 }: BriefStudioMatrixProps) {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [savingAxis, setSavingAxis] = useState<'service' | 'area' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +66,46 @@ export function BriefStudioMatrix({
   }, [projectId, showToast]);
 
   useEffect(() => { void load(); }, [load, reloadToken]);
+
+  /**
+   * Append a service or service area to the project, dedup-protected against
+   * the current axis. Refreshes the matrix and signals the parent so the
+   * Brief Studio's "matrix may be stale" hint can recompute.
+   */
+  const addAxisItem = useCallback(async (axis: 'service' | 'area', value: string) => {
+    if (savingAxis || !data) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    const current = axis === 'service'
+      ? data.servicePages.map((r) => r.service)
+      : data.serviceAreaGrid.cities;
+
+    // Case-insensitive dedup — silently no-op if the operator typed
+    // something already on the axis.
+    const exists = current.some((v) => v.trim().toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      showToast(`${trimmed} is already on the matrix`, 'default');
+      return;
+    }
+
+    setSavingAxis(axis);
+    try {
+      const nextArr = [...current, trimmed];
+      const patch = axis === 'service'
+        ? { services: nextArr }
+        : { service_areas: nextArr };
+      await api.projects.update(projectId, patch);
+      showToast(`Added ${trimmed} to the matrix`, 'success');
+      await load();
+      onProjectChanged?.();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Add failed: ${msg}`, 'error');
+    } finally {
+      setSavingAxis(null);
+    }
+  }, [data, load, onProjectChanged, projectId, savingAxis, showToast]);
 
   /**
    * Resolve a click into either "create page + generate brief" or "open
@@ -152,43 +198,64 @@ export function BriefStudioMatrix({
       </MatrixSection>
 
       <MatrixSection label="Individual Service Pages">
-        {servicePages.length === 0 ? (
-          <PlaceholderRow text="No services listed on the project yet. Add services in the master brief form to populate this row." />
-        ) : (
-          <div className="bs-matrix-row-flat">
-            {servicePages.map((row) => {
-              const key = `s:${row.service}`;
-              return (
-                <Cell
-                  key={key}
-                  cellKey={key}
-                  title={row.service}
-                  status={row.status}
-                  billing={row.billingStatus}
-                  busy={busyKey === key}
-                  onClick={() =>
-                    handleCellClick(
-                      key,
-                      row,
-                      { type: 'service', service: row.service }
-                    )
-                  }
-                />
-              );
-            })}
-          </div>
-        )}
+        <div className="bs-matrix-row-flat">
+          {servicePages.map((row) => {
+            const key = `s:${row.service}`;
+            return (
+              <Cell
+                key={key}
+                cellKey={key}
+                title={row.service}
+                status={row.status}
+                billing={row.billingStatus}
+                busy={busyKey === key}
+                onClick={() =>
+                  handleCellClick(
+                    key,
+                    row,
+                    { type: 'service', service: row.service }
+                  )
+                }
+              />
+            );
+          })}
+          <AddPill
+            placeholder="Service name (e.g. Roof Replacement)"
+            saving={savingAxis === 'service'}
+            onAdd={(v) => addAxisItem('service', v)}
+            label={servicePages.length === 0 ? '+ Add first service' : '+ Add service'}
+          />
+        </div>
       </MatrixSection>
 
       <MatrixSection label="Service Area Pages (service × city)">
         {noServices || noCities ? (
-          <PlaceholderRow text="Service-area grid populates once the master brief lists at least one service and one service area." />
+          <>
+            <PlaceholderRow text={
+              noServices && noCities
+                ? 'Add at least one service and one service area to populate the grid.'
+                : noServices
+                  ? 'Add at least one service (above) to populate the grid.'
+                  : 'Add at least one service area to populate the grid.'
+            } />
+            {!noServices && noCities && (
+              <div className="bs-matrix-row-flat" style={{ marginTop: 8 }}>
+                <AddPill
+                  placeholder="Service area / city (e.g. Madison)"
+                  saving={savingAxis === 'area'}
+                  onAdd={(v) => addAxisItem('area', v)}
+                  label="+ Add first service area"
+                />
+              </div>
+            )}
+          </>
         ) : (
           <ServiceAreaGrid
             services={serviceAreaGrid.services}
             cities={serviceAreaGrid.cities}
             cells={serviceAreaGrid.cells}
             busyKey={busyKey}
+            savingAxis={savingAxis}
             onCellClick={(svc, city, row) =>
               handleCellClick(
                 `g:${svc}:${city}`,
@@ -196,6 +263,7 @@ export function BriefStudioMatrix({
                 { type: 'service-area', service: svc, city }
               )
             }
+            onAddArea={(v) => addAxisItem('area', v)}
           />
         )}
       </MatrixSection>
@@ -232,15 +300,19 @@ function PlaceholderRow({ text }: { text: string }) {
 }
 
 function ServiceAreaGrid({
-  services, cities, cells, busyKey, onCellClick,
+  services, cities, cells, busyKey, savingAxis, onCellClick, onAddArea,
 }: {
   services: string[];
   cities: string[];
   cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string }>;
   busyKey: string | null;
+  savingAxis: 'service' | 'area' | null;
   onCellClick: (service: string, city: string, row: { pageId: number | null; status: string; billingStatus: string }) => void;
+  onAddArea: (value: string) => void;
 }) {
-  const gridTemplate = `170px repeat(${cities.length}, minmax(110px, 1fr))`;
+  // Extra trailing column hosts the inline "+ Add city" pill so the operator
+  // can extend the grid without leaving the table.
+  const gridTemplate = `170px repeat(${cities.length}, minmax(110px, 1fr)) minmax(140px, 1fr)`;
   const byKey = new Map<string, (typeof cells)[number]>();
   for (const c of cells) byKey.set(`${c.service}::${c.city}`.toLowerCase(), c);
 
@@ -251,6 +323,15 @@ function ServiceAreaGrid({
         {cities.map((city) => (
           <div key={city} className="bs-grid-col-label">{city}</div>
         ))}
+        <div className="bs-grid-col-label" style={{ padding: 0 }}>
+          <AddPill
+            placeholder="City"
+            saving={savingAxis === 'area'}
+            onAdd={onAddArea}
+            label="+ Add city"
+            compact
+          />
+        </div>
       </div>
       {services.map((service) => {
         const rowCells = cities.map((city) => byKey.get(`${service}::${city}`.toLowerCase()));
@@ -282,6 +363,8 @@ function ServiceAreaGrid({
                 />
               );
             })}
+            {/* Trailing spacer cell to align with the header's "+ Add city" slot */}
+            <div />
           </div>
         );
       })}
@@ -342,6 +425,133 @@ function billingShort(b: string): string {
   if (b === 'add_on') return 'add-on';
   if (b === 'comp') return 'comp';
   return b;
+}
+
+/**
+ * Inline two-state pill: collapsed shows "+ Add ..." text; clicking expands
+ * to an input + ✓ confirm. Enter submits, Escape cancels. Used at the end of
+ * the Service Pages row and the Service Area grid header.
+ */
+function AddPill({
+  label, placeholder, saving, onAdd, compact,
+}: {
+  label: string;
+  placeholder: string;
+  saving: boolean;
+  onAdd: (value: string) => void;
+  compact?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  function commit() {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setEditing(false);
+      return;
+    }
+    onAdd(trimmed);
+    setValue('');
+    setEditing(false);
+  }
+
+  if (!editing && !saving) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={`bs-add-pill ${compact ? 'bs-add-pill-compact' : ''}`}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          padding: compact ? '6px 8px' : '10px 14px',
+          minHeight: compact ? 36 : undefined,
+          background: 'transparent',
+          border: '1px dashed var(--border)',
+          borderRadius: 'var(--r)',
+          color: 'var(--text3)',
+          fontSize: compact ? '0.62rem' : '0.7rem',
+          fontWeight: 600,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+        title={placeholder}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: compact ? '4px 6px' : '6px 8px',
+        minHeight: compact ? 36 : undefined,
+        background: 'var(--surface2)',
+        border: '1px solid var(--accent)',
+        borderRadius: 'var(--r)',
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        disabled={saving}
+        placeholder={placeholder}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { setEditing(false); setValue(''); }
+        }}
+        onBlur={() => {
+          // Defer so the confirm-button click can register before the input
+          // un-mounts via setEditing(false).
+          setTimeout(() => { if (!saving) setEditing(false); }, 120);
+        }}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          color: 'var(--text)',
+          fontSize: compact ? '0.7rem' : '0.78rem',
+          fontFamily: 'inherit',
+          minWidth: compact ? 90 : 140,
+          padding: 0,
+        }}
+      />
+      {saving ? (
+        <Spinner />
+      ) : (
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); commit(); }}
+          style={{
+            background: 'var(--accent)',
+            border: 'none',
+            color: 'white',
+            borderRadius: 6,
+            padding: '2px 8px',
+            fontSize: '0.7rem',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+          title="Add"
+        >
+          ✓
+        </button>
+      )}
+    </div>
+  );
 }
 
 function describePage(spec: { type: string; service?: string; city?: string; customTitle?: string }): string {

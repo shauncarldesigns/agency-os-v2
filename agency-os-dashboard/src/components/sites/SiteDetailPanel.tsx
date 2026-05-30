@@ -6,6 +6,11 @@ import { Spinner } from '../shared/Spinner';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
+import {
+  extractServicesFromBrief,
+  extractServiceAreasFromBrief,
+  diffAdditions,
+} from '../../lib/briefExtract';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -86,6 +91,54 @@ export function SiteDetailPanel({
     };
   }, [master, briefs, project.monthly_pages_target, tier]);
 
+  // Brief-vs-matrix drift detection (Option C bridge): when the master brief
+  // mentions services or service areas not in project.services/service_areas,
+  // surface a callout so the operator can one-click sync. We never silently
+  // mutate the project — the matrix stays the source of truth.
+  const projectServices = useMemo(() => safeJsonArray(project.services), [project.services]);
+  const projectAreas = useMemo(() => safeJsonArray(project.service_areas), [project.service_areas]);
+  const briefAdditions = useMemo(() => {
+    if (!master) return { services: [], areas: [] };
+    return {
+      services: diffAdditions(extractServicesFromBrief(master.content_markdown), projectServices),
+      areas: diffAdditions(extractServiceAreasFromBrief(master.content_markdown), projectAreas),
+    };
+  }, [master, projectServices, projectAreas]);
+  const [dismissedSig, setDismissedSig] = useState<string | null>(null);
+  const additionsSig = briefAdditions.services.join('|') + '::' + briefAdditions.areas.join('|');
+  const hasBriefAdditions = (briefAdditions.services.length + briefAdditions.areas.length) > 0
+    && additionsSig !== dismissedSig;
+
+  // "Matrix may be stale" — the project has been mutated (matrix add, edit info,
+  // etc.) more recently than the master brief was generated/updated.
+  const matrixIsStale = useMemo(() => {
+    if (!master) return false;
+    const masterTs = Date.parse(master.updated_at ?? master.generated_at ?? '');
+    const projectTs = Date.parse(project.updated_at ?? '');
+    if (!Number.isFinite(masterTs) || !Number.isFinite(projectTs)) return false;
+    // Small fudge so trivial near-simultaneous timestamps don't flag.
+    return projectTs - masterTs > 2_000;
+  }, [master, project.updated_at]);
+
+  async function applyBriefAdditions() {
+    if (!master) return;
+    try {
+      const nextServices = [...projectServices, ...briefAdditions.services];
+      const nextAreas = [...projectAreas, ...briefAdditions.areas];
+      await api.projects.update(project.id, {
+        services: nextServices,
+        service_areas: nextAreas,
+      });
+      const total = briefAdditions.services.length + briefAdditions.areas.length;
+      showToast(`Added ${total} item${total === 1 ? '' : 's'} from the brief to the matrix`, 'success');
+      onProjectChanged();
+      await reload();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Add failed: ${msg}`, 'error');
+    }
+  }
+
   return (
     <>
       <div className="bs-topbar">
@@ -118,10 +171,20 @@ export function SiteDetailPanel({
               {master ? (
                 <MasterBriefCard
                   master={master}
+                  stale={matrixIsStale}
                   onClick={() => setViewerBriefId(master.id)}
                 />
               ) : (
                 <EmptyCallout onOpenForm={() => setOperatorFormOpen(true)} />
+              )}
+
+              {tier === 3 && hasBriefAdditions && (
+                <BriefAdditionsCallout
+                  services={briefAdditions.services}
+                  areas={briefAdditions.areas}
+                  onAdd={applyBriefAdditions}
+                  onDismiss={() => setDismissedSig(additionsSig)}
+                />
               )}
 
               <h2 className="bs-section-h">Page Matrix</h2>
@@ -165,9 +228,10 @@ export function SiteDetailPanel({
                 {tier === 3 && master ? (
                   <BriefStudioMatrix
                     projectId={project.id}
-                    reloadToken={master.updated_at ?? master.generated_at ?? ''}
+                    reloadToken={`${master.updated_at ?? master.generated_at ?? ''}::${project.updated_at}`}
                     showToast={showToast}
                     onOpenBrief={(b) => setViewerBriefId(b.id)}
+                    onProjectChanged={() => { onProjectChanged(); void reload(); }}
                   />
                 ) : (
                   <MatrixSkeleton />
@@ -283,7 +347,9 @@ function EmptyCallout({ onOpenForm }: { onOpenForm: () => void }) {
 // Master brief card
 // ============================================================================
 
-function MasterBriefCard({ master, onClick }: { master: Brief; onClick: () => void }) {
+function MasterBriefCard({
+  master, stale, onClick,
+}: { master: Brief; stale: boolean; onClick: () => void }) {
   const updatedFromGenerated = master.updated_at ?? master.generated_at;
   const shortDate = formatRelative(updatedFromGenerated);
   return (
@@ -298,12 +364,91 @@ function MasterBriefCard({ master, onClick }: { master: Brief; onClick: () => vo
               <span className="bs-master-tbd">⚠ {master.tbd_count} TBD{master.tbd_count === 1 ? '' : 's'}</span>
             )}
             {master.tbd_count === 0 && <span className="bs-master-ok">✓ no TBDs</span>}
+            {stale && (
+              <span
+                title="The project (services / areas / business info) was updated after this brief. Regenerate to refresh the prose."
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  color: 'var(--yellow)',
+                  background: 'rgba(245,200,66,0.08)',
+                  border: '1px solid rgba(245,200,66,0.25)',
+                  padding: '2px 7px',
+                  borderRadius: 999,
+                }}
+              >
+                ⚠ Matrix may be stale
+              </span>
+            )}
           </div>
         </div>
         <span className="bs-master-cta">Click to open in editor →</span>
       </div>
       <div className="bs-master-sub">
         Source of truth. Defines services, areas, brand voice. Drives the matrix below.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Non-modal callout shown when the master brief mentions services or service
+ * areas that aren't on the matrix. The bridge for Option C — the brief
+ * doesn't silently mutate the matrix, but the operator can one-click sync.
+ * Dismissable: the caller stashes the signature so the same diff doesn't
+ * re-trigger this session.
+ */
+function BriefAdditionsCallout({
+  services, areas, onAdd, onDismiss,
+}: {
+  services: string[];
+  areas: string[];
+  onAdd: () => void;
+  onDismiss: () => void;
+}) {
+  const total = services.length + areas.length;
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: '11px 14px',
+        background: 'rgba(106,168,255,0.05)',
+        border: '1px solid rgba(106,168,255,0.22)',
+        borderRadius: 10,
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          color: 'var(--accent)',
+          marginBottom: 4,
+          letterSpacing: '0.3px',
+        }}>
+          📋 BRIEF MENTIONS {total} ITEM{total === 1 ? '' : 'S'} NOT ON THE MATRIX
+        </div>
+        {services.length > 0 && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--text2)', marginBottom: areas.length > 0 ? 4 : 0 }}>
+            <strong>Services:</strong> {services.join(', ')}
+          </div>
+        )}
+        {areas.length > 0 && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--text2)' }}>
+            <strong>Service areas:</strong> {areas.join(', ')}
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+        <Button variant="ghost" size="sm" onClick={onDismiss}>Dismiss</Button>
+        <Button variant="primary" size="sm" onClick={onAdd}>+ Add to matrix</Button>
       </div>
     </div>
   );
@@ -463,6 +608,16 @@ function Sidebar({
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function safeJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? (v as string[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 function formatRelative(ts: string | null | undefined): string {
   if (!ts) return 'never';
