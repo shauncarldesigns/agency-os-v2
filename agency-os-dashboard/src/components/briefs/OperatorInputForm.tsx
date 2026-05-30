@@ -208,7 +208,7 @@ export function OperatorInputForm({ open, onClose, project, lead, showToast, onB
         photography_direction: photographyDirection.trim() || null,
         services,
         service_areas: serviceAreas,
-      } as unknown as Partial<Project>);
+      });
 
       // 2) Persist testimonials. Insert new ones; update featured-flag on existing ones.
       for (const t of testimonials) {

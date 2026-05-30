@@ -7,6 +7,18 @@ import type {
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
 const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
 
+/**
+ * Project update payload. The DB stores `services` and `service_areas` as
+ * JSON-encoded strings, but the backend PUT route accepts arrays (and does
+ * the JSON.stringify server-side) — so this type widens those two fields to
+ * `string[]` for callers, while leaving every other field as the project
+ * shape's native type.
+ */
+export type ProjectUpdate = Omit<Partial<Project>, 'services' | 'service_areas'> & {
+  services?: string[];
+  service_areas?: string[];
+};
+
 export class ApiError extends Error {
   constructor(message: string, public status: number, public data?: unknown) {
     super(message);
@@ -102,7 +114,7 @@ export const api = {
       apiFetch<{ project: Project; pages: Page[] }>(`/api/projects/${id}`),
     create: (data: { leadId?: number; tier?: 1 | 2 | 3; business_name?: string; services?: string[]; service_areas?: string[] }) =>
       apiFetch<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Project>) =>
+    update: (id: number, data: ProjectUpdate) =>
       apiFetch<{ project: Project }>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     // Hard-delete a project. Cascades to its pages/briefs/etc; the linked lead
     // is reverted to status='qualified' with project_id cleared.
