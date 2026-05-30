@@ -16,6 +16,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('pipeline');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
   const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, pipeline: 0, sites: 0 });
+  // When the Pipeline qualifies a Tier 3 lead we deep-link the operator into
+  // the new project's Brief Studio on the Sites tab. The id sticks around
+  // until SitesPanel consumes it (then clears it via the callback).
+  const [pendingOpenProjectId, setPendingOpenProjectId] = useState<number | null>(null);
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadStats(); }, []);
@@ -59,12 +63,21 @@ export default function App() {
           <PipelinePanel
             showToast={showToast}
             onLeadCountChanged={loadStats}
+            onQualified={(project, tier) => {
+              // T3 → open Brief Studio directly; T1/T2 land on the grid (no
+              // Studio exists for those tiers).
+              if (tier === 3) setPendingOpenProjectId(project.id);
+              setActiveTab('sites');
+              loadStats();
+            }}
           />
         )}
         {activeTab === 'sites' && (
           <SitesPanel
             showToast={showToast}
             onSwitchTab={setActiveTab}
+            initialProjectId={pendingOpenProjectId}
+            onInitialProjectConsumed={() => setPendingOpenProjectId(null)}
           />
         )}
         {activeTab === 'reports' && <ReportsPanel showToast={showToast} />}

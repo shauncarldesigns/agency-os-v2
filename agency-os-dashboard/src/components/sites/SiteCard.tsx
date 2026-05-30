@@ -7,18 +7,25 @@ interface SiteCardProps {
   project: Project;
   showToast: ShowToast;
   onSwitchTab: (tab: Tab) => void;
+  /** Open the Brief Studio detail (Tier 3 only — Tier 1/2 cards short-circuit
+   *  this to Edit Info instead). */
   onOpenDetail: () => void;
+  /** Open the Edit Project modal (tier change / business info / delete). */
+  onEditInfo: () => void;
 }
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
-export function SiteCard({ project, onSwitchTab, onOpenDetail, showToast: _showToast }: SiteCardProps) {
+export function SiteCard({
+  project, onSwitchTab, onOpenDetail, onEditInfo, showToast: _showToast,
+}: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const isBuilding = project.status === 'building';
   const mrr = TIER_MRR[tier] ?? 0;
   const pagesBuilt = project.pages_built ?? 0;
   const monthlyTarget = project.monthly_pages_target ?? (tier === 3 ? 5 : 0);
+  const hasBriefStudio = tier === 3;
 
   const subtitle = (() => {
     const where = [project.city, project.state].filter(Boolean).join(', ');
@@ -28,13 +35,19 @@ export function SiteCard({ project, onSwitchTab, onOpenDetail, showToast: _showT
     return `${where} · ${project.status === 'building' ? 'Just signed' : project.status}`;
   })();
 
+  // Tier 3 → header opens Brief Studio (existing behaviour).
+  // Tier 1/2 → no Brief Studio exists; header opens Edit Info instead so the
+  // card still has a primary action and the operator can upsell from here.
+  const headerAction = hasBriefStudio ? onOpenDetail : onEditInfo;
+  const headerTitle = hasBriefStudio ? 'Open Brief Studio' : 'Edit project info';
+
   return (
     <div className={`scard2 t${tier}`}>
       <div
         className="scard-header"
-        onClick={onOpenDetail}
+        onClick={headerAction}
         role="button"
-        title="Open Brief Studio"
+        title={headerTitle}
         style={{ cursor: 'pointer' }}
       >
         <div>
@@ -87,14 +100,34 @@ export function SiteCard({ project, onSwitchTab, onOpenDetail, showToast: _showT
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 7, marginTop: 12 }}>
-          <Button variant="primary" size="sm" onClick={onOpenDetail}>
-            📋 Brief Studio
-          </Button>
-          {tier === 3 && (
-            <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
-              📈 Report
-            </Button>
+        <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+          {hasBriefStudio ? (
+            <>
+              <Button variant="primary" size="sm" onClick={onOpenDetail}>
+                📋 Brief Studio
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
+                📈 Report
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onEditInfo}>
+                ✎ Edit
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="primary" size="sm" onClick={onEditInfo}>
+                ✎ Edit Info
+              </Button>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: '0.62rem',
+                color: 'var(--text3)',
+                fontStyle: 'italic',
+              }}>
+                Upgrade to Tier 3 for Brief Studio
+              </span>
+            </>
           )}
         </div>
       </div>

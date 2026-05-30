@@ -5,21 +5,30 @@ import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
 import { SiteCard } from './SiteCard';
 import { SiteDetailPanel } from './SiteDetailPanel';
+import { EditProjectModal } from './EditProjectModal';
 
 interface SitesPanelProps {
   showToast: ShowToast;
   onSwitchTab: (tab: Tab) => void;
+  /** When App.tsx hands us a project id (e.g. from a fresh Pipeline qualify
+   *  on a Tier 3 lead), open its Brief Studio detail on arrival. */
+  initialProjectId?: number | null;
+  /** Tell App.tsx we consumed the initialProjectId so it can clear state. */
+  onInitialProjectConsumed?: () => void;
 }
 
 type Sort = 'tier' | 'due' | 'az';
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
-export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
+export function SitesPanel({
+  showToast, onSwitchTab, initialProjectId, onInitialProjectConsumed,
+}: SitesPanelProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,6 +44,20 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
   }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Deep-link from a Pipeline qualify: open the new project's Brief Studio
+  // once the list finishes loading and we can confirm the project (Tier 3)
+  // actually exists in the result set. T1/T2 deep-links don't apply here —
+  // they land on the grid without auto-opening detail.
+  useEffect(() => {
+    if (initialProjectId == null) return;
+    if (loading) return;
+    const project = projects.find((p) => p.id === initialProjectId);
+    if (project && project.tier === 3) {
+      setDetailProjectId(initialProjectId);
+    }
+    onInitialProjectConsumed?.();
+  }, [initialProjectId, loading, projects, onInitialProjectConsumed]);
 
   const sorted = useMemo(() => {
     const list = [...projects];
@@ -64,13 +87,29 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
     : null;
   if (detailProject) {
     return (
-      <SiteDetailPanel
-        project={detailProject}
-        showToast={showToast}
-        onSwitchTab={onSwitchTab}
-        onBack={() => setDetailProjectId(null)}
-        onProjectChanged={load}
-      />
+      <>
+        <SiteDetailPanel
+          project={detailProject}
+          showToast={showToast}
+          onSwitchTab={onSwitchTab}
+          onBack={() => setDetailProjectId(null)}
+          onProjectChanged={load}
+          onEditProject={() => setEditingProject(detailProject)}
+        />
+        <EditProjectModal
+          open={editingProject !== null}
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          showToast={showToast}
+          onSaved={() => { void load(); }}
+          onDeleted={() => {
+            // Project gone — bounce back to the grid so we don't render a
+            // stale detail view.
+            setDetailProjectId(null);
+            void load();
+          }}
+        />
+      </>
     );
   }
 
@@ -79,7 +118,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
       <div className="sec-header">
         <div>
           <div className="sec-title">Sites</div>
-          <div className="sec-sub">All client sites · Click a card to open its Brief Studio</div>
+          <div className="sec-sub">All client projects · Tier 3 cards open the Brief Studio; Tier 1/2 use Edit Info</div>
         </div>
         <select className="fsel" value={sort} onChange={e => setSort(e.target.value as Sort)}>
           <option value="tier">Sort: Tier (high to low)</option>
@@ -115,7 +154,7 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
         <EmptyState
           icon="🌐"
           title="No client sites yet"
-          sub="Mark a Pipeline lead as 'client' to convert it into a project. The Brief Studio for that project opens here."
+          sub="Qualify a Pipeline lead to convert it into a project here. Tier 3 unlocks the Brief Studio; Tier 1/2 land as light-weight records."
         />
       ) : (
         <div className="sites-grid">
@@ -126,10 +165,20 @@ export function SitesPanel({ showToast, onSwitchTab }: SitesPanelProps) {
               showToast={showToast}
               onSwitchTab={onSwitchTab}
               onOpenDetail={() => setDetailProjectId(p.id)}
+              onEditInfo={() => setEditingProject(p)}
             />
           ))}
         </div>
       )}
+
+      <EditProjectModal
+        open={editingProject !== null}
+        project={editingProject}
+        onClose={() => setEditingProject(null)}
+        showToast={showToast}
+        onSaved={() => { void load(); }}
+        onDeleted={() => { void load(); }}
+      />
     </>
   );
 }

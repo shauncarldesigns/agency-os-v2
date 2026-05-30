@@ -13,6 +13,10 @@ interface SiteDetailPanelProps {
   onSwitchTab: (tab: Tab) => void;
   onBack: () => void;
   onProjectChanged: () => void;
+  /** Open the shared Edit Project modal (tier change / business info / delete).
+   *  Lives at the SitesPanel level so the modal survives the detail view
+   *  unmounting (e.g. when deleting). */
+  onEditProject: () => void;
 }
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
@@ -33,7 +37,7 @@ const KIND_LABEL: Record<BriefKind, string> = {
  * with a placeholder note for now).
  */
 export function SiteDetailPanel({
-  project, showToast, onSwitchTab, onBack, onProjectChanged,
+  project, showToast, onSwitchTab, onBack, onProjectChanged, onEditProject,
 }: SiteDetailPanelProps) {
   const [briefs, setBriefs] = useState<BriefSummary[]>([]);
   const [master, setMaster] = useState<Brief | null>(null);
@@ -129,13 +133,36 @@ export function SiteDetailPanel({
               </div>
 
               <div className="bs-matrix-card">
-                {!master && (
+                {tier !== 3 ? (
+                  <div className="bs-matrix-overlay">
+                    <span className="bs-matrix-lock">🔒</span>
+                    <span>
+                      Page Matrix is a Tier 3 feature. Upgrade this project from{' '}
+                      <button
+                        type="button"
+                        onClick={onEditProject}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent)',
+                          textDecoration: 'underline',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          padding: 0,
+                        }}
+                      >
+                        Edit Project Info
+                      </button>{' '}
+                      to unlock.
+                    </span>
+                  </div>
+                ) : !master ? (
                   <div className="bs-matrix-overlay">
                     <span className="bs-matrix-lock">🔒</span>
                     <span>Generate the master brief to unlock the matrix</span>
                   </div>
-                )}
-                {master ? (
+                ) : null}
+                {tier === 3 && master ? (
                   <BriefStudioMatrix
                     projectId={project.id}
                     reloadToken={master.updated_at ?? master.generated_at ?? ''}
@@ -156,7 +183,7 @@ export function SiteDetailPanel({
             lead={lead}
             hasMaster={!!master}
             onSwitchTab={onSwitchTab}
-            showToast={showToast}
+            onEditProject={onEditProject}
           />
         </aside>
       </div>
@@ -356,13 +383,13 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 // ============================================================================
 
 function Sidebar({
-  project, lead, hasMaster, onSwitchTab, showToast,
+  project, lead, hasMaster, onSwitchTab, onEditProject,
 }: {
   project: Project;
   lead: Lead | null;
   hasMaster: boolean;
   onSwitchTab: (tab: Tab) => void;
-  showToast: ShowToast;
+  onEditProject: () => void;
 }) {
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
@@ -398,7 +425,7 @@ function Sidebar({
           <Button variant="ghost" size="sm" disabled={!hasMaster} onClick={() => onSwitchTab('reports')}>
             📊 View Reports
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => showToast('Project info editor lands in a later pass', 'default')}>
+          <Button variant="ghost" size="sm" onClick={onEditProject}>
             ✎ Edit Project Info
           </Button>
         </div>
