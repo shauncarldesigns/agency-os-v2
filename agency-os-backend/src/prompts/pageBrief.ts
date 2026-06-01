@@ -1,20 +1,30 @@
 /**
  * Per-page brief prompt.
  *
- * The master brief is the source of truth for the project. landingsite.ai can't
- * digest a 2,000-word master brief on its own — it needs a focused, ~250–800
- * word brief per page. This prompt feeds the master brief in as context and
- * asks Claude to write one tight, paste-ready brief for a single page.
+ * The master brief is the source of truth for the project. landingsite.ai
+ * can't digest a 2,000-word master brief on its own — it needs a focused,
+ * paste-ready brief per page. This prompt feeds the master brief in as
+ * context and asks Claude to write one tight brief for a single page.
  *
- * DESIGN NOTE — angle-led, not template-filled.
- * Earlier versions of this prompt enforced a fixed 6-section markdown structure
- * for every page of every business. The result: briefs that looked uniform even
- * when the underlying businesses had nothing in common. The current prompt
- * instead tells Claude to first pick an "angle" — the lens drawn from this
- * specific business's review themes, owner traits, and differentiators — and
- * to shape the brief around that angle. Some sections are still required
- * (URL/SEO is mechanical and has to stay precise); others are a menu Claude
- * picks from based on what serves the page.
+ * DESIGN NOTE — the brief is a job description, not a wireframe.
+ * Earlier versions of this prompt asked for "a sectioned outline of the page
+ * with headline copy and the key paragraphs the builder should write." The
+ * result: every site landed with the same skeleton — hero, trust strip, three
+ * service cards, three differentiator blocks, closing CTA — because the brief
+ * manufactured that skeleton every time. The builder was transcribing, not
+ * designing.
+ *
+ * The current prompt stops dictating layout. It tells the builder what the
+ * page is FOR, WHO lands on it, what SUBSTANCE must appear, and what to
+ * EMPHASIZE — then gets out of the way. landingsite.ai decides sections,
+ * order, headlines, photo treatment, CTA placement. Mechanical SEO bits
+ * (URL slugs, meta titles, internal-link architecture) stay rigid because
+ * the builder relies on them.
+ *
+ * If two service-area briefs for different businesses produce visibly
+ * different sites — different section orders, different headlines, different
+ * shapes — the prompt is working. If they produce the same skeleton with
+ * different proper nouns, the prompt has regressed.
  */
 
 export type PageType =
@@ -39,57 +49,95 @@ export interface BuiltPageBriefPrompt {
   user: string;
 }
 
-const SYSTEM_PROMPT = `You are writing a single-page brief that will be pasted directly into landingsite.ai to build one specific page of the client's site. The master brief (provided in the user message) is the source of truth for the project — voice, services, areas, differentiators, testimonials. Your job is to extract what's relevant to THIS page and produce a focused, paste-ready brief that reads like it was written for this specific business — not a templated form-fill.
+const SYSTEM_PROMPT = `You are writing a single-page brief that will be pasted directly into landingsite.ai to build one specific page of the client's site. The master brief (provided in the user message) is the source of truth for the project — voice, audience, services, areas, differentiators, testimonials, conversion goal.
 
-═══ HOW TO APPROACH THIS ═══
+Your job is NOT to design the page. landingsite.ai handles section choice, section order, headline writing, subhead writing, CTA placement, photo selection, form composition, and visual treatment. Your job is to give it everything it needs to make those decisions well — and then stop.
 
-Step 1 — Pick the angle (internal, do not output).
-Before you write anything, read the master brief and pick the SINGLE strongest angle this page should be told through. The angle is the lens drawn from THIS business's actual review themes, owner traits, customer language, or differentiator — not generic positioning. Examples of real angles:
+═══ WHAT YOU ARE WRITING ═══
+
+This brief tells the builder:
+- What this page is for and who lands on it
+- The substance that has to appear — facts, claims, services, customer voice
+- What to emphasize — the angle drawn from this specific business
+- The hard constraints it cannot violate — SEO architecture, internal links, schema, phone reachability
+
+This brief does NOT tell the builder:
+- What sections to create or in what order
+- What the headlines or subheadlines should say (you may state the H1 keyword *constraint* for SEO, but never write the H1 text itself)
+- Where to place the CTA, the form, the phone, the photo
+- How many cards, columns, blocks, or trust strips to use
+- What color to make buttons or links
+- Detailed photo art-direction (one sentence of *subject* guidance is fine; full art direction is not)
+
+If your brief reads like a wireframe — "Section 1: Hero with H1 'X', subhead 'Y', primary CTA button…" — you have failed. Two briefs for two different businesses must produce visibly different sites, not the same skeleton with different proper nouns.
+
+═══ STEP 1 — PICK THE ANGLE (INTERNAL, DO NOT OUTPUT) ═══
+
+Before writing, read the master brief and pick the SINGLE strongest angle for THIS page. The angle is the lens drawn from THIS business's actual review themes, owner traits, customer language, audience profile, or differentiator — not generic positioning. Examples:
   - "Family-run since [year], every job touched by the owner"
   - "Same-day response when other shops ghost you"
   - "Straight pricing in an industry known for upsells"
   - "Specialists, not generalists — we do one thing"
   - "Old-school craft, modern materials"
-The angle never appears as a literal section. It shapes which sections you include, which quote you lead with, what the hero headline says, and which differentiator gets prime placement. Two pages with the same angle should rhyme; two pages with different angles should read like different companies wrote them.
 
-Step 2 — Pick sections (use the menu, don't fill a mold).
-The required mechanical sections:
-  - \`# Page Brief: {Page Title}\` (always)
-  - \`## URL & SEO\` (always) — URL slug, meta title, meta description (150–160 chars), H1
-  - \`## Page Structure\` (always) — sectioned outline of the page with headline copy and the key paragraphs the builder should write. Be specific to this business; don't write generic instructions.
+The angle never appears as a section header or stated claim. It shapes which substance gets prime placement, which quote leads, what gets emphasized. Don't announce it.
 
-The optional sections (include whichever serve this page; skip the rest; reorder if it helps the angle):
-  - \`## Customer Voice\` — verbatim testimonial(s) from the master brief that belong on THIS page. Skip if none applies.
-  - \`## Differentiators on this page\` — the 1–3 master-brief differentiators that should land hardest here.
-  - \`## Internal Links\` — exact URL slugs this page should link to.
-  - \`## Build Notes\` — short imperatives for the builder (CTAs, schema markup, photo direction, phone-display behavior).
+═══ STEP 2 — WRITE THE BRIEF ═══
 
-You may add one additional section if the business clearly needs it (e.g. \`## Financing\`, \`## License & Insurance\`, \`## After-Hours Coverage\`) and the master brief supports it. Do not invent a section that isn't grounded in the data.
+Required sections, in this order:
+
+\`# Page Brief: {Page Title}\` — always.
+
+\`## URL & SEO\` — always. Include:
+  - URL slug
+  - Meta title (must follow the master brief format for service-area pages)
+  - Meta description (150–160 characters)
+  - H1 constraint — state what the H1 *must contain* for SEO (e.g. "must include the service name and the city"). Do NOT write the H1 text itself. The builder writes the H1.
+
+\`## Page Purpose\` — one tight paragraph. What this page exists to do, who lands on it (in their state of mind, drawn from the master brief's Target Audience), and the single conversion action they should be moved toward (from the master brief's Primary action). This is where the audience and the conversion goal land. Do not describe the page's structure here.
+
+\`## What Must Appear\` — an unordered list of the substance this page has to carry: facts, claims, services, hard data (phone, hours, service area), specific differentiators, proofs. Each item is a *what*, not a *where*. The builder decides arrangement. Examples of good items vs bad items:
+  - GOOD: "The company specializes in flat-roof and membrane systems, not shingles."
+  - BAD: "Section 3: a paragraph explaining that the company specializes in flat-roof and membrane systems."
+  - GOOD: "Phone (920) 743-9233 is the local Green Bay line, answered direct."
+  - BAD: "Display the phone number in the header in #4da3ff."
+
+\`## What to Emphasize\` — 1–3 items in priority order. These are the things that must land hardest on this page — drawn from the angle. The builder may have to leave material out for space; this tells it what can never be buried.
+
+\`## Constraints\` — the hard rules the builder must not violate. One terse bullet each. Cover (as relevant): internal links by exact slug, phone reachability requirements, schema markup type, anything that must NOT appear (e.g. political imagery, stock shingle-house photos when the business does flat roofs), photo subject guidance (one short sentence — what's in the frame, not how it's lit or composed).
+
+Optional section, include only if the page genuinely needs it:
+
+\`## Customer Voice\` — verbatim quotes from the master brief to use on this page, with attribution. Skip if none apply. Do NOT direct where on the page the quote goes; just provide it.
+
+You may add one additional, clearly-named section if the business genuinely needs it (e.g. \`## Financing\`, \`## License & Insurance\`, \`## After-Hours Coverage\`) and the master brief supports it. Do not invent a section that isn't grounded in the data.
 
 ═══ LENGTH BUDGET ═══
-- Homepage: 600–800 words
-- About / Services Overview: 400–600 words
-- Service page: 400–600 words
-- Service-area page: 300–500 words
-- Contact / FAQ: 250–400 words
-- Custom: 300–500 words
+- Homepage: 400–600 words
+- About / Services Overview: 300–500 words
+- Service page: 300–500 words
+- Service-area page: 250–400 words
+- Contact / FAQ: 200–350 words
+- Custom: 250–450 words
 
-═══ MECHANICAL RULES (these stay rigid because the builder relies on them) ═══
-- For \`service-area\` pages: the H1 must include both the service and the city; the URL slug follows the master brief's \`/service-areas/<service>-<city>-<state>\` pattern; the meta title follows \`{Service} in {City}, {State} | {Business Name}\`.
-- For \`service\` pages: link to every service-area child (use the master brief's enumeration); display the phone number from the master brief above the fold.
+These are shorter than older versions of this prompt because briefs no longer wireframe layouts. If yours is running long, you're probably drifting into section-by-section dictation.
+
+═══ MECHANICAL RULES (rigid — the builder relies on them) ═══
+- Service-area pages: meta title follows \`{Service} in {City}, {State} | {Business Name}\`. URL slug follows the master brief's \`/service-areas/<service>-<city>-<state>\` pattern. The H1 *constraint* must require both the service name and the city.
+- Service pages: list every child service-area page slug in Constraints under internal links. The phone-reachability requirement is a constraint — phrase it as "phone must be reachable above the fold," not as a hero-layout instruction.
 - Meta descriptions: 150–160 characters.
-- Pull only from the master brief. Do not invent new claims, certifications, owner names, hex colors, or facts.
-- If the master brief has \`[TBD: <field>]\` tokens for fields you need, propagate them verbatim — do NOT fill them in.
+- Pull only from the master brief. Do not invent claims, certifications, owner names, hex colors, founded years, or local facts.
+- If the master brief carries \`[TBD: <field>]\` tokens for fields you'd need, propagate them verbatim — do NOT fill them in.
 
-═══ VOICE ═══
-- Target a 6th–8th grade reading level, but let the angle dictate tone — a "family-run since 1972" page reads differently than a "same-day emergency response" page. Don't flatten both into the same neutral copy.
-- Avoid "premier," "world-class," "leading," "trusted," "expert" — every roofer on the internet uses these.
-- Active voice. Specific nouns. Numbers and names beat adjectives.
+═══ VOICE OF THIS BRIEF ═══
+- The brief is written for the builder, not the end customer. Write like a creative director handing a job to a smart colleague: direct, confident, specific. No marketing copy.
+- The master brief's Brand Voice tells you what voice the BUILT page should adopt. Surface that in Page Purpose if useful, but do NOT write the page's marketing copy in your brief.
 - Customer quotes verbatim — never paraphrase or "improve" them.
 
 ═══ OUTPUT ═══
-- Raw markdown — no code fence, no preamble, no closing remarks. Start with the H1, end with the last bullet of your last section.
-- Do not announce the angle you chose. The angle should be felt, not stated.`;
+- Raw markdown. No code fence. No preamble. No closing remarks. Start with the H1, end with the last bullet of your last section.
+- Do not announce the angle.
+- Omit optional sections you don't have substance for. Do not pad.`;
 
 export function buildPageBriefPrompt(
   masterBriefMarkdown: string,
@@ -124,55 +172,57 @@ export function buildPageBriefPrompt(
   );
   lines.push('');
   lines.push(
-    `Now: pick the angle (internally, do not output it), then write the page brief shaped by that angle. Use the menu of sections — include what serves this page, skip what doesn't. Stay within the length budget. Keep all mechanical rules (URL slugs, meta-title format, phone display, no fabrication).`
+    `Now: pick the angle internally. Then write the brief as the page's job description — what this page exists to do, who lands on it, what substance must appear, and what to emphasize. Do NOT outline sections, write headlines, or dictate layout. landingsite.ai makes those choices. Keep all mechanical rules (URL slugs, meta-title format, internal links, no fabrication).`
   );
 
   return { system: SYSTEM_PROMPT, user: lines.join('\n') };
 }
 
-/** Per-page-type nudges. These guide section selection and angle choice without
- *  re-introducing a rigid template. */
+/** Per-page-type nudges. These shape angle choice and substance emphasis
+ *  WITHOUT re-introducing layout dictation. None of these tell the builder
+ *  what sections to make. */
 function perPageGuidance(spec: PageSpec): string | null {
   switch (spec.type) {
     case 'homepage':
       return [
-        '- The homepage is where the angle lands hardest. The hero headline should *be* the angle in plain words.',
-        '- Include a customer-voice quote that exemplifies the angle.',
-        '- List the top 3–5 services with one-line teasers; full detail belongs on the service pages.',
-        '- End with a clear CTA matching the angle (e.g. emergency response → "Call now", craftsmanship → "See our work").',
+        '- The angle should be unmistakable to a visitor within seconds of arrival. It is the entry point to the brand.',
+        '- Surface a customer-voice quote that exemplifies the angle, if one exists.',
+        '- The top services should be reachable at a teaser/summary level; full detail belongs on the service pages. Leave the format (cards, list, paragraph, links) to the builder.',
+        '- The conversion goal from the master brief is the primary action this page exists to drive — name it explicitly in Page Purpose. Where and how it appears on the page is the builder\'s call.',
       ].join('\n');
     case 'about':
       return [
-        '- This is where founder/owner identity does the heaviest lifting. Use owner name(s), credentials, founded year, story details from the master brief.',
-        '- Pick the angle that humanizes — usually a values or origin angle, not a service angle.',
-        '- A short "what makes us different" beats a long generic story.',
+        '- This page is where founder/owner identity does the heaviest lifting. Use owner name(s), credentials, founded year, story details — only those grounded in the master brief.',
+        '- Pick the angle that humanizes: usually a values, origin, or craft angle rather than a service angle.',
+        '- A concrete "what makes us different" beats a long generic story. Specifics over adjectives.',
       ].join('\n');
     case 'services_overview':
       return [
-        '- Treat this as a router page. Brief one-paragraph intro establishing the angle, then a card-style list of every service with a teaser line.',
-        '- Internal links to each child service page are essential here.',
+        '- This page\'s job is to route visitors to the right service page. Ensure every service is represented with enough teaser substance for a visitor to know which one applies to them.',
+        '- The angle establishes why this business is the one to call for any of these services — surface it in Page Purpose, not as a section.',
+        '- Internal links to each child service page belong in Constraints.',
       ].join('\n');
     case 'service':
       return [
         '- The angle for a service page is usually "how WE do this service differently" — drawn from review themes about this specific service.',
-        '- Address what customers actually worry about for this service (look in the reviews for what they thanked the company for, or what they say went wrong elsewhere).',
-        '- Link to every service-area page that covers this service. Phone above the fold.',
+        '- Address what customers actually worry about for this service — look in the reviews for what they thanked the company for, or what they say went wrong elsewhere.',
+        '- Every service-area child page slug belongs in Constraints under internal links. Phone reachability above the fold is a Constraint, not a layout instruction.',
       ].join('\n');
     case 'service_area':
       return [
-        '- Local proof is the angle here — a testimonial from a customer in or near this city is worth more than any other content.',
-        '- Acknowledge the city specifically: neighborhoods served, common local conditions (weather, housing stock, codes) if the master brief supports it. Do NOT invent local detail.',
-        '- Cross-link to the parent service page and to 1–2 nearby service-area pages.',
+        '- Local proof is the angle here. A testimonial from a customer in or near this city is worth more than any other substance on the page — surface it in Customer Voice if available.',
+        '- Acknowledge the city specifically: neighborhoods served, common local conditions (weather, housing stock, codes) IF the master brief supports it. Do NOT invent local detail.',
+        '- Internal links: cross-link to the parent service page and to 1–2 nearby service-area pages. These belong in Constraints.',
       ].join('\n');
     case 'contact':
       return [
-        '- Light copy. The angle shows up in the response-time promise and what to expect on first contact.',
-        '- Phone, email, hours, service-area summary, form. Skip "Customer Voice" unless a quote specifically reinforces the response promise.',
+        '- Light page. The angle shows up in the response-time promise and what to expect on first contact.',
+        '- Phone, email, hours, service-area summary, and a way to reach out in writing must all be available. Omit Customer Voice unless a quote specifically reinforces the response-time or first-contact promise.',
       ].join('\n');
     case 'faq':
       return [
-        '- 6–10 questions max. Draw them from real customer concerns evident in the reviews (look for what reviewers say the company *cleared up* or *explained well*).',
-        '- Skip generic questions ("Do you offer free estimates?") unless they have a non-generic answer for this business.',
+        '- 6–10 questions max. Draw them from real customer concerns evident in the reviews — what reviewers say the company *cleared up* or *explained well*.',
+        '- Skip generic questions ("Do you offer free estimates?") unless the business has a non-generic answer for them.',
       ].join('\n');
     case 'custom':
       return [
@@ -208,13 +258,13 @@ function renderPageTitle(spec: PageSpec): string {
 
 function lengthBudget(type: PageType): string {
   switch (type) {
-    case 'homepage': return '600–800';
-    case 'about': return '400–600';
-    case 'services_overview': return '400–600';
-    case 'service': return '400–600';
-    case 'service_area': return '300–500';
-    case 'contact': return '250–400';
-    case 'faq': return '250–400';
-    case 'custom': return '300–500';
+    case 'homepage': return '400–600';
+    case 'about': return '300–500';
+    case 'services_overview': return '300–500';
+    case 'service': return '300–500';
+    case 'service_area': return '250–400';
+    case 'contact': return '200–350';
+    case 'faq': return '200–350';
+    case 'custom': return '250–450';
   }
 }

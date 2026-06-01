@@ -15,7 +15,6 @@ export interface MinedReviewData {
   owner_names: string[];
   strengths: string[];
   pitch_quotes: PitchQuote[];
-  differentiators: string[];
 }
 
 const EMPTY: MinedReviewData = {
@@ -24,7 +23,6 @@ const EMPTY: MinedReviewData = {
   owner_names: [],
   strengths: [],
   pitch_quotes: [],
-  differentiators: [],
 };
 
 export async function mineReviews(
@@ -47,6 +45,5 @@ export async function mineReviews(
     owner_names: result.owner_names ?? [],
     strengths: result.strengths ?? [],
     pitch_quotes: (result.pitch_quotes ?? []).slice(0, 5),
-    differentiators: result.differentiators ?? [],
   };
 }
