@@ -232,9 +232,15 @@ briefsRouter.post('/projects/:projectId/pages', async (c) => {
         ? `/service-areas/${slugify(body.service)}-${slugify(body.city)}-${state}`
         : body.type === 'service' && body.service
           ? `/services/${slugify(body.service)}`
-          : body.type === 'custom' && body.customTitle
-            ? `/${slugify(body.customTitle)}`
-            : `/${slugify(body.type)}`;
+          : body.type === 'services_overview'
+            ? `/services`
+            : body.type === 'service_areas_overview'
+              ? `/service-areas`
+              : body.type === 'homepage'
+                ? `/`
+                : body.type === 'custom' && body.customTitle
+                  ? `/${slugify(body.customTitle)}`
+                  : `/${slugify(body.type)}`;
 
     // De-dupe on (project_id, type, service, city)
     const existing = await c.env.DB
@@ -569,6 +575,7 @@ function pageSpecFromRow(page: {
     case 'homepage':
     case 'about':
     case 'services_overview':
+    case 'service_areas_overview':
     case 'contact':
     case 'faq':
       return { type: t as PageType };

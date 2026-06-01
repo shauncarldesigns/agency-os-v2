@@ -463,7 +463,7 @@ function MatrixSkeleton() {
       <div className="bs-matrix-section">
         <div className="bs-matrix-section-label">Foundation Pages</div>
         <div className="bs-matrix-row-flat">
-          {['Homepage', 'About', 'Services Overview', 'Contact', 'FAQ', '+ Add'].map((l) => (
+          {['Homepage', 'About', 'Services', 'Service Areas', 'Contact', 'FAQ', '+ Add'].map((l) => (
             <CellSkeleton key={l} label={l} />
           ))}
         </div>

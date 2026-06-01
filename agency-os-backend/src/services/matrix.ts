@@ -15,10 +15,15 @@
 
 import type { Project, Page } from '../types';
 
+// The full set of foundation page types. The Service Areas hub is in here
+// but only emitted by buildMatrixForProject() when the project has 2+
+// service areas — a single-city site has no service-area sub-tree to hub
+// into, so the page would be a thin/useless index.
 const FOUNDATION_TYPES = [
   { type: 'homepage', label: 'Homepage' },
   { type: 'about', label: 'About' },
-  { type: 'services_overview', label: 'Services Overview' },
+  { type: 'services_overview', label: 'Services' },
+  { type: 'service_areas_overview', label: 'Service Areas' },
   { type: 'contact', label: 'Contact' },
   { type: 'faq', label: 'FAQ' },
 ] as const;
@@ -93,16 +98,22 @@ export async function buildMatrixForProject(
     }
   }
 
-  const foundationPages: FoundationMatrixRow[] = FOUNDATION_TYPES.map((f) => {
-    const row = foundationByType.get(f.type);
-    return {
-      type: f.type,
-      label: f.label,
-      pageId: row?.id ?? null,
-      status: row?.status ?? '',
-      billingStatus: row?.billing_status ?? '',
-    };
-  });
+  // Service Areas hub only earns a row with 2+ service areas — same rule
+  // as the service-area grid. Single-city projects don't need a hub page
+  // that has nothing to hub into.
+  const tooFewCitiesForHub = cities.length < 2;
+  const foundationPages: FoundationMatrixRow[] = FOUNDATION_TYPES
+    .filter((f) => !(f.type === 'service_areas_overview' && tooFewCitiesForHub))
+    .map((f) => {
+      const row = foundationByType.get(f.type);
+      return {
+        type: f.type,
+        label: f.label,
+        pageId: row?.id ?? null,
+        status: row?.status ?? '',
+        billingStatus: row?.billing_status ?? '',
+      };
+    });
 
   // Also include any 'custom' page rows already created
   for (const p of pages) {
