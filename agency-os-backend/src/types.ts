@@ -40,6 +40,7 @@ export interface Lead {
   extracted_services: string | null;
   extracted_service_areas: string | null;
   extracted_strengths: string | null;
+  extracted_local_landmarks: string | null;
   pitch_quotes: string | null;
   owner_names: string | null;
   opportunity_score: number | null;

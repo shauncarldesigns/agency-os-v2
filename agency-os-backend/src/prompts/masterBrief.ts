@@ -99,8 +99,8 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 2. ...
 
 ## Service Areas ({region})
-- {City 1} (HQ)
-- {City 2}
+- {City 1} (HQ){ — landmarks/neighborhoods from this city's reviews if any: "East Side", "Allouez", "near Lambeau"}
+- {City 2}{ — landmarks/neighborhoods if any}
 - ...
 
 ## Key Differentiators
@@ -162,6 +162,7 @@ QUALITY BAR:
 - Primary action the site should drive: state exactly ONE conversion goal (call, form submission, or quote request). This is the most important line in the Target Audience section — every page downstream should point at this action. If it genuinely can't be inferred from the data, emit \`[TBD: primary conversion goal]\`.
 - Services Offered must list EXACTLY the operator-curated \`Services to render\` from the user message, in the order given. Do not add services Claude infers from reviews; do not drop services because they weren't mentioned in reviews. Use the mined review data to write the one-sentence description for each, not to decide the list.
 - Service Areas must list EXACTLY the operator-curated \`Service areas to render\` from the user message, in the order given. The first entry gets the "(HQ)" tag. Do not drop areas that weren't review-mined; do not add areas the operator didn't list. The brief drives downstream service-area page generation, so omissions here become missing pages.
+- For each city in the Service Areas section, if the mined \`Local landmarks / neighborhoods\` field contains references that obviously belong to that city (e.g. "East Side of Green Bay" → Green Bay, "downtown De Pere" → De Pere), append them as a parenthetical or em-dash continuation on the city's bullet, in the customers' own phrasing. Skip cities with no matching landmarks rather than fabricating one. These references seed the per-city service-area page briefs with genuine local color.
 - Services Offered descriptions (the one-sentence each) should be grounded in what reviews mention the business actually does.
 - Key Differentiators should be 3-6 items, each a concrete claim (a certification, a years-in-trade number, a specific guarantee, a named owner trait) — not vague positioning.
 - Site Structure should enumerate every page. For full_site, that means listing every service-area page combination (operator-curated services × operator-curated service areas) explicitly (e.g., "Roof Replacement in Madison", "Roof Replacement in Sun Prairie", etc.) so the builder doesn't have to guess.
@@ -204,6 +205,10 @@ function buildUserPrompt(input: MasterBriefInput): string {
   lines.push(`- Service areas (from reviews): ${listOrEmpty(input.mined.service_areas)}`);
   lines.push(`- Owner names mentioned in reviews: ${listOrEmpty(input.mined.owner_names)}`);
   lines.push(`- Strengths (themes): ${listOrEmpty(input.mined.strengths)}`);
+  // Sub-city geographic references — neighborhoods, named districts, landmarks,
+  // roads, regions. Used by per-city service-area page briefs to seed local
+  // color. Surface in the master brief's Service Areas section when relevant.
+  lines.push(`- Local landmarks / neighborhoods (sub-city geographic refs): ${listOrEmpty(input.mined.local_landmarks)}`);
   if (input.mined.pitch_quotes.length) {
     lines.push('- Mined pitch quotes:');
     for (const pq of input.mined.pitch_quotes) {

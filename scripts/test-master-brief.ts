@@ -79,6 +79,7 @@ const TEST_INPUT: MasterBriefInput = {
       'General plumbing repairs',
     ],
     service_areas: ['Green Bay', 'GB area'],
+    local_landmarks: ['East Side of Green Bay', 'near Lambeau', 'Allouez'],
     owner_names: ['Kory', 'Brad', 'Corey', 'Dustin'],
     strengths: [
       'Quick scheduling and responsiveness',
