@@ -505,6 +505,11 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
       tagline: project.tagline ?? null,
       primary_color: project.primary_color ?? null,
       accent_color: project.accent_color ?? null,
+      // Authoritative axes — the prompt enforces these as the source of
+      // truth for Services Offered, Service Areas, and Site Structure.
+      // The review-mined arrays go in the `mined` section as signal only.
+      services: safeArr<string>(project.services),
+      service_areas: safeArr<string>(project.service_areas),
       monthly_pages_target: project.monthly_pages_target ?? 0,
       tier: project.tier != null ? `tier_${project.tier}` : null,
     },

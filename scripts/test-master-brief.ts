@@ -57,7 +57,14 @@ const TEST_INPUT: MasterBriefInput = {
     tagline: null,                     // → [TBD: tagline]
     primary_color: null,               // → [TBD: primary color]
     accent_color: null,                // → [TBD: accent color]
-    photography_direction: null,       // → [TBD: photography direction]
+    services: [                         // operator-curated, authoritative
+      'Water Heater Replacement',
+      'Tankless Water Heater Installation',
+      'Kitchen & Bath Remodel Plumbing',
+      'Bathroom Renovation Plumbing',
+      'Emergency Plumbing Repairs',
+    ],
+    service_areas: ['Green Bay', 'De Pere', 'Howard'],
     monthly_pages_target: 0,
     tier: 'tier_2',
   },

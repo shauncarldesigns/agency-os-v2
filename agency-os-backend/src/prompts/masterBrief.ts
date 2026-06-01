@@ -37,6 +37,15 @@ export interface MasterBriefProject {
   tagline: string | null;
   primary_color: string | null;
   accent_color: string | null;
+  /** Operator-curated, authoritative list of services to render in the brief
+   *  and downstream matrix. Edited through the project editor modal; may
+   *  diverge from the review-mined `services_performed` (which is just a
+   *  signal about what the business actually does). */
+  services: string[];
+  /** Operator-curated, authoritative list of cities the site should target.
+   *  First entry is treated as HQ. May include cities the reviews never
+   *  mentioned. */
+  service_areas: string[];
   monthly_pages_target?: number | null;
   tier?: string | null;
 }
@@ -151,9 +160,11 @@ HARD RULES:
 QUALITY BAR:
 - Target Audience must be synthesized from the reviews, services performed, and strengths — the actual people hiring this business, not a generic "homeowners and businesses." Name 1-2 real segments, the problem that brings them, and what they worry about, using the language customers use in the reviews. If a brand attribute explicitly names the audience (operator-supplied), prefer it over inference. Do not invent demographics the data doesn't support.
 - Primary action the site should drive: state exactly ONE conversion goal (call, form submission, or quote request). This is the most important line in the Target Audience section — every page downstream should point at this action. If it genuinely can't be inferred from the data, emit \`[TBD: primary conversion goal]\`.
-- Services Offered descriptions should be one tight sentence each, grounded in what reviews mention the business actually does.
+- Services Offered must list EXACTLY the operator-curated \`Services to render\` from the user message, in the order given. Do not add services Claude infers from reviews; do not drop services because they weren't mentioned in reviews. Use the mined review data to write the one-sentence description for each, not to decide the list.
+- Service Areas must list EXACTLY the operator-curated \`Service areas to render\` from the user message, in the order given. The first entry gets the "(HQ)" tag. Do not drop areas that weren't review-mined; do not add areas the operator didn't list. The brief drives downstream service-area page generation, so omissions here become missing pages.
+- Services Offered descriptions (the one-sentence each) should be grounded in what reviews mention the business actually does.
 - Key Differentiators should be 3-6 items, each a concrete claim (a certification, a years-in-trade number, a specific guarantee, a named owner trait) — not vague positioning.
-- Site Structure should enumerate every page. For full_site, that means listing every service-area page combination explicitly (e.g., "Roof Replacement in Madison", "Roof Replacement in Sun Prairie", etc.) so the builder doesn't have to guess.
+- Site Structure should enumerate every page. For full_site, that means listing every service-area page combination (operator-curated services × operator-curated service areas) explicitly (e.g., "Roof Replacement in Madison", "Roof Replacement in Sun Prairie", etc.) so the builder doesn't have to guess.
 - Build Instructions are direct imperatives to the site builder: "Use the customer quote from {Author} on the homepage hero." "Link every service-area page back to the parent service page."`;
 }
 
@@ -179,7 +190,16 @@ function buildUserPrompt(input: MasterBriefInput): string {
   if (p.monthly_pages_target) lines.push(`- Monthly pages target: ${p.monthly_pages_target}`);
   lines.push('');
 
-  lines.push('## Mined review data');
+  // Authoritative axes — operator-curated. The "Services Offered", "Service
+  // Areas", and "Site Structure" sections of the brief MUST match these
+  // exactly. Review-mined arrays below are just signal/context (used for
+  // writing the descriptions), never as the source-of-truth list.
+  lines.push('## Project services & service areas (operator-curated — AUTHORITATIVE)');
+  lines.push(`- Services to render (in this exact order): ${listOrEmpty(p.services)}`);
+  lines.push(`- Service areas to render (first entry is HQ, in this exact order): ${listOrEmpty(p.service_areas)}`);
+  lines.push('');
+
+  lines.push('## Mined review data (signal only — NOT the source-of-truth list)');
   lines.push(`- Services performed (from reviews): ${listOrEmpty(input.mined.services_performed)}`);
   lines.push(`- Service areas (from reviews): ${listOrEmpty(input.mined.service_areas)}`);
   lines.push(`- Owner names mentioned in reviews: ${listOrEmpty(input.mined.owner_names)}`);
