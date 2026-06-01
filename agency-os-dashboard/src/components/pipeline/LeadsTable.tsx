@@ -9,13 +9,19 @@ import { formatPhone, scoreColor, statusBadge, outcomeBadge, tierColor } from '.
 
 interface LeadsTableProps {
   leads: Lead[];
+  selectedIds: Set<number>;
+  onToggleSelected: (id: number) => void;
+  onToggleAllVisible: (on: boolean) => void;
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
   onQualify: (lead: Lead) => void;
 }
 
-export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onQualify }: LeadsTableProps) {
+export function LeadsTable({
+  leads, selectedIds, onToggleSelected, onToggleAllVisible,
+  showToast, onLeadUpdated, onOpenLead, onQualify,
+}: LeadsTableProps) {
   if (leads.length === 0) {
     return (
       <div className="twrap" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
@@ -24,11 +30,28 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onQual
     );
   }
 
+  // Header checkbox tri-state: all visible selected → checked,
+  // some → indeterminate, none → unchecked.
+  const visibleIds = leads.map((l) => l.id);
+  const visibleSelectedCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+  const allVisibleChecked = visibleSelectedCount === visibleIds.length;
+  const someVisibleChecked = visibleSelectedCount > 0 && !allVisibleChecked;
+
   return (
     <div className="twrap">
       <table>
         <thead>
           <tr>
+            <th style={{ width: 32 }}>
+              <input
+                type="checkbox"
+                checked={allVisibleChecked}
+                ref={(el) => { if (el) el.indeterminate = someVisibleChecked; }}
+                onChange={(e) => onToggleAllVisible(e.target.checked)}
+                title={allVisibleChecked ? 'Deselect all visible' : 'Select all visible'}
+                aria-label="Select all visible leads"
+              />
+            </th>
             <th>Company</th>
             <th>Status</th>
             <th>Tier</th>
@@ -46,6 +69,8 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onQual
             <LeadRow
               key={l.id}
               lead={l}
+              selected={selectedIds.has(l.id)}
+              onToggleSelected={onToggleSelected}
               showToast={showToast}
               onLeadUpdated={onLeadUpdated}
               onOpenLead={onOpenLead}
@@ -60,13 +85,17 @@ export function LeadsTable({ leads, showToast, onLeadUpdated, onOpenLead, onQual
 
 interface LeadRowProps {
   lead: Lead;
+  selected: boolean;
+  onToggleSelected: (id: number) => void;
   showToast: ShowToast;
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
   onQualify: (lead: Lead) => void;
 }
 
-function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onQualify }: LeadRowProps) {
+function LeadRow({
+  lead, selected, onToggleSelected, showToast, onLeadUpdated, onOpenLead, onQualify,
+}: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
   const stage = statusBadge(lead.status);
   const outcome = outcomeBadge(lead.outcome);
@@ -120,6 +149,16 @@ function LeadRow({ lead, showToast, onLeadUpdated, onOpenLead, onQualify }: Lead
 
   return (
     <tr style={rowStyle} onClick={() => onOpenLead(lead.id)}>
+      <td onClick={stop} style={{ width: 32, textAlign: 'center' }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelected(lead.id)}
+          onClick={stop}
+          aria-label={`Select ${lead.company}`}
+          title={selected ? `Deselect ${lead.company}` : `Select ${lead.company} for bulk re-enrich`}
+        />
+      </td>
       <td className="td-co" style={lead.status === 'dead' ? { textDecoration: 'line-through', color: 'var(--text3)' } : undefined}>
         {lead.company}
       </td>

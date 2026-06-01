@@ -9,18 +9,45 @@ import { calculateOpportunityScore, recentReviewActivity } from '../services/sco
 
 export const enrichRouter = new Hono<{ Bindings: Env }>();
 
-// Bulk enrich — runs all 'pending' leads sequentially (one at a time so we don't blow API quotas)
+// Bulk enrich — runs leads sequentially (one at a time so we don't blow API quotas).
+// Two modes:
+//   • Body { ids: [...] }     → re-enrich those specific leads, regardless of
+//                                current enrichment_status. Used by the
+//                                pipeline bulk-select re-enrich flow.
+//   • Body omitted / no ids   → enrich every 'pending' lead (legacy behavior).
+// Always skips dead + soft-deleted leads as a safety guard.
 enrichRouter.post('/enrich-all', async (c) => {
   try {
-    const body = await c.req.json().catch(() => ({})) as { limit?: number };
+    const body = await c.req.json().catch(() => ({})) as { limit?: number; ids?: number[] };
     const limit = Math.min(body.limit ?? 25, 100);
 
-    const pending = await c.env.DB
-      .prepare("SELECT id FROM leads WHERE enrichment_status = 'pending' AND status != 'dead' LIMIT ?")
-      .bind(limit)
-      .all();
-
-    const ids = (pending.results as Array<{ id: number }>).map(r => r.id);
+    let ids: number[];
+    if (Array.isArray(body.ids) && body.ids.length > 0) {
+      const numericIds = body.ids
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (numericIds.length === 0) {
+        return c.json(badRequest('ids must contain at least one valid lead id'), 400);
+      }
+      const capped = numericIds.slice(0, limit);
+      const placeholders = capped.map(() => '?').join(',');
+      const valid = await c.env.DB
+        .prepare(
+          `SELECT id FROM leads
+           WHERE id IN (${placeholders})
+             AND status != 'dead'
+             AND deleted_at IS NULL`
+        )
+        .bind(...capped)
+        .all();
+      ids = (valid.results as Array<{ id: number }>).map(r => r.id);
+    } else {
+      const pending = await c.env.DB
+        .prepare("SELECT id FROM leads WHERE enrichment_status = 'pending' AND status != 'dead' AND deleted_at IS NULL LIMIT ?")
+        .bind(limit)
+        .all();
+      ids = (pending.results as Array<{ id: number }>).map(r => r.id);
+    }
     let succeeded = 0;
     let failed = 0;
     const failures: Array<{ id: number; error: string }> = [];

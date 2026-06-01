@@ -39,6 +39,9 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
+  // Bulk-select state for re-enrichment. Stored as a Set so toggling is O(1)
+  // and an empty selection means "no bulk action queued".
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -69,6 +72,31 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
     loadLeads();
     onLeadCountChanged?.();
   }, [loadLeads, onLeadCountChanged]);
+
+  // Drop selections on view switch (active ↔ trash) so the operator doesn't
+  // accidentally re-enrich something they can no longer see. Filter changes
+  // keep selection intentionally — the operator may pick across filters.
+  useEffect(() => { setSelectedIds(new Set()); }, [view]);
+
+  const toggleSelected = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const setSelectionForVisible = useCallback((visibleIds: number[], on: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
 
   // Filter for the table — stats show all leads (excluding hidden filters)
   const filtered = useMemo(() => {
@@ -122,8 +150,10 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         <>
           <EnrichmentStrip
             leads={leads}
+            selectedIds={selectedIds}
+            onClearSelection={() => setSelectedIds(new Set())}
             showToast={showToast}
-            onComplete={loadLeads}
+            onComplete={() => { loadLeads(); setSelectedIds(new Set()); }}
           />
 
           <StageFunnel leads={leads} active={stage} onChange={setStage} />
@@ -170,6 +200,9 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       ) : (
         <LeadsTable
           leads={filtered}
+          selectedIds={selectedIds}
+          onToggleSelected={toggleSelected}
+          onToggleAllVisible={(on) => setSelectionForVisible(filtered.map((l) => l.id), on)}
           showToast={showToast}
           onLeadUpdated={handleLeadUpdated}
           onOpenLead={setOpenLeadId}
