@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import type { Brief, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
@@ -9,7 +9,8 @@ interface BriefEditorPanelProps {
   brief: Brief | null;
   onClose: () => void;
   showToast: ShowToast;
-  /** Called after PATCH (TBD fill or manual edit). Parent should refresh dependent UI (matrix, brief list). */
+  /** Called after PATCH (raw markdown edit). Parent refreshes dependent UI
+   *  (matrix, brief list). */
   onChanged?: (updated: Brief) => void;
   /** Called after a page brief's status flips to 'complete'. */
   onPageCompleted?: (pageId: number) => void;
@@ -20,16 +21,17 @@ const TBD_PATTERN = /\[TBD:\s*([^\]]+)\]/gi;
 /**
  * Right-side slide-in editor panel for master + page briefs.
  *
- * - Master variant: meta strip with version + last-updated + TBD count.
- * - Page variant: 3-step status bar (Planned → Briefed → Complete).
+ * - Master variant: meta strip with version + last-updated + TBD count,
+ *   plus a Regenerate button.
+ * - Page variant: 3-step status bar (Planned → Briefed → Complete) and a
+ *   Mark complete action when status='briefed'.
  *
- * Markdown is rendered with [TBD: <field>] tokens turned into clickable
- * yellow chips. Clicking a chip opens an inline input — saving PATCHes the
- * brief with the token replaced by the entered value. The server recounts
- * tbd_count, so the meta strip updates after each fill.
- *
- * Operators can also click "Edit" to swap the rendered markdown for a raw
- * textarea and save freeform changes.
+ * Markdown is rendered with `[TBD: <field>]` tokens highlighted as inline
+ * yellow text so the operator can see what's unfilled — but they are NOT
+ * clickable. The fix path for TBDs is now: open the project editor modal
+ * via Edit Project Info, fill in the underlying project field, then
+ * Save & Regenerate. The Edit button still drops to a raw markdown
+ * textarea for manual one-off edits.
  */
 export function BriefEditorPanel({
   open, brief, onClose, showToast, onChanged, onPageCompleted,
@@ -40,60 +42,14 @@ export function BriefEditorPanel({
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  /** Local TBD chip state — keyed by occurrence index so duplicates can be filled independently. */
-  const [activeChipIdx, setActiveChipIdx] = useState<number | null>(null);
-  const [chipInput, setChipInput] = useState('');
 
   useEffect(() => {
     setCurrent(brief);
     setEditing(false);
     setDraft(brief?.content_markdown ?? '');
-    setActiveChipIdx(null);
-    setChipInput('');
   }, [brief?.id, brief?.version]);
 
-  // Render-time cache of TBD positions so chip indices line up with the
-  // ordered match list (used by handleFillChip to know which occurrence to replace).
-  const tbdMatches = useMemo(() => {
-    const md = current?.content_markdown ?? '';
-    const out: Array<{ start: number; end: number; field: string }> = [];
-    const re = new RegExp(TBD_PATTERN.source, 'gi');
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(md)) !== null) {
-      out.push({ start: m.index, end: m.index + m[0].length, field: m[1].trim() });
-    }
-    return out;
-  }, [current?.content_markdown]);
-
   if (!open || !current) return null;
-
-  async function handleFillChip(idx: number, value: string) {
-    if (!current) return;
-    const v = value.trim();
-    if (!v) {
-      showToast('Enter a value to fill this TBD', 'error');
-      return;
-    }
-    const md = current.content_markdown;
-    const match = tbdMatches[idx];
-    if (!match) return;
-    const next = md.slice(0, match.start) + v + md.slice(match.end);
-    setSaving(true);
-    try {
-      const updated = await api.briefs.updateContent(current.id, next);
-      setCurrent(updated);
-      setDraft(updated.content_markdown);
-      setActiveChipIdx(null);
-      setChipInput('');
-      showToast(`Filled "${match.field}"`, 'success');
-      onChanged?.(updated);
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`TBD fill failed: ${msg}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function handleSaveEdits() {
     if (!current) return;
@@ -131,8 +87,8 @@ export function BriefEditorPanel({
     const ok = window.confirm(
       'Regenerate this master brief?\n\n'
         + 'Claude will rewrite it from scratch using the current project data (~30–60s). '
-        + 'Manual edits and TBD fills on this version will be lost — the existing brief is archived '
-        + 'as a previous version, not deleted.'
+        + 'Manual edits on this version will be lost — the existing brief is archived '
+        + 'as a prior version, not deleted.'
     );
     if (!ok) return;
 
@@ -142,8 +98,6 @@ export function BriefEditorPanel({
       setCurrent(next);
       setDraft(next.content_markdown);
       setEditing(false);
-      setActiveChipIdx(null);
-      setChipInput('');
       showToast(`Master brief regenerated (v${next.version})`, 'success');
       onChanged?.(next);
     } catch (err) {
@@ -212,16 +166,7 @@ export function BriefEditorPanel({
               spellCheck={false}
             />
           ) : (
-            <BriefMarkdownInteractive
-              markdown={current.content_markdown}
-              activeChipIdx={activeChipIdx}
-              chipInput={chipInput}
-              saving={saving}
-              onChipOpen={(idx, field) => { setActiveChipIdx(idx); setChipInput(field); }}
-              onChipChange={setChipInput}
-              onChipSave={(idx) => handleFillChip(idx, chipInput)}
-              onChipCancel={() => { setActiveChipIdx(null); setChipInput(''); }}
-            />
+            <BriefMarkdownReadOnly markdown={current.content_markdown} />
           )}
         </div>
 
@@ -273,7 +218,7 @@ function MasterMetaStrip({ brief }: { brief: Brief }) {
       <span className="bs-master-chip">v{brief.version}</span>
       <span className="bs-editor-meta-text">Updated {fmtRelative(brief.updated_at ?? brief.generated_at)}</span>
       {brief.tbd_count > 0 ? (
-        <span className="bs-master-tbd">⚠ {brief.tbd_count} TBD{brief.tbd_count === 1 ? '' : 's'} remaining</span>
+        <span className="bs-master-tbd">⚠ {brief.tbd_count} TBD{brief.tbd_count === 1 ? '' : 's'} — fill in Edit Project Info, then Regenerate</span>
       ) : (
         <span className="bs-master-ok">✓ no TBDs</span>
       )}
@@ -306,28 +251,10 @@ function PageStatusBar({ status }: { status: string }) {
 }
 
 // ============================================================================
-// Interactive markdown with clickable TBD chips
+// Read-only markdown render with TBD tokens highlighted (not interactive)
 // ============================================================================
 
-interface InteractiveProps {
-  markdown: string;
-  activeChipIdx: number | null;
-  chipInput: string;
-  saving: boolean;
-  onChipOpen: (idx: number, field: string) => void;
-  onChipChange: (v: string) => void;
-  onChipSave: (idx: number) => void;
-  onChipCancel: () => void;
-}
-
-function BriefMarkdownInteractive({
-  markdown, activeChipIdx, chipInput, saving,
-  onChipOpen, onChipChange, onChipSave, onChipCancel,
-}: InteractiveProps) {
-  // Single global counter so chip indices match the regex match positions
-  // in handleFillChip (tbdMatches array is built off the same regex).
-  let chipIdx = -1;
-
+function BriefMarkdownReadOnly({ markdown }: { markdown: string }) {
   const lines = markdown.split('\n');
   const out: ReactNode[] = [];
 
@@ -350,92 +277,59 @@ function BriefMarkdownInteractive({
       out.push(<div key={`l-${li}`} className="brief-divider" />);
       continue;
     }
-
-    // Walk the line splitting on TBD tokens
-    const parts: ReactNode[] = [];
-    const re = new RegExp(TBD_PATTERN.source, 'gi');
-    let cursor = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-      chipIdx++;
-      if (m.index > cursor) {
-        parts.push(<TextSegment key={`s-${li}-${cursor}`} text={line.slice(cursor, m.index)} />);
-      }
-      const idx = chipIdx;
-      const field = m[1].trim();
-      parts.push(
-        <TbdChip
-          key={`t-${li}-${idx}`}
-          field={field}
-          active={activeChipIdx === idx}
-          inputValue={chipInput}
-          saving={saving}
-          onOpen={() => onChipOpen(idx, field)}
-          onChange={onChipChange}
-          onSave={() => onChipSave(idx)}
-          onCancel={onChipCancel}
-        />
-      );
-      cursor = m.index + m[0].length;
-    }
-    if (cursor < line.length) {
-      parts.push(<TextSegment key={`s-${li}-end`} text={line.slice(cursor)} />);
-    }
-    if (parts.length === 0) parts.push(<TextSegment key={`s-${li}-empty`} text="" />);
-
-    out.push(<div key={`l-${li}`} className="brief-line">{parts}</div>);
+    out.push(<div key={`l-${li}`} className="brief-line">{renderLine(line, li)}</div>);
   }
 
   return <div className="brief-editor">{out}</div>;
 }
 
+/** Walk a single line, emitting plain text segments and TBD highlights. */
+function renderLine(line: string, lineKey: number): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const re = new RegExp(TBD_PATTERN.source, 'gi');
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  let tokenIdx = 0;
+  while ((m = re.exec(line)) !== null) {
+    if (m.index > cursor) {
+      parts.push(<TextSegment key={`s-${lineKey}-${cursor}`} text={line.slice(cursor, m.index)} />);
+    }
+    parts.push(
+      <span
+        key={`t-${lineKey}-${tokenIdx++}`}
+        className="bs-tbd-readonly"
+        title="Fill the underlying field in Edit Project Info, then regenerate the brief"
+        style={{
+          display: 'inline-block',
+          padding: '0 6px',
+          margin: '0 2px',
+          fontSize: '0.85em',
+          color: 'var(--yellow)',
+          background: 'rgba(245,200,66,0.08)',
+          border: '1px solid rgba(245,200,66,0.3)',
+          borderRadius: 6,
+          fontWeight: 600,
+        }}
+      >
+        ⚠ {m[1].trim()}
+      </span>
+    );
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < line.length) {
+    parts.push(<TextSegment key={`s-${lineKey}-end`} text={line.slice(cursor)} />);
+  }
+  if (parts.length === 0) parts.push(<TextSegment key={`s-${lineKey}-empty`} text="" />);
+  return parts;
+}
+
 function TextSegment({ text }: { text: string }) {
-  // Render plain text with **bold** support, as the existing BriefMarkdown does.
   const html = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="brief-md-strong">$1</strong>');
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
-function TbdChip({
-  field, active, inputValue, saving, onOpen, onChange, onSave, onCancel,
-}: {
-  field: string;
-  active: boolean;
-  inputValue: string;
-  saving: boolean;
-  onOpen: () => void;
-  onChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  if (!active) {
-    return (
-      <button type="button" className="bs-tbd-chip" onClick={onOpen} title="Click to fill">
-        ⚠ {field}
-      </button>
-    );
-  }
-  return (
-    <span className="bs-tbd-chip-edit">
-      <input
-        autoFocus
-        value={inputValue}
-        onChange={(e) => onChange(e.target.value === field ? '' : e.target.value)}
-        placeholder={field}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); onSave(); }
-          if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-        }}
-      />
-      <button type="button" className="bs-tbd-save" disabled={saving} onClick={onSave}>
-        {saving ? '…' : '✓'}
-      </button>
-      <button type="button" className="bs-tbd-cancel" onClick={onCancel}>✕</button>
-    </span>
-  );
 }
 
 // ============================================================================

@@ -3,7 +3,6 @@ import type { Project, Brief, BriefSummary, BriefKind, ShowToast, Tab, Lead } fr
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
-import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
 import {
@@ -49,7 +48,6 @@ export function SiteDetailPanel({
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerBriefId, setViewerBriefId] = useState<number | null>(null);
-  const [operatorFormOpen, setOperatorFormOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -175,7 +173,7 @@ export function SiteDetailPanel({
                   onClick={() => setViewerBriefId(master.id)}
                 />
               ) : (
-                <EmptyCallout onOpenForm={() => setOperatorFormOpen(true)} />
+                <EmptyCallout onOpenForm={onEditProject} />
               )}
 
               {tier === 3 && hasBriefAdditions && (
@@ -231,7 +229,6 @@ export function SiteDetailPanel({
                     reloadToken={`${master.updated_at ?? master.generated_at ?? ''}::${project.updated_at}`}
                     showToast={showToast}
                     onOpenBrief={(b) => setViewerBriefId(b.id)}
-                    onProjectChanged={() => { onProjectChanged(); void reload(); }}
                   />
                 ) : (
                   <MatrixSkeleton />
@@ -251,22 +248,6 @@ export function SiteDetailPanel({
           />
         </aside>
       </div>
-
-      {operatorFormOpen && (
-        <OperatorInputForm
-          open={true}
-          onClose={() => setOperatorFormOpen(false)}
-          project={project}
-          lead={lead}
-          showToast={showToast}
-          onBriefGenerated={(b) => {
-            setOperatorFormOpen(false);
-            setViewerBriefId(b.id);
-            void reload();
-            onProjectChanged();
-          }}
-        />
-      )}
 
       <BriefEditorPanelLoader
         briefId={viewerBriefId}
