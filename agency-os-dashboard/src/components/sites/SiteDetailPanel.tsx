@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Project, Brief, BriefSummary, BriefKind, ShowToast, Tab, Lead } from '../../lib/types';
+import type { Project, Brief, BriefKind, ShowToast, Tab, Lead, Page } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
@@ -43,17 +43,19 @@ const KIND_LABEL: Record<BriefKind, string> = {
 export function SiteDetailPanel({
   project, showToast, onSwitchTab, onBack, onProjectChanged, onEditProject,
 }: SiteDetailPanelProps) {
-  const [briefs, setBriefs] = useState<BriefSummary[]>([]);
   const [master, setMaster] = useState<Brief | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);
+  const [pages, setPages] = useState<Page[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewerBriefId, setViewerBriefId] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [briefsRes, masterRes, leadRes] = await Promise.all([
-        api.briefs.listForProject(project.id),
+      // Page rows from /api/projects/:id drive the stats — a brief row stays
+      // status='briefed' even after its page is marked complete, so counting
+      // briefs over-counts. Page rows carry the authoritative status.
+      const [masterRes, leadRes, projectRes] = await Promise.all([
         api.briefs.getMaster(project.id).catch((err) => {
           if (err instanceof ApiError && err.status === 404) return null;
           throw err;
@@ -61,10 +63,11 @@ export function SiteDetailPanel({
         project.lead_id
           ? api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
           : Promise.resolve(null),
+        api.projects.get(project.id).then((r) => r.pages).catch(() => [] as Page[]),
       ]);
-      setBriefs(briefsRes.briefs);
       setMaster(masterRes);
       setLead(leadRes);
+      setPages(projectRes);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not load Brief Studio: ${msg}`, 'error');
@@ -79,15 +82,21 @@ export function SiteDetailPanel({
   const mrr = TIER_MRR[tier] ?? 0;
 
   const stats = useMemo(() => {
-    const completePages = 0;       // Phase 4 populates from the matrix endpoint
-    const briefedPages = briefs.filter((b) => b.kind === 'page' && b.status === 'briefed').length;
+    // Source: page rows (status='planned' | 'briefed' | 'complete'). The
+    // briefs list isn't authoritative because brief.status doesn't change
+    // when its page is marked complete — counting briefs over-counts the
+    // "awaiting complete" bucket.
+    const pagesLive = pages.filter((p) => p.status === 'complete').length;
+    const pagesBriefed = pages.filter((p) => p.status === 'briefed').length;
+    const pagesPlanned = project.pages_planned ?? (tier === 3 ? 15 : 5);
     return {
       masterCount: master ? 1 : 0,
-      pagesLive: completePages,
-      pagesPasted: briefedPages,
+      pagesLive,
+      pagesBriefed,
+      pagesPlanned,
       monthlyTarget: project.monthly_pages_target ?? (tier === 3 ? 5 : 0),
     };
-  }, [master, briefs, project.monthly_pages_target, tier]);
+  }, [master, pages, project.pages_planned, project.monthly_pages_target, tier]);
 
   // Brief-vs-matrix drift detection (Option C bridge): when the master brief
   // mentions services or service areas not in project.services/service_areas,
@@ -267,9 +276,18 @@ export function SiteDetailPanel({
 function StatsRow({
   stats, hasMaster,
 }: {
-  stats: { masterCount: number; pagesLive: number; pagesPasted: number; monthlyTarget: number };
+  stats: {
+    masterCount: number;
+    pagesLive: number;
+    pagesBriefed: number;
+    pagesPlanned: number;
+    monthlyTarget: number;
+  };
   hasMaster: boolean;
 }) {
+  const liveValue = hasMaster
+    ? (stats.pagesPlanned > 0 ? `${stats.pagesLive} / ${stats.pagesPlanned}` : String(stats.pagesLive))
+    : '—';
   return (
     <div className="bs-stats">
       <StatTile
@@ -278,14 +296,14 @@ function StatsRow({
         muted={!hasMaster}
       />
       <StatTile
-        value={hasMaster ? `${stats.pagesLive} / —` : '0 / —'}
+        value={liveValue}
         label={hasMaster ? 'Pages live' : 'Pages live · matrix locked'}
         muted={!hasMaster}
       />
       <StatTile
-        value={String(stats.pagesPasted)}
+        value={String(stats.pagesBriefed)}
         label={'Briefed · awaiting complete'}
-        muted={!hasMaster && stats.pagesPasted === 0}
+        muted={!hasMaster && stats.pagesBriefed === 0}
       />
       <StatTile
         value={stats.monthlyTarget > 0 ? `0 / ${stats.monthlyTarget}` : '—'}
