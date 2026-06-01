@@ -67,6 +67,13 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 **Description:** {2-3 sentence summary}
 **Owner:** {name, credentials}
 
+## Target Audience
+**Primary customer:** {who actually hires this business — 1-2 real segments drawn from the reviews and services, e.g. "homeowners with flat or low-slope roofs" and "commercial property managers." Do not list every conceivable customer.}
+**What brings them here:** {the triggering problem or job — what just happened that made them go looking}
+**What they worry about:** {the hesitation, fear, or bad past experience this business has to overcome — pulled from the language customers actually use in reviews}
+**Why they choose this business:** {the deciding factor in the customers' own terms, from review themes}
+**Primary action the site should drive:** {the single conversion goal — call, form submission, or quote request}
+
 ## Brand Voice
 - {3-6 voice descriptors}
 - Reading level: 6th-8th grade
@@ -110,7 +117,7 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 ## Important Build Instructions
 {numbered list of final nudges to the site builder}`;
 
-const FULL_SITE_SECTIONS = `Business Overview, Brand Voice, Brand Style, Services Offered, Service Areas, Key Differentiators, Customer Reviews to Reference, Site Structure Required, SEO Requirements, Important Build Instructions`;
+const FULL_SITE_SECTIONS = `Business Overview, Target Audience, Brand Voice, Brand Style, Services Offered, Service Areas, Key Differentiators, Customer Reviews to Reference, Site Structure Required, SEO Requirements, Important Build Instructions`;
 
 export function buildMasterBriefPrompt(input: MasterBriefInput): BuiltMasterBriefPrompt {
   const system = buildSystemPrompt();
@@ -143,6 +150,8 @@ HARD RULES:
 10. Active voice. Zero fluff. No filler adjectives like "premier," "world-class," "leading."
 
 QUALITY BAR:
+- Target Audience must be synthesized from the reviews, services performed, and strengths — the actual people hiring this business, not a generic "homeowners and businesses." Name 1-2 real segments, the problem that brings them, and what they worry about, using the language customers use in the reviews. If a brand attribute explicitly names the audience (operator-supplied), prefer it over inference. Do not invent demographics the data doesn't support.
+- Primary action the site should drive: state exactly ONE conversion goal (call, form submission, or quote request). This is the most important line in the Target Audience section — every page downstream should point at this action. If it genuinely can't be inferred from the data, emit \`[TBD: primary conversion goal]\`.
 - Services Offered descriptions should be one tight sentence each, grounded in what reviews mention the business actually does.
 - Key Differentiators should be 3-6 items, each a concrete claim (a certification, a years-in-trade number, a specific guarantee, a named owner trait) — not vague positioning.
 - Site Structure should enumerate every page. For full_site, that means listing every service-area page combination explicitly (e.g., "Roof Replacement in Madison", "Roof Replacement in Sun Prairie", etc.) so the builder doesn't have to guess.
@@ -176,7 +185,6 @@ function buildUserPrompt(input: MasterBriefInput): string {
   lines.push(`- Service areas (from reviews): ${listOrEmpty(input.mined.service_areas)}`);
   lines.push(`- Owner names mentioned in reviews: ${listOrEmpty(input.mined.owner_names)}`);
   lines.push(`- Strengths (themes): ${listOrEmpty(input.mined.strengths)}`);
-  lines.push(`- Differentiators (from reviews): ${listOrEmpty(input.mined.differentiators)}`);
   if (input.mined.pitch_quotes.length) {
     lines.push('- Mined pitch quotes:');
     for (const pq of input.mined.pitch_quotes) {

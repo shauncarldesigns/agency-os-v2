@@ -542,7 +542,7 @@ function collectReviews(project: Project, lead: Lead | null): GoogleReview[] {
 function collectMinedData(lead: Lead | null): MinedReviewData {
   const empty: MinedReviewData = {
     service_areas: [], services_performed: [], owner_names: [],
-    strengths: [], pitch_quotes: [], differentiators: [],
+    strengths: [], pitch_quotes: [],
   };
   if (!lead) return empty;
   return {
@@ -551,7 +551,6 @@ function collectMinedData(lead: Lead | null): MinedReviewData {
     owner_names: safeArr(lead.owner_names),
     strengths: safeArr(lead.extracted_strengths),
     pitch_quotes: safeArr(lead.pitch_quotes),
-    differentiators: [],
   };
 }
 
