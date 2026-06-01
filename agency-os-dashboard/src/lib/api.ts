@@ -80,10 +80,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    enrichAll: (limit = 25) =>
+    /**
+     * Bulk enrich. Two modes:
+     * - `ids` provided → re-enrich those specific leads regardless of current
+     *   enrichment_status (used by the pipeline bulk-select flow).
+     * - `ids` omitted → enrich every 'pending' lead, capped by `limit`.
+     */
+    enrichAll: (opts: { limit?: number; ids?: number[] } = {}) =>
       apiFetch<{ total: number; succeeded: number; failed: number; failures: Array<{ id: number; error: string }> }>(
         '/api/leads/enrich-all',
-        { method: 'POST', body: JSON.stringify({ limit }) }
+        { method: 'POST', body: JSON.stringify({ limit: opts.limit ?? 25, ...(opts.ids ? { ids: opts.ids } : {}) }) }
       ),
   },
   calls: {
