@@ -39,6 +39,7 @@ export function BriefEditorPanel({
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   /** Local TBD chip state — keyed by occurrence index so duplicates can be filled independently. */
   const [activeChipIdx, setActiveChipIdx] = useState<number | null>(null);
   const [chipInput, setChipInput] = useState('');
@@ -125,6 +126,34 @@ export function BriefEditorPanel({
     }
   }
 
+  async function handleRegenerate() {
+    if (!current || current.kind !== 'master') return;
+    const ok = window.confirm(
+      'Regenerate this master brief?\n\n'
+        + 'Claude will rewrite it from scratch using the current project data (~30–60s). '
+        + 'Manual edits and TBD fills on this version will be lost — the existing brief is archived '
+        + 'as a previous version, not deleted.'
+    );
+    if (!ok) return;
+
+    setRegenerating(true);
+    try {
+      const next = await api.briefs.regenerateMaster(current.project_id);
+      setCurrent(next);
+      setDraft(next.content_markdown);
+      setEditing(false);
+      setActiveChipIdx(null);
+      setChipInput('');
+      showToast(`Master brief regenerated (v${next.version})`, 'success');
+      onChanged?.(next);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Regenerate failed: ${msg}`, 'error');
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   async function handleMarkComplete() {
     if (!current || current.kind !== 'page' || current.page_id == null) return;
     setCompleting(true);
@@ -145,7 +174,7 @@ export function BriefEditorPanel({
 
   return (
     <>
-      <div className="bs-editor-backdrop" onClick={onClose} />
+      <div className="bs-editor-backdrop" onClick={regenerating ? undefined : onClose} />
       <aside className="bs-editor-panel" role="dialog" aria-label={title}>
         <div className="bs-editor-header">
           <div>
@@ -153,9 +182,19 @@ export function BriefEditorPanel({
             <div className="bs-editor-sub">
               {current.generated_by_model ?? 'unknown model'} ·{' '}
               {fmtTime(current.updated_at ?? current.generated_at)}
+              {regenerating && (
+                <span style={{ marginLeft: 8, color: 'var(--yellow)' }}>· regenerating…</span>
+              )}
             </div>
           </div>
-          <button type="button" className="bs-editor-close" onClick={onClose} aria-label="Close">✕</button>
+          <button
+            type="button"
+            className="bs-editor-close"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={regenerating}
+            title={regenerating ? 'Wait for regenerate to finish' : 'Close'}
+          >✕</button>
         </div>
 
         {current.kind === 'master' ? (
@@ -189,17 +228,28 @@ export function BriefEditorPanel({
         <div className="bs-editor-footer">
           {editing ? (
             <>
-              <Button variant="ghost" size="sm" disabled={saving} onClick={() => { setEditing(false); setDraft(current.content_markdown); }}>
+              <Button variant="ghost" size="sm" disabled={saving || regenerating} onClick={() => { setEditing(false); setDraft(current.content_markdown); }}>
                 Cancel
               </Button>
-              <Button variant="primary" size="sm" disabled={saving} onClick={handleSaveEdits}>
+              <Button variant="primary" size="sm" disabled={saving || regenerating} onClick={handleSaveEdits}>
                 {saving ? <><Spinner /> Saving…</> : 'Save edits'}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>✎ Edit</Button>
-              <Button variant="ghost" size="sm" onClick={handleCopy}>📋 Copy</Button>
+              <Button variant="ghost" size="sm" disabled={regenerating} onClick={() => setEditing(true)}>✎ Edit</Button>
+              <Button variant="ghost" size="sm" disabled={regenerating} onClick={handleCopy}>📋 Copy</Button>
+              {current.kind === 'master' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={regenerating || saving}
+                  onClick={handleRegenerate}
+                  title="Rewrite this master brief from scratch using the current project data"
+                >
+                  {regenerating ? <><Spinner /> Regenerating…</> : '↻ Regenerate'}
+                </Button>
+              )}
               {current.kind === 'page' && current.status === 'briefed' && (
                 <Button variant="primary" size="sm" disabled={completing} onClick={handleMarkComplete}>
                   {completing ? <><Spinner /> Marking…</> : '✓ Mark complete'}
