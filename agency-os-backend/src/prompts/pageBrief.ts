@@ -227,9 +227,11 @@ function perPageGuidance(spec: PageSpec): string | null {
     case 'service_area':
       return [
         '- Local proof is the angle. A testimonial from a customer in or near this city is worth more than any other content on the page — surface it verbatim with attribution if the master brief has one.',
-        '- Acknowledge the city specifically: neighborhoods, common local conditions (weather, housing stock, codes) — but ONLY if the master brief supports it. Do not invent local detail.',
+        '- The master brief\'s `## Service Areas` section may have appended landmarks/neighborhoods after a city\'s bullet (e.g. "Green Bay — East Side, near Lambeau, Allouez"). For THIS page\'s city, work those references into the letter when present — they\'re the genuine local color customers actually used. If the city\'s bullet has no landmarks listed, skip the local-color paragraph rather than inventing one.',
+        '- Acknowledge the city specifically. Mention it by name at least 3 times in the letter body (in addition to its appearance in the H1 / meta title / SEO fields). Local conditions (weather, housing stock, codes) are fair game ONLY if the master brief supports them. Do not invent local detail.',
         '- The SEO block\'s H1 must contain the service name and the city. The meta title follows the standard service-area pattern.',
         '- Internal links: cross-link to the parent service page and to 1–2 nearby service-area pages. These belong in the SEO block.',
+        '- Include a directive in the letter telling the builder to embed a map showing this city\'s location relative to the HQ city (the first entry under the master brief\'s `## Service Areas`). Don\'t dress it up — a simple two-pin map is the goal. If the builder ignores map embeds, this directive is harmless.',
       ].join('\n');
     case 'contact':
       return [

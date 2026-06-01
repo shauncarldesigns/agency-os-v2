@@ -10,7 +10,7 @@ const LEAD_FIELDS = [
   'place_id', 'gbp_claimed', 'gbp_completeness', 'gbp_photos_count', 'gbp_categories',
   'gbp_hours', 'google_rating', 'google_review_count', 'google_reviews', 'reviews_fetched_at',
   'website', 'has_website', 'pagespeed_desktop', 'pagespeed_mobile',
-  'extracted_services', 'extracted_service_areas', 'extracted_strengths',
+  'extracted_services', 'extracted_service_areas', 'extracted_strengths', 'extracted_local_landmarks',
   'pitch_quotes', 'owner_names', 'opportunity_score', 'opportunity_reasoning', 'recommended_tier',
   'enrichment_status', 'enrichment_error', 'status', 'outcome', 'followup',
   'notes', 'source', 'project_id',

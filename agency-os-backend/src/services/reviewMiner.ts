@@ -11,6 +11,14 @@ export interface PitchQuote {
 
 export interface MinedReviewData {
   service_areas: string[];
+  /**
+   * Sub-city geographic references mined from reviews: neighborhoods,
+   * named districts, landmarks, roads, bridges, regions. Each item may
+   * include the city when it was obvious from context (e.g. "East Side
+   * of Green Bay"). Used to seed local color on per-city service-area
+   * page briefs.
+   */
+  local_landmarks: string[];
   services_performed: string[];
   owner_names: string[];
   strengths: string[];
@@ -19,6 +27,7 @@ export interface MinedReviewData {
 
 const EMPTY: MinedReviewData = {
   service_areas: [],
+  local_landmarks: [],
   services_performed: [],
   owner_names: [],
   strengths: [],
@@ -41,6 +50,7 @@ export async function mineReviews(
 
   return {
     service_areas: result.service_areas ?? [],
+    local_landmarks: result.local_landmarks ?? [],
     services_performed: result.services_performed ?? [],
     owner_names: result.owner_names ?? [],
     strengths: result.strengths ?? [],

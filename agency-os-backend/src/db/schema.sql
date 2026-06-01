@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS leads (
   extracted_services TEXT,
   extracted_service_areas TEXT,
   extracted_strengths TEXT,
+  extracted_local_landmarks TEXT,  -- JSON array of sub-city geographic refs mined from reviews
   pitch_quotes    TEXT,
   owner_names     TEXT,
   -- Scoring + tier
