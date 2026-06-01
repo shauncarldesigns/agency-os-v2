@@ -37,7 +37,6 @@ export interface MasterBriefProject {
   tagline: string | null;
   primary_color: string | null;
   accent_color: string | null;
-  photography_direction: string | null;
   monthly_pages_target?: number | null;
   tier?: string | null;
 }

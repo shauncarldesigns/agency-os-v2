@@ -123,7 +123,12 @@ export function BriefStudioMatrix({
 
   const { foundationPages, servicePages, serviceAreaGrid } = data;
   const noServices = serviceAreaGrid.services.length === 0;
-  const noCities = serviceAreaGrid.cities.length === 0;
+  const cityCount = serviceAreaGrid.cities.length;
+  const noCities = cityCount === 0;
+  // A "service × city" matrix only earns its weight with multiple cities —
+  // a single-column matrix is just a duplicate of the Individual Service
+  // Pages row. Hide the grid until the operator has 2+ service areas.
+  const tooFewCities = cityCount < 2;
 
   return (
     <>
@@ -184,13 +189,15 @@ export function BriefStudioMatrix({
       </MatrixSection>
 
       <MatrixSection label="Service Area Pages (service × city)">
-        {noServices || noCities ? (
+        {noServices || tooFewCities ? (
           <PlaceholderRow text={
             noServices && noCities
-              ? 'Add at least one service and one service area in Edit Project Info to populate the grid.'
+              ? 'Add at least one service and two+ service areas in Edit Project Info to populate the grid.'
               : noServices
                 ? 'Add at least one service in Edit Project Info to populate the grid.'
-                : 'Add at least one service area in Edit Project Info to populate the grid.'
+                : noCities
+                  ? 'Add at least two service areas in Edit Project Info to populate the grid.'
+                  : `Service-area matrix appears with 2+ service areas. Currently 1 area (${serviceAreaGrid.cities[0]}) — add more in Edit Project Info.`
           } />
         ) : (
           <ServiceAreaGrid

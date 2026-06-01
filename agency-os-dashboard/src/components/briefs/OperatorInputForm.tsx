@@ -69,12 +69,6 @@ const TIER_OPTIONS: ReadonlyArray<{
   { tier: 3, label: 'Tier 3 · SEO Program', price: '$499/mo', blurb: 'Brief Studio + monthly SEO pages.' },
 ];
 
-const PHOTO_PRESETS = [
-  { label: 'Rugged contractor', value: 'Real crews on real jobs — trucks, tools, finished work. No stock.' },
-  { label: 'Warm family', value: 'Family-run feel — owner with crew, homeowner handoff, kids and pets if relevant.' },
-  { label: 'Modern minimal', value: 'Clean, high-contrast shots. Sparse compositions. Brand-color accents.' },
-];
-
 export function OperatorInputForm({
   open, onClose, project, lead, hasMaster, showToast,
   onBriefGenerated, onProjectSaved, onDeleted,
@@ -91,7 +85,6 @@ export function OperatorInputForm({
   const [tagline, setTagline] = useState(project.tagline ?? '');
   const [primaryColor, setPrimaryColor] = useState(project.primary_color ?? '#1B3A5C');
   const [accentColor, setAccentColor] = useState(project.accent_color ?? '#E8A33D');
-  const [photographyDirection, setPhotographyDirection] = useState(project.photography_direction ?? '');
   const [services, setServices] = useState<string[]>(safeParseArr(project.services, lead?.extracted_services));
   const [serviceAreas, setServiceAreas] = useState<string[]>(safeParseArr(project.service_areas, lead?.extracted_service_areas));
   const [newService, setNewService] = useState('');
@@ -118,7 +111,6 @@ export function OperatorInputForm({
     setTagline(project.tagline ?? '');
     setPrimaryColor(project.primary_color ?? '#1B3A5C');
     setAccentColor(project.accent_color ?? '#E8A33D');
-    setPhotographyDirection(project.photography_direction ?? '');
     setServices(safeParseArr(project.services, lead?.extracted_services));
     setServiceAreas(safeParseArr(project.service_areas, lead?.extracted_service_areas));
     setExtraAttrs([]);
@@ -267,7 +259,6 @@ export function OperatorInputForm({
       tagline: tagline.trim() || null,
       primary_color: primaryColor,
       accent_color: accentColor,
-      photography_direction: photographyDirection.trim() || null,
       services,
       service_areas: serviceAreas,
     });
@@ -498,35 +489,6 @@ export function OperatorInputForm({
             <ColorPair color={accentColor} onChange={setAccentColor} />
           </Field>
         </Grid2>
-
-        <Field label="Photography direction">
-          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-            {PHOTO_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => setPhotographyDirection(p.value)}
-                style={{
-                  background: 'var(--surface2)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 999,
-                  padding: '4px 10px',
-                  fontSize: '0.65rem',
-                  color: 'var(--text2)',
-                  cursor: 'pointer',
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <Textarea
-            value={photographyDirection}
-            onChange={setPhotographyDirection}
-            placeholder="Real crews on real jobs, no stock photos. Show trucks, tools, and the homeowner handoff."
-            rows={2}
-          />
-        </Field>
 
         <SectionTitle>Services ({services.length})</SectionTitle>
         <ChipList items={services} onRemove={(i) => removeChip(services, setServices, i)} />
