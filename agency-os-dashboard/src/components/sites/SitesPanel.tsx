@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Project, ShowToast, Tab } from '../../lib/types';
+import type { Project, Lead, ShowToast, Tab } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
 import { SiteCard } from './SiteCard';
 import { SiteDetailPanel } from './SiteDetailPanel';
-import { EditProjectModal } from './EditProjectModal';
+import { OperatorInputForm } from '../briefs/OperatorInputForm';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -21,6 +21,18 @@ type Sort = 'tier' | 'due' | 'az';
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
+/**
+ * The unified project editor (OperatorInputForm) needs hasMaster + lead.
+ * SitesPanel doesn't track per-project briefs/leads itself — it lazily
+ * fetches them when the modal opens so the form can render in the right
+ * mode (Generate vs Regenerate) and seed testimonials from the lead.
+ */
+interface EditorContext {
+  project: Project;
+  lead: Lead | null;
+  hasMaster: boolean;
+}
+
 export function SitesPanel({
   showToast, onSwitchTab, initialProjectId, onInitialProjectConsumed,
 }: SitesPanelProps) {
@@ -28,7 +40,8 @@ export function SitesPanel({
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editorCtx, setEditorCtx] = useState<EditorContext | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,10 +58,6 @@ export function SitesPanel({
 
   useEffect(() => { load(); }, [load]);
 
-  // Deep-link from a Pipeline qualify: open the new project's Brief Studio
-  // once the list finishes loading and we can confirm the project (Tier 3)
-  // actually exists in the result set. T1/T2 deep-links don't apply here —
-  // they land on the grid without auto-opening detail.
   useEffect(() => {
     if (initialProjectId == null) return;
     if (loading) return;
@@ -58,6 +67,32 @@ export function SitesPanel({
     }
     onInitialProjectConsumed?.();
   }, [initialProjectId, loading, projects, onInitialProjectConsumed]);
+
+  /**
+   * Open the editor modal for a project. Fetches the lead + master brief in
+   * parallel so the form can render with the right title/buttons immediately
+   * (avoids a flash where it looks like "Generate" before flipping to "Edit").
+   */
+  const openEditor = useCallback(async (project: Project) => {
+    setEditorLoading(true);
+    try {
+      const [leadRes, masterRes] = await Promise.all([
+        project.lead_id
+          ? api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
+          : Promise.resolve(null),
+        api.briefs.getMaster(project.id).catch((err) => {
+          if (err instanceof ApiError && err.status === 404) return null;
+          throw err;
+        }),
+      ]);
+      setEditorCtx({ project, lead: leadRes, hasMaster: !!masterRes });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not open editor: ${msg}`, 'error');
+    } finally {
+      setEditorLoading(false);
+    }
+  }, [showToast]);
 
   const sorted = useMemo(() => {
     const list = [...projects];
@@ -81,10 +116,27 @@ export function SitesPanel({
     return { total: live.length, t3: t3.length, t2: t2.length, t1: t1.length, t3Mrr, t2Mrr };
   }, [projects]);
 
-  // If we're in detail view, render that instead of the grid.
+  const editorElement = editorCtx && (
+    <OperatorInputForm
+      open={true}
+      onClose={() => setEditorCtx(null)}
+      project={editorCtx.project}
+      lead={editorCtx.lead}
+      hasMaster={editorCtx.hasMaster}
+      showToast={showToast}
+      onBriefGenerated={() => { void load(); }}
+      onProjectSaved={() => { void load(); }}
+      onDeleted={() => {
+        setDetailProjectId(null);
+        void load();
+      }}
+    />
+  );
+
   const detailProject = detailProjectId != null
     ? projects.find((p) => p.id === detailProjectId) ?? null
     : null;
+
   if (detailProject) {
     return (
       <>
@@ -94,21 +146,10 @@ export function SitesPanel({
           onSwitchTab={onSwitchTab}
           onBack={() => setDetailProjectId(null)}
           onProjectChanged={load}
-          onEditProject={() => setEditingProject(detailProject)}
+          onEditProject={() => openEditor(detailProject)}
         />
-        <EditProjectModal
-          open={editingProject !== null}
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          showToast={showToast}
-          onSaved={() => { void load(); }}
-          onDeleted={() => {
-            // Project gone — bounce back to the grid so we don't render a
-            // stale detail view.
-            setDetailProjectId(null);
-            void load();
-          }}
-        />
+        {editorElement}
+        {editorLoading && <ModalLoaderHint />}
       </>
     );
   }
@@ -165,20 +206,33 @@ export function SitesPanel({
               showToast={showToast}
               onSwitchTab={onSwitchTab}
               onOpenDetail={() => setDetailProjectId(p.id)}
-              onEditInfo={() => setEditingProject(p)}
+              onEditInfo={() => openEditor(p)}
             />
           ))}
         </div>
       )}
 
-      <EditProjectModal
-        open={editingProject !== null}
-        project={editingProject}
-        onClose={() => setEditingProject(null)}
-        showToast={showToast}
-        onSaved={() => { void load(); }}
-        onDeleted={() => { void load(); }}
-      />
+      {editorElement}
+      {editorLoading && <ModalLoaderHint />}
     </>
+  );
+}
+
+/** Tiny modal-overlay-style loader for when we're fetching context for the
+ *  editor before showing it. Avoids a layout pop while the parallel fetch
+ *  for lead + master brief resolves. */
+function ModalLoaderHint() {
+  return (
+    <div className="modal-overlay open" style={{ pointerEvents: 'none' }}>
+      <div className="modal" style={{
+        width: 320,
+        padding: '20px 24px',
+        textAlign: 'center',
+        color: 'var(--text2)',
+        fontSize: '0.78rem',
+      }}>
+        <Spinner /> Loading project editor…
+      </div>
+    </div>
   );
 }
