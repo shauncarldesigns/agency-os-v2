@@ -37,6 +37,7 @@ export type PageType =
   | 'homepage'
   | 'about'
   | 'services_overview'
+  | 'service_areas_overview'
   | 'contact'
   | 'faq'
   | 'service'
@@ -202,9 +203,19 @@ function perPageGuidance(spec: PageSpec): string | null {
       ].join('\n');
     case 'services_overview':
       return [
-        '- This page\'s job is to route visitors to the right service page. The angle in the letter establishes why this business is the one to call for any of these services — let the headline suggestion communicate that.',
-        '- Every service from the master brief is represented by name with a 1-2 sentence teaser drawn from review themes about that specific service. Internal links to each child service page must be in the SEO block.',
+        '- This is the Services hub page. Its job is to route visitors to the right individual service page, and to communicate why this business is the one to call across the full range of services. Let the headline suggestion communicate that umbrella angle.',
+        '- Every service from the master brief is represented by name with a 1–2 sentence teaser drawn from review themes about that specific service. Internal links to each child service page must be listed in the SEO block.',
         '- Don\'t go deep on any single service. That\'s the service page\'s job.',
+        '- URL slug is `/services` (single tier, not `/services-overview`).',
+      ].join('\n');
+    case 'service_areas_overview':
+      return [
+        '- This is the Service Areas hub page — a site-wide page that lists every city the business serves and links out to each city-specific page. Its primary job is SEO: a single hub that consolidates link equity for the long-tail service-area pages.',
+        '- The letter should briefly say WHERE the business is based (HQ city) and WHO it serves (every service area, named). Mention the home metro region by name if the master brief uses one (e.g. "Northeast Wisconsin").',
+        '- Every service area from the master brief is mentioned by city name in the letter. The SEO block\'s `Internal links` field must list every `/service-areas/{service}-{city}-{state}` slug that exists for this project (services × cities — assume all combinations).',
+        '- Don\'t go deep on any single city. That\'s the per-city service-area page\'s job. The hub is short and link-dense — keep the letter at the lower end of the length budget.',
+        '- URL slug is `/service-areas` (single tier, not `/service-areas-overview`).',
+        '- A customer quote that mentions a specific city is great if available, but skip if not — don\'t force one.',
       ].join('\n');
     case 'service':
       return [
@@ -254,7 +265,8 @@ function renderPageTitle(spec: PageSpec): string {
   switch (spec.type) {
     case 'homepage': return 'Homepage';
     case 'about': return 'About';
-    case 'services_overview': return 'Services Overview';
+    case 'services_overview': return 'Services';
+    case 'service_areas_overview': return 'Service Areas';
     case 'contact': return 'Contact';
     case 'faq': return 'FAQ';
     case 'service': return spec.service as string;
@@ -269,6 +281,7 @@ function lengthBudget(type: PageType): string {
     case 'homepage': return '400–600';
     case 'about': return '350–500';
     case 'services_overview': return '350–500';
+    case 'service_areas_overview': return '250–400';
     case 'service': return '300–450';
     case 'service_area': return '250–400';
     case 'contact': return '200–350';
