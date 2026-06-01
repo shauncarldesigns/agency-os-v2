@@ -505,7 +505,6 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
       tagline: project.tagline ?? null,
       primary_color: project.primary_color ?? null,
       accent_color: project.accent_color ?? null,
-      photography_direction: project.photography_direction ?? null,
       monthly_pages_target: project.monthly_pages_target ?? 0,
       tier: project.tier != null ? `tier_${project.tier}` : null,
     },
