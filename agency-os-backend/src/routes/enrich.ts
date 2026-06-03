@@ -51,6 +51,8 @@ enrichRouter.post('/enrich-all', async (c) => {
     let succeeded = 0;
     let failed = 0;
     const failures: Array<{ id: number; error: string }> = [];
+    let stoppedAt: number | null = null;
+    let stopReason: string | null = null;
 
     for (const id of ids) {
       try {
@@ -65,10 +67,32 @@ enrichRouter.post('/enrich-all', async (c) => {
           .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
           .bind(msg.slice(0, 500), id)
           .run();
+
+        // Subrequest exhaustion is a per-Worker-invocation hard cap. Once we
+        // hit it, every downstream subrequest in this same invocation will
+        // also fail — there's no point continuing the loop. Leave the
+        // remaining leads in their current state (typically 'pending' or
+        // their prior 'enriched') so the operator can retry them in a
+        // fresh invocation rather than have them all marked failed.
+        if (msg.includes('Too many subrequests')) {
+          stoppedAt = id;
+          stopReason = 'subrequest_budget_exhausted';
+          log('error', 'enrich', `Hit Worker subrequest cap on lead ${id} — aborting batch with ${ids.indexOf(id) + 1}/${ids.length} processed`);
+          break;
+        }
       }
     }
 
-    return c.json({ total: ids.length, succeeded, failed, failures: failures.slice(0, 10) });
+    const processed = stoppedAt !== null ? ids.indexOf(stoppedAt) + 1 : ids.length;
+    return c.json({
+      total: ids.length,
+      processed,
+      succeeded,
+      failed,
+      failures: failures.slice(0, 10),
+      stoppedEarly: stopReason,
+      remainingUnprocessed: stoppedAt !== null ? ids.length - processed : 0,
+    });
   } catch (err) {
     log('error', 'enrich', 'POST /enrich-all failed', err);
     return c.json(serverError(), 500);
@@ -130,6 +154,20 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
     } catch (err) {
       log('warn', 'enrich', `Place detail failed for lead ${leadId}`, err);
     }
+  }
+
+  // If we couldn't get place data AND the lead has no preexisting place data
+  // to fall back on, the rest of the pipeline produces a thin/empty enrichment
+  // that misleads the operator into thinking the lead was successfully
+  // processed. Mark failed instead so the operator can retry or fix the input
+  // data (a re-enriched lead with existing data still goes through — the
+  // COALESCE fields below preserve whatever was already there).
+  const hadPreviousPlaceData = !!lead.place_id && !!lead.google_reviews;
+  if (!placeData && !hadPreviousPlaceData) {
+    const reason = placeId
+      ? 'Google Places details fetch failed — try again later or check API key'
+      : `Could not resolve Google Places match for "${lead.company}" in ${lead.city ?? 'unknown city'}`;
+    throw new Error(reason);
   }
 
   // 2b + 3. Outscraper review backfill and PageSpeed both depend only on
