@@ -111,7 +111,15 @@ export interface Project {
   merchynt_active: number;
   contract_start: string | null;
   contract_min_end: string | null;
-  status: 'building' | 'live' | 'paused' | 'dead';
+  /**
+   * Project lifecycle:
+   * - 'prospect' — qualified, pitching, not yet signed. EXCLUDED from MRR.
+   * - 'building' — signed client, site under construction. Counts toward MRR.
+   * - 'live'     — site is live. Counts toward MRR.
+   * - 'paused'   — temporarily inactive client. Counts toward MRR.
+   * - 'dead'     — churned. Excluded from MRR.
+   */
+  status: 'prospect' | 'building' | 'live' | 'paused' | 'dead';
   reviews_snapshot: string | null;
   gsc_property_url: string | null;
   cf_zone_id: string | null;

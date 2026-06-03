@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { Project, ShowToast, Tab } from '../../lib/types';
+import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { TierPill } from '../shared/TierPill';
 import { formatDate } from '../../lib/format';
@@ -15,28 +17,53 @@ interface SiteCardProps {
   /** Open the Quick Brief modal — business name + reviews verbatim, for the
    *  pre-call landingsite paste. Available on every tier. */
   onQuickBrief: () => void;
+  /** Called after the project's status has been flipped via the card's
+   *  "Mark as Active Client" action so the parent can reload the projects
+   *  list and refresh stats/MRR. */
+  onProjectChanged: () => void;
 }
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
 export function SiteCard({
-  project, onSwitchTab, onOpenDetail, onEditInfo, onQuickBrief, showToast: _showToast,
+  project, onSwitchTab, onOpenDetail, onEditInfo, onQuickBrief, onProjectChanged, showToast,
 }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const isBuilding = project.status === 'building';
+  const isProspect = project.status === 'prospect';
   const mrr = TIER_MRR[tier] ?? 0;
   const pagesBuilt = project.pages_built ?? 0;
   const monthlyTarget = project.monthly_pages_target ?? (tier === 3 ? 5 : 0);
   const hasBriefStudio = tier === 3;
+  const [signing, setSigning] = useState(false);
 
   const subtitle = (() => {
     const where = [project.city, project.state].filter(Boolean).join(', ');
+    if (isProspect) return `${where} · Prospect (qualified, not yet signed)`;
     if (project.contract_start) {
       return `${where} · Client since ${formatDate(project.contract_start, { year: 'numeric', month: 'short' })}`;
     }
     return `${where} · ${project.status === 'building' ? 'Just signed' : project.status}`;
   })();
+
+  async function handleMarkActive() {
+    if (signing) return;
+    setSigning(true);
+    try {
+      await api.projects.update(project.id, {
+        status: 'building',
+        contract_start: new Date().toISOString(),
+      });
+      showToast(`${project.business_name} marked as active client`, 'success');
+      onProjectChanged();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not mark active: ${msg}`, 'error');
+    } finally {
+      setSigning(false);
+    }
+  }
 
   // Tier 3 → header opens Brief Studio (existing behaviour).
   // Tier 1/2 → no Brief Studio exists; header opens Edit Info instead so the
@@ -57,7 +84,27 @@ export function SiteCard({
           <div className="scard-title">{project.business_name}</div>
           <div className="scard-sub">{subtitle}</div>
         </div>
-        <TierPill tier={tier} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isProspect && (
+            <span
+              style={{
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                color: 'var(--yellow)',
+                background: 'rgba(245,200,66,0.1)',
+                border: '1px solid rgba(245,200,66,0.3)',
+                padding: '2px 7px',
+                borderRadius: 999,
+                textTransform: 'uppercase',
+              }}
+              title="Qualified for pitch, not yet signed. Excluded from MRR."
+            >
+              📝 Prospect
+            </span>
+          )}
+          <TierPill tier={tier} />
+        </div>
       </div>
       <div className="scard-body">
         <div className="url-row">
@@ -104,11 +151,27 @@ export function SiteCard({
         </div>
 
         <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+          {/* Prospects get a dedicated "they signed!" button at the top of
+              the action row. Once flipped, the card becomes a regular active
+              client and this button stops rendering. */}
+          {isProspect && (
+            <Button variant="primary" size="sm" onClick={handleMarkActive} disabled={signing}
+                    title="They signed. Move to active client status — counts toward MRR.">
+              {signing ? '⏳ Marking…' : '✓ Mark as active client'}
+            </Button>
+          )}
           {hasBriefStudio ? (
             <>
-              <Button variant="primary" size="sm" onClick={onOpenDetail}>
-                📋 Brief Studio
-              </Button>
+              {!isProspect && (
+                <Button variant="primary" size="sm" onClick={onOpenDetail}>
+                  📋 Brief Studio
+                </Button>
+              )}
+              {isProspect && (
+                <Button variant="ghost" size="sm" onClick={onOpenDetail}>
+                  📋 Brief Studio
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
                 ⚡ Quick brief
               </Button>
@@ -121,9 +184,16 @@ export function SiteCard({
             </>
           ) : (
             <>
-              <Button variant="primary" size="sm" onClick={onEditInfo}>
-                ✎ Edit Info
-              </Button>
+              {!isProspect && (
+                <Button variant="primary" size="sm" onClick={onEditInfo}>
+                  ✎ Edit Info
+                </Button>
+              )}
+              {isProspect && (
+                <Button variant="ghost" size="sm" onClick={onEditInfo}>
+                  ✎ Edit
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
                 ⚡ Quick brief
               </Button>

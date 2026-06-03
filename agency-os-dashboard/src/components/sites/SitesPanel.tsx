@@ -133,13 +133,24 @@ export function SitesPanel({
   }, [projects, sort]);
 
   const stats = useMemo(() => {
-    const live = projects.filter(p => p.status === 'live' || p.status === 'building');
-    const t3 = live.filter(p => p.tier === 3);
-    const t2 = live.filter(p => p.tier === 2);
-    const t1 = live.filter(p => p.tier === 1);
+    // Active clients drive every MRR-style stat — projects in 'prospect'
+    // status are qualified-but-unsigned and shouldn't inflate the numbers.
+    const active = projects.filter(p => p.status === 'live' || p.status === 'building');
+    const prospects = projects.filter(p => p.status === 'prospect');
+    const t3 = active.filter(p => p.tier === 3);
+    const t2 = active.filter(p => p.tier === 2);
+    const t1 = active.filter(p => p.tier === 1);
     const t3Mrr = t3.length * TIER_MRR[3];
     const t2Mrr = t2.length * TIER_MRR[2];
-    return { total: live.length, t3: t3.length, t2: t2.length, t1: t1.length, t3Mrr, t2Mrr };
+    return {
+      total: active.length,
+      prospects: prospects.length,
+      t3: t3.length,
+      t2: t2.length,
+      t1: t1.length,
+      t3Mrr,
+      t2Mrr,
+    };
   }, [projects]);
 
   const editorElement = editorCtx && (
@@ -206,8 +217,20 @@ export function SitesPanel({
         </select>
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <div className="scard"><div className="snum">{stats.total}</div><div className="slabel">Total Sites</div></div>
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <div className="scard">
+          <div className="snum">{stats.total}</div>
+          <div className="slabel">Active Clients</div>
+          <div className="sdelta">${(stats.t3Mrr + stats.t2Mrr).toLocaleString()}/mo total MRR</div>
+        </div>
+        <div className="scard" style={{
+          background: 'rgba(245,200,66,0.06)',
+          border: '1px solid rgba(245,200,66,0.2)',
+        }}>
+          <div className="snum" style={{ color: 'var(--yellow)' }}>{stats.prospects}</div>
+          <div className="slabel">Prospects</div>
+          <div className="sdelta">Qualified · not yet signed</div>
+        </div>
         <div className="tier-stat t3">
           <div className="tier-num t3">{stats.t3}</div>
           <div className="slabel" style={{ color: 'var(--tier3)' }}>Tier 3 active</div>
@@ -246,6 +269,7 @@ export function SitesPanel({
               onOpenDetail={() => setDetailProjectId(p.id)}
               onEditInfo={() => openEditor(p)}
               onQuickBrief={() => openQuickBrief(p)}
+              onProjectChanged={() => { void load(); }}
             />
           ))}
         </div>

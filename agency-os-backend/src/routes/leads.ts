@@ -258,12 +258,16 @@ async function createProjectFromLead(env: Env, lead: Lead, tier: 1 | 2 | 3): Pro
     : null;
   const pagesPlanned = tier === 3 ? 15 : 5;
 
+  // New projects start as 'prospect' — qualified leads we're pitching but
+  // haven't signed yet. The operator transitions to 'building' (or 'live',
+  // 'paused', 'dead') once the deal closes. MRR calculations exclude
+  // 'prospect' so the pre-close pipeline doesn't inflate revenue numbers.
   const insert = await env.DB.prepare(`
     INSERT INTO projects (
       lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
       services, service_areas, pages_planned,
       contract_start, contract_min_end, merchynt_active, status, reviews_snapshot
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'building', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospect', ?)
   `).bind(
     lead.id,
     lead.company,
