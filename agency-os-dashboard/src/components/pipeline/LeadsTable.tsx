@@ -56,6 +56,7 @@ export function LeadsTable({
             <th>Status</th>
             <th>Tier</th>
             <th>Score</th>
+            <th>Reviews</th>
             <th>City</th>
             <th>Website</th>
             <th>Phone</th>
@@ -164,9 +165,9 @@ function LeadRow({
       </td>
       <td>{enrichmentBadge}</td>
 
-      {/* For enriching/pending/failed, span tier + score columns with explanatory text */}
-      {(lead.enrichment_status === 'enriched' || lead.enrichment_status === 'enriching' || lead.enrichment_status === 'pending' || lead.enrichment_status === 'failed') && lead.enrichment_status !== 'enriched' ? (
-        <td colSpan={2} style={{
+      {/* For enriching/pending/failed, span tier + score + reviews columns with explanatory text */}
+      {lead.enrichment_status !== 'enriched' ? (
+        <td colSpan={3} style={{
           color: lead.enrichment_status === 'failed' ? 'var(--red)' : 'var(--text3)',
           fontSize: '0.7rem',
           fontStyle: lead.enrichment_status === 'pending' ? 'italic' : undefined,
@@ -192,6 +193,7 @@ function LeadRow({
               />
             ) : <span style={{ color: 'var(--text3)' }}>—</span>}
           </td>
+          <td>{renderReviewsCell(lead)}</td>
         </>
       )}
 
@@ -236,6 +238,29 @@ function LeadRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+// Reviews cell. Shows Google review count + average rating — a quick signal
+// for "is this lead worth calling." A high count with a strong rating means
+// a real, established business with an online footprint; a low count or no
+// rating means either a new business or a poor Places match. Always
+// rendered for enriched leads only (the colSpan above covers the rest).
+function renderReviewsCell(lead: Lead): React.ReactNode {
+  const count = lead.google_review_count;
+  const rating = lead.google_rating;
+  if (count == null && rating == null) {
+    return <span style={{ color: 'var(--text3)' }}>—</span>;
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
+      <span style={{ fontWeight: 600 }}>{count ?? 0}</span>
+      {rating != null && (
+        <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+          · {rating.toFixed(1)}★
+        </span>
+      )}
+    </span>
   );
 }
 

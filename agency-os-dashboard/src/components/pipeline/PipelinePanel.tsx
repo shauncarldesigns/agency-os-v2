@@ -23,6 +23,11 @@ interface PipelinePanelProps {
 
 type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
+// Sort options for the pipeline table. 'default' preserves the backend's
+// updated_at DESC ordering; the others let the operator triage by signal
+// strength (most reviews = most established business, highest score =
+// best opportunity, highest rating = strongest customer signal).
+type SortMode = 'default' | 'reviews' | 'score' | 'rating';
 
 export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: PipelinePanelProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -30,6 +35,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [stage, setStage] = useState<StageFilter>('all');
   const [tier, setTier] = useState<TierFilter>('all');
   const [website, setWebsite] = useState<WebsiteFilter>('all');
+  const [sort, setSort] = useState<SortMode>('default');
   const [industry, setIndustry] = useState<string>('');
   const [industries, setIndustries] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -117,8 +123,25 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         || (l.phone ?? '').toLowerCase().includes(q)
       );
     }
+    // Sort step. 'default' = backend's updated_at DESC; others sort the
+    // filtered list DESC by the requested signal, nulls last so unenriched
+    // rows sink rather than masquerade as zero.
+    if (sort !== 'default') {
+      const key: (l: Lead) => number | null =
+        sort === 'reviews' ? (l) => l.google_review_count
+        : sort === 'score' ? (l) => l.opportunity_score
+        : (l) => l.google_rating;
+      list = [...list].sort((a, b) => {
+        const av = key(a);
+        const bv = key(b);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return bv - av;
+      });
+    }
     return list;
-  }, [leads, stage, tier, website, search]);
+  }, [leads, stage, tier, website, search, sort]);
 
   return (
     <>
@@ -189,6 +212,14 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
             <option value="all">All Websites</option>
             <option value="none">No website</option>
             <option value="has">Has website</option>
+          </select>
+        )}
+        {view === 'active' && (
+          <select className="fsel" value={sort} onChange={e => setSort(e.target.value as SortMode)}>
+            <option value="default">Sort: Recently updated</option>
+            <option value="reviews">Sort: Most reviews</option>
+            <option value="score">Sort: Highest score</option>
+            <option value="rating">Sort: Highest rating</option>
           </select>
         )}
       </div>
