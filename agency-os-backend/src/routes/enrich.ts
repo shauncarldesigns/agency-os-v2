@@ -203,14 +203,27 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   if (outscraperResult.status === 'fulfilled') {
     placeData = outscraperResult.value;
   } else {
-    log('warn', 'enrich', `Outscraper fetch failed for lead ${leadId} — falling back to Google reviews`, outscraperResult.reason);
+    const reason = outscraperResult.reason;
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    // Subrequest cap = no point continuing this lead OR the next ones —
+    // propagate so the enrich-all loop bails out cleanly instead of
+    // burning the rest of the budget on Claude/PageSpeed retries.
+    if (msg.includes('Too many subrequests')) {
+      throw new Error(msg);
+    }
+    log('warn', 'enrich', `Outscraper fetch failed for lead ${leadId} — falling back to Google reviews`, reason);
   }
 
   if (pagespeedResult.status === 'fulfilled' && pagespeedResult.value) {
     pagespeedMobile = pagespeedResult.value.mobile;
     pagespeedDesktop = pagespeedResult.value.desktop;
   } else if (pagespeedResult.status === 'rejected') {
-    log('warn', 'enrich', `PageSpeed failed for lead ${leadId}`, pagespeedResult.reason);
+    const reason = pagespeedResult.reason;
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    if (msg.includes('Too many subrequests')) {
+      throw new Error(msg);
+    }
+    log('warn', 'enrich', `PageSpeed failed for lead ${leadId}`, reason);
   }
 
   // 4. Review mining via Claude (only if we have reviews)
@@ -224,6 +237,13 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
         placeData.reviews
       );
     } catch (err) {
+      const msg = (err as Error).message;
+      // Same subrequest-cap propagation — Claude calls hit the cap just
+      // like Outscraper does, and continuing means scoring/persisting a
+      // half-enriched lead and probably tripping the cap on the next one too.
+      if (msg.includes('Too many subrequests')) {
+        throw err;
+      }
       log('warn', 'enrich', `Review mining failed for lead ${leadId}`, err);
     }
   }

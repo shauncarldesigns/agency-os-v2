@@ -102,9 +102,18 @@ async function pollResults(apiKey: string, resultsUrl: string): Promise<Outscrap
         signal: AbortSignal.timeout(POLL_FETCH_TIMEOUT_MS),
       });
     } catch (err) {
+      const msg = (err as Error).message;
+      // Worker subrequest cap is the only fetch error that DOESN'T resolve
+      // by retrying — once we're past 1000 subrequests in this invocation,
+      // every subsequent fetch fails the same way. Bail immediately so the
+      // caller (enrich-all) can stop the batch instead of burning the
+      // remaining 60–120s deadline on doomed retries.
+      if (msg.includes('Too many subrequests')) {
+        throw new Error(`Outscraper polling abandoned — Worker subrequest cap exhausted: ${msg}`);
+      }
       // A single hung/aborted poll shouldn't kill the job — log and let the
       // deadline check decide whether to keep trying.
-      log('warn', 'outscraper', `poll fetch errored, retrying`, { message: (err as Error).message });
+      log('warn', 'outscraper', `poll fetch errored, retrying`, { message: msg });
       continue;
     }
 
