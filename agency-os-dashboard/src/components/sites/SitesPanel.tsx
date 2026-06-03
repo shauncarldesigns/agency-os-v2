@@ -19,6 +19,13 @@ interface SitesPanelProps {
 }
 
 type Sort = 'tier' | 'due' | 'az';
+/**
+ * Which slice of projects the grid renders. Click a stat tile to toggle a
+ * filter; clicking the active tile clears back to 'all'. Tiles are
+ * mutually exclusive — the operator picks one at a time, no compound
+ * filtering. Filter is purely client-side over the already-fetched list.
+ */
+type StatusFilter = 'all' | 'active' | 'prospect' | 't3' | 't2' | 't1';
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
@@ -40,6 +47,7 @@ export function SitesPanel({
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
+  const [filter, setFilter] = useState<StatusFilter>('all');
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
   const [editorCtx, setEditorCtx] = useState<EditorContext | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
@@ -121,7 +129,20 @@ export function SitesPanel({
   }, [showToast]);
 
   const sorted = useMemo(() => {
-    const list = [...projects];
+    // Filter first (cheap, narrows the set), then sort the remainder.
+    const isActive = (p: Project) => p.status === 'live' || p.status === 'building';
+    let list = projects.filter((p) => {
+      switch (filter) {
+        case 'active':   return isActive(p);
+        case 'prospect': return p.status === 'prospect';
+        case 't3':       return isActive(p) && p.tier === 3;
+        case 't2':       return isActive(p) && p.tier === 2;
+        case 't1':       return isActive(p) && p.tier === 1;
+        case 'all':
+        default:         return true;
+      }
+    });
+    list = [...list];
     if (sort === 'tier') list.sort((a, b) => b.tier - a.tier);
     else if (sort === 'az') list.sort((a, b) => a.business_name.localeCompare(b.business_name));
     else if (sort === 'due') list.sort((a, b) => {
@@ -130,7 +151,7 @@ export function SitesPanel({
       return aDate - bDate;
     });
     return list;
-  }, [projects, sort]);
+  }, [projects, sort, filter]);
 
   const stats = useMemo(() => {
     // Active clients drive every MRR-style stat — projects in 'prospect'
@@ -208,7 +229,28 @@ export function SitesPanel({
       <div className="sec-header">
         <div>
           <div className="sec-title">Sites</div>
-          <div className="sec-sub">All client projects · Tier 3 cards open the Brief Studio; Tier 1/2 use Edit Info</div>
+          <div className="sec-sub">
+            {filter === 'all'
+              ? 'All client projects · click a tile below to filter'
+              : `Filtered: ${filterLabel(filter)} · `}
+            {filter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilter('all')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  font: 'inherit',
+                  padding: 0,
+                  textDecoration: 'underline',
+                }}
+              >
+                clear filter
+              </button>
+            )}
+          </div>
         </div>
         <select className="fsel" value={sort} onChange={e => setSort(e.target.value as Sort)}>
           <option value="tier">Sort: Tier (high to low)</option>
@@ -218,46 +260,93 @@ export function SitesPanel({
       </div>
 
       <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-        <div className="scard">
+        <StatTile
+          active={filter === 'active'}
+          onClick={() => setFilter((f) => (f === 'active' ? 'all' : 'active'))}
+          variant="scard"
+        >
           <div className="snum">{stats.total}</div>
           <div className="slabel">Active Clients</div>
           <div className="sdelta">${(stats.t3Mrr + stats.t2Mrr).toLocaleString()}/mo total MRR</div>
-        </div>
-        <div className="scard" style={{
-          background: 'rgba(245,200,66,0.06)',
-          border: '1px solid rgba(245,200,66,0.2)',
-        }}>
+        </StatTile>
+        <StatTile
+          active={filter === 'prospect'}
+          onClick={() => setFilter((f) => (f === 'prospect' ? 'all' : 'prospect'))}
+          variant="prospect"
+        >
           <div className="snum" style={{ color: 'var(--yellow)' }}>{stats.prospects}</div>
           <div className="slabel">Prospects</div>
           <div className="sdelta">Qualified · not yet signed</div>
-        </div>
-        <div className="tier-stat t3">
+        </StatTile>
+        <StatTile
+          active={filter === 't3'}
+          onClick={() => setFilter((f) => (f === 't3' ? 'all' : 't3'))}
+          variant="tier-stat t3"
+        >
           <div className="tier-num t3">{stats.t3}</div>
           <div className="slabel" style={{ color: 'var(--tier3)' }}>Tier 3 active</div>
           <div className="sdelta">${stats.t3Mrr.toLocaleString()}/mo recurring</div>
-        </div>
-        <div className="tier-stat t2">
+        </StatTile>
+        <StatTile
+          active={filter === 't2'}
+          onClick={() => setFilter((f) => (f === 't2' ? 'all' : 't2'))}
+          variant="tier-stat t2"
+        >
           <div className="tier-num t2">{stats.t2}</div>
           <div className="slabel" style={{ color: 'var(--tier2)' }}>Tier 2 active</div>
           <div className="sdelta">${stats.t2Mrr.toLocaleString()}/mo recurring</div>
-        </div>
-        <div className="tier-stat t1">
+        </StatTile>
+        <StatTile
+          active={filter === 't1'}
+          onClick={() => setFilter((f) => (f === 't1' ? 'all' : 't1'))}
+          variant="tier-stat t1"
+        >
           <div className="tier-num t1">{stats.t1}</div>
           <div className="slabel" style={{ color: 'var(--tier1)' }}>Tier 1 (handed off)</div>
           <div className="sdelta">No ongoing work</div>
-        </div>
+        </StatTile>
       </div>
 
       {loading ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
           <Spinner /> Loading sites…
         </div>
-      ) : sorted.length === 0 ? (
+      ) : projects.length === 0 ? (
+        // True empty state: no projects at all in the DB.
         <EmptyState
           icon="🌐"
           title="No client sites yet"
           sub="Qualify a Pipeline lead to convert it into a project here. Tier 3 unlocks the Brief Studio; Tier 1/2 land as light-weight records."
         />
+      ) : sorted.length === 0 ? (
+        // Projects exist but the active filter excludes them all.
+        <div style={{
+          marginTop: 14,
+          padding: '24px 16px',
+          textAlign: 'center',
+          color: 'var(--text3)',
+          background: 'var(--surface2)',
+          border: '1px dashed var(--border)',
+          borderRadius: 'var(--r)',
+          fontSize: '0.78rem',
+        }}>
+          No projects match the <strong>{filterLabel(filter)}</strong> filter.{' '}
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              cursor: 'pointer',
+              font: 'inherit',
+              padding: 0,
+              textDecoration: 'underline',
+            }}
+          >
+            Show all
+          </button>
+        </div>
       ) : (
         <div className="sites-grid">
           {sorted.map(p => (
@@ -285,6 +374,60 @@ export function SitesPanel({
 /** Tiny modal-overlay-style loader for when we're fetching context for the
  *  editor before showing it. Avoids a layout pop while the parallel fetch
  *  for lead + master brief resolves. */
+/**
+ * Clickable stat tile. Replaces the static <div className="scard">; same
+ * visual shell, but adds a hover affordance + an "active" outline when
+ * the tile is the currently-applied filter. Falls back to a regular
+ * div with no extra chrome if onClick is not provided.
+ */
+function StatTile({
+  active, onClick, variant, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  variant: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={variant}
+      style={{
+        textAlign: 'left',
+        cursor: 'pointer',
+        font: 'inherit',
+        color: 'inherit',
+        background: variant === 'prospect'
+          ? 'rgba(245,200,66,0.06)'
+          : undefined,
+        // Active state: thicker accent-coloured outline so the operator can
+        // see which slice the grid below is filtered to at a glance.
+        outline: active ? '2px solid var(--accent)' : undefined,
+        outlineOffset: active ? -2 : 0,
+        border: variant === 'prospect'
+          ? '1px solid rgba(245,200,66,0.2)'
+          : undefined,
+      }}
+      title={active ? 'Click to clear filter' : 'Click to filter the grid below'}
+      aria-pressed={active}
+    >
+      {children}
+    </button>
+  );
+}
+
+function filterLabel(f: 'all' | 'active' | 'prospect' | 't3' | 't2' | 't1'): string {
+  switch (f) {
+    case 'active':   return 'Active Clients';
+    case 'prospect': return 'Prospects';
+    case 't3':       return 'Tier 3 active';
+    case 't2':       return 'Tier 2 active';
+    case 't1':       return 'Tier 1 (handed off)';
+    default:         return '';
+  }
+}
+
 function ModalLoaderHint() {
   return (
     <div className="modal-overlay open" style={{ pointerEvents: 'none' }}>
