@@ -14,10 +14,13 @@ interface EnrichmentStripProps {
   onComplete: () => void;
 }
 
-// UI safety cap — backend allows up to 100, but a single 50-lead Outscraper
-// batch already pushes ~30+ minutes wall-clock. 50 is the largest "click and
-// walk away" batch we want to encourage from one button press.
-const BULK_LIMIT = 50;
+// UI safety cap. The Worker's per-invocation subrequest budget (1000 on
+// paid) bounds how many leads a single bulk call can process — each lead
+// burns ~15–20 subrequests with the post-fix Outscraper poll cadence.
+// 25 leaves comfortable headroom; if the backend hits the cap mid-batch
+// it now stops cleanly and reports `stoppedEarly`, but staying under the
+// cap is the better path.
+const BULK_LIMIT = 25;
 
 export function EnrichmentStrip({
   leads, selectedIds, onClearSelection, showToast, onComplete,
@@ -68,10 +71,7 @@ export function EnrichmentStrip({
       );
       try {
         const result = await api.leads.enrichAll({ ids, limit: BULK_LIMIT });
-        showToast(
-          `Re-enriched ${result.succeeded} of ${result.total} (${result.failed} failed)`,
-          result.failed === 0 ? 'success' : 'default'
-        );
+        showToast(formatResultToast(result, 'Re-enriched'), result.failed === 0 && !result.stoppedEarly ? 'success' : 'default');
         onComplete();
       } catch (err) {
         showToast(`Bulk re-enrich failed: ${(err as Error).message}`, 'error');
@@ -87,16 +87,37 @@ export function EnrichmentStrip({
     showToast(`Enriching ${pending} pending leads — this may take a few minutes`, 'default');
     try {
       const result = await api.leads.enrichAll({ limit: Math.min(pending, BULK_LIMIT) });
-      showToast(
-        `Enriched ${result.succeeded} of ${result.total} (${result.failed} failed)`,
-        result.failed === 0 ? 'success' : 'default'
-      );
+      showToast(formatResultToast(result, 'Enriched'), result.failed === 0 && !result.stoppedEarly ? 'success' : 'default');
       onComplete();
     } catch (err) {
       showToast(`Enrichment failed: ${(err as Error).message}`, 'error');
     } finally {
       setRunning(false);
     }
+  }
+
+  /** Build a friendly toast covering the normal case + the new "stopped
+   *  early" case where the Worker subrequest cap kicked in mid-batch. */
+  function formatResultToast(
+    result: {
+      total: number;
+      processed?: number;
+      succeeded: number;
+      failed: number;
+      stoppedEarly?: string | null;
+      remainingUnprocessed?: number;
+    },
+    verb: string
+  ): string {
+    const base = `${verb} ${result.succeeded} of ${result.total} (${result.failed} failed)`;
+    if (result.stoppedEarly === 'subrequest_budget_exhausted') {
+      const remaining = result.remainingUnprocessed ?? 0;
+      return `${base} — hit Worker subrequest cap, ${remaining} left to retry in a smaller batch`;
+    }
+    if (result.stoppedEarly) {
+      return `${base} — batch stopped early (${result.stoppedEarly})`;
+    }
+    return base;
   }
 
   const buttonLabel = (() => {

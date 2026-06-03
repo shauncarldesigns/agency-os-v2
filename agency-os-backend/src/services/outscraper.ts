@@ -13,7 +13,13 @@ import { log } from '../utils/errors';
 import type { GoogleReview } from './places';
 
 const BASE = 'https://api.app.outscraper.com/maps/reviews-v3';
-const POLL_INTERVAL_MS = 2000;
+// Polling cadence drives the Worker subrequest budget more than anything
+// else in this codebase. A 2s interval with a 120s deadline = up to 60
+// subrequests per Outscraper task, and bulk enrich blows the Worker's
+// 1000-subrequest cap in ~15 leads. 8s × 120s = 15 subrequests max per
+// task, ~50 leads safely per bulk. Trades up to 8s of completion latency
+// per task (most jobs finish in 30–90s) for 4× the bulk headroom.
+const POLL_INTERVAL_MS = 8000;
 // Outscraper async jobs for 50 reviews legitimately take 1.5–2 min (observed
 // ~118s in prod for 43 reviews). 45s was clipping real jobs and forcing a
 // fallback to Google's 5. 120s lets review-heavy leads complete; the per-fetch

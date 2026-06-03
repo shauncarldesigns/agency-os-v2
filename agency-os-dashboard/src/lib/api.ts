@@ -87,7 +87,19 @@ export const api = {
      * - `ids` omitted → enrich every 'pending' lead, capped by `limit`.
      */
     enrichAll: (opts: { limit?: number; ids?: number[] } = {}) =>
-      apiFetch<{ total: number; succeeded: number; failed: number; failures: Array<{ id: number; error: string }> }>(
+      apiFetch<{
+        total: number;
+        processed?: number;
+        succeeded: number;
+        failed: number;
+        failures: Array<{ id: number; error: string }>;
+        /** Set when the backend stopped the batch before processing every id —
+         *  e.g. 'subrequest_budget_exhausted' when the Worker hit its 1000-
+         *  subrequest cap. The remaining leads are untouched (NOT marked
+         *  failed) so the operator can retry them in a fresh invocation. */
+        stoppedEarly?: string | null;
+        remainingUnprocessed?: number;
+      }>(
         '/api/leads/enrich-all',
         { method: 'POST', body: JSON.stringify({ limit: opts.limit ?? 25, ...(opts.ids ? { ids: opts.ids } : {}) }) }
       ),
