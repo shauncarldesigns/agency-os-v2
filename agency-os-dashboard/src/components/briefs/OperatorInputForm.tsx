@@ -74,6 +74,7 @@ export function OperatorInputForm({
   onBriefGenerated, onProjectSaved, onDeleted,
 }: OperatorInputFormProps) {
   const [tier, setTier] = useState<Tier>((project.tier ?? 3) as Tier);
+  const [status, setStatus] = useState<Project['status']>(project.status ?? 'prospect');
   const [businessName, setBusinessName] = useState(project.business_name);
   const [city, setCity] = useState(project.city ?? '');
   const [stateCode, setStateCode] = useState(project.state ?? 'WI');
@@ -100,6 +101,7 @@ export function OperatorInputForm({
   useEffect(() => {
     if (!open) return;
     setTier((project.tier ?? 3) as Tier);
+    setStatus(project.status ?? 'prospect');
     setBusinessName(project.business_name);
     setCity(project.city ?? '');
     setStateCode(project.state ?? 'WI');
@@ -248,6 +250,7 @@ export function OperatorInputForm({
     const yearNum = foundedYear.trim() ? Number(foundedYear.trim()) : null;
     const res = await api.projects.update(project.id, {
       tier,
+      status,
       business_name: businessName.trim(),
       city: city.trim() || null,
       state: stateCode.trim() || null,
@@ -442,6 +445,24 @@ export function OperatorInputForm({
             )}
           </div>
         )}
+
+        <SectionTitle>Status</SectionTitle>
+        <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginBottom: 8 }}>
+          Drives whether this project counts toward MRR on the Sites tab.
+          Only <code>building</code>, <code>live</code>, and <code>paused</code> count.
+        </div>
+        <select
+          className="finput"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as Project['status'])}
+          style={{ width: '100%' }}
+        >
+          <option value="prospect">📝 Prospect — qualified, not yet signed (NOT counted in MRR)</option>
+          <option value="building">🔨 Building — signed client, site being built (counts)</option>
+          <option value="live">● Live — site is live (counts)</option>
+          <option value="paused">⏸ Paused — temporarily inactive client (counts)</option>
+          <option value="dead">⚠ Dead — churned (NOT counted in MRR)</option>
+        </select>
 
         <SectionTitle>Business details</SectionTitle>
         <Grid2>
