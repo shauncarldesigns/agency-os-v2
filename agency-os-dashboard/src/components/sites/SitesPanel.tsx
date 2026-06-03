@@ -6,6 +6,7 @@ import { EmptyState } from '../shared/EmptyState';
 import { SiteCard } from './SiteCard';
 import { SiteDetailPanel } from './SiteDetailPanel';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
+import { QuickBriefModal } from './QuickBriefModal';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -42,6 +43,10 @@ export function SitesPanel({
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
   const [editorCtx, setEditorCtx] = useState<EditorContext | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
+  // Quick brief modal — keyed on { project, lead } where lead is fetched
+  // lazily so we can show the freshest reviews after any re-enrichment.
+  const [quickBriefCtx, setQuickBriefCtx] = useState<{ project: Project; lead: Lead | null } | null>(null);
+  const [quickBriefLoading, setQuickBriefLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,6 +99,27 @@ export function SitesPanel({
     }
   }, [showToast]);
 
+  /**
+   * Open the quick brief modal. Pulls a fresh lead (if linked) so the
+   * reviews block reflects the latest enrichment rather than the snapshot
+   * taken at project-create time. Falls back to project.reviews_snapshot
+   * if the lead is gone or unlinkable.
+   */
+  const openQuickBrief = useCallback(async (project: Project) => {
+    setQuickBriefLoading(true);
+    try {
+      const lead = project.lead_id
+        ? await api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
+        : null;
+      setQuickBriefCtx({ project, lead });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not open quick brief: ${msg}`, 'error');
+    } finally {
+      setQuickBriefLoading(false);
+    }
+  }, [showToast]);
+
   const sorted = useMemo(() => {
     const list = [...projects];
     if (sort === 'tier') list.sort((a, b) => b.tier - a.tier);
@@ -133,6 +159,16 @@ export function SitesPanel({
     />
   );
 
+  const quickBriefElement = quickBriefCtx && (
+    <QuickBriefModal
+      open={true}
+      onClose={() => setQuickBriefCtx(null)}
+      project={quickBriefCtx.project}
+      lead={quickBriefCtx.lead}
+      showToast={showToast}
+    />
+  );
+
   const detailProject = detailProjectId != null
     ? projects.find((p) => p.id === detailProjectId) ?? null
     : null;
@@ -147,9 +183,11 @@ export function SitesPanel({
           onBack={() => setDetailProjectId(null)}
           onProjectChanged={load}
           onEditProject={() => openEditor(detailProject)}
+          onQuickBrief={() => openQuickBrief(detailProject)}
         />
         {editorElement}
-        {editorLoading && <ModalLoaderHint />}
+        {quickBriefElement}
+        {(editorLoading || quickBriefLoading) && <ModalLoaderHint />}
       </>
     );
   }
@@ -207,13 +245,15 @@ export function SitesPanel({
               onSwitchTab={onSwitchTab}
               onOpenDetail={() => setDetailProjectId(p.id)}
               onEditInfo={() => openEditor(p)}
+              onQuickBrief={() => openQuickBrief(p)}
             />
           ))}
         </div>
       )}
 
       {editorElement}
-      {editorLoading && <ModalLoaderHint />}
+      {quickBriefElement}
+      {(editorLoading || quickBriefLoading) && <ModalLoaderHint />}
     </>
   );
 }

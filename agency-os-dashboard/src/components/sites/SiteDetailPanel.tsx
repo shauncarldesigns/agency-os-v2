@@ -21,6 +21,9 @@ interface SiteDetailPanelProps {
    *  Lives at the SitesPanel level so the modal survives the detail view
    *  unmounting (e.g. when deleting). */
   onEditProject: () => void;
+  /** Open the Quick Brief modal — business name + reviews verbatim, for the
+   *  pre-call landingsite paste. Sidebar Quick Actions. */
+  onQuickBrief: () => void;
 }
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
@@ -41,7 +44,7 @@ const KIND_LABEL: Record<BriefKind, string> = {
  * with a placeholder note for now).
  */
 export function SiteDetailPanel({
-  project, showToast, onSwitchTab, onBack, onProjectChanged, onEditProject,
+  project, showToast, onSwitchTab, onBack, onProjectChanged, onEditProject, onQuickBrief,
 }: SiteDetailPanelProps) {
   const [master, setMaster] = useState<Brief | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);
@@ -254,6 +257,7 @@ export function SiteDetailPanel({
             hasMaster={!!master}
             onSwitchTab={onSwitchTab}
             onEditProject={onEditProject}
+            onQuickBrief={onQuickBrief}
           />
         </aside>
       </div>
@@ -527,13 +531,14 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 // ============================================================================
 
 function Sidebar({
-  project, lead, hasMaster, onSwitchTab, onEditProject,
+  project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief,
 }: {
   project: Project;
   lead: Lead | null;
   hasMaster: boolean;
   onSwitchTab: (tab: Tab) => void;
   onEditProject: () => void;
+  onQuickBrief: () => void;
 }) {
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
@@ -558,6 +563,14 @@ function Sidebar({
       <div className="bs-side-card">
         <div className="bs-side-title">Quick Actions</div>
         <div className="bs-quick-actions">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onQuickBrief}
+            title="Business + reviews verbatim, for the pre-call landingsite paste"
+          >
+            ⚡ Quick brief (for landingsite demo)
+          </Button>
           <Button
             variant="ghost"
             size="sm"
