@@ -12,12 +12,15 @@ interface SiteCardProps {
   onOpenDetail: () => void;
   /** Open the Edit Project modal (tier change / business info / delete). */
   onEditInfo: () => void;
+  /** Open the Quick Brief modal — business name + reviews verbatim, for the
+   *  pre-call landingsite paste. Available on every tier. */
+  onQuickBrief: () => void;
 }
 
 const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
 export function SiteCard({
-  project, onSwitchTab, onOpenDetail, onEditInfo, showToast: _showToast,
+  project, onSwitchTab, onOpenDetail, onEditInfo, onQuickBrief, showToast: _showToast,
 }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
@@ -106,6 +109,9 @@ export function SiteCard({
               <Button variant="primary" size="sm" onClick={onOpenDetail}>
                 📋 Brief Studio
               </Button>
+              <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
+                ⚡ Quick brief
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
                 📈 Report
               </Button>
@@ -117,6 +123,9 @@ export function SiteCard({
             <>
               <Button variant="primary" size="sm" onClick={onEditInfo}>
                 ✎ Edit Info
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
+                ⚡ Quick brief
               </Button>
               <span style={{
                 display: 'inline-flex',
