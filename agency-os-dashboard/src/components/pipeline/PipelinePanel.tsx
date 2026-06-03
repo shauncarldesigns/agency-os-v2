@@ -23,6 +23,10 @@ interface PipelinePanelProps {
 
 type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
+// Enrichment status filter. Mirrors lead.enrichment_status's four values so
+// the operator can quickly slice to "leads still pending enrichment" or
+// "leads that failed and need a retry" without scrolling.
+type EnrichmentFilter = 'all' | 'enriched' | 'pending' | 'enriching' | 'failed';
 // Sort options for the pipeline table. 'default' preserves the backend's
 // updated_at DESC ordering; the others let the operator triage by signal
 // strength (most reviews = most established business, highest score =
@@ -35,6 +39,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [stage, setStage] = useState<StageFilter>('all');
   const [tier, setTier] = useState<TierFilter>('all');
   const [website, setWebsite] = useState<WebsiteFilter>('all');
+  const [enrichment, setEnrichment] = useState<EnrichmentFilter>('all');
   const [sort, setSort] = useState<SortMode>('default');
   const [industry, setIndustry] = useState<string>('');
   const [industries, setIndustries] = useState<string[]>([]);
@@ -109,6 +114,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
     let list = leads;
     if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
+    if (enrichment !== 'all') list = list.filter(l => l.enrichment_status === enrichment);
     // Website presence is only known after enrichment, so both filters scope to
     // enriched leads — this keeps the filtered set in sync with what the
     // Website column actually shows ("No site" badge vs domain).
@@ -141,7 +147,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       });
     }
     return list;
-  }, [leads, stage, tier, website, search, sort]);
+  }, [leads, stage, tier, enrichment, website, search, sort]);
 
   return (
     <>
@@ -205,6 +211,15 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
             <option value="3">Tier 3 only</option>
             <option value="2">Tier 2 only</option>
             <option value="1">Tier 1 only</option>
+          </select>
+        )}
+        {view === 'active' && (
+          <select className="fsel" value={enrichment} onChange={e => setEnrichment(e.target.value as EnrichmentFilter)}>
+            <option value="all">All Enrichment</option>
+            <option value="enriched">✓ Enriched</option>
+            <option value="pending">⏳ Pending</option>
+            <option value="enriching">⚙ Enriching now</option>
+            <option value="failed">⚠ Failed</option>
           </select>
         )}
         {view === 'active' && (
