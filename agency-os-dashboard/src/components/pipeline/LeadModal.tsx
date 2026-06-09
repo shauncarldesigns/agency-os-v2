@@ -219,9 +219,28 @@ function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (fie
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
         <div className="fg">
           <label className="flabel">Phone</label>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '0.95rem', color: 'var(--accent)', fontWeight: 500 }}>
-            {formatPhone(lead.phone) || '—'}
-          </div>
+          {lead.phone ? (
+            <a
+              href={`tel:${lead.phone.replace(/\D/g, '')}`}
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: '0.95rem',
+                color: 'var(--accent)',
+                fontWeight: 500,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              title="Click to call (uses your computer's default phone handler — Phone.app, Google Voice, Zoom, etc.)"
+            >
+              📞 {formatPhone(lead.phone)}
+            </a>
+          ) : (
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '0.95rem', color: 'var(--text3)', fontWeight: 500 }}>
+              —
+            </div>
+          )}
         </div>
         <div className="fg">
           <label className="flabel">Existing Website</label>
