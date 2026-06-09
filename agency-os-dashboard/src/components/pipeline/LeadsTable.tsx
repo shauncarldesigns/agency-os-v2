@@ -144,6 +144,19 @@ function LeadRow({
     }
   }
 
+  async function handleHardDelete() {
+    if (!window.confirm(
+      `Permanently delete "${lead.company}"? This cannot be undone — all call history will be lost.`
+    )) return;
+    try {
+      await api.leads.hardDelete(lead.id);
+      showToast(`${lead.company} permanently deleted`, 'default');
+      onLeadUpdated();
+    } catch (err) {
+      showToast(`Delete failed: ${(err as Error).message}`, 'error');
+    }
+  }
+
   // stopPropagation wrapper so action-cell clicks don't trigger the row's
   // open-modal behaviour
   const stop = (e: React.MouseEvent | React.ChangeEvent) => e.stopPropagation();
@@ -231,7 +244,18 @@ function LeadRow({
             <Button variant="ghost" size="xs" disabled={enriching} onClick={handleEnrich}>↻ Retry</Button>
           )}
           {lead.deleted_at ? (
-            <Button variant="ghost" size="xs" onClick={handleRestore} title="Restore from trash">↺ Restore</Button>
+            <>
+              <Button variant="ghost" size="xs" onClick={handleRestore} title="Restore from trash">↺ Restore</Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={handleHardDelete}
+                title="Permanently delete — cannot be undone"
+                style={{ color: 'var(--red)' }}
+              >
+                🗑 Delete forever
+              </Button>
+            </>
           ) : (
             <Button variant="ghost" size="xs" onClick={handleDelete} title="Move to trash">🗑</Button>
           )}

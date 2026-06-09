@@ -191,6 +191,29 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         </>
       )}
 
+      {view === 'trash' && selectedIds.size > 0 && (
+        <TrashBulkStrip
+          selectedCount={selectedIds.size}
+          onClear={() => setSelectedIds(new Set())}
+          onConfirm={async () => {
+            const ids = Array.from(selectedIds);
+            if (!window.confirm(
+              `Permanently delete ${ids.length} lead${ids.length === 1 ? '' : 's'}? ` +
+              `This cannot be undone — all call history for these leads will be lost.`
+            )) return;
+            const results = await Promise.allSettled(ids.map((id) => api.leads.hardDelete(id)));
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            if (failed === 0) {
+              showToast(`${ids.length} lead${ids.length === 1 ? '' : 's'} permanently deleted`, 'success');
+            } else {
+              showToast(`${ids.length - failed} deleted, ${failed} failed`, failed === ids.length ? 'error' : 'default');
+            }
+            setSelectedIds(new Set());
+            loadLeads();
+          }}
+        />
+      )}
+
       <div className="fbar">
         <div className="swrap">
           <span className="sicon">🔍</span>
@@ -290,5 +313,50 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         onAdded={handleLeadUpdated}
       />
     </>
+  );
+}
+
+// Bulk-delete strip for the trash view. Mirrors the EnrichmentStrip pattern
+// (visible only when there's a selection; lets the operator clear or confirm).
+// Kept inline rather than promoted to its own file because it's small and
+// trash-view-specific.
+interface TrashBulkStripProps {
+  selectedCount: number;
+  onClear: () => void;
+  onConfirm: () => void | Promise<void>;
+}
+
+function TrashBulkStrip({ selectedCount, onClear, onConfirm }: TrashBulkStripProps) {
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, padding: '10px 14px', marginBottom: 12,
+        background: 'rgba(248,113,113,0.06)',
+        border: '1px solid rgba(248,113,113,0.35)',
+        borderRadius: 6,
+      }}
+    >
+      <div style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>
+        <strong style={{ color: 'var(--red)' }}>{selectedCount}</strong>{' '}
+        {selectedCount === 1 ? 'lead' : 'leads'} selected for permanent deletion
+      </div>
+      <div style={{ display: 'flex', gap: 7 }}>
+        <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={deleting}
+          onClick={async () => {
+            setDeleting(true);
+            try { await onConfirm(); } finally { setDeleting(false); }
+          }}
+          style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+        >
+          {deleting ? '⏳ Deleting…' : `🗑 Delete forever (${selectedCount})`}
+        </Button>
+      </div>
+    </div>
   );
 }

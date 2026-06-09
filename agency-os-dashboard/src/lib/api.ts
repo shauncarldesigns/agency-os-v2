@@ -63,6 +63,10 @@ export const api = {
       apiFetch<{ lead: Lead }>(`/api/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) =>
       apiFetch<void>(`/api/leads/${id}`, { method: 'DELETE' }),
+    // Permanent delete. Backend rejects with 400 unless the lead is already
+    // soft-deleted — so this is only safe to call from the trash view.
+    hardDelete: (id: number) =>
+      apiFetch<void>(`/api/leads/${id}?hard=true`, { method: 'DELETE' }),
     restore: (id: number) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/restore`, { method: 'POST' }),
     importCsv: (csv: string) =>
