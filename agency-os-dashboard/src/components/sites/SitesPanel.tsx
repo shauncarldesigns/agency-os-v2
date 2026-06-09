@@ -272,7 +272,7 @@ export function SitesPanel({
         <StatTile
           active={filter === 'prospect'}
           onClick={() => setFilter((f) => (f === 'prospect' ? 'all' : 'prospect'))}
-          variant="prospect"
+          variant="scard prospect"
         >
           <div className="snum" style={{ color: 'var(--yellow)' }}>{stats.prospects}</div>
           <div className="slabel">Prospects</div>
@@ -398,14 +398,14 @@ function StatTile({
         cursor: 'pointer',
         font: 'inherit',
         color: 'inherit',
-        background: variant === 'prospect'
+        background: variant.includes('prospect')
           ? 'rgba(245,200,66,0.06)'
           : undefined,
         // Active state: thicker accent-coloured outline so the operator can
         // see which slice the grid below is filtered to at a glance.
         outline: active ? '2px solid var(--accent)' : undefined,
         outlineOffset: active ? -2 : 0,
-        border: variant === 'prospect'
+        border: variant.includes('prospect')
           ? '1px solid rgba(245,200,66,0.2)'
           : undefined,
       }}
