@@ -188,12 +188,19 @@ export const api = {
     dns: {
       setup: (
         id: number,
-        body: { domain: string; registrar?: string; domain_owner_email?: string }
+        body: { domain: string; registrar?: string; domain_owner_email?: string },
+        // Pass replace=true for the Edit Project domain-swap flow. Causes the
+        // backend to orphan the existing zone and create a new one. The
+        // old zone_id is logged for audit; manual cleanup in CF dashboard.
+        opts?: { replace?: boolean }
       ) =>
-        apiFetch<DnsSetupResponse>(`/api/projects/${id}/dns/setup`, {
-          method: 'POST',
-          body: JSON.stringify(body),
-        }),
+        apiFetch<DnsSetupResponse>(
+          `/api/projects/${id}/dns/setup${opts?.replace ? '?replace=true' : ''}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          }
+        ),
       status: (id: number) =>
         apiFetch<DnsStatusResponse>(`/api/projects/${id}/dns/status`),
       retry: (id: number) =>
