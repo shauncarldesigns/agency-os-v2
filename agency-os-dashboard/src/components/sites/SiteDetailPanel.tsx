@@ -10,6 +10,7 @@ import {
   extractServiceAreasFromBrief,
   diffAdditions,
 } from '../../lib/briefExtract';
+import { TIER_MRR } from '../../lib/pricing';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -26,7 +27,8 @@ interface SiteDetailPanelProps {
   onQuickBrief: () => void;
 }
 
-const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
+// Short uppercase form used as a card header — distinct from pricing.ts's
+// "Tier 1 · Foundation" picker label, so kept local.
 const TIER_LABEL = { 1: 'TIER 1', 2: 'TIER 2', 3: 'TIER 3' } as const;
 
 const KIND_LABEL: Record<BriefKind, string> = {
