@@ -124,6 +124,13 @@ export interface Project {
   gsc_property_url: string | null;
   cf_zone_id: string | null;
   client_email: string | null;
+  // DNS management (added 2026-06-14)
+  domain: string | null;
+  cf_nameservers: string | null;               // JSON array of CF nameservers; parse before use
+  dns_status: 'not_created' | 'pending' | 'active' | 'failed';
+  dns_last_checked: string | null;
+  registrar: string | null;
+  domain_owner_email: string | null;
   created_at: string;
   updated_at: string;
 }
