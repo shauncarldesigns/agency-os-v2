@@ -85,6 +85,13 @@ export function OperatorInputForm({
   const [tagline, setTagline] = useState(project.tagline ?? '');
   const [primaryColor, setPrimaryColor] = useState(project.primary_color ?? '#1B3A5C');
   const [accentColor, setAccentColor] = useState(project.accent_color ?? '#E8A33D');
+  // DNS-related metadata. `domain` is shown editable only when the project
+  // already has a CF zone — first-time setup goes through the Quick Action
+  // (canonical path). Renamed local `ownerEmailDomain` to disambiguate from
+  // the business contact `email` above.
+  const [domain, setDomain] = useState(project.domain ?? '');
+  const [registrar, setRegistrar] = useState(project.registrar ?? '');
+  const [ownerEmailDomain, setOwnerEmailDomain] = useState(project.domain_owner_email ?? '');
   const [services, setServices] = useState<string[]>(safeParseArr(project.services, lead?.extracted_services));
   const [serviceAreas, setServiceAreas] = useState<string[]>(safeParseArr(project.service_areas, lead?.extracted_service_areas));
   const [newService, setNewService] = useState('');
@@ -112,6 +119,9 @@ export function OperatorInputForm({
     setTagline(project.tagline ?? '');
     setPrimaryColor(project.primary_color ?? '#1B3A5C');
     setAccentColor(project.accent_color ?? '#E8A33D');
+    setDomain(project.domain ?? '');
+    setRegistrar(project.registrar ?? '');
+    setOwnerEmailDomain(project.domain_owner_email ?? '');
     setServices(safeParseArr(project.services, lead?.extracted_services));
     setServiceAreas(safeParseArr(project.service_areas, lead?.extracted_service_areas));
     setExtraAttrs([]);
@@ -263,6 +273,11 @@ export function OperatorInputForm({
       accent_color: accentColor,
       services,
       service_areas: serviceAreas,
+      // DNS-adjacent metadata — `domain` itself is intentionally NOT sent
+      // here; domain changes route through /dns/setup?replace=true in the
+      // separate persistDomainIfChanged() flow.
+      registrar: registrar.trim() || null,
+      domain_owner_email: ownerEmailDomain.trim() || null,
     });
 
     for (const t of testimonials) {
@@ -300,9 +315,41 @@ export function OperatorInputForm({
     return res.project;
   }
 
+  // Domain-change guard. If the operator edited the domain field on a project
+  // that already has a CF zone, prompt for explicit confirmation before
+  // creating a fresh zone (orphans the old one). Returns false if the user
+  // bails — caller should abort the whole save in that case.
+  async function persistDomainIfChanged(): Promise<{ ok: boolean }> {
+    const normalized = normalizeApexDomain(domain);
+    const projectHasZone = !!project.cf_zone_id;
+    const userChangedDomain = normalized.length > 0 && normalized !== (project.domain ?? '');
+    if (!projectHasZone || !userChangedDomain) {
+      return { ok: true };
+    }
+    const confirmed = window.confirm(
+      `Switch domain from "${project.domain}" to "${normalized}"?\n\n` +
+      `A new Cloudflare zone will be created. The old zone (${project.cf_zone_id}) ` +
+      `will stay in your Cloudflare account — delete it manually after the new one ` +
+      `is delegated. This cannot be undone from inside the app.`
+    );
+    if (!confirmed) return { ok: false };
+    await api.projects.dns.setup(
+      project.id,
+      {
+        domain: normalized,
+        registrar: registrar.trim() || undefined,
+        domain_owner_email: ownerEmailDomain.trim() || undefined,
+      },
+      { replace: true }
+    );
+    return { ok: true };
+  }
+
   async function handleSave() {
     setSaving('save');
     try {
+      const dns = await persistDomainIfChanged();
+      if (!dns.ok) return;
       const updated = await persistAll();
       if (!updated) return;
       showToast('Project saved', 'success');
@@ -319,6 +366,8 @@ export function OperatorInputForm({
   async function handleSaveAndRegen() {
     setSaving('save+regen');
     try {
+      const dns = await persistDomainIfChanged();
+      if (!dns.ok) return;
       const updated = await persistAll();
       if (!updated) return;
       const brief = hasMaster
@@ -334,6 +383,13 @@ export function OperatorInputForm({
     } finally {
       setSaving('idle');
     }
+  }
+
+  // Apex-domain normalizer — strips scheme/www/trailing slash, lowercases.
+  // Mirrors the backend's normalizeDomain in routes/dns.ts so the comparison
+  // against project.domain is byte-faithful.
+  function normalizeApexDomain(d: string): string {
+    return d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
   }
 
   async function handleDelete() {
@@ -509,6 +565,53 @@ export function OperatorInputForm({
             <ColorPair color={accentColor} onChange={setAccentColor} />
           </Field>
         </Grid2>
+
+        <SectionTitle>Domain & DNS</SectionTitle>
+        <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginBottom: 8, lineHeight: 1.5 }}>
+          For after-the-fact corrections. First-time domain setup goes through the
+          <strong style={{ color: 'var(--text2)' }}> ⚡ Add domain & DNS</strong> Quick Action.
+        </div>
+        <Grid2>
+          <Field label={project.cf_zone_id ? 'Domain' : 'Domain (set via Quick Action)'}>
+            <Input
+              value={domain}
+              onChange={setDomain}
+              placeholder={project.cf_zone_id ? 'example.com' : '— no zone yet'}
+              disabled={!project.cf_zone_id}
+            />
+          </Field>
+          <Field label="Registrar">
+            <Input value={registrar} onChange={setRegistrar} placeholder="Squarespace · GoDaddy · Namecheap…" />
+          </Field>
+        </Grid2>
+        <Field label="Domain owner email">
+          <Input
+            value={ownerEmailDomain}
+            onChange={setOwnerEmailDomain}
+            placeholder="owner@example.com"
+            type="email"
+          />
+        </Field>
+        {project.cf_zone_id && normalizeApexDomain(domain).length > 0 &&
+          normalizeApexDomain(domain) !== (project.domain ?? '') && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '7px 11px',
+                background: 'rgba(245,200,66,0.06)',
+                border: '1px solid rgba(245,200,66,0.2)',
+                borderRadius: 8,
+                fontSize: '0.68rem',
+                color: 'var(--text2)',
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ color: 'var(--yellow)' }}>Heads up:</strong> Saving will create a
+              new Cloudflare zone for <code>{normalizeApexDomain(domain)}</code>. The existing
+              zone for <code>{project.domain}</code> ({project.cf_zone_id}) will stay in your
+              Cloudflare account — delete it manually after the new one is delegated.
+            </div>
+          )}
 
         <SectionTitle>Services ({services.length})</SectionTitle>
         <ChipList items={services} onRemove={(i) => removeChip(services, setServices, i)} />
@@ -688,9 +791,9 @@ function Grid2({ children }: { children: React.ReactNode }) {
 }
 
 function Input({
-  value, onChange, placeholder, type, onEnter,
+  value, onChange, placeholder, type, onEnter, disabled,
 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; onEnter?: () => void;
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; onEnter?: () => void; disabled?: boolean;
 }) {
   return (
     <input
@@ -698,7 +801,8 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      style={inputStyle}
+      disabled={disabled}
+      style={disabled ? { ...inputStyle, opacity: 0.55, cursor: 'not-allowed' } : inputStyle}
       onKeyDown={onEnter ? (e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } } : undefined}
     />
   );

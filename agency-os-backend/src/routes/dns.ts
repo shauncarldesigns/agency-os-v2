@@ -56,9 +56,16 @@ function recordMatches(
 }
 
 // POST /:id/dns/setup — body: { domain, registrar?, domain_owner_email? }
+//
+// Pass ?replace=true to allow operating against a project that already has
+// cf_zone_id set — used by the Edit Project domain-change flow (Phase 5).
+// The old zone is intentionally orphaned in Cloudflare for the operator to
+// clean up manually (auto-deletion is out of scope per spec). The orphaned
+// zone_id is logged for audit so it can be located later.
 dnsRouter.post('/:id/dns/setup', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+  const replace = c.req.query('replace') === 'true';
 
   const body = (await c.req.json().catch(() => ({}))) as {
     domain?: string;
@@ -78,13 +85,20 @@ dnsRouter.post('/:id/dns/setup', async (c) => {
     .bind(id)
     .first<Project>();
   if (!project) return c.json(notFound('Project'), 404);
-  if (project.cf_zone_id) {
+  if (project.cf_zone_id && !replace) {
     return c.json(
       conflict(
-        `Project already has a Cloudflare zone (${project.cf_zone_id}). To switch domains, use the Edit Project flow.`
+        `Project already has a Cloudflare zone (${project.cf_zone_id}). Pass ?replace=true to orphan the old zone and create a new one for ${domain}.`
       ),
       409
     );
+  }
+  if (project.cf_zone_id && replace) {
+    log('info', 'dns', `Replacing zone for project ${id}`, {
+      oldZoneId: project.cf_zone_id,
+      oldDomain: project.domain,
+      newDomain: domain,
+    });
   }
 
   // Create the zone first. If this fails (e.g. domain already in another CF
