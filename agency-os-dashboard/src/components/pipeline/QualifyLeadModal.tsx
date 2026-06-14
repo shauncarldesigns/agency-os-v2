@@ -4,6 +4,7 @@ import { api, ApiError } from '../../lib/api';
 import { Modal, ModalHeader, ModalFooter } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
+import { type Tier, TIER_LABEL, tierPriceShort } from '../../lib/pricing';
 
 interface QualifyLeadModalProps {
   open: boolean;
@@ -12,10 +13,8 @@ interface QualifyLeadModalProps {
   showToast: ShowToast;
   /** Fired when the project is created. Parent should switch to Sites and
    *  open the project's Brief Studio when tier === 3 (T1/T2 have no Studio). */
-  onQualified: (project: Project, tier: 1 | 2 | 3) => void;
+  onQualified: (project: Project, tier: Tier) => void;
 }
-
-type Tier = 1 | 2 | 3;
 
 const TIER_OPTIONS: ReadonlyArray<{
   tier: Tier;
@@ -25,20 +24,22 @@ const TIER_OPTIONS: ReadonlyArray<{
 }> = [
   {
     tier: 1,
-    label: 'Tier 1 · Foundation',
-    price: '$950 one-time',
+    label: TIER_LABEL[1],
+    price: tierPriceShort(1),
     blurb: 'No contract. 5-page handoff site. No ongoing service.',
   },
   {
     tier: 2,
-    label: 'Tier 2 · Managed',
-    price: '$799 build + $79/mo',
+    label: TIER_LABEL[2],
+    price: tierPriceShort(2),
     blurb: 'Hosting + edits. 5 pages. Month-to-month.',
   },
   {
     tier: 3,
-    label: 'Tier 3 · SEO Program',
-    price: '$499/mo, free build',
+    label: TIER_LABEL[3],
+    // Qualify modal historically appends ", free build" to T3's price —
+    // preserved here for byte-identical rendering.
+    price: `${tierPriceShort(3)}, free build`,
     blurb: '6-mo commit. 8–10 pages at launch + 3 SEO pages/mo. Full Brief Studio.',
   },
 ];

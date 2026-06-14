@@ -4,6 +4,7 @@ import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { TierPill } from '../shared/TierPill';
 import { formatDate } from '../../lib/format';
+import { TIER_MRR } from '../../lib/pricing';
 
 interface SiteCardProps {
   project: Project;
@@ -22,8 +23,6 @@ interface SiteCardProps {
    *  list and refresh stats/MRR. */
   onProjectChanged: () => void;
 }
-
-const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
 export function SiteCard({
   project, onSwitchTab, onOpenDetail, onEditInfo, onQuickBrief, onProjectChanged, showToast,

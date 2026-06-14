@@ -9,8 +9,7 @@ import { SitesPanel } from './components/sites/SitesPanel';
 import { ReportsPanel } from './components/reports/ReportsPanel';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
-
-const TIER_MRR = { 1: 0, 2: 79, 3: 499 };
+import { TIER_MRR } from './lib/pricing';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('pipeline');

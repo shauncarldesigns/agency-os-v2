@@ -8,6 +8,7 @@ import { TierPill } from '../shared/TierPill';
 import { Spinner } from '../shared/Spinner';
 import { CallLogTab } from './CallLogTab';
 import { formatPhone, parseList, stars } from '../../lib/format';
+import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 
 type LMTab = 'overview' | 'reviews' | 'pitch' | 'call';
 
@@ -433,12 +434,10 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
     );
   }
 
-  const tier = lead.recommended_tier ?? 1;
-  const tierCopy: Record<number, string> = {
-    1: '$950 one-time, no contract. Quick foundation site — 5 pages, complete handoff.',
-    2: '$799 build + $79/mo. Hosting + edits handled. 5 pages, no contract beyond month-to-month.',
-    3: '$499/mo, free build, 6-month commitment. 8-10 pages at launch + 3 SEO service-area pages every month.',
-  };
+  // Narrow recommended_tier (typed `number | null`) to the Tier union so we
+  // can hand it to pricing helpers. Same guard pattern as QualifyLeadModal.
+  const rawTier = lead.recommended_tier;
+  const tier: Tier = (rawTier === 1 || rawTier === 2 || rawTier === 3) ? rawTier : 1;
 
   return (
     <div style={PANE_STYLE}>
@@ -484,7 +483,7 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 
         <div className="cp-section">
           <div className="cp-label">💰 The pitch · Tier {tier}</div>
-          <div className="cp-content">{tierCopy[tier]}</div>
+          <div className="cp-content">{tierPitchBlurb(tier)}</div>
         </div>
       </div>
     </div>

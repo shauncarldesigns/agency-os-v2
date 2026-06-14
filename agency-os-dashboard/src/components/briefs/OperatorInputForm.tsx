@@ -6,6 +6,7 @@ import { Modal, ModalHeader } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { api, ApiError } from '../../lib/api';
+import { type Tier, TIER_LABEL, tierPriceShort } from '../../lib/pricing';
 
 /**
  * The single project-editor modal.
@@ -56,17 +57,15 @@ interface DraftBrandAttr {
   value: string;
 }
 
-type Tier = 1 | 2 | 3;
-
 const TIER_OPTIONS: ReadonlyArray<{
   tier: Tier;
   label: string;
   price: string;
   blurb: string;
 }> = [
-  { tier: 1, label: 'Tier 1 · Foundation', price: '$950 one-time', blurb: 'No ongoing service.' },
-  { tier: 2, label: 'Tier 2 · Managed', price: '$799 build + $79/mo', blurb: 'Hosting + edits.' },
-  { tier: 3, label: 'Tier 3 · SEO Program', price: '$499/mo', blurb: 'Brief Studio + monthly SEO pages.' },
+  { tier: 1, label: TIER_LABEL[1], price: tierPriceShort(1), blurb: 'No ongoing service.' },
+  { tier: 2, label: TIER_LABEL[2], price: tierPriceShort(2), blurb: 'Hosting + edits.' },
+  { tier: 3, label: TIER_LABEL[3], price: tierPriceShort(3), blurb: 'Brief Studio + monthly SEO pages.' },
 ];
 
 export function OperatorInputForm({

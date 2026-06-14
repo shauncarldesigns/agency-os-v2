@@ -7,6 +7,7 @@ import { SiteCard } from './SiteCard';
 import { SiteDetailPanel } from './SiteDetailPanel';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { QuickBriefModal } from './QuickBriefModal';
+import { TIER_MRR } from '../../lib/pricing';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -26,8 +27,6 @@ type Sort = 'tier' | 'due' | 'az';
  * filtering. Filter is purely client-side over the already-fetched list.
  */
 type StatusFilter = 'all' | 'active' | 'prospect' | 't3' | 't2' | 't1';
-
-const TIER_MRR = { 1: 0, 2: 79, 3: 499 } as const;
 
 /**
  * The unified project editor (OperatorInputForm) needs hasMaster + lead.
