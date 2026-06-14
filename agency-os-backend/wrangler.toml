@@ -10,9 +10,10 @@ database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
 
 [triggers]
 crons = [
-  "0 6 * * *",
-  "0 7 1 * *",
-  "0 8 * * 1"
+  "0 6 * * *",     # Daily 6am — refresh PageSpeed for live Tier 3 sites
+  "0 7 1 * *",    # Monthly 1st 7am — finalize prior-month snapshots + exec summaries
+  "0 8 * * 1",    # Weekly Monday 8am — intermediate GSC refresh
+  "0 * * * *"     # Hourly — DNS poll for projects still awaiting NS delegation
 ]
 
 [vars]
