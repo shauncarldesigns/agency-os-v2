@@ -64,8 +64,8 @@ const TIER_OPTIONS: ReadonlyArray<{
   price: string;
   blurb: string;
 }> = [
-  { tier: 1, label: 'Tier 1 · Foundation', price: '$800 one-time', blurb: 'No ongoing service.' },
-  { tier: 2, label: 'Tier 2 · Managed', price: '$79/mo', blurb: 'Hosting + edits.' },
+  { tier: 1, label: 'Tier 1 · Foundation', price: '$950 one-time', blurb: 'No ongoing service.' },
+  { tier: 2, label: 'Tier 2 · Managed', price: '$799 build + $79/mo', blurb: 'Hosting + edits.' },
   { tier: 3, label: 'Tier 3 · SEO Program', price: '$499/mo', blurb: 'Brief Studio + monthly SEO pages.' },
 ];
 
