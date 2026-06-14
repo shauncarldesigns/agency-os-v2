@@ -435,8 +435,8 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 
   const tier = lead.recommended_tier ?? 1;
   const tierCopy: Record<number, string> = {
-    1: '$800 one-time, no contract. Quick foundation site — 5 pages, complete handoff.',
-    2: '$400 build + $79/mo. Hosting + edits handled. 5 pages, no contract beyond month-to-month.',
+    1: '$950 one-time, no contract. Quick foundation site — 5 pages, complete handoff.',
+    2: '$799 build + $79/mo. Hosting + edits handled. 5 pages, no contract beyond month-to-month.',
     3: '$499/mo, free build, 6-month commitment. 8-10 pages at launch + 3 SEO service-area pages every month.',
   };
 

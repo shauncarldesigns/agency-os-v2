@@ -21,12 +21,12 @@ export function TierStats({ leads }: TierStatsProps) {
       <div className="tier-stat t2">
         <div className="tier-num t2">{t2}</div>
         <div className="slabel" style={{ color: 'var(--tier2)' }}>Tier 2 prospects</div>
-        <div className="sdelta" style={{ color: 'var(--text3)' }}>$400 + $79/mo each</div>
+        <div className="sdelta" style={{ color: 'var(--text3)' }}>$799 + $79/mo each</div>
       </div>
       <div className="tier-stat t1">
         <div className="tier-num t1">{t1}</div>
         <div className="slabel" style={{ color: 'var(--tier1)' }}>Tier 1 prospects</div>
-        <div className="sdelta" style={{ color: 'var(--text3)' }}>$800 one-time each</div>
+        <div className="sdelta" style={{ color: 'var(--text3)' }}>$950 one-time each</div>
       </div>
     </div>
   );

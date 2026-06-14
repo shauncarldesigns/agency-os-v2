@@ -26,13 +26,13 @@ const TIER_OPTIONS: ReadonlyArray<{
   {
     tier: 1,
     label: 'Tier 1 · Foundation',
-    price: '$800 one-time',
+    price: '$950 one-time',
     blurb: 'No contract. 5-page handoff site. No ongoing service.',
   },
   {
     tier: 2,
     label: 'Tier 2 · Managed',
-    price: '$400 build + $79/mo',
+    price: '$799 build + $79/mo',
     blurb: 'Hosting + edits. 5 pages. Month-to-month.',
   },
   {
