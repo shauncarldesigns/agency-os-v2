@@ -13,6 +13,7 @@ import { brandAttributesRouter } from './routes/brand-attributes';
 import { testimonialsRouter } from './routes/testimonials';
 import { scrapeRouter } from './routes/scrape';
 import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
+import { dnsRouter } from './routes/dns';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -34,6 +35,10 @@ app.route('/api/leads', enrichRouter); // exposes /enrich-all under /api/leads/e
 app.route('/api/leads', leadsRouter);
 app.route('/api/calls', callsRouter);
 app.route('/api/prospect', prospectRouter);
+// dnsRouter handles /:id/dns/* — mount before projectsRouter so the more
+// specific DNS paths match first (Hono's matcher is order-dependent for
+// overlapping subrouters mounted at the same prefix).
+app.route('/api/projects', dnsRouter);
 app.route('/api/projects', projectsRouter);
 // v2.1 brief routes span /api/projects/:id/briefs, /api/briefs/:id, and /api/pages/:id/complete
 app.route('/api', briefsRouter);
