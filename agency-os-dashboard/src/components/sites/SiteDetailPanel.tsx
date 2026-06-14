@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Project, Brief, BriefKind, ShowToast, Tab, Lead, Page } from '../../lib/types';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, type DnsStatusResponse } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
@@ -655,7 +655,194 @@ function Sidebar({
           </span>
         </div>
       </div>
+
+      <DnsCard project={project} onManageDns={onManageDns} />
     </>
+  );
+}
+
+// ============================================================================
+// DNS card — status-at-a-glance, lives in the sidebar below Data Sources.
+// Self-fetches /dns/status and polls every 60s while dns_status='pending' so
+// the operator can see active state appear after a registrar NS change
+// without refreshing the page. Polling stops automatically once active.
+// ============================================================================
+
+function DnsCard({ project, onManageDns }: { project: Project; onManageDns: () => void }) {
+  const [status, setStatus] = useState<DnsStatusResponse | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasZone = !!(project.domain && project.cf_zone_id);
+
+  const refresh = useCallback(async () => {
+    if (!hasZone) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const res = await api.projects.dns.status(project.id);
+      setStatus(res);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (err as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [project.id, hasZone]);
+
+  useEffect(() => {
+    if (!hasZone) {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    // Self-scheduling tick — fetch then re-arm only if still pending. Stops
+    // automatically when CF reports active, when the user navigates away,
+    // or when the component unmounts. 60s cadence is a good balance between
+    // operator feedback and Cloudflare subrequest cost (2 CF calls per tick).
+    async function tick() {
+      if (cancelled) return;
+      try {
+        const res = await api.projects.dns.status(project.id);
+        if (cancelled) return;
+        setStatus(res);
+        if (res.dns_status === 'pending') {
+          timer = setTimeout(tick, 60_000);
+        }
+      } catch {
+        // Silent — sidebar should degrade quietly. Operator can click
+        // Refresh to see the explicit error, or open Manage DNS for detail.
+        if (!cancelled) timer = setTimeout(tick, 60_000);
+      }
+    }
+    void tick();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [project.id, hasZone]);
+
+  // Header is shared across empty + populated states.
+  const header = (
+    <div
+      className="bs-side-title"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+    >
+      <span>DNS</span>
+      {hasZone && (
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          title="Re-check DNS state from Cloudflare"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text3)',
+            cursor: refreshing ? 'default' : 'pointer',
+            fontSize: '0.7rem',
+            padding: '2px 6px',
+            opacity: refreshing ? 0.5 : 1,
+            textTransform: 'none',
+            letterSpacing: 0,
+          }}
+        >
+          {refreshing ? '…' : '↻ Refresh'}
+        </button>
+      )}
+    </div>
+  );
+
+  if (!hasZone) {
+    return (
+      <div className="bs-side-card">
+        {header}
+        <div
+          style={{
+            fontSize: '0.72rem',
+            color: 'var(--text3)',
+            padding: '6px 0',
+            lineHeight: 1.5,
+          }}
+        >
+          No domain set
+          <div style={{ fontSize: '0.66rem', color: 'var(--text3)', marginTop: 4, opacity: 0.75 }}>
+            Use <strong style={{ color: 'var(--text2)' }}>⚡ Add domain & DNS</strong> in Quick Actions.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // While the first /status fetch is in flight (no status data yet, no error,
+  // no refreshing flag), fall back to the project record's dns_status. Avoids
+  // a flash of "—" on initial render.
+  const dnsStatus = status?.dns_status ?? project.dns_status;
+  const nameservers = status?.nameservers ?? safeJsonArray(project.cf_nameservers);
+  const records = status?.records ?? [];
+
+  return (
+    <div className="bs-side-card">
+      {header}
+
+      <div className="bs-side-row bs-side-row-status">
+        <span>Zone status</span>
+        <span className={dnsStatus === 'active' ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+          {dnsStatus === 'active' && '✓ Active'}
+          {dnsStatus === 'pending' && '⏳ Pending'}
+          {dnsStatus === 'failed' && '⚠ Failed'}
+          {dnsStatus === 'not_created' && '— not created'}
+        </span>
+      </div>
+
+      <div
+        className="bs-side-row bs-side-row-status"
+        onClick={onManageDns}
+        style={{ cursor: 'pointer' }}
+        title="Click to view + copy nameservers"
+      >
+        <span>Nameservers</span>
+        <span className={nameservers.length > 0 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+          {nameservers.length > 0 ? `${nameservers.length} assigned →` : '— pending'}
+        </span>
+      </div>
+
+      {/* Per-record rows. If we haven't fetched live records yet, render
+          skeleton rows from the expected-record list so the layout doesn't
+          jump. Each row's right-hand status updates once /status returns. */}
+      {records.length > 0
+        ? records.map((r, i) => (
+            <div key={`${r.type}-${r.hostname}-${r.content}-${i}`} className="bs-side-row bs-side-row-status">
+              <span>{r.type === 'CNAME' ? 'CNAME (www)' : 'A record (apex)'}</span>
+              <span className={r.found ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+                {r.found ? '✓ Found' : '✗ Missing'}
+              </span>
+            </div>
+          ))
+        : (
+          <div className="bs-side-row bs-side-row-status">
+            <span>Records</span>
+            <span className="bs-side-status-na">— checking…</span>
+          </div>
+        )
+      }
+
+      {error && (
+        <div
+          style={{
+            fontSize: '0.66rem',
+            color: 'var(--red)',
+            padding: '6px 0 0',
+            lineHeight: 1.4,
+            opacity: 0.85,
+          }}
+        >
+          Refresh failed: {error}
+        </div>
+      )}
+    </div>
   );
 }
 
