@@ -133,6 +133,15 @@ CREATE TABLE IF NOT EXISTS projects (
   status          TEXT DEFAULT 'building',
   -- Reviews snapshot at project time
   reviews_snapshot TEXT,
+  -- DNS management (added 2026-06-14) — set later in the project lifecycle
+  -- via the "Add domain & DNS" Quick Action. cf_zone_id above is REUSED for
+  -- this feature; not duplicating into a separate cloudflare_zone_id column.
+  domain          TEXT,
+  cf_nameservers  TEXT,                       -- JSON array of Cloudflare-assigned nameservers
+  dns_status      TEXT NOT NULL DEFAULT 'not_created', -- not_created | pending | active | failed
+  dns_last_checked TEXT,
+  registrar       TEXT,
+  domain_owner_email TEXT,
   -- Timestamps
   created_at      TEXT DEFAULT (datetime('now')),
   updated_at      TEXT DEFAULT (datetime('now'))
@@ -140,6 +149,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_proj_lead ON projects(lead_id);
 CREATE INDEX IF NOT EXISTS idx_proj_tier ON projects(tier);
 CREATE INDEX IF NOT EXISTS idx_proj_status ON projects(status);
+-- Lets the hourly DNS poll cron cheaply find zones still awaiting nameserver delegation.
+CREATE INDEX IF NOT EXISTS idx_projects_dns_pending ON projects(dns_status) WHERE dns_status = 'pending';
 
 -- ==================================================
 -- PAGES — Each page built in landingsite.ai

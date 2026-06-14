@@ -15,6 +15,10 @@ const PROJECT_FIELDS = [
   // v2.1
   'founded_year', 'owner_name', 'owner_credentials', 'accent_color', 'tagline',
   'photography_direction', 'monthly_pages_target',
+  // DNS management — operator-editable metadata only. The system-managed
+  // fields (cf_nameservers, dns_status, dns_last_checked) are written
+  // exclusively by the DNS endpoints in routes/dns.ts, never via this PUT.
+  'domain', 'registrar', 'domain_owner_email',
 ];
 
 projectsRouter.get('/', async (c) => {
