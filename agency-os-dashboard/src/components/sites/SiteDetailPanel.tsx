@@ -5,6 +5,8 @@ import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
+import { DnsSetupModal } from './DnsSetupModal';
+import { DnsManagePanel } from './DnsManagePanel';
 import {
   extractServicesFromBrief,
   extractServiceAreasFromBrief,
@@ -53,6 +55,10 @@ export function SiteDetailPanel({
   const [pages, setPages] = useState<Page[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewerBriefId, setViewerBriefId] = useState<number | null>(null);
+  // DNS modals — driven by the dynamic Quick Action button below. State stays
+  // local because the modals don't need to survive a parent unmount.
+  const [dnsSetupOpen, setDnsSetupOpen] = useState(false);
+  const [dnsManageOpen, setDnsManageOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -260,6 +266,8 @@ export function SiteDetailPanel({
             onSwitchTab={onSwitchTab}
             onEditProject={onEditProject}
             onQuickBrief={onQuickBrief}
+            onAddDns={() => setDnsSetupOpen(true)}
+            onManageDns={() => setDnsManageOpen(true)}
           />
         </aside>
       </div>
@@ -270,6 +278,22 @@ export function SiteDetailPanel({
         showToast={showToast}
         onChanged={() => void reload()}
         onPageCompleted={() => { void reload(); onProjectChanged(); }}
+      />
+
+      <DnsSetupModal
+        open={dnsSetupOpen}
+        project={project}
+        onClose={() => setDnsSetupOpen(false)}
+        showToast={showToast}
+        onSetupComplete={onProjectChanged}
+      />
+
+      <DnsManagePanel
+        open={dnsManageOpen}
+        project={project}
+        onClose={() => setDnsManageOpen(false)}
+        showToast={showToast}
+        onProjectChanged={onProjectChanged}
       />
     </>
   );
@@ -533,7 +557,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 // ============================================================================
 
 function Sidebar({
-  project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief,
+  project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief, onAddDns, onManageDns,
 }: {
   project: Project;
   lead: Lead | null;
@@ -541,6 +565,10 @@ function Sidebar({
   onSwitchTab: (tab: Tab) => void;
   onEditProject: () => void;
   onQuickBrief: () => void;
+  /** Open the first-time DNS setup modal — shown when project has no domain. */
+  onAddDns: () => void;
+  /** Open the Manage DNS panel — shown when project already has a CF zone. */
+  onManageDns: () => void;
 }) {
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
@@ -581,6 +609,18 @@ function Sidebar({
           >
             ↗ Open landingsite.ai project
           </Button>
+          {/* DNS action — primary variant when no domain yet (it's the
+              call-to-action gating zone creation); ghost once it's just an
+              ongoing-monitoring affordance. */}
+          {project.domain ? (
+            <Button variant="ghost" size="sm" onClick={onManageDns}>
+              🔧 Manage DNS
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" onClick={onAddDns}>
+              ⚡ Add domain & DNS
+            </Button>
+          )}
           <Button variant="ghost" size="sm" disabled={!hasMaster} onClick={() => onSwitchTab('reports')}>
             📊 View Reports
           </Button>

@@ -19,6 +19,38 @@ export type ProjectUpdate = Omit<Partial<Project>, 'services' | 'service_areas'>
   service_areas?: string[];
 };
 
+// DNS endpoint response shapes. Mirror what routes/dns.ts returns.
+export interface DnsRecordStatus {
+  type: 'A' | 'CNAME';
+  subdomain: string;
+  hostname: string;
+  content: string;
+  found: boolean;
+}
+
+export interface DnsSetupResponse {
+  project: Project;
+  nameservers: string[];
+  failures: string[];                 // empty on full success
+  status: 'pending' | 'failed';
+}
+
+export interface DnsStatusResponse {
+  // Raw Cloudflare zone status — may differ from dns_status briefly until
+  // the backend reconciles (e.g. CF=active but we haven't yet flipped).
+  zone_status: 'pending' | 'active' | 'initializing' | 'moved' | 'deleted' | 'deactivated';
+  dns_status: 'not_created' | 'pending' | 'active' | 'failed';
+  nameservers: string[];
+  records: DnsRecordStatus[];
+  last_checked: string;
+}
+
+export interface DnsRetryResponse {
+  created: string[];                  // newly-created records (human-readable strings)
+  failures: string[];
+  status: 'not_created' | 'pending' | 'active' | 'failed';
+}
+
 export class ApiError extends Error {
   constructor(message: string, public status: number, public data?: unknown) {
     super(message);
@@ -149,6 +181,24 @@ export const api = {
         matrix: Array<{ city: string; inReviews: boolean; cells: Array<{ service: string; city: string; state: 'built' | 'building' | 'queued' | 'recommended' | 'available' }> }>;
         summary: { total: number; built: number; available: number; pct: number };
       }>(`/api/projects/${id}/coverage`),
+    // DNS management — mounted under /api/projects/:id/dns/* by the backend.
+    // setup() is rejected by the backend with 409 if the project already has
+    // a cf_zone_id; phase 5's Edit Project flow goes through a separate confirm
+    // step before calling setup() again with a new domain.
+    dns: {
+      setup: (
+        id: number,
+        body: { domain: string; registrar?: string; domain_owner_email?: string }
+      ) =>
+        apiFetch<DnsSetupResponse>(`/api/projects/${id}/dns/setup`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      status: (id: number) =>
+        apiFetch<DnsStatusResponse>(`/api/projects/${id}/dns/status`),
+      retry: (id: number) =>
+        apiFetch<DnsRetryResponse>(`/api/projects/${id}/dns/retry`, { method: 'POST' }),
+    },
   },
   briefs: {
     listForProject: (projectId: number) =>
