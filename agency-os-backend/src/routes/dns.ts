@@ -21,6 +21,7 @@ import {
   createDnsRecord,
   CloudflareError,
   type DnsRecord,
+  type Zone,
 } from '../services/cloudflare';
 import { LANDINGSITE_DNS_RECORDS, expectedHostname } from '../services/dnsConstants';
 
@@ -329,3 +330,75 @@ dnsRouter.post('/:id/dns/retry', async (c) => {
     status: nextStatus,
   });
 });
+
+// ============================================================================
+// Cron entrypoint — called from the scheduled handler in src/index.ts on the
+// "0 * * * *" trigger. Finds projects whose CF zone is awaiting nameserver
+// delegation and flips them to 'active' once CF reports them so.
+// ============================================================================
+
+export interface DnsPollResult {
+  projectId: number;
+  domain: string | null;
+  transitioned: boolean;
+  cfStatus?: Zone['status'];
+  error?: string;
+}
+
+export async function pollPendingDnsZones(env: Env): Promise<DnsPollResult[]> {
+  // Partial index idx_projects_dns_pending makes this cheap even when the
+  // projects table grows. We only need a handful of fields per row.
+  const res = await env.DB
+    .prepare(`SELECT id, domain, cf_zone_id FROM projects WHERE dns_status = 'pending' AND cf_zone_id IS NOT NULL`)
+    .all<{ id: number; domain: string | null; cf_zone_id: string }>();
+
+  const rows = res.results ?? [];
+  if (rows.length === 0) {
+    log('info', 'dns-poll', 'No pending zones to poll');
+    return [];
+  }
+
+  const out: DnsPollResult[] = [];
+  for (const row of rows) {
+    const now = new Date().toISOString();
+    try {
+      const zone = await getZoneStatus(env.CLOUDFLARE_API_TOKEN, row.cf_zone_id);
+      const transitioned = zone.status === 'active';
+      if (transitioned) {
+        await env.DB
+          .prepare(`UPDATE projects SET dns_status = 'active', dns_last_checked = ?, updated_at = ? WHERE id = ?`)
+          .bind(now, now, row.id)
+          .run();
+        log('info', 'dns-poll', `Zone activated for project ${row.id}`, { domain: row.domain });
+      } else {
+        // Still pending — just stamp dns_last_checked so the operator can see
+        // we're still watching it.
+        await env.DB
+          .prepare(`UPDATE projects SET dns_last_checked = ? WHERE id = ?`)
+          .bind(now, row.id)
+          .run();
+      }
+      out.push({ projectId: row.id, domain: row.domain, transitioned, cfStatus: zone.status });
+    } catch (err) {
+      const msg = err instanceof CloudflareError ? err.message : (err as Error).message;
+      log('warn', 'dns-poll', `Status fetch failed for project ${row.id}`, { error: msg });
+      // Don't fail the whole batch on one project's error; stamp last_checked
+      // anyway so the operator can see we tried.
+      await env.DB
+        .prepare(`UPDATE projects SET dns_last_checked = ? WHERE id = ?`)
+        .bind(now, row.id)
+        .run()
+        .catch(() => undefined);
+      out.push({ projectId: row.id, domain: row.domain, transitioned: false, error: msg });
+    }
+  }
+
+  const activated = out.filter((r) => r.transitioned).length;
+  const failed = out.filter((r) => r.error).length;
+  log('info', 'dns-poll', `Polled ${rows.length} pending zone(s)`, {
+    activated,
+    stillPending: rows.length - activated - failed,
+    failed,
+  });
+  return out;
+}

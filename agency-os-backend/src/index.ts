@@ -13,7 +13,7 @@ import { brandAttributesRouter } from './routes/brand-attributes';
 import { testimonialsRouter } from './routes/testimonials';
 import { scrapeRouter } from './routes/scrape';
 import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
-import { dnsRouter } from './routes/dns';
+import { dnsRouter, pollPendingDnsZones } from './routes/dns';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -66,6 +66,12 @@ export default {
     } else if (event.cron === '0 8 * * 1') {
       // Weekly Monday 8am — refresh GSC for current period (intermediate progress check)
       ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Weekly GSC refresh run`, { results: out })));
+    } else if (event.cron === '0 * * * *') {
+      // Hourly — poll Cloudflare for any project zones still awaiting
+      // nameserver delegation. Flips dns_status pending→active when CF
+      // reports the zone is active. Partial index makes this cheap when
+      // there are zero pending projects.
+      ctx.waitUntil(pollPendingDnsZones(env).then(out => log('info', 'cron', `DNS poll run`, { count: out.length })));
     }
   },
 };
