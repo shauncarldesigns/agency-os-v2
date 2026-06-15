@@ -12,7 +12,8 @@ into projects, drive landingsite.ai with Claude-generated briefs. Monorepo:
 - `agency-os-dashboard/` — Vite/React **Pages** frontend.
 
 Backend structure: `src/routes/` (API endpoints), `src/services/`
-(`claude.ts`, `places.ts`, `outscraper.ts`, `pagespeed.ts`, `reviewMiner.ts`),
+(`claude.ts`, `places.ts`, `outscraper.ts`, `pagespeed.ts`, `reviewMiner.ts`,
+`cloudflare.ts`, `dnsConstants.ts`),
 `src/prompts/` (`masterBrief.ts`, `pageBrief.ts`, `reviewExtraction.ts`),
 `src/db/migrations/` (timestamped SQL migrations).
 
@@ -72,6 +73,48 @@ npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/YYYY-MM-D
 - Node 22+ required for backend tsc + dashboard vite build. A persistent install
   lives at `~/.local/node22/` with symlinks in `~/.local/bin/{node,npm,npx}`.
 
+## Cloudflare DNS management (added 2026-06-14)
+
+Every project can have a Cloudflare zone for its client domain. Records are
+created by the app, not by hand. Quick Action button in the project sidebar:
+"⚡ Add domain & DNS" (first-time) flips to "🔧 Manage DNS" once a zone exists.
+
+- **Records, hard-coded in `services/dnsConstants.ts`:**
+  - A `@` → 75.2.29.147
+  - A `@` → 166.117.246.71
+  - CNAME `www` → proxy-ssl.getlandingsite.com
+- **Proxy MUST be OFF** (gray cloud) on every record. Landingsite issues the SSL
+  cert directly; Cloudflare's orange-cloud proxy intercepts TLS and breaks it.
+  `createDnsRecord` hard-codes `proxied: false` — no caller can override.
+- **Reuses `cf_zone_id`** column (originally for zone analytics). Did NOT add a
+  duplicate `cloudflare_zone_id`. The analytics path in `reports.ts` still works
+  but only meaningfully returns data for proxied sites — which landingsite
+  clients are not. Likely dead-path for current clients; left in place.
+- **Subdomain limitation:** Cloudflare zones are per-apex. You can't create a
+  zone for `magee-plumbing.agncy.dev` — the setup endpoint will 1116 with
+  "provide the root domain." For `*.agncy.dev` style demos, add records
+  manually under the existing `agncy.dev` zone (the app doesn't help yet).
+- **CF token scope requirement (one-time operator setup):** the runtime token
+  (`CLOUDFLARE_API_TOKEN` secret) must have `Zone:Edit` + `DNS:Edit` + at least
+  `Account Settings:Read` (the last one is required for `account.id` in the
+  POST /zones body to resolve). Account-level token resources must include the
+  agency CF account. Pre-DNS-feature, this token only needed `Zone Analytics:
+  Read` — anyone bootstrapping a new deploy must upgrade scope.
+- **Endpoints** (mounted under `/api/projects/:id/dns/*`):
+  - `POST /setup` body `{ domain, registrar?, domain_owner_email? }` —
+    rejects 409 if zone already exists. Pass `?replace=true` to orphan the old
+    zone and create a fresh one (used by the Edit Project domain-swap flow).
+    Old zone left in CF account for manual cleanup; ID is logged for audit.
+  - `GET /status` — pulls live zone status + record found/missing. Auto-flips
+    `pending → active` if CF reports active.
+  - `POST /retry` — re-creates missing records; recovers from `failed` state.
+- **Cron:** hourly `0 * * * *` calls `pollPendingDnsZones()`. Partial index
+  `idx_projects_dns_pending` (created in the 2026-06-14 migration) makes the
+  SELECT cheap when nothing's pending.
+- **Sidebar reactivity:** the DNS card in `SiteDetailPanel` self-polls every
+  60s while `dns_status='pending'`, stops automatically once active. Cheaper
+  than a global poll because it only fires when the operator is looking.
+
 ## Models & APIs
 
 - **Brief generation model:** `BRIEF_MODEL` in `routes/briefs.ts` = `claude-opus-4-7`.
@@ -84,6 +127,20 @@ npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/YYYY-MM-D
   per-lead subrequest budget low enough that bulk-enrich fits the Worker cap.
 - **PageSpeed** uses the Places API key; that key must have **PageSpeed Insights
   API** enabled in its allowed-APIs list, or it 400s with `API_KEY_SERVICE_BLOCKED`.
+
+## Cron triggers (wrangler.toml)
+
+Four crons currently scheduled in `[triggers]`:
+
+- `0 6 * * *` — daily 6am — refresh PageSpeed for live Tier 3 sites
+- `0 7 1 * *` — monthly 1st 7am — finalize prior-month snapshots + exec summaries
+- `0 8 * * 1` — weekly Monday 8am — intermediate GSC refresh
+- `0 * * * *` — hourly — DNS poll for projects awaiting nameserver delegation
+
+Dispatched via the `scheduled` handler in `src/index.ts`. Each branch matches
+on `event.cron` exactly. Adding a new cron requires both a `wrangler.toml`
+entry AND a handler branch — the deploy will succeed without the handler but
+the cron will silently no-op.
 
 ## Worker subrequest cap awareness
 
@@ -184,3 +241,13 @@ Soft signals layered on top:
   parent PR hasn't merged yet; otherwise branch off `main` for a clean follow-up.
 - When PR descriptions say "deploy after merge," the dashboard step is manual —
   don't assume it landed because CI passed.
+- **Keep the docs in sync on shipping PRs.** As part of the same branch (or a
+  follow-up docs-refresh PR after a multi-phase feature):
+  - `CHANGELOG.md` — add one line per merged PR with user-visible change.
+    Reverse chronological, grouped by month. Internal refactors / CI tweaks /
+    dep bumps can be omitted.
+  - `CLAUDE.md` — update when the PR changes durable facts (new env secrets,
+    new cron, new architectural invariant). NOT every PR.
+  - `HANDOFF.md` — refresh at the end of a session or a multi-PR feature with
+    snapshot date, what shipped, updated punch list. This file is point-in-time,
+    not a log.
