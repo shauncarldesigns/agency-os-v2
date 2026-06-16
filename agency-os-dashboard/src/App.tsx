@@ -5,6 +5,7 @@ import { Header } from './components/layout/Header';
 import { Nav } from './components/layout/Nav';
 import { DashboardPanel } from './components/dashboard/DashboardPanel';
 import { ExecutionView } from './components/dashboard/ExecutionView';
+import { BookDemoModal } from './components/dashboard/BookDemoModal';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
@@ -12,23 +13,7 @@ import { ReportsPanel } from './components/reports/ReportsPanel';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
-
-// Phase-5 fallbacks for the BookDemoModal (Phase 6 replaces these).
-function defaultDemoDateTime(): string {
-  const d = new Date();
-  d.setHours(d.getHours() + 24, 0, 0, 0);
-  // Local-tz YYYY-MM-DDTHH:MM (no seconds, no zone) — matches the prompt
-  // example format the operator will type.
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function toIsoLocal(s: string): string {
-  // Operator entered local-tz datetime (no zone). Construct a Date in local tz,
-  // then return its ISO string. Backend stores as UTC, displays via Chicago tz.
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return new Date().toISOString();
-  return d.toISOString();
-}
+import type { Lead } from './lib/types';
 
 export default function App() {
   // Dashboard is the new default landing tab (Phase 4 flip per spec).
@@ -40,8 +25,14 @@ export default function App() {
   // until SitesPanel consumes it (then clears it via the callback).
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState<number | null>(null);
   // When a calling session is opened, the execution view takes over the screen.
-  // Cleared on close; passes through to a Phase 6 booking modal (stub here).
   const [openSessionId, setOpenSessionId] = useState<number | null>(null);
+  // Book-demo modal state — driven by the execution view's "Booked" outcome.
+  // Holds the lead being booked + the callback that records the outcome once
+  // the operator confirms.
+  const [bookingState, setBookingState] = useState<{
+    lead: Lead;
+    onConfirm: (scheduledFor: string, honeybookConfirmed: boolean) => Promise<void>;
+  } | null>(null);
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadStats(); }, []);
@@ -125,25 +116,21 @@ export default function App() {
           sessionId={openSessionId}
           showToast={showToast}
           onClose={() => { setOpenSessionId(null); loadStats(); }}
-          onBookDemo={(lead, onConfirm) => {
-            // Phase 6 wires the HoneyBook split-pane. Phase 5 ships a
-            // window.prompt fallback so the outcome can still be recorded
-            // and the lead lifecycle ticks correctly.
-            const datePrompt = window.prompt(
-              `Booked demo with ${lead.company} — when?\n\n` +
-              `Enter scheduled datetime as YYYY-MM-DDTHH:MM (24h, your local time):`,
-              defaultDemoDateTime()
-            );
-            if (!datePrompt) return;
-            const hbConfirmed = window.confirm(
-              `HoneyBook step\n\n` +
-              `Did you submit the HoneyBook form?\n\n` +
-              `(OK = yes, Cancel = no — you can mark it later.)`
-            );
-            void onConfirm(toIsoLocal(datePrompt), hbConfirmed);
-          }}
+          onBookDemo={(lead, onConfirm) => setBookingState({ lead, onConfirm })}
         />
       )}
+
+      <BookDemoModal
+        open={bookingState !== null}
+        lead={bookingState?.lead ?? null}
+        showToast={showToast}
+        onClose={() => setBookingState(null)}
+        onConfirm={async (scheduledFor, hbConfirmed) => {
+          if (!bookingState) return;
+          await bookingState.onConfirm(scheduledFor, hbConfirmed);
+          setBookingState(null);
+        }}
+      />
     </>
   );
 }
