@@ -173,19 +173,21 @@ function LeadModalBody({
       <div style={{ padding: '13px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         {lead.enrichment_status === 'enriched'
+          && lead.status !== 'qualified'
           && lead.status !== 'client'
+          && lead.status !== 'not_interested'
           && lead.status !== 'dead' && (
           <Button
             variant="primary"
             onClick={() => { onQualify(lead); onClose(); }}
-            title="Convert this lead into a Sites project at a chosen tier"
+            title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
           >
-            → Qualify & Send to Sites
+            → Book demo
           </Button>
         )}
-        {lead.status === 'client' && lead.project_id && (
+        {(lead.status === 'qualified' || lead.status === 'client') && lead.project_id && (
           <Button variant="ghost" size="sm" disabled title="Open in the Sites tab to manage this project">
-            ✓ Converted to project · open in Sites
+            {lead.status === 'qualified' ? '✓ Demo booked · open in Sites' : '✓ Active client · open in Sites'}
           </Button>
         )}
       </div>
@@ -341,16 +343,23 @@ function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (fie
             className="finput"
             value={lead.status}
             onChange={e => onFieldChange('status', e.target.value)}
-            disabled={lead.status === 'client'}
-            title={lead.status === 'client' ? 'Already converted — manage from Sites tab' : undefined}
+            disabled={lead.status === 'qualified' || lead.status === 'client'}
+            title={
+              lead.status === 'qualified' ? 'Demo booked — manage the prospect from the Sites tab'
+              : lead.status === 'client' ? 'Active client — manage from the Sites tab'
+              : undefined
+            }
           >
             <option value="cold">Cold</option>
             <option value="contacted">Contacted</option>
-            <option value="qualified">Qualified</option>
-            {/* 'client' status is reserved for the Qualify flow which atomically
-                creates a Sites project. Once a lead is a client, the dropdown
-                locks — to undo, delete the project from Sites. */}
+            {/* 'qualified' and 'client' are reserved for flows that atomically
+                create / promote a Sites project — Book demo, Mark as active
+                client. Once a lead is in either state, this dropdown locks;
+                to undo, use the Sites prospect-card buttons (Demo passed,
+                delete project). */}
+            {lead.status === 'qualified' && <option value="qualified">Demo booked (locked)</option>}
             {lead.status === 'client' && <option value="client">Client (locked)</option>}
+            <option value="not_interested">Not interested</option>
             <option value="dead">Dead</option>
           </select>
         </div>

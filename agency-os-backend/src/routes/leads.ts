@@ -221,15 +221,18 @@ leadsRouter.post('/:id/qualify', async (c) => {
   try {
     const projectId = await createProjectFromLead(c.env, lead, tier);
 
-    // Mark the lead as a client + link the project. Stamp the note onto the
-    // lead's notes field (prepended) so the qualification reason isn't lost.
+    // Mark the lead as 'qualified' (demo booked, project exists, awaiting
+    // outcome) and link the project. Stamp the note onto the lead's notes
+    // field (prepended) so the qualification reason isn't lost. The lead is
+    // not flipped to 'client' until the prospect card's "Mark as active
+    // client" button is hit after the demo holds + they sign.
     const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const newNotes = note
-      ? [`[${stamp} · Qualified Tier ${tier}] ${note}`, lead.notes].filter(Boolean).join('\n\n')
+      ? [`[${stamp} · Demo booked, Tier ${tier}] ${note}`, lead.notes].filter(Boolean).join('\n\n')
       : lead.notes;
 
     await c.env.DB.prepare(
-      "UPDATE leads SET status = 'client', project_id = ?, notes = ?, updated_at = datetime('now') WHERE id = ?"
+      "UPDATE leads SET status = 'qualified', project_id = ?, notes = ?, updated_at = datetime('now') WHERE id = ?"
     ).bind(projectId, newNotes, id).run();
 
     const [updatedLead, project] = await Promise.all([
@@ -237,7 +240,7 @@ leadsRouter.post('/:id/qualify', async (c) => {
       c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first(),
     ]);
 
-    log('info', 'leads', `Lead ${id} qualified → project ${projectId} (T${tier})`);
+    log('info', 'leads', `Lead ${id} qualified (demo booked) → project ${projectId} (T${tier})`);
     return c.json({ lead: updatedLead, project }, 201);
   } catch (err) {
     log('error', 'leads', `POST /leads/${id}/qualify failed`, err);

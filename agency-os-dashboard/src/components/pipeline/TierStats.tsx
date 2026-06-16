@@ -6,8 +6,15 @@ interface TierStatsProps {
 }
 
 export function TierStats({ leads }: TierStatsProps) {
-  // Only count leads that aren't dead/clients yet — these are *prospects*
-  const prospects = leads.filter(l => l.status !== 'dead' && l.status !== 'client');
+  // "Prospects" here = leads still in the active calling pool — excludes
+  // qualified (demo booked), client (signed), not_interested (declined),
+  // and dead (churned).
+  const prospects = leads.filter(l =>
+    l.status !== 'qualified'
+    && l.status !== 'client'
+    && l.status !== 'not_interested'
+    && l.status !== 'dead'
+  );
   const t3 = prospects.filter(l => l.recommended_tier === 3).length;
   const t2 = prospects.filter(l => l.recommended_tier === 2).length;
   const t1 = prospects.filter(l => l.recommended_tier === 1).length;

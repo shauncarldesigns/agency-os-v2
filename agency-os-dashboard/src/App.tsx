@@ -29,7 +29,14 @@ export default function App() {
         api.leads.list(),
         api.projects.list().catch(() => ({ projects: [], total: 0 })),
       ]);
-      const activeLeads = leadsRes.leads.filter(l => l.status !== 'dead' && l.status !== 'client').length;
+      // Active = still in the calling pool. Excludes qualified (demo booked,
+      // managed from Sites), client (signed), not_interested, and dead.
+      const activeLeads = leadsRes.leads.filter(l =>
+        l.status !== 'qualified'
+        && l.status !== 'client'
+        && l.status !== 'not_interested'
+        && l.status !== 'dead'
+      ).length;
       const clients = projectsRes.projects.filter(p => p.status === 'live' || p.status === 'building');
       const mrr = clients.reduce((sum, p) => sum + (TIER_MRR[p.tier] ?? 0), 0);
       setStats({ totalClients: clients.length, mrrUsd: mrr });

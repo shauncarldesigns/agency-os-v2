@@ -69,12 +69,12 @@ export function QualifyLeadModal({
     try {
       const res = await api.leads.qualify(lead.id, { tier, note: note.trim() || undefined });
       const label = `Tier ${tier}`;
-      showToast(`${lead.company} qualified as ${label}`, 'success');
+      showToast(`Demo booked with ${lead.company} — ${label} prospect created`, 'success');
       onQualified(res.project, tier);
       onClose();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Qualify failed: ${msg}`, 'error');
+      showToast(`Booking failed: ${msg}`, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -83,14 +83,16 @@ export function QualifyLeadModal({
   return (
     <Modal open={open} onClose={submitting ? () => undefined : onClose} width={560}>
       <ModalHeader
-        title={`Qualify · ${lead.company}`}
+        title={`Book demo · ${lead.company}`}
         onClose={submitting ? () => undefined : onClose}
       />
 
       <div style={{ padding: '18px 20px' }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
-          Convert this lead into a Sites project. The lead disappears from the active pipeline
-          and shows up on the Sites tab at the selected tier.
+          Creates a Sites prospect project at the selected tier. Lead moves to <strong>Demo
+          booked</strong> status and Quick Brief becomes available on the prospect card for demo
+          prep. The lead stays linked — flip to active client after the demo holds + they sign,
+          or hit Demo passed to send them back to the pipeline.
         </p>
 
         <label className="flabel" style={{ marginBottom: 8 }}>Tier</label>
@@ -183,7 +185,7 @@ export function QualifyLeadModal({
           Cancel
         </Button>
         <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <><Spinner /> Qualifying…</> : `→ Qualify as Tier ${tier}`}
+          {submitting ? <><Spinner /> Booking…</> : `→ Book demo at Tier ${tier}`}
         </Button>
       </ModalFooter>
     </Modal>
