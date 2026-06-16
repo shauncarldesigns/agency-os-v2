@@ -61,14 +61,16 @@ export function outcomeBadge(outcome: string | null | undefined): { color: 'gree
   return { color: 'gray', label: outcome };
 }
 
-// Pipeline status → badge color
+// Pipeline status → badge color. See Lead.status comment in lib/types.ts for
+// the post-Phase-0 vocabulary. 'Qualified' is the new "demo booked" state.
 export function statusBadge(status: string): { color: 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'tier3'; label: string } {
   const map: Record<string, { color: 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'tier3'; label: string }> = {
-    cold:      { color: 'gray',  label: 'Cold' },
-    contacted: { color: 'blue',  label: 'Contacted' },
-    qualified: { color: 'yellow', label: 'Qualified' },
-    client:    { color: 'tier3', label: 'Client' },
-    dead:      { color: 'red',   label: 'Dead' },
+    cold:            { color: 'gray',  label: 'Cold' },
+    contacted:       { color: 'blue',  label: 'Contacted' },
+    qualified:       { color: 'green', label: 'Demo booked' },
+    client:          { color: 'tier3', label: 'Client' },
+    not_interested:  { color: 'red',   label: 'Not interested' },
+    dead:            { color: 'red',   label: 'Dead' },
   };
   return map[status] ?? { color: 'gray', label: status };
 }

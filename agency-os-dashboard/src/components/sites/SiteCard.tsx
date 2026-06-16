@@ -64,6 +64,31 @@ export function SiteCard({
     }
   }
 
+  // Demo happened, prospect declined. Project becomes a 'dead' historical
+  // record and the lead returns to 'contacted' so they can be re-engaged.
+  // Destructive enough to warrant a confirm dialog — the project leaves
+  // the active Sites view immediately.
+  async function handleDemoPassed() {
+    if (signing) return;
+    const confirmed = window.confirm(
+      `Mark "${project.business_name}" as demo passed?\n\n` +
+      `The project will be archived as 'dead' (kept for audit), and the lead ` +
+      `returns to the calling pipeline as 'contacted' so you can re-engage later.`
+    );
+    if (!confirmed) return;
+    setSigning(true);
+    try {
+      await api.projects.demoPassed(project.id);
+      showToast(`${project.business_name} archived — lead returned to pipeline`, 'default');
+      onProjectChanged();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not mark demo passed: ${msg}`, 'error');
+    } finally {
+      setSigning(false);
+    }
+  }
+
   // Tier 3 → header opens Brief Studio (existing behaviour).
   // Tier 1/2 → no Brief Studio exists; header opens Edit Info instead so the
   // card still has a primary action and the operator can upsell from here.
@@ -154,10 +179,17 @@ export function SiteCard({
               the action row. Once flipped, the card becomes a regular active
               client and this button stops rendering. */}
           {isProspect && (
-            <Button variant="primary" size="sm" onClick={handleMarkActive} disabled={signing}
-                    title="They signed. Move to active client status — counts toward MRR.">
-              {signing ? '⏳ Marking…' : '✓ Mark as active client'}
-            </Button>
+            <>
+              <Button variant="primary" size="sm" onClick={handleMarkActive} disabled={signing}
+                      title="They signed. Move to active client status — counts toward MRR.">
+                {signing ? '⏳ Marking…' : '✓ Mark as active client'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleDemoPassed} disabled={signing}
+                      title="The demo happened and they declined. Archive the project and send the lead back to the pipeline."
+                      style={{ color: 'var(--red)' }}>
+                ✗ Demo passed
+              </Button>
+            </>
           )}
           {hasBriefStudio ? (
             <>

@@ -164,19 +164,57 @@ projectsRouter.delete('/:id', async (c) => {
 
   try {
     // Revert the lead first so it survives even if the project delete races
-    // with another request reading lead.project_id.
+    // with another request reading lead.project_id. Status target is
+    // 'contacted' — under the post-Phase-0 vocabulary, 'qualified' means
+    // "demo booked, project exists, awaiting outcome", so a lead with no
+    // project can't be qualified by definition.
     if (project.lead_id) {
       await c.env.DB.prepare(
-        "UPDATE leads SET project_id = NULL, status = 'qualified', updated_at = datetime('now') WHERE id = ?"
+        "UPDATE leads SET project_id = NULL, status = 'contacted', updated_at = datetime('now') WHERE id = ?"
       ).bind(project.lead_id).run();
     }
 
     await c.env.DB.prepare('DELETE FROM projects WHERE id = ?').bind(id).run();
-    log('info', 'projects', `Project ${id} deleted; lead ${project.lead_id ?? '(none)'} reverted to qualified`);
+    log('info', 'projects', `Project ${id} deleted; lead ${project.lead_id ?? '(none)'} reverted to contacted`);
     return c.body(null, 204);
   } catch (err) {
     log('error', 'projects', `DELETE /projects/${id} failed`, err);
     return c.json(serverError(`${(err as Error).message}`), 500);
+  }
+});
+
+// POST /:id/demo-passed — operator hit the "Demo passed" button on a prospect
+// card. The held demo concluded with a decline. Project stays as a 'dead'
+// historical record (per spec — preserves audit trail vs clean Sites tab).
+// Lead goes back to 'contacted' and is unlinked so it can re-enter the
+// calling pool. Project keeps its lead_id back-reference for traceability.
+projectsRouter.post('/:id/demo-passed', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+
+  const project = await c.env.DB
+    .prepare('SELECT id, lead_id, status FROM projects WHERE id = ?')
+    .bind(id)
+    .first<{ id: number; lead_id: number | null; status: string }>();
+  if (!project) return c.json(notFound('Project'), 404);
+
+  try {
+    await c.env.DB.prepare(
+      "UPDATE projects SET status = 'dead', updated_at = datetime('now') WHERE id = ?"
+    ).bind(id).run();
+
+    if (project.lead_id) {
+      await c.env.DB.prepare(
+        "UPDATE leads SET status = 'contacted', project_id = NULL, updated_at = datetime('now') WHERE id = ?"
+      ).bind(project.lead_id).run();
+    }
+
+    log('info', 'projects', `Project ${id} marked demo-passed; lead ${project.lead_id ?? '(none)'} → contacted`);
+    const updated = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first();
+    return c.json({ project: updated });
+  } catch (err) {
+    log('error', 'projects', `POST /projects/${id}/demo-passed failed`, err);
+    return c.json(serverError(`Demo-passed failed: ${(err as Error).message}`), 500);
   }
 });
 

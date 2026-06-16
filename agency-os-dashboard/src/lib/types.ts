@@ -32,7 +32,14 @@ export interface Lead {
   recommended_tier: number | null;
   enrichment_status: 'pending' | 'enriching' | 'enriched' | 'failed';
   enrichment_error: string | null;
-  status: 'cold' | 'contacted' | 'qualified' | 'client' | 'dead';
+  // Lead lifecycle (Phase-0 vocabulary):
+  // - cold           — never called
+  // - contacted      — called at least once, no commitment
+  // - qualified      — demo booked, prospect project exists, awaiting outcome
+  // - client         — signed, has a building/live project (counts toward MRR)
+  // - not_interested — cold-called and declined; out of the calling pool
+  // - dead           — former client who churned (not for cold-call rejections)
+  status: 'cold' | 'contacted' | 'qualified' | 'client' | 'not_interested' | 'dead';
   outcome: string | null;
   followup: string | null;
   notes: string | null;

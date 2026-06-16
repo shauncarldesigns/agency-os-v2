@@ -171,9 +171,13 @@ export const api = {
     update: (id: number, data: ProjectUpdate) =>
       apiFetch<{ project: Project }>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     // Hard-delete a project. Cascades to its pages/briefs/etc; the linked lead
-    // is reverted to status='qualified' with project_id cleared.
+    // is reverted to status='contacted' with project_id cleared.
     delete: (id: number) =>
       apiFetch<void>(`/api/projects/${id}`, { method: 'DELETE' }),
+    // The demo was held but the prospect declined. Project is marked 'dead'
+    // (historical record), lead returns to 'contacted' for re-engagement.
+    demoPassed: (id: number) =>
+      apiFetch<{ project: Project }>(`/api/projects/${id}/demo-passed`, { method: 'POST' }),
     coverage: (id: number) =>
       apiFetch<{
         services: string[];

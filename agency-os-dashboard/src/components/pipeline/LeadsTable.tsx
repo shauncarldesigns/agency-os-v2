@@ -173,7 +173,12 @@ function LeadRow({
           title={selected ? `Deselect ${lead.company}` : `Select ${lead.company} for bulk re-enrich`}
         />
       </td>
-      <td className="td-co" style={lead.status === 'dead' ? { textDecoration: 'line-through', color: 'var(--text3)' } : undefined}>
+      <td
+        className="td-co"
+        style={lead.status === 'dead' || lead.status === 'not_interested'
+          ? { textDecoration: 'line-through', color: 'var(--text3)' }
+          : undefined}
+      >
         {lead.company}
       </td>
       <td>{enrichmentBadge}</td>
@@ -220,16 +225,18 @@ function LeadRow({
       <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
           {lead.enrichment_status === 'enriched'
+            && lead.status !== 'qualified'
             && lead.status !== 'client'
+            && lead.status !== 'not_interested'
             && lead.status !== 'dead'
             && !lead.deleted_at && (
               <Button
                 variant="primary"
                 size="xs"
                 onClick={() => onQualify(lead)}
-                title="Convert this lead into a Sites project at a chosen tier"
+                title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
               >
-                → Qualify
+                → Book demo
               </Button>
           )}
           {lead.enrichment_status === 'pending' && (
