@@ -3,6 +3,7 @@ import type { Tab, HeaderStats, NavCounts } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { Header } from './components/layout/Header';
 import { Nav } from './components/layout/Nav';
+import { DashboardPanel } from './components/dashboard/DashboardPanel';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
@@ -12,7 +13,8 @@ import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('pipeline');
+  // Dashboard is the new default landing tab (Phase 4 flip per spec).
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
   const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, pipeline: 0, sites: 0 });
   // When the Pipeline qualifies a Tier 3 lead we deep-link the operator into
@@ -59,6 +61,17 @@ export default function App() {
       <Header stats={stats} />
       <Nav active={activeTab} onChange={setActiveTab} counts={navCounts} />
       <main className="main">
+        {activeTab === 'dashboard' && (
+          <DashboardPanel
+            showToast={showToast}
+            onStateChanged={loadStats}
+            onOpenSession={() => {
+              // Phase 5 wires the execution-view route; for now toast the
+              // operator so they know what's missing.
+              showToast('Execution view ships in Phase 5 — coming next.', 'default');
+            }}
+          />
+        )}
         {activeTab === 'prospect' && (
           <ProspectPanel
             showToast={showToast}
