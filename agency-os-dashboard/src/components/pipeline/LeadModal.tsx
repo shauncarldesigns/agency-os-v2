@@ -7,7 +7,7 @@ import { Button } from '../shared/Button';
 import { TierPill } from '../shared/TierPill';
 import { Spinner } from '../shared/Spinner';
 import { CallLogTab } from './CallLogTab';
-import { formatPhone, parseList, stars } from '../../lib/format';
+import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
 import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 
 type LMTab = 'overview' | 'reviews' | 'pitch' | 'call';
@@ -198,18 +198,6 @@ function LeadModalBody({
 // --- Tab panes ---
 
 const PANE_STYLE: React.CSSProperties = { padding: '18px 20px', maxHeight: '50vh', overflowY: 'auto' };
-
-// Build a Google Maps link for the lead. When we have a place_id we use the
-// official Maps URL format with query_place_id so it resolves to the exact
-// listing; otherwise we fall back to a name + location text search.
-function googleMapsUrl(lead: Lead): string | null {
-  const locationText = lead.address ?? [lead.city, lead.state].filter(Boolean).join(', ');
-  const query = [lead.company, locationText].filter(Boolean).join(' ').trim();
-  if (!query && !lead.place_id) return null;
-  const params = new URLSearchParams({ api: '1', query: query || lead.company });
-  if (lead.place_id) params.set('query_place_id', lead.place_id);
-  return `https://www.google.com/maps/search/?${params.toString()}`;
-}
 
 function OverviewPane({ lead, onFieldChange }: { lead: Lead; onFieldChange: (field: 'status' | 'outcome' | 'recommended_tier', value: string | number | null) => void }) {
   const services = parseList<string>(lead.extracted_services);

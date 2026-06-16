@@ -29,7 +29,7 @@ dashboardRouter.get('/', async (c) => {
     demosToday,
     callbacksDue,
   ] = await Promise.all([
-    c.env.DB.prepare(`SELECT * FROM sessions WHERE session_date = ? ORDER BY block ASC`).bind(today).all<Session>(),
+    c.env.DB.prepare(`SELECT * FROM sessions WHERE session_date = ? ORDER BY CASE block WHEN 'morning' THEN 0 ELSE 1 END`).bind(today).all<Session>(),
     c.env.DB.prepare(`
       SELECT d.*, l.company, l.phone, l.city, l.state
       FROM demos d INNER JOIN leads l ON l.id = d.lead_id

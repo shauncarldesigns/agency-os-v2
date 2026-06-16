@@ -4,7 +4,7 @@ import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
-import { formatPhone, parseList, stars } from '../../lib/format';
+import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
 
 /**
  * Full-screen one-lead-at-a-time execution view.
@@ -284,13 +284,38 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
             </div>
             <div style={{ fontSize: '0.74rem', color: 'var(--text3)', marginTop: 4 }}>
               {[lead.city, lead.state].filter(Boolean).join(', ')}
-              {lead.website ? ` · ` : ''}{lead.website && <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>{cleanDomain(lead.website)} ↗</a>}
+              {lead.website && (
+                <>
+                  {' · '}
+                  <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
+                    {cleanDomain(lead.website)} ↗
+                  </a>
+                </>
+              )}
               {lead.phone && (
                 <>
                   {' · '}
-                  <a href={`tel:${lead.phone}`} style={{ color: 'var(--text2)', fontFamily: 'ui-monospace,monospace' }}>{formatPhone(lead.phone)}</a>
+                  <a href={`tel:${lead.phone}`} style={{ color: 'var(--text2)', fontFamily: 'ui-monospace,monospace' }}>
+                    {formatPhone(lead.phone)}
+                  </a>
                 </>
               )}
+              {(() => {
+                // Google Maps link — operator wanted access to the GBP listing
+                // mid-call for quick research (services, hours, reviews scroll,
+                // photos). Uses place_id when present so it resolves to the
+                // exact business, not a generic search.
+                const maps = googleMapsUrl(lead);
+                if (!maps) return null;
+                return (
+                  <>
+                    {' · '}
+                    <a href={maps} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
+                      🗺️ Maps ↗
+                    </a>
+                  </>
+                );
+              })()}
               {lead.contact && ` · ${lead.contact}`}
             </div>
           </div>

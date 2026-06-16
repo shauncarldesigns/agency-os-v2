@@ -35,7 +35,7 @@ sessionsRouter.get('/today', async (c) => {
   const today = chicagoToday();
   const mode = chicagoCallingMode();
   const sessions = await c.env.DB
-    .prepare(`SELECT * FROM sessions WHERE session_date = ? ORDER BY block ASC`)
+    .prepare(`SELECT * FROM sessions WHERE session_date = ? ORDER BY CASE block WHEN 'morning' THEN 0 ELSE 1 END`)
     .bind(today)
     .all<Session>();
   return c.json({ date: today, mode, sessions: sessions.results ?? [] });
@@ -49,7 +49,7 @@ sessionsRouter.get('/week', async (c) => {
   const ref = dateParam ? new Date(`${dateParam}T12:00:00-06:00`) : new Date();
   const week = chicagoCallingWeek(ref);
   const sessions = await c.env.DB
-    .prepare(`SELECT * FROM sessions WHERE session_date BETWEEN ? AND ? ORDER BY session_date, block`)
+    .prepare(`SELECT * FROM sessions WHERE session_date BETWEEN ? AND ? ORDER BY session_date, CASE block WHEN 'morning' THEN 0 ELSE 1 END`)
     .bind(week.monday, week.friday)
     .all<Session>();
   return c.json({ week, sessions: sessions.results ?? [] });
