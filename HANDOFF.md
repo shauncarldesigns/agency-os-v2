@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-06-15. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-06-16. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`._
 
@@ -8,146 +8,209 @@ every session). Full PR-by-PR log lives in `CHANGELOG.md`._
 
 All PRs below are **merged to `main`**. The backend Worker auto-deployed via
 CI on each merge. The dashboard was manually deployed after each UI-touching
-phase. The Dashboard tab is now the default landing view.
+phase.
 
-## What shipped since the last handoff (PRs #49–#57)
+## What shipped since the last handoff (PRs #58–#65)
 
-### Calling Dashboard — major feature, 9 PRs
+These are all **post-launch iterations on the Calling Dashboard** based on
+the operator's first real test sessions. Each one came from running a
+session and hitting something that didn't work right.
 
-End-to-end calling workflow. Pre-composes 6 sessions per week (Tue/Wed/Thu
-× morning/evening), runs an execution view that loads one lead at a time,
-captures outcomes via 4 buttons + Skip, books demos through a live HoneyBook
-embed. Mon/Fri get their own non-calling views.
+### #58 — Industry rotation key vs label (the big "0 leads matched" bug)
+The session composer's industry rotation array used display labels
+(`'Plumbing'`, `'HVAC'`, `'Electrical'`, etc.) but the actual `leads.industry`
+column stores Google Places `primaryType` strings (`'plumber'`,
+`'electrician'`, `'roofing_contractor'`, `'general_contractor'`).
 
-- **#49 — Phase 0: vocabulary refactor.** Renames `Qualify → Book demo` across
-  the UI. New lead-status semantic: `qualified` = "demo booked, prospect
-  project exists, awaiting outcome." New `not_interested` status. Prospect
-  cards get `✗ Demo passed` button (project → 'dead', lead → 'contacted').
-- **#50 — Phase 2: schema + types.** 5 new tables (sessions, session_leads,
-  callbacks, demos, demo_events) + weekly_rotation single-row table.
-  5 ALTER on leads for pointer columns.
-- **#51 — Phase 3: backend session + outcome logic.** Composition recipe with
-  widening cascade (score → geo → 14-day). Outcome endpoint handling all 5
-  outcomes with side-effects. On-demand pitch card via Haiku.
-- **#52 — Phase 4: shell + sessions grid.** Dashboard tab default. Priority
-  strip with 4 groups (demos awaiting / no-show recovery / demos today /
-  callbacks due). SessionCard.
-- **#53 — Phase 5: execution view.** Full-screen overlay with pitch card +
-  signals + outcome buttons + keyboard shortcuts (1/2/3/4/S). Burn-through
-  complete screen.
-- **#54 — Phase 6: HoneyBook split-pane booking modal.** Live embed in right
-  pane, per-field copy buttons in left.
-- **#55 — Phase 7: Mon/Fri views + prospecting block.** MondayView with
-  SessionEditModal. FridayView with stat cards, by-industry bars, callback
-  recovery. Shared ProspectingTaskBlock (50/week target).
-- **#56 — Phase 8: reschedule modal.** Replaces Phase 4's window.prompt.
-- **#57 — Phase 9: polish + docs.** Notes autosave to localStorage (drafts
-  survive mid-call modal close). CHANGELOG/CLAUDE/HANDOFF refresh.
+Every session was generating with `industry='Plumbing'`, the composer's
+`WHERE industry = ?` returned 0 rows, the widening cascade tried to drop
+score floor / geo / 14-day but the industry mismatch was the actual
+bottleneck → operator hit Start, got "0/0 dialed", burn-through fired
+instantly.
 
-**HoneyBook spike** (between Phase 0 and Phase 2, no PR): standalone HTML test
-confirmed the embed renders inside our modal-overlay pattern. Disposable test
-file `public/honeybook-spike.html` was deleted after the spike.
+`INDUSTRY_ROTATION` is now `{key, label}` pairs. Sessions store the key
+(`'plumber'`), UI uses `industryLabel()` to display (`'Plumbing'`).
 
-**Operator decisions baked in:**
-- Lead status `qualified` = "demo booked." `not_interested` is new (was
-  reusing `dead` for cold-call rejections).
-- One existing `client`-with-project lead (Magee Plumbing) was backfilled to
-  `qualified` in the Phase 0 migration.
-- Demo "awaiting status" timing = past-today (next-day surfacing), not
-  past-now.
-- Pitch cards NOT auto-backfilled — operator clicks ↻ to generate on the
-  165 pre-existing leads.
-- Geographic filter is multi-select cities only (no county data).
-- Timezone hardcoded America/Chicago in the Worker.
-- Industry rotation: Plumbing → HVAC → Electrical → Roofing → General
-  Contracting, persisted across weeks in `weekly_rotation` table.
-- Widening cascade for Extend +20: drop score floor (in 10-pt steps to 30)
-  → drop geo filter → drop 14-day exclusion last.
-- "Demo passed" on prospect card: project → `dead`, lead → `contacted`.
-- Skipped outcome is silent (no call_log, no `last_called_at` update).
+**Side fix:** session cards now show the day-of-week prefix
+(`Mon · Morning — Plumbing`) so multiple days don't look identical.
+
+### #59 — Maps link + morning/evening sort
+Two small operator asks: (1) want to look at the GBP listing mid-call for
+research → added `🗺️ Maps ↗` link in the exec-view contact row, uses
+`place_id` for exact resolution. (2) sessions were ordered alphabetically
+which put evening before morning → SQL changed to
+`ORDER BY CASE block WHEN 'morning' THEN 0 ELSE 1 END`.
+
+Also promoted `googleMapsUrl` helper from `LeadModal` into shared
+`lib/format.ts`.
+
+### #60 — Previous/Next/Skip nav row
+Original Skip wrote a permanent `skipped` outcome and never re-surfaced the
+lead. Operator wanted "park this for later." Switched ExecutionView from
+one-lead-at-a-time fetch to full session load + client-side `currentIndex`.
+Added `← Previous · Skip for now · Next →` row. Skip-for-now wraps to first
+uncalled at end so skipped leads naturally come back around.
+
+### #61 — Exec view as a page (not a modal)
+Operator hit Booked → BookDemoModal opened ON TOP of the ExecutionView
+modal → confusing modal-on-modal stacking. Bigger problem: the exec view
+felt cramped in a modal when it should be the operator's whole world during
+calling.
+
+ExecutionView now renders as a full page (replaces the dashboard view when
+a session is active). Header + Nav hidden. Prior-calls toggle added above
+the notes textarea. Next button dropped (overlapped with Skip too much).
+
+### #62 — Brief Studio layout + booking inline
+Big restyle to match the rest of the app. Two-column `bs-layout`:
+- **Main column:** Pitch card / notes / outcomes / inline callback picker
+- **Sticky right sidebar:** Scores card, Signals card, Prior Calls card (the read-only reference material)
+
+Booking happens inline now — when operator clicks "Booked demo", the main
+column swaps to a new BookingPane (full HoneyBook embed + lead-info copy
+buttons + confirm fields). Sidebar reference stays visible during booking
+so operator can glance at scores/signals/prior-calls while filling the
+form. `BookDemoModal.tsx` deleted.
+
+### #63 — Log a Call form + sidebar auto-refresh
+The bare notes textarea wasn't enough — operator wanted richer outcome
+options ("Spoke with Owner", "Spoke with Gatekeeper") and follow-up dates
+on any call, not just terminal callbacks. Replaced the textarea with the
+orange "Log a Call" card from the Pipeline LeadModal:
+- Outcome dropdown (8 options)
+- Follow-up date
+- Notes textarea
+- Save Call Entry button — logs without advancing
+- Outcome buttons below still advance + drive session state
+
+Sidebar Prior Calls card auto-refreshes when a call is saved via a
+`refreshKey` bump.
+
+### #64 — Booking creates project + Brief Studio Client card
+Three changes in one PR:
+1. **Bug:** Booked-demo from exec view set `lead.status='qualified'` but
+   never created a project. Lead got stuck — no Sites entry, no way to
+   run Quick Brief for demo prep. Pipeline qualify creates a project; exec
+   view didn't. Backend now does, defaulting to the lead's
+   `recommended_tier` (fallback T3), and returns it in the response.
+2. **Feature:** Post-booking modal prompt — "✓ Demo booked / 🛠 Pause &
+   build demo / Keep calling." Pause path closes the session, switches to
+   Sites tab, deep-links into the new project's Brief Studio. Matches the
+   operator's stated workflow: when a demo books, immediately pause cold
+   calling and prep the demo site.
+3. **Brief Studio sidebar:** redundant Status Legend replaced with a
+   **Client** card (business / owner / phone / email / location / "Client
+   since"). Falls back through project → lead values so it always shows
+   what's available.
+
+### #65 — Outcome column updates from exec view + stuck-lead cleanup
+Pipeline list has an Outcome column showing each lead's most recent
+meaningful interaction. `routes/calls.ts` already keeps it current
+(LeadModal CallLogTab + new Log a Call form). The session outcome handler
+was writing `call_log` entries but never touching `lead.outcome` — so the
+Pipeline column showed "—" for leads called via the exec view.
+
+Each outcome now maps to a friendly label:
+| outcome | label | badge |
+|---|---|---|
+| voicemail | Voicemail Left | blue |
+| not_interested | Not Interested | red |
+| callback | Callback Requested | yellow |
+| booked | Demo Booked | green (new outcomeBadge case) |
+| skipped | — (silent) | — |
+
+`outcomeBadge` in `lib/format.ts` got a `'booked'` → green case.
+
+**Cleanup applied to remote D1:** 5 stuck test leads (Dave Steltz's,
+Mueller, Jahnke, Ken's, Cliff Young) reset to `cold`. 4 `demos` + 4
+`demo_events` rows deleted. 1 orphan project (id 38) deleted. Magee Plumbing
+(id 15, project 37) preserved as the only real prospect.
 
 ## Open items / next session candidates
 
-Roughly priority order. None blocking.
+Priority order. None blocking.
 
-1. **Cliff Young & Son lead is stuck.** Lead 188 has `status='qualified'`
-   with `project_id=NULL` — inconsistent under the new vocabulary
-   (qualified should imply project exists). Pre-existing oddity, not caused
-   by this work. One-line cleanup:
-   ```sql
-   UPDATE leads SET status='contacted', updated_at=datetime('now')
-   WHERE id=188;
-   ```
-2. **Subdomain validation hint** in DNS Setup modal. Soft warning when the
-   input has more than one dot, so future-you doesn't repeat the
-   `magee-plumbing.agncy.dev` test failure. Tiny PR (from the DNS feature
-   open items).
-3. **DNS subdomain mode** (~Phase 7 of DNS feature). If `*.agncy.dev`
+1. **HVAC has 0 leads in the data.** The industry rotation includes
+   `hvac_contractor` but the operator hasn't prospected any HVAC contractors
+   yet. HVAC sessions will compose 0 strict, then widen → end up pulling
+   from outside HVAC. Either prospect HVAC via the Prospect tab to fill the
+   bucket, or skip HVAC days on the Monday-view session edit modal until
+   the pool exists.
+2. **Pitch card backfill script.** 165 existing leads have null
+   `pitch_card_text`. Operator generates on-demand via the ↻ button. A
+   one-time bulk backfill (~$2–3 in Haiku) would mean no first-call lag for
+   any lead. Worth considering once calling kicks into gear.
+3. **Jump-to-next-block in BurnThroughComplete.** Currently a no-op toast
+   ("ships in Phase 9 polish"). Real implementation would wrap the current
+   session, find the next planned one, and start it inline.
+4. **DNS subdomain mode** (~Phase 7 of DNS feature). If `*.agncy.dev`
    subdomain demos become a real workflow, the setup flow should detect
    subdomains and add records to the existing parent zone instead of
-   trying to create a new one (Cloudflare 1116). Still gated on whether
-   this matches a real workflow.
-4. **`reviewExtraction.ts` still requests `differentiators`.** PR #19
-   removed the field from `MinedReviewData` but the Claude prompt still
-   asks for it. Wasted tokens per enrichment. One-line cleanup.
-5. **Compound filtering on Sites tab.** Current filter is single-select.
-   Not urgent.
-6. **Bulk-enrich latency.** ~50 leads/invocation ≈ 30 min wall-clock for a
-   full sweep. Real fix is a background job. Out of scope until friction.
-7. **Pitch card backfill script.** Operator-on-demand works, but a one-time
-   bulk backfill for the 165 existing leads (~$2-3 in Haiku) would mean
-   no first-call lag. Worth considering once calling starts in earnest.
-8. **Jump-to-next-block in BurnThroughComplete.** Currently just closes the
-   modal with a "ships in Phase 9 polish" toast. Real implementation would
-   wrap the current session, find the next planned one, and start it.
+   trying to create a new one (Cloudflare 1116).
+5. **DNS setup modal subdomain warning.** Cheap follow-up from the DNS
+   feature — soft warning when input has >1 dot.
+6. **`reviewExtraction.ts` still requests `differentiators`.** PR #19
+   removed the field but the Claude prompt still asks. Wasted tokens.
+   One-line cleanup.
+7. **Compound filtering on Sites tab.** Single-select tile click handles
+   common cases; "Tier 3 prospects" needs a real filter row. Not urgent.
+8. **Bulk-enrich latency.** ~30 min wall-clock for a full sweep. Real fix
+   is a background job using the cron triggers already in `wrangler.toml`.
 9. **Reports module's `cf_zone_id` analytics path is effectively dead.**
-   No landingsite client is proxied through CF (proxy OFF mandatory), so
+   No landingsite client is CF-proxied (proxy OFF mandatory), so
    `getZoneAnalytics` returns zeros silently. Worth removing from monthly
-   snapshots, or replacing with CF Web Analytics if landingsite allows
+   snapshots or swapping in CF Web Analytics if landingsite supports
    custom script injection.
 
 ## Recently verified working
 
-- Phase 0 end-to-end: book demo on a cold lead → prospect project created →
-  prospect card has new ✗ Demo passed button → clicking it returns lead to
-  contacted, project marked dead.
-- Phase 1 HoneyBook spike: embed renders inside our modal pattern.
-- Phase 4 dashboard becomes default landing tab.
-- Phase 7 MondayView edit modal lets operator tweak session composition
-  before week starts.
+- Industry rotation matches real `leads.industry` values; sessions compose
+  ~30+ leads each on Plumbing / Electrical / Roofing / General Contracting.
+- Maps link in exec view opens the exact GBP listing.
+- Previous/Skip nav lets operator park a lead and return later.
+- Brief Studio-styled exec page with sidebar Scores/Signals/Prior Calls.
+- Booking creates a real prospect project; "Pause & build demo" lands in
+  the new project's Brief Studio with Quick Brief one click away.
+- Pipeline Outcome column now reflects exec-view outcomes (Voicemail
+  Left / Not Interested / Callback Requested / Demo Booked).
+- Sites tab shows Magee Plumbing as the only prospect; other 5 stuck-test
+  leads are back in the calling pool as `cold`.
 
-## Deploy state to confirm
+## Deploy state
 
-- **Backend Worker:** auto-deployed via CI on each merge. Last HEAD on `main`
-  is the squash-merge of PR #57 (or whatever #57 became — the Phase 9 polish
-  PR).
-- **Dashboard:** manually deployed after each UI-touching phase. Last bundle
-  verified in production: see most recent `npm run deploy` output.
-- **Migrations applied to remote D1:**
-  - `2026-06-14-vocabulary-refactor.sql` — 1 row updated (Magee Plumbing
-    client → qualified).
-  - `2026-06-14-calling-dashboard.sql` — 28 queries (6 tables + 5 ALTER +
-    indexes + weekly_rotation seed).
+- **Backend Worker:** auto-deployed via CI through PR #65.
+- **Dashboard:** manually deployed after each UI-touching PR. Last deploy
+  was after #65; verify the apex bundle hash matches a recent build hash
+  if you suspect drift.
+- **D1 migrations applied:** all listed in CHANGELOG. No outstanding
+  migrations.
 
-## Operator pre-flight before first real calling
+## One nuance worth knowing for next session
 
-1. **Generate the week.** Dashboard → "+ Generate week" button → confirms 6
-   sessions for the upcoming Tue/Wed/Thu.
-2. **Override composition if needed.** Click the Edit button on any planned
-   card to tweak industry, score floor, target count, or city filter.
-3. **Optionally generate pitch cards in bulk** — currently lazy/on-demand
-   only. If you'd rather have them ready before calling, run the ↻ on each
-   lead in the session before starting (or wait for a backfill script).
-4. **HoneyBook placement ID** is hardcoded in `BookDemoModal.tsx`. If the
-   placement changes, update there + the spike HTML if you ever rerun it.
+The booking flow now has a **TWO-stage write**:
+1. `POST /sessions/:id/outcome` with `outcome='booked'` → creates project,
+   sets lead → qualified, stamps demo pointers, creates demos + demo_events
+   rows, returns the new project.
+2. UI shows the post-booking prompt. "Pause & build" deep-links into
+   Brief Studio; "Keep calling" just dismisses.
 
-## Out of scope (per spec)
+If the post-booking UX ever needs to change, the backend response shape
+already returns `{ ok, demo, callbackId, project }` — `project` is what
+drives the deep-link.
 
-- HoneyBook API integration (replace embed with direct API call). Out of
-  scope until volume justifies; would eliminate 60-90s/booking.
-- Time-precision callbacks. Day-precision only.
-- Auto-retirement of dead leads after N unanswered attempts.
-- Configurable session times (currently just "morning" / "evening" labels).
-- Per-industry booking-rate-driven rotation reordering.
-- Pre-call prep digest email Monday morning.
-- Demo show-rate forecasting based on time-to-demo gap.
+The same friendly-outcome-label mapping (#65) is what shows up in:
+- Pipeline list Outcome column
+- Lead modal call log
+- Execution view Prior Calls sidebar card (via call_log entries)
+
+Three surfaces, one source of truth in `routes/sessions.ts`.
+
+## Out of scope (still — unchanged from prior handoff)
+
+- HoneyBook API integration (replacing the embed)
+- Time-precision callbacks
+- Auto-retirement of dead leads
+- Configurable session times
+- Per-industry rotation reordering by booking-rate
+- Pre-call digest email
+- Demo show-rate forecasting
