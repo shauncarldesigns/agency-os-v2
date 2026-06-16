@@ -75,6 +75,27 @@ export function statusBadge(status: string): { color: 'green' | 'yellow' | 'red'
   return map[status] ?? { color: 'gray', label: status };
 }
 
+// Build a Google Maps link for a lead. Uses place_id when present so the
+// link resolves to the exact GBP listing; falls back to a name+location text
+// search. Returns null if there's nothing usable to search on.
+//
+// Lifted from LeadModal.tsx so the execution view + any future surface can
+// reuse it without duplicating. Original caller was the Pipeline LeadModal.
+export function googleMapsUrl(lead: {
+  company: string;
+  city: string | null;
+  state: string | null;
+  address?: string | null;
+  place_id: string | null;
+}): string | null {
+  const locationText = lead.address ?? [lead.city, lead.state].filter(Boolean).join(', ');
+  const query = [lead.company, locationText].filter(Boolean).join(' ').trim();
+  if (!query && !lead.place_id) return null;
+  const params = new URLSearchParams({ api: '1', query: query || lead.company });
+  if (lead.place_id) params.set('query_place_id', lead.place_id);
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
 // Safely parse JSON-string columns from D1
 export function parseList<T = string>(raw: string | null | undefined): T[] {
   if (!raw) return [];
