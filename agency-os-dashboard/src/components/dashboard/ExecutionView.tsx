@@ -4,7 +4,8 @@ import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
-import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
+import { formatPhone, parseList, googleMapsUrl } from '../../lib/format';
+import { BookingPane } from './BookingPane';
 
 /**
  * Full-screen one-lead-at-a-time execution view.
@@ -28,12 +29,6 @@ interface ExecutionViewProps {
   showToast: ShowToast;
   /** Closes the execution view + reloads the dashboard. */
   onClose: () => void;
-  /** Phase 6 will wire this to open the BookDemoModal. Phase 5 ships a stub
-   *  that prompts for a datetime so the outcome can still be recorded. */
-  onBookDemo: (
-    lead: Lead,
-    onConfirm: (scheduledFor: string, honeybookConfirmed: boolean) => Promise<void>,
-  ) => void;
 }
 
 interface LeadWithSession extends Lead {
@@ -46,7 +41,7 @@ interface LeadWithSession extends Lead {
   called_at?: string | null;
 }
 
-export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: ExecutionViewProps) {
+export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewProps) {
   const [session, setSession] = useState<Session | null>(null);
   // Full lead list, kept client-side so the operator can navigate
   // forward/backward without re-fetching. currentIndex is the position they're
@@ -90,6 +85,12 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   const [callbackDate, setCallbackDate] = useState(defaultCallbackDate());
   const [callbackBlock, setCallbackBlock] = useState<SessionBlock>('morning');
 
+  // Booking-mode flag — when true, the main column swaps to the BookingPane
+  // (split-pane HoneyBook embed + copy fields). Stays true until the operator
+  // either confirms (advances) or cancels (back to outcome buttons). Auto-
+  // resets when the lead changes so it doesn't leak across Previous/Next.
+  const [bookingMode, setBookingMode] = useState(false);
+
   // Pitch card generation state (lazy — operator clicks ↻ to generate).
   const [generatingPitchCard, setGeneratingPitchCard] = useState(false);
 
@@ -121,7 +122,8 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
 
   // Re-seed the notes textarea when the current lead changes (Previous/Next/
   // advance). LocalStorage drafts are keyed by session_lead_id so each lead's
-  // notes survive navigation away and back.
+  // notes survive navigation away and back. Also resets bookingMode and the
+  // callback picker so neither leaks across navigation.
   useEffect(() => {
     if (!draftKey) { setNotes(''); return; }
     try {
@@ -129,6 +131,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
       setNotes(saved ?? '');
     } catch { setNotes(''); }
     setCallbackOpen(false);
+    setBookingMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
 
@@ -202,12 +205,17 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
     setCallbackOpen(false);
   }, [recordOutcome, callbackDate, callbackBlock]);
+  // Booked demo opens the inline BookingPane. recordOutcome happens when the
+  // operator hits "Mark booked & advance" inside the pane.
   const handleBookedDemo = useCallback(() => {
     if (!lead) return;
-    onBookDemo(lead, async (scheduledFor, honeybookConfirmed) => {
-      await recordOutcome('booked', { demoData: { scheduledFor, honeybookConfirmed } });
-    });
-  }, [lead, onBookDemo, recordOutcome]);
+    setBookingMode(true);
+  }, [lead]);
+  const handleBookingConfirm = useCallback(async (scheduledFor: string, honeybookConfirmed: boolean) => {
+    await recordOutcome('booked', { demoData: { scheduledFor, honeybookConfirmed } });
+    // bookingMode auto-clears via the lead-change effect when recordOutcome
+    // advances to the next lead. No explicit reset needed.
+  }, [recordOutcome]);
 
   // Navigation handlers — no DB writes, pure index movement. "Skip for now"
   // is just Next that doesn't record an outcome; the lead stays in 'uncalled'
@@ -321,175 +329,155 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
 
   return (
     <div className="exec-page">
-      <div className="exec-card" style={{ width: '100%', maxWidth: 880, minHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 18px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface2)',
-        }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {session ? `${session.industry} · ${session.block}` : ''}
-            </div>
+      {/* Topbar — Brief-Studio style. Always visible above the 2-col layout. */}
+      <div className="bs-topbar">
+        <div>
+          <button type="button" className="bs-back" onClick={onClose}>← Exit session</button>
+          <div className="bs-breadcrumb">
+            {session ? `${session.session_date} · ${session.block === 'morning' ? 'Morning' : 'Evening'}` : ''}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
-            <button
-              onClick={onClose}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text3)', fontSize: '1.2rem', cursor: 'pointer', padding: '2px 8px' }}
-              title="Close (pauses session)"
-            >
-              ✕
-            </button>
-          </div>
+          <h1 className="bs-title">{lead.company}</h1>
         </div>
+        <div className="bs-topbar-meta">
+          {lead.is_callback === 1 && <Badge color="yellow">Callback</Badge>}
+          <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
+        </div>
+      </div>
 
-        {/* Body */}
-        <div style={{ padding: '18px 22px', overflowY: 'auto', flex: 1 }}>
-          {/* Company header */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>{lead.company}</h2>
-              {lead.is_callback === 1 && <Badge color="yellow">Callback</Badge>}
-            </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text3)', marginTop: 4 }}>
-              {[lead.city, lead.state].filter(Boolean).join(', ')}
-              {lead.website && (
-                <>
-                  {' · '}
-                  <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
-                    {cleanDomain(lead.website)} ↗
-                  </a>
-                </>
-              )}
-              {lead.phone && (
-                <>
-                  {' · '}
-                  <a href={`tel:${lead.phone}`} style={{ color: 'var(--text2)', fontFamily: 'ui-monospace,monospace' }}>
-                    {formatPhone(lead.phone)}
-                  </a>
-                </>
-              )}
-              {(() => {
-                // Google Maps link — operator wanted access to the GBP listing
-                // mid-call for quick research (services, hours, reviews scroll,
-                // photos). Uses place_id when present so it resolves to the
-                // exact business, not a generic search.
-                const maps = googleMapsUrl(lead);
-                if (!maps) return null;
-                return (
-                  <>
-                    {' · '}
-                    <a href={maps} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
-                      🗺️ Maps ↗
-                    </a>
-                  </>
-                );
-              })()}
-              {lead.contact && ` · ${lead.contact}`}
-            </div>
-          </div>
+      {/* Sub-header — contact info strip under the title. Kept outside the
+          2-col layout so it spans the full width and reads like a top-of-page
+          contact card. */}
+      <div style={{
+        fontSize: '0.78rem', color: 'var(--text3)',
+        padding: '0 0 14px',
+        display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+      }}>
+        <span>{[lead.city, lead.state].filter(Boolean).join(', ') || '—'}</span>
+        {lead.phone && (
+          <a href={`tel:${lead.phone}`} style={{ color: 'var(--text)', fontFamily: 'ui-monospace,monospace' }}>
+            📞 {formatPhone(lead.phone)}
+          </a>
+        )}
+        {lead.website && (
+          <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
+            🌐 {cleanDomain(lead.website)} ↗
+          </a>
+        )}
+        {(() => {
+          const maps = googleMapsUrl(lead);
+          if (!maps) return null;
+          return (
+            <a href={maps} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
+              🗺️ Maps ↗
+            </a>
+          );
+        })()}
+        {lead.email && (
+          <a href={`mailto:${lead.email}`} style={{ color: 'var(--text2)' }}>
+            ✉ {lead.email}
+          </a>
+        )}
+        {lead.contact && <span>👤 {lead.contact}</span>}
+      </div>
 
-          {/* Score cards row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-            <ScoreCard
-              label="GBP"
-              value={reviewCount > 0 ? `${reviewCount} reviews` : '— no reviews'}
-              sub={rating != null ? `${rating.toFixed(1)}★ ${stars(rating)}` : (lead.gbp_claimed === 0 ? 'Unclaimed' : '')}
-              accent={lead.gbp_claimed === 0 ? 'red' : reviewCount >= 20 ? 'green' : 'gray'}
+      {/* Two-column body, Brief Studio classes. */}
+      <div className="bs-layout">
+        <main className="bs-main">
+          {bookingMode ? (
+            <BookingPane
+              lead={lead}
+              showToast={showToast}
+              onConfirm={handleBookingConfirm}
+              onCancel={() => setBookingMode(false)}
             />
-            <ScoreCard
-              label="Website"
-              value={lead.website ? `PSI ${lead.pagespeed_mobile ?? '?'}` : 'No site'}
-              sub={lead.opportunity_score != null ? `Score ${lead.opportunity_score}${tier ? ` · Tier ${tier}` : ''}` : ''}
-              accent={!lead.website ? 'red' : (lead.pagespeed_mobile ?? 100) < 50 ? 'yellow' : 'green'}
-            />
-          </div>
+          ) : (
+            <>
+              {/* Pitch card */}
+              <PitchCard
+                text={lead.pitch_card_text}
+                generatedAt={lead.pitch_card_generated_at}
+                onRegenerate={handleGeneratePitchCard}
+                busy={generatingPitchCard}
+              />
 
-          {/* Pitch card */}
-          <PitchCard
-            text={lead.pitch_card_text}
-            generatedAt={lead.pitch_card_generated_at}
-            onRegenerate={handleGeneratePitchCard}
-            busy={generatingPitchCard}
-          />
-
-          {/* Signals */}
-          <SignalsList lead={lead} />
-
-          {/* Prior call history — lazy-loaded on expand. Operator can scan
-              past outcomes + notes for context without leaving the page. */}
-          <PriorCalls leadId={lead.id} key={lead.id} />
-
-          {/* Notes textarea */}
-          <div style={{ marginTop: 12 }}>
-            <div style={labelStyle}>Call notes</div>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Anything noteworthy from the call (saved on outcome)…"
-              rows={3}
-              style={{
-                width: '100%',
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: 8,
-                fontSize: '0.76rem',
-                color: 'var(--text)',
-                fontFamily: 'inherit',
-                resize: 'vertical',
-              }}
-            />
-          </div>
-
-          {/* Inline callback picker (visible on outcome=3) */}
-          {callbackOpen && (
-            <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.3)', borderRadius: 6 }}>
-              <div style={labelStyle}>Callback date</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input
-                  type="date"
-                  value={callbackDate}
-                  onChange={(e) => setCallbackDate(e.target.value)}
-                  style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'inherit' }}
+              {/* Notes textarea */}
+              <div style={{ marginTop: 14 }}>
+                <div style={labelStyle}>Call notes</div>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Who you talked to, objections, what they asked about (saved on outcome)…"
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    background: 'var(--surface2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: 10,
+                    fontSize: '0.78rem',
+                    color: 'var(--text)',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
                 />
-                <select
-                  value={callbackBlock}
-                  onChange={(e) => setCallbackBlock(e.target.value as SessionBlock)}
-                  style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)' }}
-                >
-                  <option value="morning">Morning</option>
-                  <option value="evening">Evening</option>
-                </select>
-                <Button variant="primary" size="sm" disabled={recording} onClick={handleCallbackConfirm}>
-                  Confirm callback
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setCallbackOpen(false)}>Cancel</Button>
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Outcome buttons + nav row (fixed bottom). Skip is no longer an
-            outcome — it lives in NavRow now and just advances without writing. */}
-        <OutcomeButtons
-          recording={recording}
-          onVoicemail={handleVoicemail}
-          onNotInterested={handleNotInterested}
-          onCallback={handleCallbackToggle}
-          onBooked={handleBookedDemo}
-        />
-        <NavRow
-          canGoBack={canGoBack}
-          recording={recording}
-          onPrevious={handlePrevious}
-          onSkip={handleSkip}
-        />
+              {/* Inline callback picker (visible on outcome=3) */}
+              {callbackOpen && (
+                <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.3)', borderRadius: 6 }}>
+                  <div style={labelStyle}>Callback date</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                    <input
+                      type="date"
+                      value={callbackDate}
+                      onChange={(e) => setCallbackDate(e.target.value)}
+                      style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'inherit' }}
+                    />
+                    <select
+                      value={callbackBlock}
+                      onChange={(e) => setCallbackBlock(e.target.value as SessionBlock)}
+                      style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)' }}
+                    >
+                      <option value="morning">Morning</option>
+                      <option value="evening">Evening</option>
+                    </select>
+                    <Button variant="primary" size="sm" disabled={recording} onClick={handleCallbackConfirm}>
+                      Confirm callback
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setCallbackOpen(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Outcome buttons — inline at the end of the workflow */}
+              <div style={{ marginTop: 16 }}>
+                <OutcomeButtons
+                  recording={recording}
+                  onVoicemail={handleVoicemail}
+                  onNotInterested={handleNotInterested}
+                  onCallback={handleCallbackToggle}
+                  onBooked={handleBookedDemo}
+                />
+              </div>
+
+              {/* Nav row — only when not booking */}
+              <NavRow
+                canGoBack={canGoBack}
+                recording={recording}
+                onPrevious={handlePrevious}
+                onSkip={handleSkip}
+              />
+            </>
+          )}
+        </main>
+
+        {/* Right sidebar — reference material. Same Brief Studio card pattern
+            so it feels consistent across the app. */}
+        <aside className="bs-sidebar">
+          <ScoreSidebarCard lead={lead} reviewCount={reviewCount} rating={rating} tier={tier} />
+          <SignalsSidebarCard lead={lead} />
+          <PriorCallsSidebarCard leadId={lead.id} key={lead.id} />
+        </aside>
       </div>
     </div>
   );
@@ -534,24 +522,176 @@ function ProgressDashes({ total, called, currentIndex }: { total: number; called
   );
 }
 
-function ScoreCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent: 'green' | 'yellow' | 'red' | 'gray' }) {
-  const colorMap = {
-    green: 'rgba(74,222,128,0.4)',
-    yellow: 'rgba(245,200,66,0.4)',
-    red: 'rgba(248,113,113,0.4)',
-    gray: 'var(--border)',
-  };
+// ============================================================================
+// Sidebar cards — Brief Studio styled, reference material that updates as the
+// operator navigates between leads. None of these allow editing; pure read.
+// ============================================================================
+
+function ScoreSidebarCard({ lead, reviewCount, rating, tier }: {
+  lead: Lead;
+  reviewCount: number;
+  rating: number | null;
+  tier: 1 | 2 | 3 | null;
+}) {
   return (
-    <div style={{
-      padding: '10px 12px',
-      background: 'var(--surface2)',
-      border: `1px solid ${colorMap[accent]}`,
-      borderLeft: `3px solid ${colorMap[accent]}`,
-      borderRadius: 4,
-    }}>
-      <div style={labelStyle}>{label}</div>
-      <div style={{ fontSize: '0.94rem', fontWeight: 600, color: 'var(--text)' }}>{value}</div>
-      {sub && <div style={{ fontSize: '0.66rem', color: 'var(--text3)', marginTop: 2 }}>{sub}</div>}
+    <div className="bs-side-card">
+      <div className="bs-side-title">Scores</div>
+      <div className="bs-side-row bs-side-row-status">
+        <span>Reviews</span>
+        <span className={reviewCount > 0 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+          {reviewCount > 0 ? `${reviewCount}${rating != null ? ` · ${rating.toFixed(1)}★` : ''}` : '— none'}
+        </span>
+      </div>
+      <div className="bs-side-row bs-side-row-status">
+        <span>GBP</span>
+        <span className={lead.gbp_claimed === 1 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+          {lead.gbp_claimed === 1 ? '✓ Claimed' : '⚠ Unclaimed'}
+        </span>
+      </div>
+      <div className="bs-side-row bs-side-row-status">
+        <span>Website</span>
+        <span className={lead.website ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+          {lead.website ? `PSI ${lead.pagespeed_mobile ?? '?'}` : '— none'}
+        </span>
+      </div>
+      <div className="bs-side-row bs-side-row-status">
+        <span>Opportunity</span>
+        <span className="bs-side-status-ok">
+          {lead.opportunity_score != null ? lead.opportunity_score : '—'}
+          {tier ? ` · Tier ${tier}` : ''}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SignalsSidebarCard({ lead }: { lead: Lead }) {
+  const signals: Array<{ text: string; severity: 'high' | 'normal' }> = [];
+  if (lead.gbp_claimed === 0) signals.push({ text: 'Unclaimed GBP', severity: 'high' });
+  if (!lead.website) signals.push({ text: 'No website', severity: 'high' });
+  else if (lead.pagespeed_mobile != null) {
+    signals.push({ text: `Mobile PSI ${lead.pagespeed_mobile}`, severity: lead.pagespeed_mobile < 50 ? 'high' : 'normal' });
+  }
+  if (lead.gbp_photos_count != null && lead.gbp_photos_count < 5) {
+    signals.push({ text: `${lead.gbp_photos_count} GBP photos`, severity: 'normal' });
+  }
+  const owners = parseList<string>(lead.owner_names);
+  if (owners.length > 0) signals.push({ text: `Owner: ${owners[0]}`, severity: 'normal' });
+
+  if (signals.length === 0) {
+    return (
+      <div className="bs-side-card">
+        <div className="bs-side-title">Signals</div>
+        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', padding: '6px 0' }}>
+          No flagged signals.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="bs-side-card">
+      <div className="bs-side-title">Signals</div>
+      {signals.map((s, i) => (
+        <div key={i} className="bs-side-row" style={{
+          color: s.severity === 'high' ? 'var(--text)' : 'var(--text2)',
+          fontWeight: s.severity === 'high' ? 600 : 400,
+        }}>
+          • {s.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PriorCallsSidebarCard({ leadId }: { leadId: number }) {
+  // Inline render of the call history in sidebar-card style. Lazy-loads on
+  // first mount per lead (key={lead.id} at the call site resets this).
+  // Shows count + collapsible list.
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [calls, setCalls] = useState<CallEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load count eagerly so the sidebar title can show "(N)" without a click.
+  useEffect(() => {
+    let cancelled = false;
+    setCalls(null); setError(null); setExpanded(false);
+    setLoading(true);
+    api.leads.get(leadId)
+      .then((res) => { if (!cancelled) setCalls(res.calls); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : (err as Error).message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [leadId]);
+
+  const count = calls?.length ?? 0;
+  const hasAny = count > 0;
+
+  return (
+    <div className="bs-side-card">
+      <div className="bs-side-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Prior calls{calls != null ? ` (${count})` : ''}</span>
+        {hasAny && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            style={{
+              background: 'transparent', border: 'none', color: 'var(--text2)',
+              cursor: 'pointer', fontSize: '0.66rem', padding: '0 4px',
+              fontFamily: 'inherit', textTransform: 'none', letterSpacing: 0,
+            }}
+          >
+            {expanded ? '▾ Hide' : '▸ Show'}
+          </button>
+        )}
+      </div>
+
+      {loading && (
+        <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Spinner /> Loading…
+        </div>
+      )}
+
+      {!loading && error && (
+        <div style={{ fontSize: '0.68rem', color: 'var(--red)', padding: '6px 0' }}>
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && !hasAny && (
+        <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0', fontStyle: 'italic' }}>
+          No prior calls logged.
+        </div>
+      )}
+
+      {!loading && !error && hasAny && expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, maxHeight: 320, overflowY: 'auto' }}>
+          {/* Newest first — backend returns ORDER BY created_at DESC. */}
+          {calls!.map((c) => (
+            <div key={c.id} style={{
+              padding: '7px 9px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              fontSize: '0.72rem',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                <span style={{ fontWeight: 600 }}>{c.outcome}</span>
+                <span style={{ color: 'var(--text3)', fontSize: '0.64rem' }}>{formatCallTimestamp(c.created_at)}</span>
+              </div>
+              {c.notes && (
+                <div style={{ color: 'var(--text2)', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                  {c.notes}
+                </div>
+              )}
+              {c.followup_date && (
+                <div style={{ color: 'var(--text3)', fontSize: '0.64rem', marginTop: 3 }}>
+                  Followup: {c.followup_date}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -607,162 +747,12 @@ function PitchCard({ text, generatedAt, onRegenerate, busy }: { text: string | n
   );
 }
 
-// Prior-call history. Collapsed toggle by default; expands to fetch + show.
-// Keyed by lead.id at the call site (key={lead.id}) so it resets cleanly
-// across Previous/Next navigation.
-function PriorCalls({ leadId }: { leadId: number }) {
-  const [expanded, setExpanded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [calls, setCalls] = useState<CallEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function ensureLoaded() {
-    if (calls !== null || loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.leads.get(leadId);
-      setCalls(res.calls);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : (err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function toggle() {
-    setExpanded((v) => {
-      const next = !v;
-      if (next) void ensureLoaded();
-      return next;
-    });
-  }
-
-  const count = calls?.length ?? null;
-
-  return (
-    <div style={{ marginTop: 12 }}>
-      <button
-        onClick={toggle}
-        style={{
-          width: '100%',
-          background: 'transparent',
-          border: '1px dashed var(--border)',
-          borderRadius: 4,
-          padding: '7px 10px',
-          fontSize: '0.7rem',
-          color: 'var(--text3)',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          textAlign: 'left',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span>
-          {expanded ? '▾' : '▸'} Prior calls{count != null ? ` (${count})` : ''}
-        </span>
-        {loading && <Spinner />}
-      </button>
-
-      {expanded && !loading && error && (
-        <div style={{ marginTop: 6, padding: '6px 10px', fontSize: '0.7rem', color: 'var(--red)' }}>
-          {error}
-        </div>
-      )}
-
-      {expanded && !loading && calls && calls.length === 0 && (
-        <div style={{ marginTop: 6, padding: '6px 10px', fontSize: '0.7rem', color: 'var(--text3)', fontStyle: 'italic' }}>
-          No prior calls logged for this lead.
-        </div>
-      )}
-
-      {expanded && !loading && calls && calls.length > 0 && (
-        <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {/* Newest first per spec — backend returns ORDER BY created_at DESC. */}
-          {calls.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                padding: '7px 10px',
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                fontSize: '0.74rem',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
-                <span style={{ fontWeight: 600 }}>{c.outcome}</span>
-                <span style={{ color: 'var(--text3)', fontSize: '0.66rem' }}>{formatCallTimestamp(c.created_at)}</span>
-              </div>
-              {c.notes && (
-                <div style={{ color: 'var(--text2)', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
-                  {c.notes}
-                </div>
-              )}
-              {c.followup_date && (
-                <div style={{ color: 'var(--text3)', fontSize: '0.66rem', marginTop: 3 }}>
-                  Followup: {c.followup_date}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function formatCallTimestamp(iso: string): string {
   try {
     return new Date(iso.replace(' ', 'T')).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
     });
   } catch { return iso; }
-}
-
-function SignalsList({ lead }: { lead: Lead }) {
-  const signals: Array<{ text: string; severity: 'high' | 'normal' }> = [];
-
-  if (lead.gbp_claimed === 0) {
-    signals.push({ text: 'Unclaimed Google Business Profile', severity: 'high' });
-  }
-  if (!lead.website) {
-    signals.push({ text: 'No website', severity: 'high' });
-  } else if (lead.pagespeed_mobile != null) {
-    signals.push({ text: `Mobile PageSpeed ${lead.pagespeed_mobile}/100`, severity: lead.pagespeed_mobile < 50 ? 'high' : 'normal' });
-  }
-  if (lead.gbp_photos_count != null && lead.gbp_photos_count < 5) {
-    signals.push({ text: `Only ${lead.gbp_photos_count} GBP photos`, severity: 'normal' });
-  }
-  const owners = parseList<string>(lead.owner_names);
-  if (owners.length > 0) {
-    signals.push({ text: `Owner: ${owners[0]}`, severity: 'normal' });
-  }
-  if (lead.google_review_count != null && lead.google_review_count > 0 && lead.google_rating != null) {
-    signals.push({ text: `${lead.google_review_count} reviews · ${lead.google_rating.toFixed(1)}★`, severity: 'normal' });
-  }
-
-  if (signals.length === 0) return null;
-
-  return (
-    <div style={{ marginTop: 12 }}>
-      <div style={labelStyle}>📡 Signals</div>
-      <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none' }}>
-        {signals.map((s, i) => (
-          <li key={i} style={{
-            padding: '4px 0',
-            fontSize: '0.76rem',
-            color: s.severity === 'high' ? 'var(--text)' : 'var(--text2)',
-            fontWeight: s.severity === 'high' ? 600 : 400,
-          }}>
-            • {s.text}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 interface OutcomeButtonsProps {

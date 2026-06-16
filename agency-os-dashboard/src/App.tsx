@@ -5,7 +5,6 @@ import { Header } from './components/layout/Header';
 import { Nav } from './components/layout/Nav';
 import { DashboardPanel } from './components/dashboard/DashboardPanel';
 import { ExecutionView } from './components/dashboard/ExecutionView';
-import { BookDemoModal } from './components/dashboard/BookDemoModal';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
@@ -13,7 +12,6 @@ import { ReportsPanel } from './components/reports/ReportsPanel';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
-import type { Lead } from './lib/types';
 
 export default function App() {
   // Dashboard is the new default landing tab (Phase 4 flip per spec).
@@ -25,14 +23,9 @@ export default function App() {
   // until SitesPanel consumes it (then clears it via the callback).
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState<number | null>(null);
   // When a calling session is opened, the execution view takes over the screen.
+  // Booking is now inline within ExecutionView itself (Brief-Studio-styled),
+  // so no separate booking-modal state lives here.
   const [openSessionId, setOpenSessionId] = useState<number | null>(null);
-  // Book-demo modal state — driven by the execution view's "Booked" outcome.
-  // Holds the lead being booked + the callback that records the outcome once
-  // the operator confirms.
-  const [bookingState, setBookingState] = useState<{
-    lead: Lead;
-    onConfirm: (scheduledFor: string, honeybookConfirmed: boolean) => Promise<void>;
-  } | null>(null);
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadStats(); }, []);
@@ -69,8 +62,8 @@ export default function App() {
   }
 
   // When the operator's in a calling session, the execution view takes over
-  // the entire app — no Header/Nav distractions. Calling is focused work.
-  // BookDemoModal can still layer above as a regular modal.
+  // the entire app — no Header/Nav distractions. Booking lives inline
+  // within ExecutionView itself.
   if (openSessionId !== null) {
     return (
       <>
@@ -78,18 +71,6 @@ export default function App() {
           sessionId={openSessionId}
           showToast={showToast}
           onClose={() => { setOpenSessionId(null); loadStats(); }}
-          onBookDemo={(lead, onConfirm) => setBookingState({ lead, onConfirm })}
-        />
-        <BookDemoModal
-          open={bookingState !== null}
-          lead={bookingState?.lead ?? null}
-          showToast={showToast}
-          onClose={() => setBookingState(null)}
-          onConfirm={async (scheduledFor, hbConfirmed) => {
-            if (!bookingState) return;
-            await bookingState.onConfirm(scheduledFor, hbConfirmed);
-            setBookingState(null);
-          }}
         />
         <ToastContainer toasts={toasts} />
       </>
