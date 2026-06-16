@@ -383,10 +383,21 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   const notes = body.notes?.trim() ?? '';
 
   // 1. Write the call_log entry (except skipped — those are silent advances).
+  // Friendly labels mirror the Pipeline LeadModal's CallLogTab vocabulary so
+  // the Outcome column on the Pipeline list stays consistent across both
+  // capture surfaces. outcomeBadge() in lib/format.ts pattern-matches these
+  // strings to badge colors.
+  const friendlyOutcome = ({
+    voicemail: 'Voicemail Left',
+    not_interested: 'Not Interested',
+    callback: 'Callback Requested',
+    booked: 'Demo Booked',
+    skipped: '',  // unused; skipped never writes to call_log or lead.outcome
+  } as const)[body.outcome];
   if (body.outcome !== 'skipped') {
     await c.env.DB.prepare(
       `INSERT INTO call_log (lead_id, outcome, notes) VALUES (?, ?, ?)`
-    ).bind(body.leadId, body.outcome, notes).run();
+    ).bind(body.leadId, friendlyOutcome, notes).run();
   }
 
   // 2. Update session_leads with the outcome.
@@ -400,20 +411,30 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // 14-day-excluded by a non-call.
   } else if (body.outcome === 'not_interested') {
     await c.env.DB.prepare(
-      `UPDATE leads SET last_called_at = ?, status = 'not_interested', updated_at = ? WHERE id = ?`
-    ).bind(now, now, body.leadId).run();
+      `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?, updated_at = ? WHERE id = ?`
+    ).bind(now, friendlyOutcome, now, body.leadId).run();
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
   } else {
-    // voicemail | callback — promote cold → contacted if applicable.
+    // voicemail | callback — promote cold → contacted if applicable, and
+    // stamp the friendly outcome on the lead row so the Pipeline list's
+    // Outcome column reflects the most recent meaningful interaction.
     await c.env.DB.prepare(`
       UPDATE leads SET
         last_called_at = ?,
         status = CASE WHEN status = 'cold' THEN 'contacted' ELSE status END,
+        outcome = ?,
+        followup = COALESCE(?, followup),
         updated_at = ?
       WHERE id = ?
-    `).bind(now, now, body.leadId).run();
+    `).bind(
+      now,
+      friendlyOutcome,
+      body.outcome === 'callback' ? body.callbackDate ?? null : null,
+      now,
+      body.leadId,
+    ).run();
   }
 
   // 4. Side-effects per outcome.
@@ -455,8 +476,8 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     }
 
     // Now update the lead's qualified state with the project linked + demo
-    // pointers stamped. project_id is set unconditionally so the Sites tab
-    // can find this lead's project.
+    // pointers stamped + friendly outcome label. project_id is set
+    // unconditionally so the Sites tab can find this lead's project.
     await c.env.DB.prepare(`
       UPDATE leads SET
         last_called_at = ?,
@@ -464,10 +485,11 @@ sessionsRouter.post('/:id/outcome', async (c) => {
         project_id = ?,
         demo_booked_at = ?,
         demo_scheduled_for = ?,
+        outcome = ?,
         updated_at = ?
       WHERE id = ?
     `).bind(
-      now, projectId, now, body.demoData.scheduledFor, now, body.leadId,
+      now, projectId, now, body.demoData.scheduledFor, friendlyOutcome, now, body.leadId,
     ).run();
 
     // Return the project in the response so the execution-view UI can

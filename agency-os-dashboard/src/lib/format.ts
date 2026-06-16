@@ -49,10 +49,14 @@ export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Outcome → badge color mapping
+// Outcome → badge color mapping. Strings are matched as substrings so the
+// CallLogTab's free-text outcomes + the session-endpoint's friendly labels
+// ("Demo Booked", "Voicemail Left", "Callback Requested", "Not Interested",
+// etc.) all map cleanly to the same color buckets.
 export function outcomeBadge(outcome: string | null | undefined): { color: 'green' | 'yellow' | 'red' | 'blue' | 'gray'; label: string } {
   if (!outcome) return { color: 'gray', label: '—' };
   const o = outcome.toLowerCase();
+  if (o.includes('booked')) return { color: 'green', label: outcome };
   if (o.includes('interested') && !o.includes('not')) return { color: 'green', label: outcome };
   if (o.includes('signed') || o.includes('qualified')) return { color: 'green', label: outcome };
   if (o.includes('callback')) return { color: 'yellow', label: outcome };
