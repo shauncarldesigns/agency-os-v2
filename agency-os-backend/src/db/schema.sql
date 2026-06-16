@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS leads (
   project_id      INTEGER,
   -- Soft delete (v2.1)
   deleted_at      TEXT,
+  -- Calling-dashboard pointer columns (added 2026-06-14)
+  pitch_card_text TEXT,                       -- Cached call-script for execution view; null = "generate me"
+  pitch_card_generated_at TEXT,
+  last_called_at  TEXT,                       -- Drives 14-day exclusion in session composer
+  demo_booked_at  TEXT,                       -- Quick-reference pointer to latest demo
+  demo_scheduled_for TEXT,                    -- Quick-reference pointer to latest demo
   -- Timestamps
   created_at      TEXT DEFAULT (datetime('now')),
   updated_at      TEXT DEFAULT (datetime('now'))
@@ -65,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_tier ON leads(recommended_tier);
 CREATE INDEX IF NOT EXISTS idx_lead_place ON leads(place_id);
 CREATE INDEX IF NOT EXISTS idx_lead_enrich ON leads(enrichment_status);
 CREATE INDEX IF NOT EXISTS idx_lead_active ON leads(deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_last_called ON leads(last_called_at);
 
 -- ==================================================
 -- CALL_LOG — Per-lead call history
@@ -291,3 +298,88 @@ CREATE TABLE IF NOT EXISTS report_history (
   created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_report_proj ON report_history(project_id, period);
+
+-- ==================================================
+-- CALLING DASHBOARD — Sessions, demos, callbacks
+-- ==================================================
+-- Added 2026-06-14. See db/migrations/2026-06-14-calling-dashboard.sql for
+-- column-by-column rationale and indexing decisions.
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_date      TEXT NOT NULL,
+  block             TEXT NOT NULL,                            -- 'morning' | 'evening'
+  industry          TEXT NOT NULL,
+  geographic_filter TEXT,                                     -- JSON array of cities; null = full service area
+  score_floor       INTEGER NOT NULL DEFAULT 50,
+  lead_count_target INTEGER NOT NULL DEFAULT 40,
+  status            TEXT NOT NULL DEFAULT 'planned',          -- planned | active | complete
+  started_at        TEXT,
+  completed_at      TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_unique ON sessions(session_date, block);
+CREATE INDEX IF NOT EXISTS idx_session_status ON sessions(status);
+CREATE INDEX IF NOT EXISTS idx_session_active ON sessions(status) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS session_leads (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id    INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  lead_id       INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  position      INTEGER NOT NULL,
+  call_outcome  TEXT,                                          -- voicemail | not_interested | callback | booked | skipped
+  called_at     TEXT,
+  is_callback   INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_lead_unique ON session_leads(session_id, lead_id);
+CREATE INDEX IF NOT EXISTS idx_session_lead_outcome ON session_leads(session_id, call_outcome);
+CREATE INDEX IF NOT EXISTS idx_session_lead_next ON session_leads(session_id, position) WHERE call_outcome IS NULL;
+
+CREATE TABLE IF NOT EXISTS callbacks (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id       INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  due_date      TEXT NOT NULL,
+  block_hint    TEXT,                                          -- 'morning' | 'evening' | null
+  notes         TEXT,
+  status        TEXT NOT NULL DEFAULT 'pending',               -- pending | completed | missed
+  completed_at  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_callback_due ON callbacks(due_date, status);
+CREATE INDEX IF NOT EXISTS idx_callback_lead ON callbacks(lead_id);
+CREATE INDEX IF NOT EXISTS idx_callback_pending ON callbacks(due_date) WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS demos (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id             INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  booked_at           TEXT NOT NULL DEFAULT (datetime('now')),
+  scheduled_for       TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'booked',          -- booked | held | no_show | rescheduled
+  honeybook_confirmed INTEGER NOT NULL DEFAULT 0,
+  outcome_notes       TEXT,
+  status_set_at       TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_demo_lead ON demos(lead_id);
+CREATE INDEX IF NOT EXISTS idx_demo_status ON demos(status);
+CREATE INDEX IF NOT EXISTS idx_demo_scheduled ON demos(scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_demo_awaiting ON demos(scheduled_for) WHERE status = 'booked';
+CREATE INDEX IF NOT EXISTS idx_demo_noshow ON demos(status) WHERE status = 'no_show';
+
+CREATE TABLE IF NOT EXISTS demo_events (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  demo_id     INTEGER NOT NULL REFERENCES demos(id) ON DELETE CASCADE,
+  event_type  TEXT NOT NULL,                                   -- created | held | no_show | rescheduled
+  event_data  TEXT,                                            -- JSON
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_demo_event_demo ON demo_events(demo_id, created_at);
+
+-- Single-row table holding the industry-rotation cursor across weeks.
+CREATE TABLE IF NOT EXISTS weekly_rotation (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),
+  last_industry   TEXT,
+  last_session_at TEXT,
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO weekly_rotation (id) VALUES (1);

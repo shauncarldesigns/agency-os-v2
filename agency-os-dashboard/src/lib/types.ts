@@ -46,6 +46,12 @@ export interface Lead {
   source: string | null;
   project_id: number | null;
   deleted_at: string | null;
+  // Calling dashboard (added 2026-06-14)
+  pitch_card_text: string | null;
+  pitch_card_generated_at: string | null;
+  last_called_at: string | null;
+  demo_booked_at: string | null;
+  demo_scheduled_for: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -287,3 +293,68 @@ export type Tab = 'prospect' | 'pipeline' | 'sites' | 'reports';
 
 export type ToastType = 'default' | 'success' | 'error';
 export type ShowToast = (message: string, type?: ToastType) => void;
+
+// ============================================================================
+// Calling dashboard (added 2026-06-14)
+// ============================================================================
+
+export type SessionBlock = 'morning' | 'evening';
+export type SessionStatus = 'planned' | 'active' | 'complete';
+export type CallOutcome = 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
+export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
+export type CallbackStatus = 'pending' | 'completed' | 'missed';
+
+export interface Session {
+  id: number;
+  session_date: string;
+  block: SessionBlock;
+  industry: string;
+  geographic_filter: string | null;   // JSON array; null = full service area
+  score_floor: number;
+  lead_count_target: number;
+  status: SessionStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface SessionLead {
+  id: number;
+  session_id: number;
+  lead_id: number;
+  position: number;
+  call_outcome: CallOutcome | null;
+  called_at: string | null;
+  is_callback: number;                // bool — 0 or 1
+}
+
+export interface Callback {
+  id: number;
+  lead_id: number;
+  due_date: string;
+  block_hint: SessionBlock | null;
+  notes: string | null;
+  status: CallbackStatus;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface Demo {
+  id: number;
+  lead_id: number;
+  booked_at: string;
+  scheduled_for: string;
+  status: DemoStatus;
+  honeybook_confirmed: number;        // bool — 0 or 1
+  outcome_notes: string | null;
+  status_set_at: string | null;
+  created_at: string;
+}
+
+export interface DemoEvent {
+  id: number;
+  demo_id: number;
+  event_type: 'created' | 'held' | 'no_show' | 'rescheduled';
+  event_data: string | null;          // JSON
+  created_at: string;
+}
