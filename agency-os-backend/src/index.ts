@@ -14,6 +14,10 @@ import { testimonialsRouter } from './routes/testimonials';
 import { scrapeRouter } from './routes/scrape';
 import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
 import { dnsRouter, pollPendingDnsZones } from './routes/dns';
+import { sessionsRouter } from './routes/sessions';
+import { callbacksRouter } from './routes/callbacks';
+import { demosRouter } from './routes/demos';
+import { dashboardRouter } from './routes/dashboard';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -46,6 +50,11 @@ app.route('/api', brandAttributesRouter);
 app.route('/api', testimonialsRouter);
 app.route('/api', scrapeRouter);
 app.route('/api/reports', reportsRouter);
+// Calling dashboard (Phase 3)
+app.route('/api/sessions', sessionsRouter);
+app.route('/api/callbacks', callbacksRouter);
+app.route('/api/demos', demosRouter);
+app.route('/api/dashboard', dashboardRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {
