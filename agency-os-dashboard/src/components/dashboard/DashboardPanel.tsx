@@ -9,6 +9,7 @@ import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
 import { MondayView, FridayView } from './MondayFridayViews';
+import { RescheduleDemoModal } from './RescheduleDemoModal';
 
 /**
  * Top-level Dashboard panel.
@@ -36,6 +37,9 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
   const [data, setData] = useState<DashboardTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  // Reschedule modal state — lifted here so any priority-strip row can open it
+  // and the modal survives strip re-renders during data reload.
+  const [reschedulingDemo, setReschedulingDemo] = useState<DemoWithLead | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -99,8 +103,21 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
 
       {/* Priority strip is pinned to top on calling days; informational on others. */}
       {(data.mode === 'calling' || hasAnyPriority(data.priorityStrip)) && (
-        <PriorityStrip data={data.priorityStrip} showToast={showToast} onReload={load} />
+        <PriorityStrip
+          data={data.priorityStrip}
+          showToast={showToast}
+          onReload={load}
+          onReschedule={setReschedulingDemo}
+        />
       )}
+
+      <RescheduleDemoModal
+        open={reschedulingDemo !== null}
+        demo={reschedulingDemo}
+        showToast={showToast}
+        onClose={() => setReschedulingDemo(null)}
+        onRescheduled={load}
+      />
 
       {/* Day-specific view */}
       {data.mode === 'calling' && (
@@ -151,9 +168,10 @@ interface PriorityStripProps {
   data: DashboardTodayResponse['priorityStrip'];
   showToast: ShowToast;
   onReload: () => Promise<void> | void;
+  onReschedule: (demo: DemoWithLead) => void;
 }
 
-function PriorityStrip({ data, showToast, onReload }: PriorityStripProps) {
+function PriorityStrip({ data, showToast, onReload, onReschedule }: PriorityStripProps) {
   if (!hasAnyPriority(data)) {
     return (
       <div style={{
@@ -175,7 +193,13 @@ function PriorityStrip({ data, showToast, onReload }: PriorityStripProps) {
       {data.demosAwaitingStatus.length > 0 && (
         <PriorityGroup label={`Demos awaiting status (${data.demosAwaitingStatus.length})`} accent="red">
           {data.demosAwaitingStatus.map((d) => (
-            <DemoAwaitingRow key={d.id} demo={d} showToast={showToast} onChanged={onReload} />
+            <DemoAwaitingRow
+              key={d.id}
+              demo={d}
+              showToast={showToast}
+              onChanged={onReload}
+              onReschedule={() => onReschedule(d)}
+            />
           ))}
         </PriorityGroup>
       )}
@@ -235,17 +259,11 @@ function PriorityGroup({ label, accent, children }: { label: string; accent: 're
   );
 }
 
-function DemoAwaitingRow({ demo, showToast, onChanged }: { demo: DemoWithLead; showToast: ShowToast; onChanged: () => Promise<void> | void }) {
+function DemoAwaitingRow({ demo, showToast, onChanged, onReschedule }: {
+  demo: DemoWithLead; showToast: ShowToast; onChanged: () => Promise<void> | void; onReschedule: () => void;
+}) {
   const [busy, setBusy] = useState(false);
-  async function mark(status: 'held' | 'no_show' | 'rescheduled') {
-    if (status === 'rescheduled') {
-      const newDate = window.prompt('Reschedule to (ISO datetime, e.g. 2026-06-20T14:00:00):');
-      if (!newDate) return;
-      setBusy(true);
-      try { await api.demos.setStatus(demo.id, { status, newDate }); await onChanged(); showToast('Rescheduled', 'success'); }
-      catch (e) { showToast(`Failed: ${(e as Error).message}`, 'error'); } finally { setBusy(false); }
-      return;
-    }
+  async function mark(status: 'held' | 'no_show') {
     setBusy(true);
     try {
       await api.demos.setStatus(demo.id, { status });
@@ -265,7 +283,7 @@ function DemoAwaitingRow({ demo, showToast, onChanged }: { demo: DemoWithLead; s
       <div style={{ display: 'flex', gap: 5 }}>
         <Button variant="primary" size="xs" onClick={() => mark('held')} disabled={busy}>Held</Button>
         <Button variant="ghost" size="xs" onClick={() => mark('no_show')} disabled={busy}>No-show</Button>
-        <Button variant="ghost" size="xs" onClick={() => mark('rescheduled')} disabled={busy}>Reschedule</Button>
+        <Button variant="ghost" size="xs" onClick={onReschedule} disabled={busy}>Reschedule</Button>
       </div>
     </div>
   );
