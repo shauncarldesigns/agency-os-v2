@@ -14,10 +14,11 @@
 
 import { Hono } from 'hono';
 import type {
-  Env, Session, SessionBlock, SessionStatus,
-  CallOutcome, SessionLead, Demo,
+  Env, Lead, Session, SessionBlock, SessionStatus,
+  CallOutcome, SessionLead, Demo, Project,
 } from '../types';
 import { badRequest, conflict, notFound, log } from '../utils/errors';
+import { createProjectFromLead } from './leads';
 import {
   chicagoToday, chicagoCallingMode, chicagoCallingWeek,
 } from '../services/dayOfWeek';
@@ -402,10 +403,8 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       `UPDATE leads SET last_called_at = ?, status = 'not_interested', updated_at = ? WHERE id = ?`
     ).bind(now, now, body.leadId).run();
   } else if (body.outcome === 'booked') {
-    // Demo creation handled below; also flip lead → 'qualified'.
-    await c.env.DB.prepare(
-      `UPDATE leads SET last_called_at = ?, status = 'qualified', demo_booked_at = ?, demo_scheduled_for = ?, updated_at = ? WHERE id = ?`
-    ).bind(now, now, body.demoData?.scheduledFor ?? null, now, body.leadId).run();
+    // Demo + project handled below. Lead's status + demo pointers updated
+    // after we know the project_id.
   } else {
     // voicemail | callback — promote cold → contacted if applicable.
     await c.env.DB.prepare(`
@@ -420,6 +419,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   // 4. Side-effects per outcome.
   let demo: Demo | null = null;
   let callbackId: number | null = null;
+  let project: Project | null = null;
 
   if (body.outcome === 'callback') {
     if (!body.callbackDate) {
@@ -434,6 +434,46 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     if (!body.demoData?.scheduledFor) {
       return c.json(badRequest(`booked outcome requires demoData.scheduledFor`), 400);
     }
+
+    // Load the full lead so we can create a project + know the existing
+    // project_id (if any — possible if operator already booked once and is
+    // re-booking, in which case we keep the existing project).
+    const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(body.leadId).first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+
+    // If the lead doesn't already have a project, create one. Default tier
+    // is the recommended one from enrichment scoring; fall back to T3 so
+    // Brief Studio + Quick Brief are immediately available for demo prep.
+    // Operator can change tier later from the Sites prospect card.
+    let projectId = lead.project_id;
+    if (!projectId) {
+      const tier = (lead.recommended_tier === 1 || lead.recommended_tier === 2 || lead.recommended_tier === 3)
+        ? lead.recommended_tier
+        : 3;
+      projectId = await createProjectFromLead(c.env, lead, tier);
+      log('info', 'sessions', `Booked demo from session ${sessionId} → created project ${projectId} for lead ${body.leadId} (T${tier})`);
+    }
+
+    // Now update the lead's qualified state with the project linked + demo
+    // pointers stamped. project_id is set unconditionally so the Sites tab
+    // can find this lead's project.
+    await c.env.DB.prepare(`
+      UPDATE leads SET
+        last_called_at = ?,
+        status = 'qualified',
+        project_id = ?,
+        demo_booked_at = ?,
+        demo_scheduled_for = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      now, projectId, now, body.demoData.scheduledFor, now, body.leadId,
+    ).run();
+
+    // Return the project in the response so the execution-view UI can
+    // surface a "Pause & build demo" affordance that deep-links to it.
+    project = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first<Project>() ?? null;
+
     demo = await c.env.DB.prepare(`
       INSERT INTO demos (lead_id, scheduled_for, status, honeybook_confirmed, outcome_notes)
       VALUES (?, ?, 'booked', ?, ?)
@@ -453,10 +493,10 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   }
 
   log('info', 'sessions', `Outcome '${body.outcome}' recorded`, {
-    sessionId, leadId: body.leadId, demoId: demo?.id, callbackId,
+    sessionId, leadId: body.leadId, demoId: demo?.id, callbackId, projectId: project?.id,
   });
 
-  return c.json({ ok: true, demo, callbackId });
+  return c.json({ ok: true, demo, callbackId, project });
 });
 
 // --------------------------------------------------------------------

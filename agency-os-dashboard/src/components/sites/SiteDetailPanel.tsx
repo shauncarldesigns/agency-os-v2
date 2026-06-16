@@ -13,6 +13,7 @@ import {
   diffAdditions,
 } from '../../lib/briefExtract';
 import { TIER_MRR } from '../../lib/pricing';
+import { formatDate } from '../../lib/format';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -577,17 +578,71 @@ function Sidebar({
 
   return (
     <>
+      {/* Client contact info — replaces the old Status Legend (the matrix
+          shows its own dot/label legend inline, so a sidebar duplicate was
+          dead weight). Lets the operator reach the client quickly during
+          demo prep or follow-up. Lead-row data fills in owner_name / phone
+          / email when the project row doesn't have its own override. */}
       <div className="bs-side-card">
-        <div className="bs-side-title">Status Legend</div>
-        <div className="bs-side-row">
-          <span className="bs-legend-dot bs-legend-empty" /> Planned — no brief yet
-        </div>
-        <div className="bs-side-row">
-          <span className="bs-legend-dot bs-legend-briefed" /> Briefed — ready to paste
-        </div>
-        <div className="bs-side-row">
-          <span className="bs-legend-dot bs-legend-live" /> Complete — published in landingsite.ai
-        </div>
+        <div className="bs-side-title">Client</div>
+        {(() => {
+          const ownerName = project.owner_name || lead?.contact || '';
+          const phone = project.phone || lead?.phone || '';
+          const email = project.client_email || project.email || lead?.email || '';
+          const where = [project.city, project.state].filter(Boolean).join(', ');
+          const hasAny = ownerName || phone || email || where || project.business_name;
+          if (!hasAny) {
+            return (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0' }}>
+                No contact info on file. Add it via Edit Project.
+              </div>
+            );
+          }
+          return (
+            <>
+              <div className="bs-side-row bs-side-row-status">
+                <span>Business</span>
+                <span style={{ color: 'var(--text2)', textAlign: 'right' }}>{project.business_name}</span>
+              </div>
+              {ownerName && (
+                <div className="bs-side-row bs-side-row-status">
+                  <span>Owner</span>
+                  <span style={{ color: 'var(--text2)', textAlign: 'right' }}>{ownerName}</span>
+                </div>
+              )}
+              {phone && (
+                <div className="bs-side-row bs-side-row-status">
+                  <span>Phone</span>
+                  <a href={`tel:${phone}`} style={{ color: 'var(--text2)', fontFamily: 'ui-monospace, monospace', textAlign: 'right' }}>
+                    {phone}
+                  </a>
+                </div>
+              )}
+              {email && (
+                <div className="bs-side-row bs-side-row-status">
+                  <span>Email</span>
+                  <a href={`mailto:${email}`} style={{ color: 'var(--text2)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {email}
+                  </a>
+                </div>
+              )}
+              {where && (
+                <div className="bs-side-row bs-side-row-status">
+                  <span>Location</span>
+                  <span style={{ color: 'var(--text2)', textAlign: 'right' }}>{where}</span>
+                </div>
+              )}
+              {project.contract_start && (
+                <div className="bs-side-row bs-side-row-status">
+                  <span>Client since</span>
+                  <span style={{ color: 'var(--text2)', textAlign: 'right' }}>
+                    {formatDate(project.contract_start, { year: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <div className="bs-side-card">

@@ -29,6 +29,10 @@ interface ExecutionViewProps {
   showToast: ShowToast;
   /** Closes the execution view + reloads the dashboard. */
   onClose: () => void;
+  /** Operator opted to pause the session and go build the just-booked
+   *  demo's site. App switches to the Sites tab and deep-links into the
+   *  project's Brief Studio so Quick Brief is one click away. */
+  onPauseAndBuild?: (projectId: number) => void;
 }
 
 interface LeadWithSession extends Lead {
@@ -57,7 +61,7 @@ const LOG_OUTCOMES = [
   'Qualified for Tier',
 ];
 
-export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewProps) {
+export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }: ExecutionViewProps) {
   const [session, setSession] = useState<Session | null>(null);
   // Full lead list, kept client-side so the operator can navigate
   // forward/backward without re-fetching. currentIndex is the position they're
@@ -185,6 +189,11 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
     return total;
   }, [leads]);
 
+  // Holds the project that was just created when the operator booked a demo.
+  // Drives the post-booking prompt (Continue calling vs Pause & build demo).
+  // Null when no booking is pending operator action.
+  const [pendingBooked, setPendingBooked] = useState<{ projectId: number; company: string } | null>(null);
+
   // Record an outcome. Updates the in-memory leads array (so navigation
   // continues to reflect the new state without a full refetch) then advances
   // to the next uncalled position.
@@ -195,13 +204,19 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
     if (!lead || recording) return;
     setRecording(true);
     try {
-      await api.sessions.outcome(sessionId, {
+      const res = await api.sessions.outcome(sessionId, {
         leadId: lead.id,
         outcome,
         notes: notesRef.current.trim() || undefined,
         ...extra,
       });
       clearDraft();
+      // Stash the booking result so the post-booking prompt can offer the
+      // "Pause & build demo" path. recordOutcome still advances normally —
+      // operator can dismiss the prompt to keep calling.
+      if (outcome === 'booked' && res.project) {
+        setPendingBooked({ projectId: res.project.id, company: lead.company });
+      }
       // Mutate the local copy so the NEXT findNextUncalled call sees this
       // outcome and skips past it. Important: spread into a new array so React
       // notices the change.
@@ -391,6 +406,21 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
 
   return (
     <div className="exec-page">
+      {/* Post-booking prompt — modal overlay on top of the page. Asks the
+          operator whether to keep calling or pause and go build the demo
+          site now. Only renders briefly after a successful booking. */}
+      {pendingBooked && (
+        <PostBookingPrompt
+          company={pendingBooked.company}
+          onContinue={() => setPendingBooked(null)}
+          onPauseAndBuild={() => {
+            const projectId = pendingBooked.projectId;
+            setPendingBooked(null);
+            onPauseAndBuild?.(projectId);
+          }}
+        />
+      )}
+
       {/* Topbar — Brief-Studio style. Always visible above the 2-col layout. */}
       <div className="bs-topbar">
         <div>
@@ -750,6 +780,48 @@ function PriorCallsSidebarCard({ leadId, refreshKey = 0 }: { leadId: number; ref
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Post-booking prompt — fires after a successful "Mark booked & advance" so
+// the operator can choose to either keep the calling rhythm or pause and go
+// build the demo site immediately (the user's stated workflow: stop calling,
+// prep the demo). Renders as a small modal-style overlay above the page so
+// it doesn't interrupt the underlying state.
+function PostBookingPrompt({ company, onContinue, onPauseAndBuild }: {
+  company: string; onContinue: () => void; onPauseAndBuild: () => void;
+}) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 2000,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        maxWidth: 480, width: '100%',
+        padding: '22px 24px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
+      }}>
+        <div style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--green)', marginBottom: 6 }}>
+          ✓ Demo booked
+        </div>
+        <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 4 }}>
+          {company}
+        </div>
+        <p style={{ fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.55, margin: '6px 0 18px' }}>
+          A prospect project was created. Want to <strong>pause the session and go build
+          the demo site now</strong>, or keep calling and come back to it later?
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button variant="ghost" size="sm" onClick={onContinue}>Keep calling</Button>
+          <Button variant="primary" size="sm" onClick={onPauseAndBuild}>🛠 Pause & build demo</Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -252,7 +252,7 @@ leadsRouter.post('/:id/qualify', async (c) => {
  * Insert a project row from an existing enriched lead. Used by the qualify
  * endpoint above; also re-exportable if other flows need it later.
  */
-async function createProjectFromLead(env: Env, lead: Lead, tier: 1 | 2 | 3): Promise<number> {
+export async function createProjectFromLead(env: Env, lead: Lead, tier: 1 | 2 | 3): Promise<number> {
   const slug = generateProjectSlug(lead.company, lead.city ?? '', lead.state ?? 'WI');
   const now = new Date();
   const contractStart = tier === 3 ? now.toISOString() : null;
