@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { ShowToast } from '../../lib/types';
+import type { ShowToast, Tab } from '../../lib/types';
 import {
   api, ApiError,
   type DashboardTodayResponse, type DemoWithLead, type CallbackWithLead,
@@ -8,6 +8,7 @@ import type { Session } from '../../lib/types';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
+import { MondayView, FridayView } from './MondayFridayViews';
 
 /**
  * Top-level Dashboard panel.
@@ -26,9 +27,12 @@ interface DashboardPanelProps {
   /** Open a session's execution view. Phase 5 wires this up; Phase 4 just
    *  surfaces the path. */
   onOpenSession?: (sessionId: number) => void;
+  /** Switch to another top-level tab — used by the Prospecting task block's
+   *  "Open Prospect tab" button. */
+  onSwitchTab?: (tab: Tab) => void;
 }
 
-export function DashboardPanel({ showToast, onOpenSession }: DashboardPanelProps) {
+export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: DashboardPanelProps) {
   const [data, setData] = useState<DashboardTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -99,9 +103,16 @@ export function DashboardPanel({ showToast, onOpenSession }: DashboardPanelProps
       )}
 
       {/* Day-specific view */}
-      {data.mode === 'calling' ? (
+      {data.mode === 'calling' && (
         <SessionsGrid sessions={data.sessions} onOpenSession={onOpenSession} showToast={showToast} onReload={load} />
-      ) : (
+      )}
+      {data.mode === 'prep' && (
+        <MondayView showToast={showToast} onReload={load} onSwitchTab={onSwitchTab} />
+      )}
+      {data.mode === 'review' && (
+        <FridayView showToast={showToast} onSwitchTab={onSwitchTab} />
+      )}
+      {data.mode === 'quiet' && (
         <NonCallingDayView mode={data.mode} sessions={data.sessions} onOpenSession={onOpenSession} />
       )}
     </>
