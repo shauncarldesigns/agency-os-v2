@@ -3,6 +3,9 @@
    Keep tokens & layout primitives in lockstep with the mockup. */
 
 *{box-sizing:border-box;margin:0;padding:0;}
+/* Global readability bump: every font-size in this file uses rem, so
+   raising the root font-size scales all UI text proportionally. */
+html{font-size:18px;}
 :root{
   --bg:#0a0a0a;--surface:#141414;--surface2:#1c1c1c;--surface3:#242424;
   --border:#2a2a2a;--border2:#333;
@@ -19,7 +22,7 @@
   --tier3:#a78bfa;--tier3-bg:rgba(167,139,250,0.12);
   --r:6px;--rl:10px;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:'DM Sans',sans-serif;font-weight:500;background:var(--bg);color:var(--text);min-height:100vh;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
