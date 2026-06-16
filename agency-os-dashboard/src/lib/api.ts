@@ -337,7 +337,7 @@ export const api = {
       apiFetch<DashboardWeekReviewResponse>(`/api/dashboard/week-review${qs({ date })}`),
     prospectingProgress: () =>
       apiFetch<{ week: WeekDates; count: number; target: number }>('/api/dashboard/prospecting-progress'),
-    industries: () => apiFetch<{ industries: string[] }>('/api/dashboard/industries'),
+    industries: () => apiFetch<{ industries: IndustrySpec[] }>('/api/dashboard/industries'),
     generatePitchCard: (leadId: number) =>
       apiFetch<{ pitch_card_text: string; generated_at: string }>(
         `/api/dashboard/leads/${leadId}/pitch-card`, { method: 'POST' }
@@ -428,6 +428,30 @@ export interface DashboardWeekReviewResponse {
   byIndustry: Array<{ industry: string; dials: number; booked: number }>;
   missedCallbacks: CallbackWithLead[];
 }
+
+// Industry rotation entry. Backend's leads.industry stores `key` (Google
+// Places primaryType like 'plumber'); UI shows `label` ('Plumbing').
+export interface IndustrySpec {
+  key: string;
+  label: string;
+}
+
+// Tiny lookup helper for components that have a session.industry key but
+// need the friendly label. Returns the key unchanged if unknown.
+export function industryLabel(key: string, specs: IndustrySpec[] = INDUSTRY_FALLBACK): string {
+  return specs.find((s) => s.key === key)?.label ?? key;
+}
+
+// Hard-coded fallback so the UI can render labels even before
+// /api/dashboard/industries returns. Mirrors backend's INDUSTRY_ROTATION;
+// keep in sync if the backend list changes.
+const INDUSTRY_FALLBACK: IndustrySpec[] = [
+  { key: 'plumber',            label: 'Plumbing' },
+  { key: 'hvac_contractor',    label: 'HVAC' },
+  { key: 'electrician',        label: 'Electrical' },
+  { key: 'roofing_contractor', label: 'Roofing' },
+  { key: 'general_contractor', label: 'General Contracting' },
+];
 
 export interface SessionRecap {
   total: number; called: number; voicemails: number; notInterested: number;

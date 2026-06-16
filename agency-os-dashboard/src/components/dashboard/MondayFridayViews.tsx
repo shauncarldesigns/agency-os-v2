@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Session, ShowToast, SessionBlock, Tab } from '../../lib/types';
-import { api, ApiError, type DashboardWeekReviewResponse, type WeekDates, type CallbackWithLead } from '../../lib/api';
+import {
+  api, ApiError, industryLabel,
+  type DashboardWeekReviewResponse, type WeekDates, type CallbackWithLead, type IndustrySpec,
+} from '../../lib/api';
 import { Modal, ModalHeader, ModalFooter } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
@@ -21,7 +24,7 @@ interface MondayViewProps {
 export function MondayView({ showToast, onReload, onSwitchTab }: MondayViewProps) {
   const [week, setWeek] = useState<WeekDates | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [industries, setIndustries] = useState<string[]>([]);
+  const [industries, setIndustries] = useState<IndustrySpec[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Session | null>(null);
 
@@ -30,7 +33,7 @@ export function MondayView({ showToast, onReload, onSwitchTab }: MondayViewProps
       setLoading(true);
       const [w, i] = await Promise.all([
         api.sessions.week(),
-        api.dashboard.industries().catch(() => ({ industries: [] })),
+        api.dashboard.industries().catch(() => ({ industries: [] as IndustrySpec[] })),
       ]);
       setWeek(w.week);
       setSessions(w.sessions);
@@ -122,7 +125,7 @@ function PlannedSessionCard({ session, onEdit }: { session: Session; onEdit: () 
             {dayLabel} {session.session_date}
           </div>
           <div style={{ fontSize: '0.82rem', fontWeight: 600, marginTop: 2 }}>
-            {session.block === 'morning' ? 'Morning' : 'Evening'} — {session.industry}
+            {session.block === 'morning' ? 'Morning' : 'Evening'} — {industryLabel(session.industry)}
           </div>
         </div>
         <Badge color={isActive ? 'yellow' : isComplete ? 'green' : 'gray'}>
@@ -144,7 +147,7 @@ function PlannedSessionCard({ session, onEdit }: { session: Session; onEdit: () 
 function SessionEditModal({ open, session, industries, showToast, onClose, onSaved }: {
   open: boolean;
   session: Session | null;
-  industries: string[];
+  industries: IndustrySpec[];
   showToast: ShowToast;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
@@ -192,8 +195,10 @@ function SessionEditModal({ open, session, industries, showToast, onClose, onSav
       <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Field label="Industry">
           <select value={industry} onChange={(e) => setIndustry(e.target.value)} style={selectStyle}>
-            {industries.map((i) => <option key={i} value={i}>{i}</option>)}
-            {!industries.includes(industry) && <option value={industry}>{industry}</option>}
+            {industries.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+            {!industries.some((i) => i.key === industry) && (
+              <option value={industry}>{industryLabel(industry)}</option>
+            )}
           </select>
         </Field>
         <Field label="Score floor">

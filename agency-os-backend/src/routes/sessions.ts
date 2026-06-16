@@ -112,7 +112,10 @@ sessionsRouter.post('/generate-week', async (c) => {
 
   for (const date of callingDates) {
     const industry = nextIndustry(lastIndustry);
-    lastIndustry = industry;
+    // Store the KEY (e.g., 'plumber') in session.industry so the composer's
+    // SQL match against leads.industry works. Label is computed in the UI
+    // via industryLabel().
+    lastIndustry = industry.key;
 
     for (const block of ['morning', 'evening'] as SessionBlock[]) {
       // Skip if already exists (unique idx idx_session_unique).
@@ -127,7 +130,7 @@ sessionsRouter.post('/generate-week', async (c) => {
         INSERT INTO sessions (session_date, block, industry, score_floor, lead_count_target, status)
         VALUES (?, ?, ?, 50, 40, 'planned')
         RETURNING *
-      `).bind(date, block, industry).first<Session>();
+      `).bind(date, block, industry.key).first<Session>();
       if (ins) created.push(ins);
     }
   }
