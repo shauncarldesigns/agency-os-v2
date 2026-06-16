@@ -2,6 +2,7 @@ import type {
   Lead, CallEntry, ProspectResult, Project, Page, ReportSummary,
   Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
   Testimonial, TestimonialSource,
+  Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
 } from './types';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
@@ -329,6 +330,117 @@ export const api = {
         method: 'POST', body: JSON.stringify(opts),
       }),
   },
+  // Calling dashboard (Phase 3+ backend, Phase 4+ frontend).
+  dashboard: {
+    today: () => apiFetch<DashboardTodayResponse>('/api/dashboard'),
+    weekReview: (date?: string) =>
+      apiFetch<DashboardWeekReviewResponse>(`/api/dashboard/week-review${qs({ date })}`),
+    prospectingProgress: () =>
+      apiFetch<{ week: WeekDates; count: number; target: number }>('/api/dashboard/prospecting-progress'),
+    industries: () => apiFetch<{ industries: string[] }>('/api/dashboard/industries'),
+    generatePitchCard: (leadId: number) =>
+      apiFetch<{ pitch_card_text: string; generated_at: string }>(
+        `/api/dashboard/leads/${leadId}/pitch-card`, { method: 'POST' }
+      ),
+  },
+  sessions: {
+    today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
+    week: (date?: string) =>
+      apiFetch<{ week: WeekDates; sessions: Session[] }>(`/api/sessions/week${qs({ date })}`),
+    get: (id: number) =>
+      apiFetch<{ session: Session; leads: Array<Lead & { position: number; call_outcome: CallOutcome | null; is_callback: number; session_lead_id: number }> }>(`/api/sessions/${id}`),
+    generateWeek: (weekStart?: string) =>
+      apiFetch<{ week: WeekDates; created: Session[]; skipped: Array<{ date: string; block: string; reason: string }> }>(
+        '/api/sessions/generate-week',
+        { method: 'POST', body: JSON.stringify(weekStart ? { weekStart } : {}) }
+      ),
+    update: (id: number, body: { industry?: string; geographic_filter?: string[] | null; score_floor?: number; lead_count_target?: number }) =>
+      apiFetch<{ session: Session }>(`/api/sessions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    start: (id: number) =>
+      apiFetch<{ session: Session }>(`/api/sessions/${id}/start`, { method: 'POST' }),
+    extend: (id: number, count = 20) =>
+      apiFetch<{ added: number; appliedFilter: unknown; widened: unknown[] }>(
+        `/api/sessions/${id}/extend`, { method: 'POST', body: JSON.stringify({ count }) }
+      ),
+    complete: (id: number) =>
+      apiFetch<{ session: Session; recap: SessionRecap }>(`/api/sessions/${id}/complete`, { method: 'POST' }),
+    nextLead: (id: number) =>
+      apiFetch<{ lead: (Lead & { position: number; is_callback: number; session_lead_id: number }) | null; done: boolean; total?: number; called?: number }>(
+        `/api/sessions/${id}/next-lead`
+      ),
+    outcome: (id: number, body: SessionOutcomeBody) =>
+      apiFetch<{ ok: boolean; demo: Demo | null; callbackId: number | null }>(
+        `/api/sessions/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }
+      ),
+  },
+  demos: {
+    list: (filters?: { status?: string; date?: string }) =>
+      apiFetch<{ demos: DemoWithLead[] }>(`/api/demos${qs(filters)}`),
+    awaitingStatus: () => apiFetch<{ demos: DemoWithLead[] }>('/api/demos/awaiting-status'),
+    noShowRecovery: () => apiFetch<{ demos: DemoWithLead[] }>('/api/demos/no-show-recovery'),
+    today: () => apiFetch<{ demos: DemoWithLead[] }>('/api/demos/today'),
+    setStatus: (id: number, body: { status: DemoStatus; newDate?: string; notes?: string }) =>
+      apiFetch<{ demo: Demo }>(`/api/demos/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
+  },
+  callbacks: {
+    list: (filters?: { status?: string; date?: string }) =>
+      apiFetch<{ callbacks: Callback[] }>(`/api/callbacks${qs(filters)}`),
+    update: (id: number, body: { status?: CallbackStatus; due_date?: string; notes?: string }) =>
+      apiFetch<{ callback: Callback }>(`/api/callbacks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  },
 };
+
+// --- Dashboard / sessions response types ---
+
+export interface WeekDates {
+  monday: string; tuesday: string; wednesday: string; thursday: string; friday: string;
+}
+
+export interface DemoWithLead extends Demo {
+  company: string; phone: string | null; city: string | null; state: string | null; contact: string | null;
+}
+
+export interface CallbackWithLead extends Callback {
+  company: string; phone: string | null;
+}
+
+export interface DashboardTodayResponse {
+  today: string;
+  mode: 'prep' | 'calling' | 'review' | 'quiet';
+  sessions: Session[];
+  priorityStrip: {
+    demosAwaitingStatus: DemoWithLead[];
+    noShowRecovery: DemoWithLead[];
+    demosToday: DemoWithLead[];
+    callbacksDue: CallbackWithLead[];
+  };
+}
+
+export interface DashboardWeekReviewResponse {
+  week: WeekDates;
+  metrics: {
+    totalDials: number;
+    demosBooked: number;
+    demosHeld: number;
+    demosNoShow: number;
+    bookingRate: number;
+  };
+  byIndustry: Array<{ industry: string; dials: number; booked: number }>;
+  missedCallbacks: CallbackWithLead[];
+}
+
+export interface SessionRecap {
+  total: number; called: number; voicemails: number; notInterested: number;
+  callbacks: number; booked: number; skipped: number; bookingRate: number;
+}
+
+export interface SessionOutcomeBody {
+  leadId: number;
+  outcome: CallOutcome;
+  notes?: string;
+  callbackDate?: string;
+  blockHint?: SessionBlock;
+  demoData?: { scheduledFor: string; honeybookConfirmed?: boolean };
+}
 
 export { API_BASE };
