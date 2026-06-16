@@ -71,6 +71,16 @@ export default function App() {
           sessionId={openSessionId}
           showToast={showToast}
           onClose={() => { setOpenSessionId(null); loadStats(); }}
+          onPauseAndBuild={(projectId) => {
+            // Pause-and-build flow: close the session, deep-link to the
+            // freshly-created prospect project's Brief Studio so Quick Brief
+            // is one click away. Reuses the same pendingOpenProjectId
+            // mechanism the qualify flow already wires up.
+            setOpenSessionId(null);
+            setPendingOpenProjectId(projectId);
+            setActiveTab('sites');
+            loadStats();
+          }}
         />
         <ToastContainer toasts={toasts} />
       </>

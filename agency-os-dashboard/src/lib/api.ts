@@ -369,7 +369,7 @@ export const api = {
         `/api/sessions/${id}/next-lead`
       ),
     outcome: (id: number, body: SessionOutcomeBody) =>
-      apiFetch<{ ok: boolean; demo: Demo | null; callbackId: number | null }>(
+      apiFetch<{ ok: boolean; demo: Demo | null; callbackId: number | null; project: Project | null }>(
         `/api/sessions/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }
       ),
   },
