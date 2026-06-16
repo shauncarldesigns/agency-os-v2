@@ -9,6 +9,17 @@ when a manual deploy was needed.
 
 ## 2026-06
 
+### Calling Dashboard feature (9 PRs + 1 spike)
+
+- **[#56](https://github.com/shauncarldesigns/agency-os-v2/pull/56) Dashboard phase 8 — reschedule modal.** Replaces the Phase 4 `window.prompt` with a proper modal; defaults to 3 days after original; notes preserved in `demo_events` audit. Dashboard.
+- **[#55](https://github.com/shauncarldesigns/agency-os-v2/pull/55) Dashboard phase 7 — Mon/Fri views + prospecting block.** Monday week-ahead with `SessionEditModal`; Friday week-in-review with stat cards, by-industry bars, callback recovery list. Shared prospecting task block (50/week target). Dashboard.
+- **[#54](https://github.com/shauncarldesigns/agency-os-v2/pull/54) Dashboard phase 6 — HoneyBook split-pane booking modal.** Live HB embed in right pane + per-field copy buttons in left. Replaces Phase 5's window.prompt fallback. Dashboard.
+- **[#53](https://github.com/shauncarldesigns/agency-os-v2/pull/53) Dashboard phase 5 — execution view.** Full-screen one-lead-at-a-time view; pitch card with ↻ generation; outcome buttons + keyboard shortcuts (1/2/3/4/S); burn-through complete screen. Dashboard.
+- **[#52](https://github.com/shauncarldesigns/agency-os-v2/pull/52) Dashboard phase 4 — shell + sessions grid.** Dashboard tab becomes the default landing tab. Priority strip (demos awaiting status / no-show recovery / demos today / callbacks due). Sessions grid. Dashboard.
+- **[#51](https://github.com/shauncarldesigns/agency-os-v2/pull/51) Dashboard phase 3 — backend session + outcome logic.** `services/sessionComposer.ts` (industry rotation + widening cascade), `services/dayOfWeek.ts` (Chicago tz), `routes/sessions.ts` (generate-week, outcome endpoint), `routes/callbacks.ts`, `routes/demos.ts`, `routes/dashboard.ts`. `prompts/pitchCard.ts` for on-demand Haiku-based pitch cards. Backend.
+- **[#50](https://github.com/shauncarldesigns/agency-os-v2/pull/50) Dashboard phase 2 — schema + types.** 5 new tables (sessions, session_leads, callbacks, demos, demo_events) + 1 single-row config (weekly_rotation). 5 ALTER on leads for pointer columns. Backend.
+- **[#49](https://github.com/shauncarldesigns/agency-os-v2/pull/49) Dashboard phase 0 — vocabulary refactor.** Renamed `Qualify → Book demo`. New lead-status semantic: `qualified` = "demo booked, project exists, awaiting outcome." New `not_interested` status. Prospect cards get `✗ Demo passed` button. Backfill of 1 existing `client` lead → `qualified`. Backend + dashboard.
+
 ### Cloudflare DNS Management feature (6 PRs)
 
 - **[#47](https://github.com/shauncarldesigns/agency-os-v2/pull/47) DNS phase 6 — hourly polling cron for pending zones.** New `0 * * * *` cron flips `dns_status` from `pending` to `active` when Cloudflare detects nameserver delegation. Backend.

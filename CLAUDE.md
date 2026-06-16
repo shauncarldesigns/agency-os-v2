@@ -73,6 +73,98 @@ npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/YYYY-MM-D
 - Node 22+ required for backend tsc + dashboard vite build. A persistent install
   lives at `~/.local/node22/` with symlinks in `~/.local/bin/{node,npm,npx}`.
 
+## Calling Dashboard (added 2026-06-14)
+
+The Dashboard tab is the default landing view. Pre-composes calling sessions
+for Tue/Wed/Thu, runs an execution view for one-lead-at-a-time calling,
+captures outcomes via 4 buttons + skip, and books demos through a HoneyBook
+split-pane embed.
+
+**Vocabulary** — Phase 0 changed lead-status semantics. `qualified` now means
+"demo booked, prospect project exists, awaiting outcome" (not "ready to
+pitch"). `client` means "signed, has a building/live project." `not_interested`
+is for cold-call rejections. `dead` is reserved for churned former clients.
+
+**Tables (Phase 2):**
+- `sessions` — one calling block (morning/evening) per day, with composition
+  parameters (industry, score_floor, geographic_filter, lead_count_target).
+- `session_leads` — M2M with per-call outcome (voicemail / not_interested /
+  callback / booked / skipped).
+- `callbacks` — day-precision callback queue.
+- `demos` — booked-demo lifecycle (booked → held / no_show / rescheduled).
+- `demo_events` — audit trail for the demo lifecycle.
+- `weekly_rotation` — single-row table (CHECK id=1) holding the industry
+  rotation cursor across weeks. Preferred over env config so operator can
+  mutate without redeploy.
+
+`leads` got 5 pointer columns: `pitch_card_text`, `pitch_card_generated_at`,
+`last_called_at`, `demo_booked_at`, `demo_scheduled_for`.
+
+**Composition recipe (`services/sessionComposer.ts`):**
+- Industry rotation: fixed array (Plumbing, HVAC, Electrical, Roofing,
+  General Contracting), resumes from `weekly_rotation.last_industry`.
+- Filter: enrichment_status='enriched', status IN ('cold','contacted'),
+  recommended_tier NOT NULL, industry match, score >= floor, optional
+  geographic filter, 14-day `last_called_at` exclusion.
+- Order: `opportunity_score DESC, last_called_at ASC NULLS FIRST`.
+- Cross-session dedup within a week — same lead can't be in two sessions.
+- Widening cascade when strict filter doesn't fill: drop score floor in
+  10-point steps to 30 → drop geographic filter → drop 14-day exclusion
+  (last resort).
+
+**Timezone (`services/dayOfWeek.ts`):** hardcoded `America/Chicago`. Workers
+run in UTC. Any "what day is it for the operator" question must route
+through this module — naive `Date.getDay()` in UTC flips a day boundary
+6 hours early.
+
+**Day-of-week routing:**
+- Mon → prep day, MondayView (week-ahead + prospecting block)
+- Tue/Wed/Thu → calling day, PriorityStrip + SessionsGrid
+- Fri → review day, FridayView (week metrics + callback recovery)
+- Sat/Sun → quiet, placeholder
+
+**Endpoints (mounted at `/api/sessions/*`, `/api/callbacks/*`, `/api/demos/*`,
+`/api/dashboard/*`):**
+- `POST /sessions/generate-week` — auto-composes 6 sessions for next calling
+  week using industry rotation.
+- `POST /sessions/:id/start` — activate. Rejects 409 if another active.
+  Materializes the lead pool via composeWithWidening.
+- `POST /sessions/:id/outcome` — single endpoint, body `{leadId, outcome,
+  notes?, callbackDate?, demoData?}`. Handles all 5 outcomes including the
+  side-effects (callback row, demo row, lead status flip).
+- `POST /sessions/:id/extend` — body `{count}`. Returns widened steps so the
+  burn-through UI can show what changed.
+- `POST /dashboard/leads/:id/pitch-card` — on-demand Haiku-based pitch card
+  generation. Cached on `leads.pitch_card_text`.
+- `PUT /demos/:id/status` — body `{status, newDate?, notes?}`. Reschedule
+  writes both the new scheduled_for AND a `demo_events` audit row.
+
+**Components live at `components/dashboard/`:**
+- `DashboardPanel.tsx` — top-level, day-of-week routed.
+- `ExecutionView.tsx` — full-screen overlay, contains pitch card / signals /
+  outcome buttons / keyboard shortcuts (1/2/3/4/S).
+- `BookDemoModal.tsx` — split-pane HoneyBook booking.
+- `MondayFridayViews.tsx` — Mon/Fri views + shared ProspectingTaskBlock.
+- `RescheduleDemoModal.tsx` — proper datetime+notes form for reschedule.
+
+**HoneyBook embed:** placement ID is hardcoded in `BookDemoModal.tsx`. The
+controller script is injected once globally via a ref guard on
+`window._HB_.__scriptInjected` (StrictMode-safe). Spike confirmed the embed
+renders inside our modal-overlay pattern — no fallback needed. If volume
+ever justifies it, the embed should be replaced with a direct HoneyBook API
+call from the Worker (currently scoped out).
+
+**Notes drafts:** `ExecutionView` persists notes textarea content to
+`localStorage` keyed by `session_lead_id`, debounced 800ms. Cleared on
+outcome record. Survives modal close / browser refresh mid-call.
+
+**Spec doc:** the full Calling Dashboard spec lives in `spec/calling-dashboard.md`
+(or wherever the operator keeps it). Notable design decisions: pitch card NOT
+backfilled for existing leads (operator clicks ↻); demos awaiting status
+uses past-today (not past-now); skipped outcome is silent (no call_log
+entry, no `last_called_at` update); only one session can be `active` at a
+time (409 conflict otherwise).
+
 ## Cloudflare DNS management (added 2026-06-14)
 
 Every project can have a Cloudflare zone for its client domain. Records are
