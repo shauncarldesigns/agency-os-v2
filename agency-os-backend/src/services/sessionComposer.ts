@@ -17,26 +17,42 @@
 
 import type { Env, Lead } from '../types';
 
-// Fixed rotation order. If the operator wants a different industry, they
-// override per session via the Edit modal in the Monday view (Phase 7).
-// New industries can be added here; rotation will pick them up automatically.
-export const INDUSTRY_ROTATION = [
-  'Plumbing',
-  'HVAC',
-  'Electrical',
-  'Roofing',
-  'General Contracting',
-] as const;
+// Fixed rotation order. `key` is the value that lives in `leads.industry`
+// (Google Places primaryType normalized) — used for SQL matching. `label` is
+// the display name shown in the UI. They MUST be kept distinct: lead data
+// from Places comes in as 'plumber', 'electrician', etc; the UI needs to
+// show 'Plumbing', 'Electrical'. Filtering by the friendly label returns
+// zero rows (this was the original Phase-3 bug).
+//
+// To add an industry: append to the array. The rotation picks it up
+// automatically. The Prospect tab must also start ingesting leads with
+// that primaryType for it to fill sessions.
+export interface IndustrySpec {
+  key: string;     // matches leads.industry exactly
+  label: string;   // UI display
+}
 
-export type Industry = typeof INDUSTRY_ROTATION[number];
+export const INDUSTRY_ROTATION: ReadonlyArray<IndustrySpec> = [
+  { key: 'plumber',             label: 'Plumbing' },
+  { key: 'hvac_contractor',     label: 'HVAC' },
+  { key: 'electrician',         label: 'Electrical' },
+  { key: 'roofing_contractor',  label: 'Roofing' },
+  { key: 'general_contractor',  label: 'General Contracting' },
+];
 
 // Pick the next industry given the last one served. Wraps around the array.
 // If lastIndustry is null/unknown, start from the first.
-export function nextIndustry(lastIndustry: string | null): Industry {
-  if (!lastIndustry) return INDUSTRY_ROTATION[0];
-  const idx = (INDUSTRY_ROTATION as readonly string[]).indexOf(lastIndustry);
+export function nextIndustry(lastIndustryKey: string | null): IndustrySpec {
+  if (!lastIndustryKey) return INDUSTRY_ROTATION[0];
+  const idx = INDUSTRY_ROTATION.findIndex((i) => i.key === lastIndustryKey);
   if (idx < 0) return INDUSTRY_ROTATION[0];
   return INDUSTRY_ROTATION[(idx + 1) % INDUSTRY_ROTATION.length];
+}
+
+// Lookup helper for code paths that have a key and need a label.
+export function industryLabel(key: string): string {
+  const spec = INDUSTRY_ROTATION.find((i) => i.key === key);
+  return spec?.label ?? key;     // unknown industries fall back to the raw key
 }
 
 export interface CompositionFilter {

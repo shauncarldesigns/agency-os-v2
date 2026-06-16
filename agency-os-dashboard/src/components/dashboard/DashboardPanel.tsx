@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ShowToast, Tab } from '../../lib/types';
 import {
-  api, ApiError,
+  api, ApiError, industryLabel,
   type DashboardTodayResponse, type DemoWithLead, type CallbackWithLead,
 } from '../../lib/api';
 import type { Session } from '../../lib/types';
@@ -451,7 +451,14 @@ function SessionCard({ session, onOpen, showToast, onReload }: SessionCardProps)
 }
 
 function sessionTitle(s: Session): string {
-  return `${s.block === 'morning' ? 'Morning' : 'Evening'} — ${s.industry}`;
+  // Prefix with the localized day-of-week so calling-day cards never look
+  // ambiguous when multiple days' sessions stack up (e.g., on Monday-view
+  // where Tue/Wed/Thu cards live side by side). Calling-day view only ever
+  // shows today's sessions, but the prefix is still useful as orientation.
+  const dayLabel = new Date(`${s.session_date}T12:00:00-06:00`)
+    .toLocaleDateString('en-US', { weekday: 'short' });
+  const block = s.block === 'morning' ? 'Morning' : 'Evening';
+  return `${dayLabel} · ${block} — ${industryLabel(s.industry)}`;
 }
 
 function compositionLine(s: Session): string {

@@ -154,6 +154,8 @@ dashboardRouter.get('/prospecting-progress', async (c) => {
 });
 
 // GET /api/dashboard/industries — surface the rotation list for the UI.
+// Returns key+label pairs so the Edit Session modal can show friendly names
+// while still passing the lead-matching key back on save.
 dashboardRouter.get('/industries', (c) => {
   return c.json({ industries: INDUSTRY_ROTATION });
 });
