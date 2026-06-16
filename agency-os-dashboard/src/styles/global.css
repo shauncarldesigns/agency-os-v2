@@ -720,22 +720,15 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 }
 .priority-row:first-child { border-top: 0; }
 
-/* Execution view — takes over the whole app when a session is active.
-   Used to be a modal-on-top-of-everything overlay; refactored to a real
-   page so BookDemoModal can stack above it without modal-on-modal
-   confusion. The execution view IS the app when openSessionId is set. */
+/* Execution view — takes over the whole app when a calling session is
+   active. Borrows Brief Studio's two-column layout (.bs-topbar + .bs-layout)
+   so the operator feels at home moving between Sites and the calling view.
+   Just sets the outer page padding + max-width; everything else is
+   bs-* classes. */
 .exec-page {
   min-height: 100vh;
   background: var(--bg);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 20px;
-}
-.exec-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-  overflow: hidden;
+  padding: 20px 24px 32px;
+  max-width: 1340px;
+  margin: 0 auto;
 }
