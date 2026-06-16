@@ -41,6 +41,22 @@ interface LeadWithSession extends Lead {
   called_at?: string | null;
 }
 
+// Log-a-call outcome dropdown options. Mirrors the Pipeline LeadModal's
+// CallLogTab so call_log entries are consistent across surfaces. The 4
+// session-action outcomes (voicemail/not_interested/callback/booked)
+// remain distinct because they drive session_leads state — not part of
+// this dropdown.
+const LOG_OUTCOMES = [
+  'No Answer',
+  'Voicemail Left',
+  'Spoke with Owner',
+  'Spoke with Gatekeeper',
+  'Callback Requested',
+  'Not Interested',
+  'Interested',
+  'Qualified for Tier',
+];
+
 export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewProps) {
   const [session, setSession] = useState<Session | null>(null);
   // Full lead list, kept client-side so the operator can navigate
@@ -91,6 +107,18 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
   // resets when the lead changes so it doesn't leak across Previous/Next.
   const [bookingMode, setBookingMode] = useState(false);
 
+  // Log-a-call form state. Outcome dropdown defaults to "Spoke with Owner" —
+  // the richest path. Follow-up date is optional. Notes is the same textarea
+  // the outcome buttons also pull from, so the operator can type once and
+  // either Save Call Entry (just log) OR click an outcome button (log +
+  // advance + drive session state).
+  const [logOutcome, setLogOutcome] = useState(LOG_OUTCOMES[2]);
+  const [logFollowup, setLogFollowup] = useState('');
+  const [savingCall, setSavingCall] = useState(false);
+  // Incremented each time a call entry is saved so the sidebar PriorCalls
+  // card knows to refetch. Cheap pattern — no need for context or events.
+  const [priorCallsRefresh, setPriorCallsRefresh] = useState(0);
+
   // Pitch card generation state (lazy — operator clicks ↻ to generate).
   const [generatingPitchCard, setGeneratingPitchCard] = useState(false);
 
@@ -122,8 +150,9 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
 
   // Re-seed the notes textarea when the current lead changes (Previous/Next/
   // advance). LocalStorage drafts are keyed by session_lead_id so each lead's
-  // notes survive navigation away and back. Also resets bookingMode and the
-  // callback picker so neither leaks across navigation.
+  // notes survive navigation away and back. Also resets bookingMode, the
+  // callback picker, and the log-a-call form fields so none leak across
+  // navigation.
   useEffect(() => {
     if (!draftKey) { setNotes(''); return; }
     try {
@@ -132,6 +161,8 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
     } catch { setNotes(''); }
     setCallbackOpen(false);
     setBookingMode(false);
+    setLogOutcome(LOG_OUTCOMES[2]);
+    setLogFollowup('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
 
@@ -205,6 +236,37 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
     setCallbackOpen(false);
   }, [recordOutcome, callbackDate, callbackBlock]);
+  // Save Call Entry — writes a call_log row WITHOUT advancing or driving any
+  // session_leads state. Used for richer in-between captures ("spoke with
+  // receptionist, owner out till Thursday") that don't fit the 4 quick
+  // outcome buttons. Operator can still click an outcome button afterward to
+  // formally advance.
+  const handleSaveCallEntry = useCallback(async () => {
+    if (!lead || savingCall) return;
+    if (!notesRef.current.trim()) {
+      showToast('Add some notes before saving', 'error');
+      return;
+    }
+    setSavingCall(true);
+    try {
+      await api.calls.create(lead.id, {
+        outcome: logOutcome,
+        notes: notesRef.current.trim(),
+        followup_date: logFollowup || null,
+      });
+      clearDraft();
+      setNotes('');
+      setLogFollowup('');
+      setPriorCallsRefresh((n) => n + 1);
+      showToast('Call logged', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Save failed: ${msg}`, 'error');
+    } finally {
+      setSavingCall(false);
+    }
+  }, [lead, savingCall, logOutcome, logFollowup, clearDraft, showToast]);
+
   // Booked demo opens the inline BookingPane. recordOutcome happens when the
   // operator hits "Mark booked & advance" inside the pane.
   const handleBookedDemo = useCallback(() => {
@@ -400,27 +462,21 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
                 busy={generatingPitchCard}
               />
 
-              {/* Notes textarea */}
-              <div style={{ marginTop: 14 }}>
-                <div style={labelStyle}>Call notes</div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Who you talked to, objections, what they asked about (saved on outcome)…"
-                  rows={4}
-                  style={{
-                    width: '100%',
-                    background: 'var(--surface2)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    padding: 10,
-                    fontSize: '0.78rem',
-                    color: 'var(--text)',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                  }}
-                />
-              </div>
+              {/* Log a Call form — capture detailed notes + optional follow-up.
+                  Save Call Entry just writes call_log without advancing. The
+                  outcome buttons below will use the same notes + advance + drive
+                  session state. */}
+              <LogACallCard
+                outcome={logOutcome}
+                setOutcome={setLogOutcome}
+                followup={logFollowup}
+                setFollowup={setLogFollowup}
+                notes={notes}
+                setNotes={setNotes}
+                saving={savingCall}
+                onClear={() => { setNotes(''); setLogFollowup(''); }}
+                onSave={handleSaveCallEntry}
+              />
 
               {/* Inline callback picker (visible on outcome=3) */}
               {callbackOpen && (
@@ -476,7 +532,7 @@ export function ExecutionView({ sessionId, showToast, onClose }: ExecutionViewPr
         <aside className="bs-sidebar">
           <ScoreSidebarCard lead={lead} reviewCount={reviewCount} rating={rating} tier={tier} />
           <SignalsSidebarCard lead={lead} />
-          <PriorCallsSidebarCard leadId={lead.id} key={lead.id} />
+          <PriorCallsSidebarCard leadId={lead.id} refreshKey={priorCallsRefresh} key={lead.id} />
         </aside>
       </div>
     </div>
@@ -603,26 +659,28 @@ function SignalsSidebarCard({ lead }: { lead: Lead }) {
   );
 }
 
-function PriorCallsSidebarCard({ leadId }: { leadId: number }) {
+function PriorCallsSidebarCard({ leadId, refreshKey = 0 }: { leadId: number; refreshKey?: number }) {
   // Inline render of the call history in sidebar-card style. Lazy-loads on
   // first mount per lead (key={lead.id} at the call site resets this).
-  // Shows count + collapsible list.
+  // refreshKey is bumped by the parent after a Save Call Entry so the list
+  // refetches without needing a manual reload.
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [calls, setCalls] = useState<CallEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load count eagerly so the sidebar title can show "(N)" without a click.
+  // Re-fetches when leadId or refreshKey change.
   useEffect(() => {
     let cancelled = false;
-    setCalls(null); setError(null); setExpanded(false);
+    setError(null);
     setLoading(true);
     api.leads.get(leadId)
       .then((res) => { if (!cancelled) setCalls(res.calls); })
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : (err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [leadId]);
+  }, [leadId, refreshKey]);
 
   const count = calls?.length ?? 0;
   const hasAny = count > 0;
@@ -695,6 +753,103 @@ function PriorCallsSidebarCard({ leadId }: { leadId: number }) {
     </div>
   );
 }
+
+// "Log a Call" form — flexible call-entry capture inside the execution view.
+// Mirrors the Pipeline LeadModal's CallLogTab look (orange-tinted header bar,
+// outcome dropdown + follow-up date row, free-form notes). Two save paths:
+//   1. "Save Call Entry" button — just writes call_log, doesn't advance
+//   2. Outcome buttons below — write call_log AND advance + drive session state
+// Both share the notes textarea, so the operator types once and picks an
+// action.
+interface LogACallCardProps {
+  outcome: string;
+  setOutcome: (v: string) => void;
+  followup: string;
+  setFollowup: (v: string) => void;
+  notes: string;
+  setNotes: (v: string) => void;
+  saving: boolean;
+  onClear: () => void;
+  onSave: () => void;
+}
+
+function LogACallCard({
+  outcome, setOutcome, followup, setFollowup, notes, setNotes, saving, onClear, onSave,
+}: LogACallCardProps) {
+  const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return (
+    <div style={{
+      marginTop: 14,
+      padding: '14px 16px',
+      background: 'rgba(255,107,43,0.06)',
+      border: '1px solid rgba(255,107,43,0.25)',
+      borderRadius: 8,
+    }}>
+      {/* Header strip */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--accent)' }}>
+          📞 Log a call
+        </div>
+        <div style={{ fontSize: '0.62rem', color: 'var(--text3)' }}>Today · {now}</div>
+      </div>
+
+      {/* Outcome + Follow-up date row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginBottom: 10 }}>
+        <div>
+          <div style={fieldLabelStyle}>Outcome</div>
+          <select
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value)}
+            style={fieldInputStyle}
+          >
+            {LOG_OUTCOMES.map((o) => <option key={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={fieldLabelStyle}>Follow-up date</div>
+          <input
+            type="date"
+            value={followup}
+            onChange={(e) => setFollowup(e.target.value)}
+            style={fieldInputStyle}
+          />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={fieldLabelStyle}>Call notes</div>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="What did they say? What's the next action? Any objections to handle?"
+          rows={3}
+          style={{ ...fieldInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+        />
+      </div>
+
+      {/* Footer — Clear + Save Call Entry. Outcome buttons live below this
+          card in the main column and will use the same `notes` value. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7 }}>
+        <Button variant="ghost" size="sm" onClick={onClear} disabled={saving}>Clear</Button>
+        <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
+          {saving ? <><Spinner /> Saving…</> : '💾 Save Call Entry'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.4px',
+  color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 4,
+};
+const fieldInputStyle: React.CSSProperties = {
+  width: '100%', background: 'var(--surface2)',
+  border: '1px solid var(--border)', borderRadius: 4,
+  padding: '7px 10px', fontSize: '0.78rem',
+  color: 'var(--text)', fontFamily: 'inherit',
+};
 
 function PitchCard({ text, generatedAt, onRegenerate, busy }: { text: string | null; generatedAt: string | null; onRegenerate: () => void; busy: boolean }) {
   return (
