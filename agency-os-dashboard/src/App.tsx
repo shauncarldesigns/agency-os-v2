@@ -78,6 +78,7 @@ export default function App() {
             showToast={showToast}
             onStateChanged={loadStats}
             onOpenSession={(id) => setOpenSessionId(id)}
+            onSwitchTab={setActiveTab}
           />
         )}
         {activeTab === 'prospect' && (
