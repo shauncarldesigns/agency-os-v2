@@ -40,15 +40,25 @@ interface LeadWithSession extends Lead {
   position?: number;
   is_callback?: number;
   session_lead_id?: number;
+  // Per-session call outcome (null until operator records something). Comes
+  // from the session_leads JOIN in /api/sessions/:id.
+  call_outcome?: CallOutcome | null;
+  called_at?: string | null;
 }
 
 export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: ExecutionViewProps) {
   const [session, setSession] = useState<Session | null>(null);
-  const [lead, setLead] = useState<LeadWithSession | null>(null);
-  const [done, setDone] = useState(false);
-  const [progress, setProgress] = useState({ total: 0, called: 0 });
+  // Full lead list, kept client-side so the operator can navigate
+  // forward/backward without re-fetching. currentIndex is the position they're
+  // looking at; lead derives from leads[currentIndex].
+  const [leads, setLeads] = useState<LeadWithSession[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
+
+  const lead = leads[currentIndex] ?? null;
+  const calledCount = leads.filter((l) => l.call_outcome != null).length;
+  const allDone = leads.length > 0 && calledCount === leads.length;
 
   // Notes textarea state. Drafts persist in localStorage so the operator
   // doesn't lose mid-call typing if the modal closes (browser refresh,
@@ -58,14 +68,6 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   const notesRef = useRef(notes);
   useEffect(() => { notesRef.current = notes; }, [notes]);
   const draftKey = lead?.session_lead_id ? `exec-notes-${lead.session_lead_id}` : null;
-  // Load draft on lead change.
-  useEffect(() => {
-    if (!draftKey) return;
-    try {
-      const saved = localStorage.getItem(draftKey);
-      if (saved) setNotes(saved);
-    } catch { /* localStorage unavailable — silent */ }
-  }, [draftKey]);
   // Debounced write — 800ms after typing stops.
   useEffect(() => {
     if (!draftKey) return;
@@ -91,19 +93,22 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   // Pitch card generation state (lazy — operator clicks ↻ to generate).
   const [generatingPitchCard, setGeneratingPitchCard] = useState(false);
 
+  // Full session load — fetches all leads, sets currentIndex to the first
+  // uncalled position so the operator naturally starts where they left off
+  // even after a refresh. Called on mount and after Extend +20 (the burn-
+  // through "extend" path needs fresh data).
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [sessRes, nextRes] = await Promise.all([
-        api.sessions.get(sessionId),
-        api.sessions.nextLead(sessionId),
-      ]);
-      setSession(sessRes.session);
-      setLead(nextRes.lead ?? null);
-      setDone(nextRes.done);
-      setProgress({ total: nextRes.total ?? 0, called: nextRes.called ?? 0 });
-      setNotes('');
+      const res = await api.sessions.get(sessionId);
+      setSession(res.session);
+      setLeads(res.leads);
+      // Park on the first uncalled lead; fall back to position 0 if everyone's
+      // already been called (burn-through screen will catch that).
+      const firstUncalled = res.leads.findIndex((l) => l.call_outcome == null);
+      setCurrentIndex(firstUncalled === -1 ? 0 : firstUncalled);
       setCallbackOpen(false);
+      setNotes('');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not load execution view: ${msg}`, 'error');
@@ -114,8 +119,41 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
 
   useEffect(() => { void load(); }, [load]);
 
-  // Record an outcome. Wraps every outcome path so the order
-  // (toast → reload → next-lead) stays consistent.
+  // Re-seed the notes textarea when the current lead changes (Previous/Next/
+  // advance). LocalStorage drafts are keyed by session_lead_id so each lead's
+  // notes survive navigation away and back.
+  useEffect(() => {
+    if (!draftKey) { setNotes(''); return; }
+    try {
+      const saved = localStorage.getItem(draftKey);
+      setNotes(saved ?? '');
+    } catch { setNotes(''); }
+    setCallbackOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.session_lead_id]);
+
+  // Advance helper: jump to the next uncalled lead AFTER the given index.
+  // If none remain forward, wrap to the first uncalled before the index
+  // (lets the operator finish the leads they skipped on the way). Returns
+  // the new index — caller is responsible for setCurrentIndex.
+  const findNextUncalledIndex = useCallback((fromIndex: number): number => {
+    const total = leads.length;
+    if (total === 0) return 0;
+    for (let i = fromIndex + 1; i < total; i++) {
+      if (leads[i].call_outcome == null) return i;
+    }
+    // Wrap — pick up any skipped-earlier uncalled leads from the start.
+    for (let i = 0; i <= fromIndex; i++) {
+      if (leads[i].call_outcome == null) return i;
+    }
+    // Nothing uncalled left anywhere. Caller will see allDone === true and
+    // render the burn-through screen.
+    return total;
+  }, [leads]);
+
+  // Record an outcome. Updates the in-memory leads array (so navigation
+  // continues to reflect the new state without a full refetch) then advances
+  // to the next uncalled position.
   const recordOutcome = useCallback(async (
     outcome: CallOutcome,
     extra: Partial<SessionOutcomeBody> = {},
@@ -129,26 +167,37 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
         notes: notesRef.current.trim() || undefined,
         ...extra,
       });
-      // Draft for this lead consumed — clear before the next-lead reload
-      // resets the textarea state.
       clearDraft();
-      // Refresh next lead. Don't toast on every outcome — keeps the rhythm.
-      await load();
+      // Mutate the local copy so the NEXT findNextUncalled call sees this
+      // outcome and skips past it. Important: spread into a new array so React
+      // notices the change.
+      const updated = leads.slice();
+      updated[currentIndex] = { ...updated[currentIndex], call_outcome: outcome, called_at: new Date().toISOString() };
+      setLeads(updated);
+      // Compute next index from the UPDATED list (not the closed-over stale one).
+      const next = (() => {
+        const total = updated.length;
+        for (let i = currentIndex + 1; i < total; i++) {
+          if (updated[i].call_outcome == null) return i;
+        }
+        for (let i = 0; i <= currentIndex; i++) {
+          if (updated[i].call_outcome == null) return i;
+        }
+        return total; // → burn-through
+      })();
+      setCurrentIndex(next);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not record outcome: ${msg}`, 'error');
     } finally {
       setRecording(false);
     }
-  }, [lead, sessionId, recording, load, showToast, clearDraft]);
+  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast]);
 
   // Outcome button handlers.
   const handleVoicemail = useCallback(() => recordOutcome('voicemail'), [recordOutcome]);
   const handleNotInterested = useCallback(() => recordOutcome('not_interested'), [recordOutcome]);
-  const handleSkip = useCallback(() => recordOutcome('skipped'), [recordOutcome]);
-  const handleCallbackToggle = useCallback(() => {
-    setCallbackOpen((v) => !v);
-  }, []);
+  const handleCallbackToggle = useCallback(() => { setCallbackOpen((v) => !v); }, []);
   const handleCallbackConfirm = useCallback(async () => {
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
     setCallbackOpen(false);
@@ -160,13 +209,39 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
     });
   }, [lead, onBookDemo, recordOutcome]);
 
-  // Pitch card on-demand generation. Caches on the lead row server-side.
+  // Navigation handlers — no DB writes, pure index movement. "Skip for now"
+  // is just Next that doesn't record an outcome; the lead stays in 'uncalled'
+  // state and naturally cycles back via the recordOutcome wrap-around logic.
+  const canGoBack = currentIndex > 0;
+  const canGoForward = currentIndex < leads.length - 1;
+  const handlePrevious = useCallback(() => {
+    if (canGoBack) setCurrentIndex((i) => i - 1);
+  }, [canGoBack]);
+  const handleNext = useCallback(() => {
+    if (canGoForward) setCurrentIndex((i) => i + 1);
+  }, [canGoForward]);
+  // Skip-for-now: advances to next uncalled (wraps if at end), matching
+  // outcome-button advance semantics. The lead stays uncalled, so subsequent
+  // cycles will surface it again.
+  const handleSkip = useCallback(() => {
+    setCurrentIndex(findNextUncalledIndex(currentIndex));
+  }, [findNextUncalledIndex, currentIndex]);
+
+  // Pitch card on-demand generation. Caches on the lead row server-side and
+  // also updates the local leads array so navigating away+back shows the
+  // freshly-generated text.
   const handleGeneratePitchCard = useCallback(async () => {
     if (!lead || generatingPitchCard) return;
     setGeneratingPitchCard(true);
     try {
       const res = await api.dashboard.generatePitchCard(lead.id);
-      setLead({ ...lead, pitch_card_text: res.pitch_card_text, pitch_card_generated_at: res.generated_at });
+      const updated = leads.slice();
+      updated[currentIndex] = {
+        ...updated[currentIndex],
+        pitch_card_text: res.pitch_card_text,
+        pitch_card_generated_at: res.generated_at,
+      };
+      setLeads(updated);
       showToast('Pitch card generated', 'success');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -174,12 +249,15 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
     } finally {
       setGeneratingPitchCard(false);
     }
-  }, [lead, generatingPitchCard, showToast]);
+  }, [lead, generatingPitchCard, showToast, leads, currentIndex]);
 
-  // Keyboard shortcuts.
+  // Keyboard shortcuts:
+  //   1-4 = outcomes (unchanged)
+  //   ← = Previous (back through positions, sees called + uncalled)
+  //   → or S = Next / Skip for now (advance to next uncalled, wraps)
+  //   Esc = close callback picker
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Ignore when typing in an input/textarea.
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
       if (recording || loading) return;
@@ -188,13 +266,15 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
         case '2': e.preventDefault(); void handleNotInterested(); break;
         case '3': e.preventDefault(); handleCallbackToggle(); break;
         case '4': e.preventDefault(); handleBookedDemo(); break;
-        case 's': case 'S': e.preventDefault(); void handleSkip(); break;
+        case 's': case 'S': e.preventDefault(); handleSkip(); break;
+        case 'ArrowLeft': e.preventDefault(); handlePrevious(); break;
+        case 'ArrowRight': e.preventDefault(); handleNext(); break;
         case 'Escape': e.preventDefault(); setCallbackOpen(false); break;
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [recording, loading, handleVoicemail, handleNotInterested, handleCallbackToggle, handleBookedDemo, handleSkip]);
+  }, [recording, loading, handleVoicemail, handleNotInterested, handleCallbackToggle, handleBookedDemo, handleSkip, handlePrevious, handleNext]);
 
   if (loading) {
     return (
@@ -208,13 +288,13 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
     );
   }
 
-  if (done || !lead) {
+  if (allDone || !lead) {
     return (
       <div className="exec-overlay">
         <div className="exec-modal" style={{ width: 540 }}>
           <BurnThroughComplete
             sessionId={sessionId}
-            progress={progress}
+            progress={{ total: leads.length, called: calledCount }}
             showToast={showToast}
             onExtend={async (count) => {
               const r = await api.sessions.extend(sessionId, count);
@@ -263,7 +343,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <ProgressDashes total={progress.total} called={progress.called} />
+            <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
             <button
               onClick={onClose}
               style={{ background: 'transparent', border: 'none', color: 'var(--text3)', fontSize: '1.2rem', cursor: 'pointer', padding: '2px 8px' }}
@@ -397,14 +477,22 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
           )}
         </div>
 
-        {/* Outcome buttons (fixed bottom) */}
+        {/* Outcome buttons + nav row (fixed bottom). Skip is no longer an
+            outcome — it lives in NavRow now and just advances without writing. */}
         <OutcomeButtons
           recording={recording}
           onVoicemail={handleVoicemail}
           onNotInterested={handleNotInterested}
           onCallback={handleCallbackToggle}
           onBooked={handleBookedDemo}
+        />
+        <NavRow
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          recording={recording}
+          onPrevious={handlePrevious}
           onSkip={handleSkip}
+          onNext={handleNext}
         />
       </div>
     </div>
@@ -413,17 +501,38 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
 
 // ---------- sub-components ----------
 
-function ProgressDashes({ total, called }: { total: number; called: number }) {
-  // Visualize as dashes — limit to 40 visible for the typical session.
+function ProgressDashes({ total, called, currentIndex }: { total: number; called: number; currentIndex: number }) {
+  // "N of M" reflects the operator's current position, not just called count
+  // (since Previous/Next navigation can put them on any position regardless
+  // of outcome state). Dashes light up for any lead with an outcome.
   const visible = Math.min(total, 40);
   if (visible === 0) return <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>0 / 0</span>;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>{called + 1} of {total}</span>
+      <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+        {currentIndex + 1} of {total}
+        <span style={{ marginLeft: 6, opacity: 0.7 }}>· {called} called</span>
+      </span>
       <div style={{ display: 'flex', gap: 2 }}>
-        {Array.from({ length: visible }).map((_, i) => (
-          <span key={i} style={{ width: 7, height: 3, background: i < called ? 'var(--accent)' : 'var(--border)' }} />
-        ))}
+        {Array.from({ length: visible }).map((_, i) => {
+          // Three visual states: current position (filled accent w/ ring),
+          // called (filled accent), uncalled (border).
+          const isCurrent = i === currentIndex;
+          const isCalled = i < currentIndex; // approximation — see note below
+          return (
+            <span
+              key={i}
+              style={{
+                width: isCurrent ? 9 : 7,
+                height: isCurrent ? 5 : 3,
+                background: isCalled ? 'var(--accent)' : 'var(--border)',
+                outline: isCurrent ? '1px solid var(--accent)' : undefined,
+                outlineOffset: isCurrent ? 1 : 0,
+                transition: 'all 80ms',
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -551,14 +660,13 @@ interface OutcomeButtonsProps {
   onNotInterested: () => void;
   onCallback: () => void;
   onBooked: () => void;
-  onSkip: () => void;
 }
 
-function OutcomeButtons({ recording, onVoicemail, onNotInterested, onCallback, onBooked, onSkip }: OutcomeButtonsProps) {
+function OutcomeButtons({ recording, onVoicemail, onNotInterested, onCallback, onBooked }: OutcomeButtonsProps) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr) auto',
+      gridTemplateColumns: 'repeat(4, 1fr)',
       gap: 8,
       padding: '12px 18px',
       borderTop: '1px solid var(--border)',
@@ -568,8 +676,65 @@ function OutcomeButtons({ recording, onVoicemail, onNotInterested, onCallback, o
       <OutcomeBtn label="Not interested" sub="2" onClick={onNotInterested} disabled={recording} accent="red" />
       <OutcomeBtn label="Callback" sub="3" onClick={onCallback} disabled={recording} accent="yellow" />
       <OutcomeBtn label="Booked demo" sub="4" onClick={onBooked} disabled={recording} accent="green" />
-      <OutcomeBtn label="Skip" sub="S" onClick={onSkip} disabled={recording} ghost />
     </div>
+  );
+}
+
+// Nav row — sits below outcome buttons. None of these write to the DB.
+// Previous walks back through positions (sees called + uncalled).
+// Skip-for-now advances to the next uncalled lead, wrapping if at the end so
+// skipped leads naturally come back around.
+// Next advances one position regardless of outcome state.
+interface NavRowProps {
+  canGoBack: boolean;
+  canGoForward: boolean;
+  recording: boolean;
+  onPrevious: () => void;
+  onSkip: () => void;
+  onNext: () => void;
+}
+function NavRow({ canGoBack, canGoForward, recording, onPrevious, onSkip, onNext }: NavRowProps) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr 1fr',
+      padding: '8px 18px 12px',
+      borderTop: '1px solid var(--border)',
+      background: 'var(--surface2)',
+      gap: 6,
+    }}>
+      <NavBtn label="← Previous" sub="←" onClick={onPrevious} disabled={recording || !canGoBack} align="left" />
+      <NavBtn label="Skip for now" sub="S" onClick={onSkip} disabled={recording} align="center" />
+      <NavBtn label="Next →" sub="→" onClick={onNext} disabled={recording || !canGoForward} align="right" />
+    </div>
+  );
+}
+
+function NavBtn({ label, sub, onClick, disabled, align }: {
+  label: string; sub: string; onClick: () => void; disabled: boolean; align: 'left' | 'center' | 'right';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '5px 10px',
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--text3)',
+        fontSize: '0.7rem',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        fontFamily: 'inherit',
+        textAlign: align,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ fontSize: '0.55rem', opacity: 0.6, marginTop: 1 }}>[{sub}]</span>
+    </button>
   );
 }
 
