@@ -50,12 +50,38 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
 
-  // Notes textarea state — auto-saved alongside outcome buttons, debounced
-  // for keystroke writes (Phase 5 just batches on outcome click; debounced
-  // autosave during typing lands in Phase 9 polish).
+  // Notes textarea state. Drafts persist in localStorage so the operator
+  // doesn't lose mid-call typing if the modal closes (browser refresh,
+  // session pause, accidental Esc). Keyed by session_lead_id so each lead's
+  // notes are independent. Cleared on outcome.
   const [notes, setNotes] = useState('');
   const notesRef = useRef(notes);
   useEffect(() => { notesRef.current = notes; }, [notes]);
+  const draftKey = lead?.session_lead_id ? `exec-notes-${lead.session_lead_id}` : null;
+  // Load draft on lead change.
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) setNotes(saved);
+    } catch { /* localStorage unavailable — silent */ }
+  }, [draftKey]);
+  // Debounced write — 800ms after typing stops.
+  useEffect(() => {
+    if (!draftKey) return;
+    const t = setTimeout(() => {
+      try {
+        if (notes.trim()) localStorage.setItem(draftKey, notes);
+        else localStorage.removeItem(draftKey);
+      } catch { /* silent */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [notes, draftKey]);
+  // Clear draft when outcome is recorded.
+  const clearDraft = useCallback(() => {
+    if (!draftKey) return;
+    try { localStorage.removeItem(draftKey); } catch { /* silent */ }
+  }, [draftKey]);
 
   // Inline callback date picker visible state.
   const [callbackOpen, setCallbackOpen] = useState(false);
@@ -103,6 +129,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
         notes: notesRef.current.trim() || undefined,
         ...extra,
       });
+      // Draft for this lead consumed — clear before the next-lead reload
+      // resets the textarea state.
+      clearDraft();
       // Refresh next lead. Don't toast on every outcome — keeps the rhythm.
       await load();
     } catch (err) {
@@ -111,7 +140,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
     } finally {
       setRecording(false);
     }
-  }, [lead, sessionId, recording, load, showToast]);
+  }, [lead, sessionId, recording, load, showToast, clearDraft]);
 
   // Outcome button handlers.
   const handleVoicemail = useCallback(() => recordOutcome('voicemail'), [recordOutcome]);
