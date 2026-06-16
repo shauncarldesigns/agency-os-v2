@@ -719,3 +719,24 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
   font-size: 0.78rem;
 }
 .priority-row:first-child { border-top: 0; }
+
+/* Execution view (Phase 5) — full-screen overlay */
+.exec-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.exec-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 800px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
