@@ -720,23 +720,22 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 }
 .priority-row:first-child { border-top: 0; }
 
-/* Execution view (Phase 5) — full-screen overlay */
-.exec-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.6);
+/* Execution view — takes over the whole app when a session is active.
+   Used to be a modal-on-top-of-everything overlay; refactored to a real
+   page so BookDemoModal can stack above it without modal-on-modal
+   confusion. The execution view IS the app when openSessionId is set. */
+.exec-page {
+  min-height: 100vh;
+  background: var(--bg);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 20px;
 }
-.exec-modal {
+.exec-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  width: 100%;
-  max-width: 800px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
   overflow: hidden;
 }

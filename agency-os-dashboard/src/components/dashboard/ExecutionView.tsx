@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Lead, ShowToast, Session, CallOutcome, SessionBlock } from '../../lib/types';
+import type { Lead, ShowToast, Session, CallOutcome, SessionBlock, CallEntry } from '../../lib/types';
 import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
@@ -213,16 +213,13 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   // is just Next that doesn't record an outcome; the lead stays in 'uncalled'
   // state and naturally cycles back via the recordOutcome wrap-around logic.
   const canGoBack = currentIndex > 0;
-  const canGoForward = currentIndex < leads.length - 1;
   const handlePrevious = useCallback(() => {
     if (canGoBack) setCurrentIndex((i) => i - 1);
   }, [canGoBack]);
-  const handleNext = useCallback(() => {
-    if (canGoForward) setCurrentIndex((i) => i + 1);
-  }, [canGoForward]);
   // Skip-for-now: advances to next uncalled (wraps if at end), matching
   // outcome-button advance semantics. The lead stays uncalled, so subsequent
-  // cycles will surface it again.
+  // cycles will surface it again. This replaces the old generic "Next" —
+  // they overlapped enough that two buttons just confused the operator.
   const handleSkip = useCallback(() => {
     setCurrentIndex(findNextUncalledIndex(currentIndex));
   }, [findNextUncalledIndex, currentIndex]);
@@ -266,23 +263,20 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
         case '2': e.preventDefault(); void handleNotInterested(); break;
         case '3': e.preventDefault(); handleCallbackToggle(); break;
         case '4': e.preventDefault(); handleBookedDemo(); break;
-        case 's': case 'S': e.preventDefault(); handleSkip(); break;
+        case 's': case 'S': case 'ArrowRight': e.preventDefault(); handleSkip(); break;
         case 'ArrowLeft': e.preventDefault(); handlePrevious(); break;
-        case 'ArrowRight': e.preventDefault(); handleNext(); break;
         case 'Escape': e.preventDefault(); setCallbackOpen(false); break;
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [recording, loading, handleVoicemail, handleNotInterested, handleCallbackToggle, handleBookedDemo, handleSkip, handlePrevious, handleNext]);
+  }, [recording, loading, handleVoicemail, handleNotInterested, handleCallbackToggle, handleBookedDemo, handleSkip, handlePrevious]);
 
   if (loading) {
     return (
-      <div className="exec-overlay">
-        <div className="exec-modal">
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
-            <Spinner /> Loading session…
-          </div>
+      <div className="exec-page">
+        <div className="exec-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
+          <Spinner /> Loading session…
         </div>
       </div>
     );
@@ -290,8 +284,8 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
 
   if (allDone || !lead) {
     return (
-      <div className="exec-overlay">
-        <div className="exec-modal" style={{ width: 540 }}>
+      <div className="exec-page">
+        <div className="exec-card" style={{ width: 540 }}>
           <BurnThroughComplete
             sessionId={sessionId}
             progress={{ total: leads.length, called: calledCount }}
@@ -326,8 +320,8 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
   const tier = lead.recommended_tier as 1 | 2 | 3 | null;
 
   return (
-    <div className="exec-overlay">
-      <div className="exec-modal" style={{ width: 760, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="exec-page">
+      <div className="exec-card" style={{ width: '100%', maxWidth: 880, minHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -427,6 +421,10 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
           {/* Signals */}
           <SignalsList lead={lead} />
 
+          {/* Prior call history — lazy-loaded on expand. Operator can scan
+              past outcomes + notes for context without leaving the page. */}
+          <PriorCalls leadId={lead.id} key={lead.id} />
+
           {/* Notes textarea */}
           <div style={{ marginTop: 12 }}>
             <div style={labelStyle}>Call notes</div>
@@ -488,11 +486,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onBookDemo }: Exe
         />
         <NavRow
           canGoBack={canGoBack}
-          canGoForward={canGoForward}
           recording={recording}
           onPrevious={handlePrevious}
           onSkip={handleSkip}
-          onNext={handleNext}
         />
       </div>
     </div>
@@ -611,6 +607,121 @@ function PitchCard({ text, generatedAt, onRegenerate, busy }: { text: string | n
   );
 }
 
+// Prior-call history. Collapsed toggle by default; expands to fetch + show.
+// Keyed by lead.id at the call site (key={lead.id}) so it resets cleanly
+// across Previous/Next navigation.
+function PriorCalls({ leadId }: { leadId: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [calls, setCalls] = useState<CallEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function ensureLoaded() {
+    if (calls !== null || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.leads.get(leadId);
+      setCalls(res.calls);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggle() {
+    setExpanded((v) => {
+      const next = !v;
+      if (next) void ensureLoaded();
+      return next;
+    });
+  }
+
+  const count = calls?.length ?? null;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        onClick={toggle}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: '1px dashed var(--border)',
+          borderRadius: 4,
+          padding: '7px 10px',
+          fontSize: '0.7rem',
+          color: 'var(--text3)',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span>
+          {expanded ? '▾' : '▸'} Prior calls{count != null ? ` (${count})` : ''}
+        </span>
+        {loading && <Spinner />}
+      </button>
+
+      {expanded && !loading && error && (
+        <div style={{ marginTop: 6, padding: '6px 10px', fontSize: '0.7rem', color: 'var(--red)' }}>
+          {error}
+        </div>
+      )}
+
+      {expanded && !loading && calls && calls.length === 0 && (
+        <div style={{ marginTop: 6, padding: '6px 10px', fontSize: '0.7rem', color: 'var(--text3)', fontStyle: 'italic' }}>
+          No prior calls logged for this lead.
+        </div>
+      )}
+
+      {expanded && !loading && calls && calls.length > 0 && (
+        <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Newest first per spec — backend returns ORDER BY created_at DESC. */}
+          {calls.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                padding: '7px 10px',
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                fontSize: '0.74rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                <span style={{ fontWeight: 600 }}>{c.outcome}</span>
+                <span style={{ color: 'var(--text3)', fontSize: '0.66rem' }}>{formatCallTimestamp(c.created_at)}</span>
+              </div>
+              {c.notes && (
+                <div style={{ color: 'var(--text2)', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
+                  {c.notes}
+                </div>
+              )}
+              {c.followup_date && (
+                <div style={{ color: 'var(--text3)', fontSize: '0.66rem', marginTop: 3 }}>
+                  Followup: {c.followup_date}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatCallTimestamp(iso: string): string {
+  try {
+    return new Date(iso.replace(' ', 'T')).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+  } catch { return iso; }
+}
+
 function SignalsList({ lead }: { lead: Lead }) {
   const signals: Array<{ text: string; severity: 'high' | 'normal' }> = [];
 
@@ -680,32 +791,29 @@ function OutcomeButtons({ recording, onVoicemail, onNotInterested, onCallback, o
   );
 }
 
-// Nav row — sits below outcome buttons. None of these write to the DB.
-// Previous walks back through positions (sees called + uncalled).
-// Skip-for-now advances to the next uncalled lead, wrapping if at the end so
-// skipped leads naturally come back around.
-// Next advances one position regardless of outcome state.
+// Nav row — sits below outcome buttons. Neither button writes to the DB.
+// Previous walks back through positions (sees called + uncalled). Skip-for-now
+// advances to the next uncalled lead, wrapping if at the end so skipped leads
+// naturally come back around. The generic "Next" was removed — it duplicated
+// Skip enough to confuse the operator without earning the screen space.
 interface NavRowProps {
   canGoBack: boolean;
-  canGoForward: boolean;
   recording: boolean;
   onPrevious: () => void;
   onSkip: () => void;
-  onNext: () => void;
 }
-function NavRow({ canGoBack, canGoForward, recording, onPrevious, onSkip, onNext }: NavRowProps) {
+function NavRow({ canGoBack, recording, onPrevious, onSkip }: NavRowProps) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr 1fr',
+      gridTemplateColumns: '1fr 1fr',
       padding: '8px 18px 12px',
       borderTop: '1px solid var(--border)',
       background: 'var(--surface2)',
       gap: 6,
     }}>
       <NavBtn label="← Previous" sub="←" onClick={onPrevious} disabled={recording || !canGoBack} align="left" />
-      <NavBtn label="Skip for now" sub="S" onClick={onSkip} disabled={recording} align="center" />
-      <NavBtn label="Next →" sub="→" onClick={onNext} disabled={recording || !canGoForward} align="right" />
+      <NavBtn label="Skip for now →" sub="S" onClick={onSkip} disabled={recording} align="right" />
     </div>
   );
 }

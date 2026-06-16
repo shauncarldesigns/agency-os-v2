@@ -68,6 +68,34 @@ export default function App() {
     }
   }
 
+  // When the operator's in a calling session, the execution view takes over
+  // the entire app — no Header/Nav distractions. Calling is focused work.
+  // BookDemoModal can still layer above as a regular modal.
+  if (openSessionId !== null) {
+    return (
+      <>
+        <ExecutionView
+          sessionId={openSessionId}
+          showToast={showToast}
+          onClose={() => { setOpenSessionId(null); loadStats(); }}
+          onBookDemo={(lead, onConfirm) => setBookingState({ lead, onConfirm })}
+        />
+        <BookDemoModal
+          open={bookingState !== null}
+          lead={bookingState?.lead ?? null}
+          showToast={showToast}
+          onClose={() => setBookingState(null)}
+          onConfirm={async (scheduledFor, hbConfirmed) => {
+            if (!bookingState) return;
+            await bookingState.onConfirm(scheduledFor, hbConfirmed);
+            setBookingState(null);
+          }}
+        />
+        <ToastContainer toasts={toasts} />
+      </>
+    );
+  }
+
   return (
     <>
       <Header stats={stats} />
@@ -111,27 +139,6 @@ export default function App() {
         {activeTab === 'reports' && <ReportsPanel showToast={showToast} />}
       </main>
       <ToastContainer toasts={toasts} />
-
-      {openSessionId !== null && (
-        <ExecutionView
-          sessionId={openSessionId}
-          showToast={showToast}
-          onClose={() => { setOpenSessionId(null); loadStats(); }}
-          onBookDemo={(lead, onConfirm) => setBookingState({ lead, onConfirm })}
-        />
-      )}
-
-      <BookDemoModal
-        open={bookingState !== null}
-        lead={bookingState?.lead ?? null}
-        showToast={showToast}
-        onClose={() => setBookingState(null)}
-        onConfirm={async (scheduledFor, hbConfirmed) => {
-          if (!bookingState) return;
-          await bookingState.onConfirm(scheduledFor, hbConfirmed);
-          setBookingState(null);
-        }}
-      />
     </>
   );
 }
