@@ -17,6 +17,8 @@ import talkToPartnerMd from '../playbook/objections/talk-to-partner.md';
 import tooBusyMd from '../playbook/objections/too-busy.md';
 import sendEmailMd from '../playbook/objections/send-email.md';
 import busyPlusEmailMd from '../playbook/objections/busy-plus-email.md';
+import whyNeedWebsiteMd from '../playbook/objections/why-need-website.md';
+import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-direct.md';
 
 import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
 
@@ -292,6 +294,8 @@ const OBJECTION_FILES: Record<string, string> = {
   'too-busy': tooBusyMd,
   'send-email': sendEmailMd,
   'busy-plus-email': busyPlusEmailMd,
+  'why-need-website': whyNeedWebsiteMd,
+  'why-need-website-direct': whyNeedWebsiteDirectMd,
 };
 
 const FOLLOW_UP_FILES: Record<string, string> = {
