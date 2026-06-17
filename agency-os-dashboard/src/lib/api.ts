@@ -346,6 +346,10 @@ export const api = {
       apiFetch<{ pitch_card_text: string; generated_at: string }>(
         `/api/dashboard/leads/${leadId}/pitch-card`, { method: 'POST' }
       ),
+    agencySummary: (range: AnalyticsRange = '30d') =>
+      apiFetch<AgencySummary>(`/api/dashboard/agency-summary?range=${range}`),
+    objectionsOverview: (range: AnalyticsRange = '30d') =>
+      apiFetch<ObjectionsOverviewResponse>(`/api/dashboard/objections-overview?range=${range}`),
   },
   sessions: {
     today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
@@ -477,6 +481,37 @@ const INDUSTRY_FALLBACK: IndustrySpec[] = [
 export interface SessionRecap {
   total: number; called: number; voicemails: number; notInterested: number;
   callbacks: number; booked: number; skipped: number; bookingRate: number;
+}
+
+export type AnalyticsRange = '30d' | 'all';
+
+export interface AgencySummary {
+  range: AnalyticsRange;
+  total_calls: number;
+  call_days: number;
+  calls_per_day: number;
+  demos_booked: number;
+  demos_held: number;
+  demos_no_show: number;
+  dial_to_set_rate_pct: number;
+  new_projects: number;
+}
+
+export interface ObjectionOverviewItem {
+  objection_id: string;
+  label: string;
+  category: 'standard' | 'deep-dive' | 'closing';
+  type: 'simple' | 'branching';
+  total_hits: number;
+  handled_count: number;
+  handled_rate_pct: number;
+  frequency_pct: number;
+}
+
+export interface ObjectionsOverviewResponse {
+  range: AnalyticsRange;
+  total_calls: number;
+  objections: ObjectionOverviewItem[];
 }
 
 export interface SessionOutcomeBody {

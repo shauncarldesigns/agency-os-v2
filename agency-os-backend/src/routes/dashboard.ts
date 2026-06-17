@@ -11,6 +11,7 @@ import { chicagoToday, chicagoCallingMode, chicagoCallingWeek } from '../service
 import { INDUSTRY_ROTATION } from '../services/sessionComposer';
 import { callClaude } from '../services/claude';
 import { buildPitchCardPrompt, leadToPitchCardInput } from '../prompts/pitchCard';
+import { getObjection } from '../services/playbook';
 import type { Lead } from '../types';
 import { badRequest, notFound, serverError } from '../utils/errors';
 
@@ -158,6 +159,118 @@ dashboardRouter.get('/prospecting-progress', async (c) => {
 // while still passing the lead-matching key back on save.
 dashboardRouter.get('/industries', (c) => {
   return c.json({ industries: INDUSTRY_ROTATION });
+});
+
+// GET /api/dashboard/agency-summary?range=30d|all — overall calling metrics.
+// "Vs industry" deltas were called out in the original spec but the operator
+// asked to skip them — these are raw numbers + simple derived rates.
+dashboardRouter.get('/agency-summary', async (c) => {
+  const range = c.req.query('range') === 'all' ? 'all' : '30d';
+  // sqlite-compatible date threshold. '1970-01-01' for "all".
+  const since = range === '30d'
+    ? `date('now', '-30 day')`
+    : `'1970-01-01'`;
+
+  const callsRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as total_calls,
+           COUNT(DISTINCT s.session_date) as call_days
+    FROM session_leads sl
+    INNER JOIN sessions s ON s.id = sl.session_id
+    WHERE s.session_date >= ${since}
+      AND sl.call_outcome IS NOT NULL
+      AND sl.call_outcome != 'skipped'
+  `).first<{ total_calls: number; call_days: number }>();
+
+  const bookedRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as n FROM session_leads sl
+    INNER JOIN sessions s ON s.id = sl.session_id
+    WHERE s.session_date >= ${since} AND sl.call_outcome = 'booked'
+  `).first<{ n: number }>();
+
+  const heldRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as n FROM demos
+    WHERE status = 'held' AND date(scheduled_for) >= ${since}
+  `).first<{ n: number }>();
+
+  const noShowRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as n FROM demos
+    WHERE status = 'no_show' AND date(scheduled_for) >= ${since}
+  `).first<{ n: number }>();
+
+  const newProjectsRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as n FROM projects WHERE date(created_at) >= ${since}
+  `).first<{ n: number }>();
+
+  const totalCalls = callsRow?.total_calls ?? 0;
+  const callDays = callsRow?.call_days ?? 0;
+  const callsPerDay = callDays > 0 ? totalCalls / callDays : 0;
+  const demosBooked = bookedRow?.n ?? 0;
+
+  return c.json({
+    range,
+    total_calls: totalCalls,
+    call_days: callDays,
+    calls_per_day: Number(callsPerDay.toFixed(1)),
+    demos_booked: demosBooked,
+    demos_held: heldRow?.n ?? 0,
+    demos_no_show: noShowRow?.n ?? 0,
+    dial_to_set_rate_pct: totalCalls > 0 ? Number(((demosBooked / totalCalls) * 100).toFixed(1)) : 0,
+    new_projects: newProjectsRow?.n ?? 0,
+  });
+});
+
+// GET /api/dashboard/objections-overview?range=30d|all — per-objection
+// frequency + handled-rate. Reads call_log.objection_hits JSON, joined
+// against the playbook for friendly labels.
+dashboardRouter.get('/objections-overview', async (c) => {
+  const range = c.req.query('range') === 'all' ? 'all' : '30d';
+  const since = range === '30d'
+    ? `date('now', '-30 day')`
+    : `'1970-01-01'`;
+
+  const totalCallsRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) as n FROM call_log WHERE date(created_at) >= ${since}
+  `).first<{ n: number }>();
+  const totalCalls = totalCallsRow?.n ?? 0;
+
+  // D1 includes the json1 extension. json_each over a TEXT column that
+  // contains a JSON array unrolls one row per array element.
+  const hitsRows = await c.env.DB.prepare(`
+    SELECT
+      json_extract(je.value, '$.objection_id') as objection_id,
+      COUNT(*) as total_hits,
+      SUM(CASE WHEN json_extract(je.value, '$.handled') = 1 THEN 1 ELSE 0 END) as handled_count
+    FROM call_log cl, json_each(cl.objection_hits) je
+    WHERE cl.objection_hits IS NOT NULL
+      AND date(cl.created_at) >= ${since}
+    GROUP BY objection_id
+    ORDER BY total_hits DESC
+    LIMIT 10
+  `).all<{ objection_id: string; total_hits: number; handled_count: number }>();
+
+  const items = (hitsRows.results ?? []).map((r) => {
+    const obj = getObjection(r.objection_id);
+    return {
+      objection_id: r.objection_id,
+      label: obj?.label ?? r.objection_id,
+      category: obj?.category ?? 'standard',
+      type: obj?.type ?? 'simple',
+      total_hits: r.total_hits,
+      handled_count: r.handled_count,
+      handled_rate_pct: r.total_hits > 0
+        ? Number(((r.handled_count / r.total_hits) * 100).toFixed(1))
+        : 0,
+      frequency_pct: totalCalls > 0
+        ? Number(((r.total_hits / totalCalls) * 100).toFixed(1))
+        : 0,
+    };
+  });
+
+  return c.json({
+    range,
+    total_calls: totalCalls,
+    objections: items,
+  });
 });
 
 // POST /api/dashboard/leads/:id/pitch-card — on-demand pitch card generation.

@@ -866,3 +866,35 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
   .cockpit-leadhead-grid { grid-template-columns: 1fr; gap: 10px; }
   .cockpit-scores { justify-content: flex-start; flex-wrap: wrap; }
 }
+
+/* ============================================================================
+   DASHBOARD ANALYTICS — Phase 5
+   ============================================================================ */
+
+.analytics-section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.analytics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.analytics-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 1.5px; color: var(--text); margin: 0; font-weight: normal; }
+.analytics-range { display: flex; gap: 4px; }
+.analytics-range-btn { background: transparent; color: var(--text3); border: 1px solid var(--border); border-radius: var(--r); padding: 5px 11px; font-size: 0.7rem; font-family: inherit; cursor: pointer; }
+.analytics-range-btn:hover { color: var(--text2); }
+.analytics-range-btn.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+.analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.analytics-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 14px 16px; }
+.analytics-card-label { font-size: 0.6rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+.analytics-card-value { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; line-height: 1; color: var(--accent); margin-bottom: 4px; }
+.analytics-card-value.accent-green { color: var(--green); }
+.analytics-card-value.accent-yellow { color: var(--yellow); }
+.analytics-card-value.accent-red { color: var(--red); }
+.analytics-card-sub { font-size: 0.66rem; color: var(--text3); }
+
+.objections-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.objection-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 12px 14px; }
+.objection-card-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.objection-card-label { font-size: 0.86rem; color: var(--text); font-weight: 600; }
+.objection-card-hits { font-size: 0.66rem; color: var(--text3); }
+.objection-freq-bar { height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+.objection-freq-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+.objection-card-bottom { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text3); }
+.objection-freq-text { font-weight: 500; }
+.objection-card-cta { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.7rem; color: var(--red); font-weight: 600; }
