@@ -3,6 +3,7 @@ import type { Project, Brief, BriefKind, ShowToast, Tab, Lead, Page } from '../.
 import { api, ApiError, type DnsStatusResponse } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
+import { InlineEditField } from '../shared/InlineEditField';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
 import { DnsSetupModal } from './DnsSetupModal';
@@ -139,6 +140,22 @@ export function SiteDetailPanel({
     return projectTs - masterTs > 2_000;
   }, [master, project.updated_at]);
 
+  // Persist an inline edit on the Client card (owner_name / email / phone).
+  // PUTs the partial and triggers the parent's refetch so the displayed
+  // project reflects the new value.
+  const handleClientFieldUpdate = useCallback(
+    async (field: 'owner_name' | 'email' | 'phone', value: string | null) => {
+      try {
+        await api.projects.update(project.id, { [field]: value });
+        onProjectChanged();
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : (err as Error).message;
+        showToast(`Could not save: ${msg}`, 'error');
+      }
+    },
+    [project.id, onProjectChanged, showToast]
+  );
+
   async function applyBriefAdditions() {
     if (!master) return;
     try {
@@ -269,6 +286,7 @@ export function SiteDetailPanel({
             onQuickBrief={onQuickBrief}
             onAddDns={() => setDnsSetupOpen(true)}
             onManageDns={() => setDnsManageOpen(true)}
+            onClientFieldUpdate={handleClientFieldUpdate}
           />
         </aside>
       </div>
@@ -558,7 +576,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 // ============================================================================
 
 function Sidebar({
-  project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief, onAddDns, onManageDns,
+  project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief, onAddDns, onManageDns, onClientFieldUpdate,
 }: {
   project: Project;
   lead: Lead | null;
@@ -566,6 +584,8 @@ function Sidebar({
   onSwitchTab: (tab: Tab) => void;
   onEditProject: () => void;
   onQuickBrief: () => void;
+  /** Persist an inline edit on a Client card field. */
+  onClientFieldUpdate: (field: 'owner_name' | 'email' | 'phone', value: string | null) => Promise<void> | void;
   /** Open the first-time DNS setup modal — shown when project has no domain. */
   onAddDns: () => void;
   /** Open the Manage DNS panel — shown when project already has a CF zone. */
@@ -586,46 +606,41 @@ function Sidebar({
       <div className="bs-side-card">
         <div className="bs-side-title">Client</div>
         {(() => {
-          const ownerName = project.owner_name || lead?.contact || '';
-          const phone = project.phone || lead?.phone || '';
-          const email = project.client_email || project.email || lead?.email || '';
           const where = [project.city, project.state].filter(Boolean).join(', ');
-          const hasAny = ownerName || phone || email || where || project.business_name;
-          if (!hasAny) {
-            return (
-              <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0' }}>
-                No contact info on file. Add it via Edit Project.
-              </div>
-            );
-          }
           return (
             <>
               <div className="bs-side-row bs-side-row-status">
                 <span>Business</span>
                 <span style={{ color: 'var(--text2)', textAlign: 'right' }}>{project.business_name}</span>
               </div>
-              {ownerName && (
-                <div className="bs-side-row bs-side-row-status">
-                  <span>Owner</span>
-                  <span style={{ color: 'var(--text2)', textAlign: 'right' }}>{ownerName}</span>
-                </div>
-              )}
-              {phone && (
-                <div className="bs-side-row bs-side-row-status">
-                  <span>Phone</span>
-                  <a href={`tel:${phone}`} style={{ color: 'var(--text2)', fontFamily: 'ui-monospace, monospace', textAlign: 'right' }}>
-                    {phone}
-                  </a>
-                </div>
-              )}
-              {email && (
-                <div className="bs-side-row bs-side-row-status">
-                  <span>Email</span>
-                  <a href={`mailto:${email}`} style={{ color: 'var(--text2)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {email}
-                  </a>
-                </div>
-              )}
+              <div className="bs-side-row-edit">
+                <InlineEditField
+                  label="Owner"
+                  value={project.owner_name}
+                  suggested={project.owner_name ? null : (lead?.contact ?? null)}
+                  placeholder="+ add owner name"
+                  onSave={(v) => onClientFieldUpdate('owner_name', v)}
+                />
+              </div>
+              <div className="bs-side-row-edit">
+                <InlineEditField
+                  label="Phone"
+                  value={project.phone}
+                  suggested={project.phone ? null : (lead?.phone ?? null)}
+                  placeholder="+ add phone"
+                  onSave={(v) => onClientFieldUpdate('phone', v)}
+                />
+              </div>
+              <div className="bs-side-row-edit">
+                <InlineEditField
+                  label="Email"
+                  type="email"
+                  value={project.email}
+                  suggested={project.email ? null : (lead?.email ?? null)}
+                  placeholder="+ add email"
+                  onSave={(v) => onClientFieldUpdate('email', v)}
+                />
+              </div>
               {where && (
                 <div className="bs-side-row bs-side-row-status">
                   <span>Location</span>
