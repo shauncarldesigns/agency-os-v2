@@ -19,6 +19,16 @@ const REBUTTAL_MODEL = 'claude-haiku-4-5-20251001';
 
 export const playbookRouter = new Hono<{ Bindings: Env }>();
 
+// Parser errors (frontmatter/body mismatch in a .md file) used to bubble
+// up as the generic Hono 500 "Internal server error", which the dashboard
+// then showed as "Could not load playbook content: Internal server
+// error" with no clue which file was broken. Surface the actual error
+// message so the operator can fix the markdown without grepping logs.
+playbookRouter.onError((err, c) => {
+  log('error', 'playbook', 'parse/load failed', err);
+  return c.json({ error: `Playbook parse error: ${err.message}` }, 422);
+});
+
 // Sanity endpoint — eagerly parses every playbook file. Returns counts
 // and full IDs so the operator can curl after deploy and confirm the
 // runtime sees what's on disk.
