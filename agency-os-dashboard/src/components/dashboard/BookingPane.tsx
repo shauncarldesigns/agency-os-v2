@@ -127,6 +127,7 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel, onLeadFieldU
           <EditableField
             label="Contact name"
             value={lead.contact}
+            suggested={firstMinedOwner(lead.owner_names)}
             placeholder="+ add name"
             copied={copied === 'contact'}
             onCopy={() => copy('contact', lead.contact)}
@@ -245,10 +246,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function EditableField({
-  label, value, placeholder, type = 'text', copied, onCopy, onSave,
+  label, value, suggested, placeholder, type = 'text', copied, onCopy, onSave,
 }: {
   label: string;
   value: string | null | undefined;
+  suggested?: string | null;
   placeholder: string;
   type?: 'text' | 'email';
   copied: boolean;
@@ -268,6 +270,7 @@ function EditableField({
         variant="boxed"
         type={type}
         value={value}
+        suggested={suggested}
         placeholder={placeholder}
         onSave={onSave}
       />
@@ -334,6 +337,18 @@ const inputStyle: React.CSSProperties = {
 const hintStyle: React.CSSProperties = {
   margin: '0 0 10px', fontSize: '0.68rem', color: 'var(--text3)', lineHeight: 1.5,
 };
+
+// Mirror of ExecutionView's helper — parses the first owner name out of the
+// JSON-stringified owner_names column written by enrichment. Returns null if
+// the field is empty or unparseable.
+function firstMinedOwner(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && typeof parsed[0] === 'string') return parsed[0];
+  } catch { /* fall through */ }
+  return null;
+}
 
 function defaultDateTimeLocal(): string {
   const d = new Date();

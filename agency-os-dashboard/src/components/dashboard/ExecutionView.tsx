@@ -616,6 +616,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               label="Owner"
               variant="boxed"
               value={lead.contact}
+              suggested={firstMinedOwner(lead.owner_names)}
               placeholder="+ add owner name"
               onSave={(v) => handleLeadFieldUpdate('contact', v)}
             />
@@ -1120,6 +1121,18 @@ function normalizeUrl(url: string): string {
 
 function cleanDomain(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+}
+
+// Pull the first owner name from the JSON-stringified owner_names column
+// (enrichment writes a string[] mined from reviews). Returned as null when
+// unparseable / empty so it cleanly falls back to the placeholder.
+function firstMinedOwner(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && typeof parsed[0] === 'string') return parsed[0];
+  } catch { /* fall through */ }
+  return null;
 }
 
 function reviewKind(count: number | null | undefined): 'good' | 'warn' | 'bad' | 'neutral' {

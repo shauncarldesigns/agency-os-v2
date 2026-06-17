@@ -17,6 +17,10 @@ import { useState, useEffect, useRef } from 'react';
 interface InlineEditFieldProps {
   label: string;
   value: string | null | undefined;
+  /** Pre-fill text shown in faded italic when `value` is empty (e.g. owner
+   *  name mined from reviews). Operator can accept by hitting Enter (saves
+   *  the suggestion to the underlying field) or type over it. */
+  suggested?: string | null;
   placeholder: string;
   onSave: (next: string | null) => Promise<void> | void;
   variant?: 'compact' | 'boxed';
@@ -25,16 +29,17 @@ interface InlineEditFieldProps {
 }
 
 export function InlineEditField({
-  label, value, placeholder, onSave, variant = 'compact', type = 'text', disabled,
+  label, value, suggested, placeholder, onSave, variant = 'compact', type = 'text', disabled,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value ?? '');
+  const initialDraft = value ?? suggested ?? '';
+  const [draft, setDraft] = useState(initialDraft);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!editing) setDraft(value ?? '');
-  }, [value, editing]);
+    if (!editing) setDraft(value ?? suggested ?? '');
+  }, [value, suggested, editing]);
 
   async function commit() {
     const trimmed = draft.trim();
@@ -83,16 +88,23 @@ export function InlineEditField({
     );
   }
 
+  const hasValue = Boolean(value);
+  const hasSuggested = !hasValue && Boolean(suggested);
+  const displayText = value || suggested || placeholder;
+  const stateClass = hasValue
+    ? ''
+    : hasSuggested ? ' iefield-suggested' : ' iefield-empty';
+
   return (
     <button
       type="button"
-      className={`iefield iefield-${variant}${!value ? ' iefield-empty' : ''}`}
+      className={`iefield iefield-${variant}${stateClass}`}
       onClick={() => !disabled && setEditing(true)}
       disabled={disabled}
-      title={disabled ? undefined : 'Click to edit'}
+      title={disabled ? undefined : hasSuggested ? 'From reviews — click to confirm or edit' : 'Click to edit'}
     >
       {labelEl}
-      <span className="iefield-value">{value || placeholder}</span>
+      <span className="iefield-value">{displayText}</span>
     </button>
   );
 }
