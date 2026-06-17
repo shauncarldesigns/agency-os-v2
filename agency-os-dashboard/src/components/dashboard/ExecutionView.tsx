@@ -119,9 +119,13 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // the Record button. Falls back to cockpit-mount time if they never record,
   // so objection-hit timestamps still capture some signal.
   const [callStartMs, setCallStartMs] = useState<number>(() => Date.now());
-  // R2 URL of the most recent recording for this lead, set by RecordButton's
-  // onRecorded callback. Persisted on the next outcome submit.
+  // Most recent recording for this lead, set by RecordButton's onRecorded
+  // callback. The upload endpoint already created a placeholder call_log
+  // row — we keep its id here so the next outcome submit can UPDATE that
+  // row in place instead of creating a duplicate. URL stays around mostly
+  // for diagnostic clarity (the row already holds it).
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
 
   // Script + stage state.
   const script: Script | null = playbook?.defaultScript ?? null;
@@ -207,6 +211,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setBookingMode(false);
     setCallStartMs(Date.now());
     setRecordingUrl(null);
+    setRecordingCallId(null);
     setCurrentStageId(linearStages[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
@@ -256,6 +261,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
         notes: notesRef.current.trim() || undefined,
         objectionHits: hits.length ? hits : undefined,
         recordingUrl: recordingUrl ?? undefined,
+        recordingCallId: recordingCallId ?? undefined,
         ...extra,
       });
       clearDraft();
@@ -272,7 +278,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     } finally {
       setRecording(false);
     }
-  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast, findNextUncalled, recordingUrl]);
+  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast, findNextUncalled, recordingUrl, recordingCallId]);
 
   // ===========================================================================
   // OBJECTION HANDLING
@@ -592,7 +598,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             showToast={showToast}
             resetKey={lead.session_lead_id ?? lead.id}
             onStart={() => setCallStartMs(Date.now())}
-            onRecorded={(url) => setRecordingUrl(url)}
+            onRecorded={(url, callId) => { setRecordingUrl(url); setRecordingCallId(callId); }}
           />
         </div>
       </div>

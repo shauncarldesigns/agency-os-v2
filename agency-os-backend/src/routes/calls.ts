@@ -38,14 +38,28 @@ leadCallsRouter.post('/:id/calls', async (c) => {
       ? JSON.stringify(objectionHitsRaw)
       : null;
     const recordingUrl = (body.recording_url ?? body.recordingUrl) as string | null | undefined;
+    const recordingCallIdRaw = body.recording_call_id ?? body.recordingCallId;
+    const recordingCallId = typeof recordingCallIdRaw === 'number' ? recordingCallIdRaw : null;
 
     if (!outcome) return c.json(badRequest('outcome is required'), 400);
     if (!notes) return c.json(badRequest('notes is required'), 400);
 
-    const result = await c.env.DB
-      .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(leadId, outcome, notes, followupDate ?? null, objectionHits, recordingUrl ?? null)
-      .run();
+    let result: { meta: { last_row_id: number } };
+    if (recordingCallId) {
+      await c.env.DB
+        .prepare(`UPDATE call_log
+                     SET outcome = ?, notes = ?, followup_date = ?, objection_hits = ?,
+                         recording_url = COALESCE(?, recording_url)
+                   WHERE id = ? AND lead_id = ?`)
+        .bind(outcome, notes, followupDate ?? null, objectionHits, recordingUrl ?? null, recordingCallId, leadId)
+        .run();
+      result = { meta: { last_row_id: recordingCallId } };
+    } else {
+      result = await c.env.DB
+        .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(leadId, outcome, notes, followupDate ?? null, objectionHits, recordingUrl ?? null)
+        .run();
+    }
 
     // Update lead's last outcome + followup
     await c.env.DB

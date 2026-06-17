@@ -33,8 +33,11 @@ interface RecordButtonProps {
   showToast: ShowToast;
   /** Fires when recording actually starts (post-permission, post-MediaRecorder.start). */
   onStart?: () => void;
-  /** Fires once the recording has been uploaded; URL is the public R2 link. */
-  onRecorded?: (url: string) => void;
+  /** Fires once the recording has been uploaded. URL is the public R2 link
+   *  and callId is the call_log row /api/recordings already created (so
+   *  the cockpit can pass it back on outcome submit to merge into the same
+   *  row instead of duplicating). */
+  onRecorded?: (url: string, callId: number) => void;
   /** Resets to idle on lead change. Pass a key that changes per lead. */
   resetKey?: string | number;
 }
@@ -152,7 +155,7 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
 
     try {
       const res = await api.recordings.upload(leadId, blob, ext);
-      onRecorded?.(res.url);
+      onRecorded?.(res.url, res.call_id);
       setState('done');
       const sizeKb = Math.round(res.bytes / 1024);
       showToast(`Recording saved (${sizeKb} KB)`, 'success');
