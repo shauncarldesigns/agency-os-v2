@@ -70,6 +70,19 @@ recordingsRouter.post('/', async (c) => {
   const base = c.env.RECORDINGS_PUBLIC_URL || PUBLIC_BASE_DEFAULT;
   const url = `${base}/${key}`;
 
-  log('info', 'recordings', `Uploaded ${file.size} bytes → ${key}`);
-  return c.json({ url, key, bytes: file.size });
+  // Create a placeholder call_log row immediately so the recording is never
+  // orphaned. If the operator later submits an outcome (Voicemail / Booked /
+  // etc.), the cockpit passes back this row's id and the outcome handler
+  // UPDATEs the row in place (no duplicate). If the operator never picks an
+  // outcome, the row stays with outcome='Recording' and the recording is
+  // still visible in the lead's call log.
+  const placeholderNotes = '(call recorded — outcome not yet logged)';
+  const inserted = await c.env.DB
+    .prepare(`INSERT INTO call_log (lead_id, outcome, notes, recording_url) VALUES (?, 'Recording', ?, ?)`)
+    .bind(leadId, placeholderNotes, url)
+    .run();
+  const callId = inserted.meta.last_row_id;
+
+  log('info', 'recordings', `Uploaded ${file.size} bytes → ${key} (call_log #${callId})`);
+  return c.json({ url, key, bytes: file.size, call_id: callId });
 });

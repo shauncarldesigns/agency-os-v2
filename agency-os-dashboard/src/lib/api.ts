@@ -402,7 +402,11 @@ export const api = {
       apiFetch<{ callback: Callback }>(`/api/callbacks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   },
   recordings: {
-    upload: async (leadId: number, blob: Blob, ext = 'webm'): Promise<{ url: string; key: string; bytes: number }> => {
+    upload: async (
+      leadId: number,
+      blob: Blob,
+      ext = 'webm',
+    ): Promise<{ url: string; key: string; bytes: number; call_id: number }> => {
       const form = new FormData();
       form.append('file', blob, `recording.${ext}`);
       form.append('leadId', String(leadId));
@@ -556,6 +560,7 @@ export interface SessionOutcomeBody {
   demoData?: { scheduledFor: string; honeybookConfirmed?: boolean };
   objectionHits?: ObjectionHit[];
   recordingUrl?: string | null;
+  recordingCallId?: number | null;
 }
 
 export { API_BASE };

@@ -539,6 +539,11 @@ interface OutcomeBody {
   // call. Saved to call_log.recording_url on the row this outcome creates.
   // null/undefined when the operator didn't record.
   recordingUrl?: string | null;
+  // id of the call_log row already created by /api/recordings when the
+  // operator hit Record. If present, the outcome handler UPDATEs that
+  // row instead of INSERTing a new one — keeps recording + outcome on a
+  // single row instead of duplicating.
+  recordingCallId?: number | null;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -581,9 +586,22 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   if (body.outcome !== 'skipped') {
     const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
     const recordingUrl = body.recordingUrl ?? null;
-    await c.env.DB.prepare(
-      `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?)`
-    ).bind(body.leadId, friendlyOutcome, notes, objectionHits, recordingUrl).run();
+    if (body.recordingCallId) {
+      // Merge into the placeholder row /api/recordings already created.
+      // Keeps recording + outcome on a single call_log entry.
+      await c.env.DB.prepare(
+        `UPDATE call_log
+            SET outcome = ?,
+                notes = ?,
+                objection_hits = ?,
+                recording_url = COALESCE(?, recording_url)
+          WHERE id = ? AND lead_id = ?`
+      ).bind(friendlyOutcome, notes, objectionHits, recordingUrl, body.recordingCallId, body.leadId).run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?)`
+      ).bind(body.leadId, friendlyOutcome, notes, objectionHits, recordingUrl).run();
+    }
   }
 
   // 2. Update session_leads with the outcome.
