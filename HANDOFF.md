@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-06-16. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-06-17. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`._
 
@@ -8,202 +8,146 @@ every session). Full PR-by-PR log lives in `CHANGELOG.md`._
 
 All PRs below are **merged to `main`**. The backend Worker auto-deployed via
 CI on each merge. The dashboard was manually deployed after each UI-touching
-phase.
+phase. Both D1 migrations applied to remote.
 
-## What shipped since the last handoff (PRs #58–#65)
+## What shipped this session (PRs #67–#73)
 
-These are all **post-launch iterations on the Calling Dashboard** based on
-the operator's first real test sessions. Each one came from running a
-session and hitting something that didn't work right.
+One readability tweak followed by the full **Playbook System** build from the
+spec the operator shared (`HANDOFF-playbook-system.md`).
 
-### #58 — Industry rotation key vs label (the big "0 leads matched" bug)
-The session composer's industry rotation array used display labels
-(`'Plumbing'`, `'HVAC'`, `'Electrical'`, etc.) but the actual `leads.industry`
-column stores Google Places `primaryType` strings (`'plumber'`,
-`'electrician'`, `'roofing_contractor'`, `'general_contractor'`).
+### #67 — Global type bump
 
-Every session was generating with `industry='Plumbing'`, the composer's
-`WHERE industry = ?` returned 0 rows, the widening cascade tried to drop
-score floor / geo / 14-day but the industry mismatch was the actual
-bottleneck → operator hit Start, got "0/0 dialed", burn-through fired
-instantly.
+`html { font-size: 18px }` (+12.5% across every rem-based size in
+`global.css`) plus body `font-weight: 500`. Lowest-risk way to bump global
+readability without touching components. Operator-driven.
 
-`INDUSTRY_ROTATION` is now `{key, label}` pairs. Sessions store the key
-(`'plumber'`), UI uses `industryLabel()` to display (`'Plumbing'`).
+### #68–#73 — Playbook system, 6 PRs
 
-**Side fix:** session cards now show the day-of-week prefix
-(`Mon · Morning — Plumbing`) so multiple days don't look identical.
+The calling cockpit was the static `ExecutionView` showing a pitch card + a
+Log-a-Call form. It's now an active Chris Voss "No-oriented" sales playbook
+with live objection handling.
 
-### #59 — Maps link + morning/evening sort
-Two small operator asks: (1) want to look at the GBP listing mid-call for
-research → added `🗺️ Maps ↗` link in the exec-view contact row, uses
-`place_id` for exact resolution. (2) sessions were ordered alphabetically
-which put evening before morning → SQL changed to
-`ORDER BY CASE block WHEN 'morning' THEN 0 ELSE 1 END`.
-
-Also promoted `googleMapsUrl` helper from `LeadModal` into shared
-`lib/format.ts`.
-
-### #60 — Previous/Next/Skip nav row
-Original Skip wrote a permanent `skipped` outcome and never re-surfaced the
-lead. Operator wanted "park this for later." Switched ExecutionView from
-one-lead-at-a-time fetch to full session load + client-side `currentIndex`.
-Added `← Previous · Skip for now · Next →` row. Skip-for-now wraps to first
-uncalled at end so skipped leads naturally come back around.
-
-### #61 — Exec view as a page (not a modal)
-Operator hit Booked → BookDemoModal opened ON TOP of the ExecutionView
-modal → confusing modal-on-modal stacking. Bigger problem: the exec view
-felt cramped in a modal when it should be the operator's whole world during
-calling.
-
-ExecutionView now renders as a full page (replaces the dashboard view when
-a session is active). Header + Nav hidden. Prior-calls toggle added above
-the notes textarea. Next button dropped (overlapped with Skip too much).
-
-### #62 — Brief Studio layout + booking inline
-Big restyle to match the rest of the app. Two-column `bs-layout`:
-- **Main column:** Pitch card / notes / outcomes / inline callback picker
-- **Sticky right sidebar:** Scores card, Signals card, Prior Calls card (the read-only reference material)
-
-Booking happens inline now — when operator clicks "Booked demo", the main
-column swaps to a new BookingPane (full HoneyBook embed + lead-info copy
-buttons + confirm fields). Sidebar reference stays visible during booking
-so operator can glance at scores/signals/prior-calls while filling the
-form. `BookDemoModal.tsx` deleted.
-
-### #63 — Log a Call form + sidebar auto-refresh
-The bare notes textarea wasn't enough — operator wanted richer outcome
-options ("Spoke with Owner", "Spoke with Gatekeeper") and follow-up dates
-on any call, not just terminal callbacks. Replaced the textarea with the
-orange "Log a Call" card from the Pipeline LeadModal:
-- Outcome dropdown (8 options)
-- Follow-up date
-- Notes textarea
-- Save Call Entry button — logs without advancing
-- Outcome buttons below still advance + drive session state
-
-Sidebar Prior Calls card auto-refreshes when a call is saved via a
-`refreshKey` bump.
-
-### #64 — Booking creates project + Brief Studio Client card
-Three changes in one PR:
-1. **Bug:** Booked-demo from exec view set `lead.status='qualified'` but
-   never created a project. Lead got stuck — no Sites entry, no way to
-   run Quick Brief for demo prep. Pipeline qualify creates a project; exec
-   view didn't. Backend now does, defaulting to the lead's
-   `recommended_tier` (fallback T3), and returns it in the response.
-2. **Feature:** Post-booking modal prompt — "✓ Demo booked / 🛠 Pause &
-   build demo / Keep calling." Pause path closes the session, switches to
-   Sites tab, deep-links into the new project's Brief Studio. Matches the
-   operator's stated workflow: when a demo books, immediately pause cold
-   calling and prep the demo site.
-3. **Brief Studio sidebar:** redundant Status Legend replaced with a
-   **Client** card (business / owner / phone / email / location / "Client
-   since"). Falls back through project → lead values so it always shows
-   what's available.
-
-### #65 — Outcome column updates from exec view + stuck-lead cleanup
-Pipeline list has an Outcome column showing each lead's most recent
-meaningful interaction. `routes/calls.ts` already keeps it current
-(LeadModal CallLogTab + new Log a Call form). The session outcome handler
-was writing `call_log` entries but never touching `lead.outcome` — so the
-Pipeline column showed "—" for leads called via the exec view.
-
-Each outcome now maps to a friendly label:
-| outcome | label | badge |
+| # | PR | Layer |
 |---|---|---|
-| voicemail | Voicemail Left | blue |
-| not_interested | Not Interested | red |
-| callback | Callback Requested | yellow |
-| booked | Demo Booked | green (new outcomeBadge case) |
-| skipped | — (silent) | — |
+| 1 | [#68](https://github.com/shauncarldesigns/agency-os-v2/pull/68) | Content seed — 13 markdown files (scripts/objections/follow-ups) |
+| 2 | [#69](https://github.com/shauncarldesigns/agency-os-v2/pull/69) | Runtime parser + read endpoints + `_debug` health |
+| 3 | [#70](https://github.com/shauncarldesigns/agency-os-v2/pull/70) | `/generate-rebuttal` + `playbook_generations` log table |
+| 4a | [#71](https://github.com/shauncarldesigns/agency-os-v2/pull/71) | API client + `call_log.objection_hits` column |
+| 4b | [#72](https://github.com/shauncarldesigns/agency-os-v2/pull/72) | Calling cockpit UI (full ExecutionView rewrite) |
+| 5 | [#73](https://github.com/shauncarldesigns/agency-os-v2/pull/73) | Dashboard analytics — agency summary + objections overview |
 
-`outcomeBadge` in `lib/format.ts` got a `'booked'` → green case.
+**What the operator sees:**
 
-**Cleanup applied to remote D1:** 5 stuck test leads (Dave Steltz's,
-Mueller, Jahnke, Ken's, Cliff Young) reset to `cold`. 4 `demos` + 4
-`demo_events` rows deleted. 1 orphan project (id 38) deleted. Magee Plumbing
-(id 15, project 37) preserved as the only real prospect.
+- Start a session as usual. The exec view now opens to the new cockpit
+  layout: lead header with score chips at top, the cold-call script panel
+  on the left (stage breadcrumb + active stage card + next preview +
+  Back/Advance), the objection chip grid on the right (Standard /
+  Deep-dive / Closing categories), notes textarea + outcome bar at the
+  bottom.
+- Tap any objection chip → script panel swaps for a rebuttal card; chip
+  highlights; `[MM:SS · OBJECTION: ...]` auto-tags into notes. For
+  branching objections (Too busy, Send email), the rebuttal card is the
+  diagnostic prompt + 3 path cards; tap a path to see that rebuttal.
+- ✨ Generate alternative calls Claude Haiku, returns 3 variant cards.
+  Use this swaps the variant in as the displayed rebuttal and stamps
+  it onto the objection hit log for that call.
+- ✓ Handled / ✕ Didn't land marks the objection's outcome before the
+  cockpit returns to script mode.
+- Outcome buttons (Voicemail / Not interested / Callback / Booked)
+  submit the call_log row with the full objection hit array attached.
+- Dashboard tab: scroll past the day-specific view to see the new
+  Analytics section. Agency summary (Calls/day, Dial→Set %, Demos held,
+  New projects) + Objections overview cards with frequency bars and
+  handled-rate %.
+
+**What was removed in #72** (so the operator isn't surprised):
+
+- Pitch card → replaced by the script panel. Operator now reads the
+  actual Chris Voss line instead of a generated business summary. If you
+  want to bring the pitch card back as a sidebar card, easy add.
+- Log-a-Call rich dropdown form → replaced by the simpler notes
+  textarea + objection chip auto-tags. The 8 outcome dropdown options
+  from PR #63 no longer appear in the cockpit. Still available on the
+  Pipeline LeadModal CallLogTab.
+- Sidebar Scores / Signals / Prior Calls cards → scores are now chips
+  in the lead header; signals + prior calls were dropped to make room
+  for the script + objection panels. Operator can open the lead's
+  modal from Pipeline for the full historical view.
 
 ## Open items / next session candidates
 
 Priority order. None blocking.
 
-1. **HVAC has 0 leads in the data.** The industry rotation includes
-   `hvac_contractor` but the operator hasn't prospected any HVAC contractors
-   yet. HVAC sessions will compose 0 strict, then widen → end up pulling
-   from outside HVAC. Either prospect HVAC via the Prospect tab to fill the
-   bucket, or skip HVAC days on the Monday-view session edit modal until
-   the pool exists.
-2. **Pitch card backfill script.** 165 existing leads have null
-   `pitch_card_text`. Operator generates on-demand via the ↻ button. A
-   one-time bulk backfill (~$2–3 in Haiku) would mean no first-call lag for
-   any lead. Worth considering once calling kicks into gear.
-3. **Jump-to-next-block in BurnThroughComplete.** Currently a no-op toast
-   ("ships in Phase 9 polish"). Real implementation would wrap the current
-   session, find the next planned one, and start it inline.
-4. **DNS subdomain mode** (~Phase 7 of DNS feature). If `*.agncy.dev`
-   subdomain demos become a real workflow, the setup flow should detect
-   subdomains and add records to the existing parent zone instead of
-   trying to create a new one (Cloudflare 1116).
-5. **DNS setup modal subdomain warning.** Cheap follow-up from the DNS
-   feature — soft warning when input has >1 dot.
-6. **`reviewExtraction.ts` still requests `differentiators`.** PR #19
-   removed the field but the Claude prompt still asks. Wasted tokens.
-   One-line cleanup.
-7. **Compound filtering on Sites tab.** Single-select tile click handles
-   common cases; "Tier 3 prospects" needs a real filter row. Not urgent.
-8. **Bulk-enrich latency.** ~30 min wall-clock for a full sweep. Real fix
-   is a background job using the cron triggers already in `wrangler.toml`.
-9. **Reports module's `cf_zone_id` analytics path is effectively dead.**
-   No landingsite client is CF-proxied (proxy OFF mandatory), so
-   `getZoneAnalytics` returns zeros silently. Worth removing from monthly
-   snapshots or swapping in CF Web Analytics if landingsite supports
-   custom script injection.
+1. **`voicemail.md` script** — the spec listed it but operator hasn't
+   provided source content. No voicemail-leaving script in the cockpit
+   today. Easy add when content lands.
+2. **Script picker dropdown** — the cockpit shows the default cold-call
+   script only. Demo scripts (`demo-tier3-primary`, `demo-tier2-primary`)
+   are seeded but not selectable yet. They probably belong on a separate
+   surface for held-demo prep, not the cold-call cockpit.
+3. **Verify on first real session** — the cockpit hasn't been exercised
+   end-to-end against a live calling block yet. First session will
+   stress-test: stage navigation feel, objection chip timing, generate-
+   rebuttal latency (typically 1-3s via Haiku), notes auto-tagging
+   readability. Expect minor UX iteration after the first day of use.
+4. **Closing-category objections are empty.** The cockpit reference HTML
+   shows "Not interested" and "Terrible time" as closing-category chips,
+   but those are currently fallback stages in the cold-call script
+   itself — not separate objection files. If operator wants them as taps
+   to log into objection_hits, add objection markdown files for them.
+5. **Pitch card backfill** (carried over) — 165 leads still have null
+   `pitch_card_text`. The cockpit no longer surfaces it but it's still
+   on the lead record; if/when a future card uses it, this matters.
+6. **`reviewExtraction.ts` still requests `differentiators`** (carried
+   over). Wasted tokens; one-line cleanup.
+7. **HVAC pool empty** (carried over). Sessions composing for
+   `hvac_contractor` will widen → end up out-of-industry.
+8. **Generated variant promotion workflow.** Right now generations are
+   logged to `playbook_generations` and the operator's "Use this"
+   choice is stamped onto the row. The original spec called for an
+   eventual workflow to promote high-handled-rate variants back into the
+   markdown source. Manual for now — DB has the data when it's time.
 
 ## Recently verified working
 
-- Industry rotation matches real `leads.industry` values; sessions compose
-  ~30+ leads each on Plumbing / Electrical / Roofing / General Contracting.
-- Maps link in exec view opens the exact GBP listing.
-- Previous/Skip nav lets operator park a lead and return later.
-- Brief Studio-styled exec page with sidebar Scores/Signals/Prior Calls.
-- Booking creates a real prospect project; "Pause & build demo" lands in
-  the new project's Brief Studio with Quick Brief one click away.
-- Pipeline Outcome column now reflects exec-view outcomes (Voicemail
-  Left / Not Interested / Callback Requested / Demo Booked).
-- Sites tab shows Magee Plumbing as the only prospect; other 5 stuck-test
-  leads are back in the calling pool as `cold`.
+- All 13 markdown files parse via `/api/playbook/_debug` (tested
+  pre-deploy via wrangler dry-run + post-deploy via the parser running
+  inside the endpoint).
+- `playbook_generations` and `call_log.objection_hits` columns exist
+  on the remote D1 (`num_tables: 17` post-migration).
+- Worker bundle 295→534 KiB after Phase 3 (markdown content + yaml
+  package). Under the 1 MiB limit.
+- Dashboard build clean each phase. CSS 35.5 → 48.4 KiB across the
+  cockpit + analytics styles.
+- All 6 PRs deployed (Worker auto, Dashboard manual `npm run deploy`).
 
 ## Deploy state
 
-- **Backend Worker:** auto-deployed via CI through PR #65.
-- **Dashboard:** manually deployed after each UI-touching PR. Last deploy
-  was after #65; verify the apex bundle hash matches a recent build hash
-  if you suspect drift.
-- **D1 migrations applied:** all listed in CHANGELOG. No outstanding
-  migrations.
+- **Backend Worker:** auto-deployed via CI through PR #73.
+- **Dashboard:** manually deployed after #67, #72, #73 (each UI-touching
+  phase). Last deploy was after #73. Verify the apex bundle hash matches
+  a recent build if you suspect drift.
+- **D1 migrations applied:** all from this session
+  (`2026-06-17-playbook-generations.sql`,
+  `2026-06-17-call-log-objection-hits.sql`).
 
 ## One nuance worth knowing for next session
 
-The booking flow now has a **TWO-stage write**:
-1. `POST /sessions/:id/outcome` with `outcome='booked'` → creates project,
-   sets lead → qualified, stamps demo pointers, creates demos + demo_events
-   rows, returns the new project.
-2. UI shows the post-booking prompt. "Pause & build" deep-links into
-   Brief Studio; "Keep calling" just dismisses.
+The cockpit's playbook content is **bundled at build time**, not read from
+D1. To change a script line or objection rebuttal:
+1. Edit the `.md` file under `agency-os-backend/src/playbook/`.
+2. Commit + push to `main` → Worker CI auto-deploys.
 
-If the post-booking UX ever needs to change, the backend response shape
-already returns `{ ok, demo, callbackId, project }` — `project` is what
-drives the deep-link.
+The Dashboard immediately reflects the change (it fetches via
+`/api/playbook/*` which serves the bundled content). No D1 migration
+needed, no dashboard redeploy needed.
 
-The same friendly-outcome-label mapping (#65) is what shows up in:
-- Pipeline list Outcome column
-- Lead modal call log
-- Execution view Prior Calls sidebar card (via call_log entries)
-
-Three surfaces, one source of truth in `routes/sessions.ts`.
+The `playbook_generations` table accumulates every Claude generation call.
+If the operator's "Use this" picks cluster on a particular variant for an
+objection, that's a strong signal to either promote it into the markdown
+or rewrite the stock rebuttal. The query for "which variants get picked
+most" is straightforward via the partial index
+`idx_playbook_gen_used`.
 
 ## Out of scope (still — unchanged from prior handoff)
 
@@ -214,3 +158,12 @@ Three surfaces, one source of truth in `routes/sessions.ts`.
 - Per-industry rotation reordering by booking-rate
 - Pre-call digest email
 - Demo show-rate forecasting
+
+## New out-of-scope (this session)
+
+- Vs-industry deltas on agency summary (spec called for them; operator
+  asked to skip — could revisit if comparison data ever becomes useful).
+- Quota tracking (operator deferred deciding on a quota target).
+- Voicemail script (no source content yet).
+- Script picker (cold-call only for now).
+- Auto-promotion of generated variants to markdown.
