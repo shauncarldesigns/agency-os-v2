@@ -540,6 +540,11 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 }
 .bs-side-row-status{justify-content:space-between;border-bottom:1px solid var(--border);}
 .bs-side-row-status:last-child{border-bottom:none;}
+.bs-side-row-edit{padding:6px 0;border-bottom:1px solid var(--border);}
+.bs-side-row-edit:last-child{border-bottom:none;}
+.bs-side-row-edit .iefield-label{font-size:0.6rem;color:var(--text3);letter-spacing:0.05em;text-transform:uppercase;font-weight:600;margin-bottom:3px;}
+.bs-side-row-edit .iefield-value{font-size:0.72rem;color:var(--text2);font-weight:500;}
+.bs-side-row-edit .iefield-input{font-size:0.72rem;padding:3px 6px;}
 .bs-side-status-ok{color:#4ade80;font-weight:500;font-size:0.7rem;}
 .bs-side-status-na{color:var(--text3);font-size:0.7rem;}
 .bs-quick-actions{display:flex;flex-direction:column;gap:5px;}
