@@ -39,3 +39,4 @@ files.zip
 
 # Agent-local config
 .claude/launch.json
+**/.claude/launch.json
