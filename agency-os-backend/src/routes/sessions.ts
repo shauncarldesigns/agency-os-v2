@@ -43,17 +43,59 @@ sessionsRouter.get('/today', async (c) => {
 });
 
 // --------------------------------------------------------------------
-// GET /week?date=YYYY-MM-DD — Mon-Fri sessions for that week
+// GET /week?date=YYYY-MM-DD — Mon-Fri sessions for that week, with progress
+// aggregates per session (called/booked/callback/voicemail/etc counts) +
+// any currently-active session (even if it's outside the queried week, so
+// the operator can always resume a stuck session from a prior day).
 // --------------------------------------------------------------------
 sessionsRouter.get('/week', async (c) => {
   const dateParam = c.req.query('date');
   const ref = dateParam ? new Date(`${dateParam}T12:00:00-06:00`) : new Date();
   const week = chicagoCallingWeek(ref);
+
+  const PROGRESS_SELECT = `
+    SELECT
+      s.*,
+      COALESCE(sl_agg.lead_count, 0) AS lead_count,
+      COALESCE(sl_agg.called_count, 0) AS called_count,
+      COALESCE(sl_agg.booked_count, 0) AS booked_count,
+      COALESCE(sl_agg.callback_count, 0) AS callback_count,
+      COALESCE(sl_agg.voicemail_count, 0) AS voicemail_count,
+      COALESCE(sl_agg.not_interested_count, 0) AS not_interested_count,
+      COALESCE(sl_agg.skipped_count, 0) AS skipped_count
+    FROM sessions s
+    LEFT JOIN (
+      SELECT
+        session_id,
+        COUNT(*) AS lead_count,
+        SUM(CASE WHEN call_outcome IS NOT NULL THEN 1 ELSE 0 END) AS called_count,
+        SUM(CASE WHEN call_outcome = 'booked' THEN 1 ELSE 0 END) AS booked_count,
+        SUM(CASE WHEN call_outcome = 'callback' THEN 1 ELSE 0 END) AS callback_count,
+        SUM(CASE WHEN call_outcome = 'voicemail' THEN 1 ELSE 0 END) AS voicemail_count,
+        SUM(CASE WHEN call_outcome = 'not_interested' THEN 1 ELSE 0 END) AS not_interested_count,
+        SUM(CASE WHEN call_outcome = 'skipped' THEN 1 ELSE 0 END) AS skipped_count
+      FROM session_leads
+      GROUP BY session_id
+    ) sl_agg ON sl_agg.session_id = s.id
+  `;
+
   const sessions = await c.env.DB
-    .prepare(`SELECT * FROM sessions WHERE session_date BETWEEN ? AND ? ORDER BY session_date, CASE block WHEN 'morning' THEN 0 ELSE 1 END`)
+    .prepare(`${PROGRESS_SELECT} WHERE s.session_date BETWEEN ? AND ? ORDER BY s.session_date, CASE s.block WHEN 'morning' THEN 0 ELSE 1 END`)
     .bind(week.monday, week.friday)
-    .all<Session>();
-  return c.json({ week, sessions: sessions.results ?? [] });
+    .all<Session & { lead_count: number; called_count: number; booked_count: number; callback_count: number; voicemail_count: number; not_interested_count: number; skipped_count: number }>();
+
+  // Active session lookup — partial index idx_session_active makes this O(1).
+  // Returned even if it's outside the queried week so the operator can always
+  // reach a stuck-active session from a prior day.
+  const activeRow = await c.env.DB
+    .prepare(`${PROGRESS_SELECT} WHERE s.status = 'active' LIMIT 1`)
+    .first<Session & { lead_count: number; called_count: number; booked_count: number; callback_count: number; voicemail_count: number; not_interested_count: number; skipped_count: number }>();
+
+  return c.json({
+    week,
+    sessions: sessions.results ?? [],
+    activeSession: activeRow ?? null,
+  });
 });
 
 // --------------------------------------------------------------------

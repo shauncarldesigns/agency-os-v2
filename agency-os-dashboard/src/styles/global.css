@@ -868,6 +868,68 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 }
 
 /* ============================================================================
+   WEEK PLANNER — replaces day-of-week-routed sessions grid
+   ============================================================================ */
+
+.weekplan { margin-top: 6px; }
+.weekplan-active {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, rgba(255, 107, 43, 0.18), rgba(255, 107, 43, 0.04));
+  border: 1px solid var(--accent); border-radius: var(--rl);
+  padding: 16px 18px; margin-bottom: 16px;
+}
+.weekplan-active-body { flex: 1; min-width: 0; }
+.weekplan-active-tag { font-size: 0.62rem; color: var(--accent); letter-spacing: 0.12em; font-weight: 700; margin-bottom: 4px; }
+.weekplan-active-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 1.5px; color: var(--text); margin-bottom: 2px; }
+.weekplan-active-sub { font-size: 0.72rem; color: var(--text2); }
+
+.weekplan-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.weekplan-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 1.5px; color: var(--text); margin: 0; font-weight: normal; }
+.weekplan-filters { display: flex; gap: 4px; }
+.weekplan-filter { background: transparent; color: var(--text3); border: 1px solid var(--border); border-radius: var(--r); padding: 5px 11px; font-size: 0.7rem; font-family: inherit; cursor: pointer; }
+.weekplan-filter:hover { color: var(--text2); }
+.weekplan-filter.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+.weekplan-loading { padding: 24px; color: var(--text3); text-align: center; }
+.weekplan-empty { padding: 30px 20px; text-align: center; color: var(--text3); background: var(--surface); border: 1px dashed var(--border); border-radius: var(--rl); font-size: 0.78rem; }
+
+.weekplan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+.weekplan-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 14px 16px; transition: border-color 0.14s; }
+.weekplan-card.is-active { border-color: var(--accent); }
+.weekplan-card.is-complete { border-color: rgba(62, 207, 142, 0.35); }
+
+.weekplan-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.weekplan-card-when { font-size: 0.66rem; color: var(--text3); }
+.weekplan-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 1.2px; color: var(--text); margin-bottom: 2px; }
+.weekplan-card-sub { font-size: 0.7rem; color: var(--text3); margin-bottom: 12px; }
+
+.weekplan-badge { font-size: 0.6rem; letter-spacing: 0.08em; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+.weekplan-badge-active { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(255, 107, 43, 0.35); }
+.weekplan-badge-planned { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245, 200, 66, 0.35); }
+.weekplan-badge-complete { background: var(--green-bg); color: var(--green); border: 1px solid rgba(62, 207, 142, 0.35); }
+
+.weekplan-progress { height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+.weekplan-progress-fill { height: 100%; background: var(--border2); border-radius: 3px; transition: width 0.18s; }
+.weekplan-progress-fill.is-active { background: var(--accent); }
+.weekplan-progress-fill.is-complete { background: var(--green); }
+
+.weekplan-card-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.weekplan-card-stats { font-size: 0.74rem; color: var(--text2); }
+.weekplan-card-stats strong { color: var(--text); font-weight: 600; }
+.weekplan-rate { color: var(--green); font-weight: 600; }
+.weekplan-card-action { display: flex; gap: 8px; }
+.weekplan-card-cta { background: transparent; color: var(--accent); border: none; padding: 4px 0; font-size: 0.78rem; font-weight: 600; font-family: inherit; cursor: pointer; }
+.weekplan-card-cta:hover:not(:disabled) { filter: brightness(1.15); }
+.weekplan-card-cta:disabled { opacity: 0.5; cursor: wait; }
+.weekplan-card-cta-ghost { background: transparent; color: var(--text3); border: none; padding: 4px 0; font-size: 0.74rem; font-family: inherit; cursor: pointer; }
+.weekplan-card-cta-ghost:hover { color: var(--text2); }
+
+@media (max-width: 700px) {
+  .weekplan-active { flex-direction: column; align-items: stretch; }
+  .weekplan-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================================
    DASHBOARD ANALYTICS — Phase 5
    ============================================================================ */
 
