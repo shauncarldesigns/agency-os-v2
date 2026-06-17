@@ -808,6 +808,9 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-stage-chip { font-size: 0.58rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; background: var(--surface2); color: var(--text3); font-weight: 600; border: none; cursor: pointer; font-family: inherit; }
 .cockpit-stage-chip.done { color: var(--green); }
 .cockpit-stage-chip.active { background: var(--accent); color: #1a0a00; }
+.cockpit-stage-chip.branch { background: transparent; border: 1px dashed var(--border2); color: var(--text3); font-style: italic; padding: 2px 6px; }
+.cockpit-stage-chip.branch:hover { color: var(--text); border-color: var(--accent); }
+.cockpit-stage-chip.branch.active { background: var(--accent); color: #1a0a00; border-color: var(--accent); font-style: normal; }
 .cockpit-stage-chip:disabled { cursor: default; }
 
 .cockpit-stage-active { background: var(--bg); border: 1px solid var(--accent); border-radius: var(--r); padding: 14px 16px; margin-bottom: 8px; }

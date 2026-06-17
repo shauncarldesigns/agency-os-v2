@@ -161,8 +161,41 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   }, [script, currentStageId, linearStages]);
 
   const currentStage = script?.stages.find((s) => s.id === currentStageId) ?? null;
-  const linearIdx = linearStages.findIndex((s) => s.id === currentStageId);
-  const nextStage = linearIdx >= 0 ? linearStages[linearIdx + 1] ?? null : null;
+  // Advance / Back walk script.stages and skip past branch:true entries so
+  // conditional stages (COST, HESITATE, TERRIBLE-TIME, NOT-INTERESTED) don't
+  // appear in the default linear flow — but they ARE still reachable via the
+  // breadcrumb chip taps below. Works whether currentStageId is on a linear
+  // stage or a branch.
+  const currentScriptIdx = script?.stages.findIndex((s) => s.id === currentStageId) ?? -1;
+  const nextStage = (() => {
+    if (!script || currentScriptIdx < 0) return null;
+    for (let i = currentScriptIdx + 1; i < script.stages.length; i++) {
+      if (!script.stages[i].branch) return script.stages[i];
+    }
+    return null;
+  })();
+  const prevStage = (() => {
+    if (!script || currentScriptIdx <= 0) return null;
+    for (let i = currentScriptIdx - 1; i >= 0; i--) {
+      if (!script.stages[i].branch) return script.stages[i];
+    }
+    return null;
+  })();
+  // Position-of-current-or-most-recent-linear-stage in linearStages, used by
+  // the breadcrumb to compute done/active state on each linear chip.
+  const linearProgressIdx = (() => {
+    if (!script || currentScriptIdx < 0) return -1;
+    // If current stage is linear, return its position in linearStages.
+    const direct = linearStages.findIndex((s) => s.id === currentStageId);
+    if (direct >= 0) return direct;
+    // Operator is on a branch — count how many linear stages came before it
+    // in script.stages (that's the "last completed" linear position).
+    let count = 0;
+    for (let i = 0; i < currentScriptIdx; i++) {
+      if (!script.stages[i].branch) count++;
+    }
+    return count - 1; // points at the most recent linear stage they completed
+  })();
 
   // Inline callback picker.
   const [callbackOpen, setCallbackOpen] = useState(false);
@@ -468,10 +501,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   }, [nextStage]);
 
   const backStage = useCallback(() => {
-    if (linearIdx <= 0) return;
-    const prev = linearStages[linearIdx - 1];
-    if (prev) setCurrentStageId(prev.id);
-  }, [linearIdx, linearStages]);
+    if (!prevStage) return;
+    setCurrentStageId(prevStage.id);
+  }, [prevStage]);
 
   // ===========================================================================
   // OUTCOME HANDLERS
@@ -670,8 +702,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               script={script}
               linearStages={linearStages}
               currentStage={currentStage}
-              currentStageIdx={linearIdx}
+              linearProgressIdx={linearProgressIdx}
               nextStage={nextStage}
+              prevStage={prevStage}
               ctx={leadCtx}
               onBack={backStage}
               onAdvance={advanceStage}
@@ -757,13 +790,14 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
 // ============================================================================
 
 function ScriptPanel({
-  script, linearStages, currentStage, currentStageIdx, nextStage, ctx, onBack, onAdvance, onJumpToStage,
+  script, linearStages, currentStage, linearProgressIdx, nextStage, prevStage, ctx, onBack, onAdvance, onJumpToStage,
 }: {
   script: Script | null;
   linearStages: Stage[];
   currentStage: Stage | null;
-  currentStageIdx: number;
-  nextStage: Stage | null;
+  linearProgressIdx: number;     // position in linearStages of the last completed linear stage
+  nextStage: Stage | null;        // next linear stage Advance jumps to (null if on the last)
+  prevStage: Stage | null;        // previous linear stage Back jumps to (null if on the first)
   ctx: LeadContext;
   onBack: () => void;
   onAdvance: () => void;
@@ -784,21 +818,26 @@ function ScriptPanel({
       <div className="cockpit-panel-header">
         <span className="cockpit-panel-title blue">📖 {script.label.toUpperCase()}</span>
         <span className="cockpit-panel-meta">
-          Stage {Math.max(currentStageIdx + 1, 1)} of {linearStages.length}
+          Stage {Math.max(linearProgressIdx + 1, 1)} of {linearStages.length}
         </span>
       </div>
       <div className="cockpit-stage-crumbs">
-        {linearStages.map((s, i) => {
+        {script.stages.map((s) => {
           const isActive = s.id === currentStage?.id;
-          const isDone = i < currentStageIdx;
+          // For linear stages, "done" = its position in linearStages is before
+          // linearProgressIdx. Branch stages are never marked done — they're
+          // conditional, not part of the completion path.
+          const isDone = !s.branch
+            && linearStages.findIndex((ls) => ls.id === s.id) < linearProgressIdx;
           return (
             <button
               key={s.id}
               type="button"
-              className={`cockpit-stage-chip${isActive ? ' active' : isDone ? ' done' : ''}`}
+              className={`cockpit-stage-chip${isActive ? ' active' : isDone ? ' done' : ''}${s.branch ? ' branch' : ''}`}
               onClick={() => onJumpToStage(s.id)}
+              title={s.branch ? 'Branch — only use when triggered' : undefined}
             >
-              {isDone ? '✓ ' : isActive ? '● ' : ''}{s.short_label}
+              {isDone ? '✓ ' : isActive ? '● ' : ''}{s.short_label}{s.branch ? ' ↗' : ''}
             </button>
           );
         })}
@@ -817,7 +856,7 @@ function ScriptPanel({
         </div>
       )}
       <div className="cockpit-stage-controls">
-        <button type="button" className="cockpit-btn" onClick={onBack} disabled={currentStageIdx <= 0}>← Back</button>
+        <button type="button" className="cockpit-btn" onClick={onBack} disabled={!prevStage}>← Back</button>
         <button type="button" className="cockpit-btn-primary" onClick={onAdvance} disabled={!nextStage}>Advance →</button>
       </div>
     </div>
