@@ -13,6 +13,10 @@ stages:
   - id: hook
     label: HOOK
     short_label: Hook
+  - id: pushback
+    label: IF THEY PUSH BACK
+    short_label: Pushback
+    branch: true
   - id: cost
     label: IF THEY ASK "HOW MUCH?"
     short_label: Cost
@@ -63,6 +67,12 @@ stages:
 "I was looking you guys up on Google and saw some really great reviews but I didn't see a website — So I actually went ahead and put a site together for you just to see what it could look like. I'm not here to pitch you anything — would it be ridiculous to schedule a call so I can just show it to you?"
 
 > Either answer opens the door: "working on it" = active interest; "not really" = invitation to show what could be there.
+
+## Stage: pushback
+
+"Honestly? Yeah, I do this for businesses I'd actually want to work with. You didn't really have an online presence, so I used your reviews and business info to build out what your site could look like. If you hate it, I move on — no cost to you, just time. Worth ten minutes to show you what that actually looks like?"
+
+> Use when they push back on "you built me a website." Acknowledges the pushback, justifies why you picked them, and closes with a smaller ask. Match their energy — if they soften, move forward; if they're still annoyed, offer a 90-day callback instead.
 
 ## Stage: cost
 
