@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { CallEntry, ShowToast } from '../../lib/types';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, type RecordingObject } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
 import { formatDateTime, todayIso, outcomeBadge } from '../../lib/format';
@@ -27,6 +27,35 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
   const [notes, setNotes] = useState('');
   const [followup, setFollowup] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Orphan-recording recovery: any R2 object under calls/{leadId}/ that isn't
+  // already attached to a call_log row. Refetches whenever calls change so a
+  // freshly-attached orphan disappears from this list.
+  const [orphans, setOrphans] = useState<RecordingObject[]>([]);
+  const [attaching, setAttaching] = useState<string | null>(null);
+  const loadRecordings = useCallback(async () => {
+    try {
+      const res = await api.recordings.listForLead(leadId);
+      setOrphans(res.recordings.filter((r) => !r.attached));
+    } catch {
+      // Silent — recovery is an optional safety net, not a critical path.
+    }
+  }, [leadId]);
+  useEffect(() => { void loadRecordings(); }, [loadRecordings, calls.length]);
+
+  async function handleAttach(url: string) {
+    setAttaching(url);
+    try {
+      await api.recordings.attach(leadId, url);
+      showToast('Recording attached to call log', 'success');
+      onCallsChanged();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Attach failed: ${msg}`, 'error');
+    } finally {
+      setAttaching(null);
+    }
+  }
 
   async function handleSave() {
     if (!notes.trim()) {
@@ -112,6 +141,30 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
 
       {/* History */}
       <div style={{ padding: '14px 20px' }}>
+        {orphans.length > 0 && (
+          <div style={{
+            background: 'rgba(245, 200, 66, 0.06)',
+            border: '1px solid rgba(245, 200, 66, 0.3)',
+            borderRadius: 6,
+            padding: '10px 12px',
+            marginBottom: 12,
+          }}>
+            <div style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '1px', color: 'var(--yellow)', textTransform: 'uppercase', marginBottom: 8 }}>
+              ⚠ {orphans.length} orphan recording{orphans.length === 1 ? '' : 's'} in R2 — not attached to any call entry
+            </div>
+            {orphans.map((o) => (
+              <div key={o.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: '0.7rem' }}>
+                <a href={o.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  🎙 {new Date(o.uploaded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {Math.round(o.size_bytes / 1024)} KB
+                </a>
+                <Button variant="ghost" size="xs" disabled={attaching === o.url} onClick={() => void handleAttach(o.url)}>
+                  {attaching === o.url ? 'Attaching…' : 'Save to call log'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ fontSize: '0.62rem', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 10 }}>
           Call History · {calls.length} {calls.length === 1 ? 'entry' : 'entries'}
         </div>
