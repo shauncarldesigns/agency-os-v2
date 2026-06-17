@@ -54,7 +54,7 @@ stages:
 
 ## Stage: intro
 
-"My name is Shaun — I build websites for local businesses here in Wisconsin to help with their online presence. Have I caught you at a terrible time?"
+"My name is Shaun — I build websites for local businesses here in Wisconsin and help them get found on Google. Have I caught you at a terrible time?"
 
 > "Terrible time" invites a No — "No, what's up?" — puts them at ease immediately.
 
