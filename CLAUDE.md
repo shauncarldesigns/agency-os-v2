@@ -165,6 +165,58 @@ uses past-today (not past-now); skipped outcome is silent (no call_log
 entry, no `last_called_at` update); only one session can be `active` at a
 time (409 conflict otherwise).
 
+## Playbook system (added 2026-06-17)
+
+The calling cockpit (formerly the static ExecutionView) runs an active Chris
+Voss "No-oriented" sales playbook. Scripts + objection rebuttals are authored
+as markdown under `agency-os-backend/src/playbook/`, bundled into the Worker
+at build time, and parsed at runtime via `services/playbook.ts`.
+
+- **Content layout** — `scripts/*.md` (cold call + demos), `objections/*.md`
+  (9 files: 6 simple, 2 branching, 1 combo), `follow-ups/*.md` (email
+  sequence). Every file has YAML frontmatter; branching objections use
+  `## Path: {id}` body sections matching `paths[].id`, scripts use
+  `## Stage: {id}` matching `stages[].id`. Operator-facing meta (the things
+  to NOT say aloud) goes into `> blockquote` lines and parses out into a
+  separate `note` field.
+- **Bundling — Workers have no fs.** `wrangler.toml` `[[rules]] type =
+  "Text" globs = ["**/*.md"]` makes esbuild inline each imported `.md` as
+  a string. Adding a new markdown file requires explicit import in
+  `services/playbook.ts` — no glob runtime discovery.
+- **YAML parser** — `yaml` package (eemeli/yaml). Adds ~25 KB to the Worker
+  bundle (240→527 KB total after this feature shipped).
+- **Token interpolation** — `[Company Name]`, `[Name]`, `[city]`, `[state]`,
+  `[their trade]` get replaced at render time from `LeadContext`.
+- **Read endpoints** (`/api/playbook/*`) — `_debug` (eagerly parses everything;
+  curl-able health check), `scripts`, `scripts/:id`, `objections`,
+  `objections/:id`, `follow-ups/:id`.
+- **Generate-rebuttal** — `POST /api/playbook/generate-rebuttal` (Claude
+  Haiku 4.5, temperature 0.85, 3 JSON variants). `POST /generations/:id/mark-used`
+  records the operator's "Use this" click. All generations logged to the
+  `playbook_generations` table including failures.
+- **Objection hits log** — every cockpit chip tap auto-appends a hit
+  (`{objection_id, path_id?, handled, timestamp_s, generation_id?}`) to a
+  per-call array. Sent with the outcome and persisted as JSON in
+  `call_log.objection_hits`. The `/api/dashboard/objections-overview`
+  endpoint aggregates this via SQLite `json_each()` for the dashboard's
+  frequency + handled-rate cards.
+
+**Tables added:**
+- `playbook_generations` — Claude rebuttal generation log (request +
+  response JSON + model + used_variant_index + status + duration).
+- `call_log.objection_hits` — JSON column (nullable; null on pre-feature
+  rows).
+
+**Migrations (run manually per CLAUDE.md deploy mechanics):**
+- `2026-06-17-playbook-generations.sql`
+- `2026-06-17-call-log-objection-hits.sql`
+
+**Cockpit UI changes** — the prior pitch card, Log-a-Call form, and
+sidebar Scores+Signals+Prior-Calls are gone; replaced by script panel +
+objection chips + notes textarea with auto-tagged objection lines. The
+operator can still open a lead's modal from Pipeline for full historical
+context.
+
 ## Cloudflare DNS management (added 2026-06-14)
 
 Every project can have a Cloudflare zone for its client domain. Records are
