@@ -803,6 +803,11 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-obj-chip.full { grid-column: span 2; }
 
 .cockpit-active-obj { background: var(--surface); border: 1px solid #f0997b; border-radius: var(--rl); padding: 14px; margin-bottom: 10px; }
+.cockpit-variant-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.cockpit-variant-row-label { font-size: 0.6rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-right: 3px; }
+.cockpit-variant-chip { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); border-radius: 14px; padding: 3px 10px; font-size: 0.66rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.1s; }
+.cockpit-variant-chip:hover { color: var(--text); border-color: #f0997b; }
+.cockpit-variant-chip.active { background: #f0997b; color: #2a1408; border-color: #f0997b; }
 .cockpit-rebuttal-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; margin-bottom: 10px; }
 .cockpit-rebuttal-heading { font-size: 0.62rem; color: #f0997b; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
 .cockpit-rebuttal-body { font-size: 0.86rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }

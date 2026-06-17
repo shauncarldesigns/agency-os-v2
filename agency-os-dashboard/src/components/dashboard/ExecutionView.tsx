@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { Lead, ShowToast, Session, CallOutcome, SessionBlock } from '../../lib/types';
 import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import type {
-  Stage, Script, Objection, BranchingObjection, BranchingPath,
+  Stage, Script, Objection, BranchingObjection, BranchingPath, SimpleObjection,
   ObjectionsByCategory, ObjectionCategory,
   ObjectionHit, RebuttalVariant, LeadContext,
 } from '../../lib/playbook';
@@ -56,7 +56,8 @@ interface LeadWithSession extends Lead {
 interface ActiveObjectionState {
   objectionId: string;
   pathId?: string;            // for branching, once operator picks
-  variantOverride?: {         // when operator clicks "Use this" on a generation
+  variantLabel?: string;      // for SimpleObjection variants — which built-in chip the operator picked (undefined = canonical Default)
+  variantOverride?: {         // when operator clicks "Use this" on a Claude generation
     angle: string;
     rebuttal: string;
     variantIndex: number;
@@ -127,14 +128,27 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   const linearStages = useMemo(() => (script?.stages ?? []).filter((s) => !s.branch), [script]);
 
   // Token-interpolation context — feeds [Company Name] / [Name] / [city] /
-  // [state] / [their trade] across every script + rebuttal render.
-  const leadCtx: LeadContext = useMemo(() => ({
-    company: lead?.company ?? '',
-    contact_name: lead?.contact ?? undefined,
-    city: lead?.city ?? undefined,
-    state: lead?.state ?? undefined,
-    trade: tradeLabel(lead?.industry),
-  }), [lead]);
+  // [state] / [their trade] / [review_count] / [review_avg] / [reviews]
+  // across every script + rebuttal render. scores.reviews uses the same
+  // combined "41 · 4.9★" format the lead-header chip shows so the parsing
+  // helper in playbook.ts can split it.
+  const leadCtx: LeadContext = useMemo(() => {
+    const reviewCount = lead?.google_review_count ?? null;
+    const rating = lead?.google_rating ?? null;
+    const reviewsCombined = reviewCount != null && rating != null
+      ? `${reviewCount} · ${rating}★`
+      : reviewCount != null
+        ? String(reviewCount)
+        : undefined;
+    return {
+      company: lead?.company ?? '',
+      contact_name: lead?.contact ?? undefined,
+      city: lead?.city ?? undefined,
+      state: lead?.state ?? undefined,
+      trade: tradeLabel(lead?.industry),
+      scores: reviewsCombined ? { reviews: reviewsCombined } : undefined,
+    };
+  }, [lead]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   useEffect(() => {
     if (script && currentStageId === null) {
@@ -259,6 +273,26 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     appendNote(`[${formatMMSS(ts)} · OBJECTION: ${objection.label}]`);
   }, [callStartMs, appendNote]);
 
+  // Operator picks a stock variant chip on a simple objection. Updates the
+  // active state + stamps variant_label onto the most recent objection_hit
+  // for that objection so the call-log captures which angle was used.
+  // Passing label=undefined returns to the canonical Default rebuttal.
+  const handleVariantTap = useCallback((objectionId: string, label: string | undefined) => {
+    setActiveObj((prev) => prev && prev.objectionId === objectionId
+      ? { ...prev, variantLabel: label }
+      : prev);
+    setObjectionHits((prev) => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].objection_id === objectionId) {
+          next[i] = { ...next[i], variant_label: label };
+          break;
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const handlePathTap = useCallback((objection: BranchingObjection, path: BranchingPath) => {
     setActiveObj((prev) => prev ? { ...prev, pathId: path.id } : prev);
     // Update last objection-hit with the path.
@@ -307,16 +341,20 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setGenerated(null);
   }, [activeObj]);
 
-  const stockRebuttalFor = useCallback((objectionId: string, pathId?: string): string => {
+  const stockRebuttalFor = useCallback((objectionId: string, pathId?: string, variantLabel?: string): string => {
     const obj = playbook?.objections
       ? (Object.values(playbook.objections).flat() as Objection[]).find((o) => o.id === objectionId)
       : null;
     if (!obj) return '';
-    const raw = obj.type === 'simple'
-      ? obj.rebuttal
-      : !pathId
+    let raw: string;
+    if (obj.type === 'simple') {
+      const v = variantLabel ? obj.variants?.find((x) => x.label === variantLabel) : null;
+      raw = v?.rebuttal ?? obj.rebuttal;
+    } else {
+      raw = !pathId
         ? obj.diagnostic.prompt
         : obj.paths.find((p) => p.id === pathId)?.rebuttal ?? obj.diagnostic.prompt;
+    }
     return interpolate(raw, leadCtx);
   }, [playbook, leadCtx]);
 
@@ -333,7 +371,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
         state: lead.state ?? undefined,
         trade: lead.industry ?? undefined,
       };
-      const stock = stockRebuttalFor(activeObj.objectionId, activeObj.pathId);
+      const stock = stockRebuttalFor(activeObj.objectionId, activeObj.pathId, activeObj.variantLabel);
       const resp = await api.playbook.generateRebuttal({
         objection_id: activeObj.objectionId,
         lead_id: lead.id,
@@ -601,12 +639,14 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             <ActiveObjectionPanel
               objection={objection}
               activePath={activeObj.pathId}
+              activeVariantLabel={activeObj.variantLabel}
               variantOverride={activeObj.variantOverride}
               generated={generated && generated.forObjectionId === activeObj.objectionId ? generated : null}
               generating={generating}
               marking={marking}
               ctx={leadCtx}
               onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
+              onVariantTap={(label) => handleVariantTap(activeObj.objectionId, label)}
               onHandled={handleHandled}
               onDidntLand={handleDidntLand}
               onGenerate={handleGenerate}
@@ -796,17 +836,19 @@ function ObjectionPanel({
 // ============================================================================
 
 function ActiveObjectionPanel({
-  objection, activePath, variantOverride, generated, generating, marking, ctx,
-  onPathTap, onHandled, onDidntLand, onGenerate, onUseVariant, onBack,
+  objection, activePath, activeVariantLabel, variantOverride, generated, generating, marking, ctx,
+  onPathTap, onVariantTap, onHandled, onDidntLand, onGenerate, onUseVariant, onBack,
 }: {
   objection: Objection;
   activePath?: string;
+  activeVariantLabel?: string;
   variantOverride?: ActiveObjectionState['variantOverride'];
   generated: GeneratedState | null;
   generating: boolean;
   marking: number | null;
   ctx: LeadContext;
   onPathTap: (p: BranchingPath) => void;
+  onVariantTap: (label: string | undefined) => void;
   onHandled: () => void;
   onDidntLand: () => void;
   onGenerate: () => void;
@@ -815,6 +857,12 @@ function ActiveObjectionPanel({
 }) {
   const isBranching = objection.type === 'branching';
   const path = isBranching ? (objection as BranchingObjection).paths.find((p) => p.id === activePath) : null;
+  // Simple-objection variants — only meaningful when objection.type === 'simple'
+  const simpleVariants = !isBranching && (objection as SimpleObjection).variants?.length
+    ? (objection as SimpleObjection).variants!
+    : null;
+  const activeVariant = simpleVariants?.find((v) => v.label === activeVariantLabel);
+  const simpleRebuttal = activeVariant?.rebuttal ?? (objection as { rebuttal: string }).rebuttal;
   return (
     <div className="cockpit-active-obj">
       <div className="cockpit-panel-header">
@@ -865,11 +913,35 @@ function ActiveObjectionPanel({
           )}
         </>
       ) : (
-        <div className="cockpit-rebuttal-card">
-          <div className="cockpit-rebuttal-heading">Stock rebuttal — say this:</div>
-          <div className="cockpit-rebuttal-body">{interpolate((objection as { rebuttal: string }).rebuttal, ctx)}</div>
-          {('note' in objection && objection.note) && <div className="cockpit-rebuttal-note">↳ {interpolate(objection.note, ctx)}</div>}
-        </div>
+        <>
+          {simpleVariants && (
+            <div className="cockpit-variant-row">
+              <span className="cockpit-variant-row-label">Angle:</span>
+              <button
+                type="button"
+                className={`cockpit-variant-chip${!activeVariantLabel ? ' active' : ''}`}
+                onClick={() => onVariantTap(undefined)}
+              >Default</button>
+              {simpleVariants.map((v) => (
+                <button
+                  key={v.label}
+                  type="button"
+                  className={`cockpit-variant-chip${activeVariantLabel === v.label ? ' active' : ''}`}
+                  onClick={() => onVariantTap(v.label)}
+                >{v.label}</button>
+              ))}
+            </div>
+          )}
+          <div className="cockpit-rebuttal-card">
+            <div className="cockpit-rebuttal-heading">
+              {simpleVariants
+                ? activeVariant ? `${activeVariant.label} — say this:` : 'Default rebuttal — say this:'
+                : 'Stock rebuttal — say this:'}
+            </div>
+            <div className="cockpit-rebuttal-body">{interpolate(simpleRebuttal, ctx)}</div>
+            {('note' in objection && objection.note) && <div className="cockpit-rebuttal-note">↳ {interpolate(objection.note, ctx)}</div>}
+          </div>
+        </>
       )}
 
       <div className="cockpit-obj-actions">

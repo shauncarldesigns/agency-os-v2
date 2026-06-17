@@ -27,13 +27,19 @@ import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
 export type ObjectionCategory = 'standard' | 'deep-dive' | 'closing';
 export type ObjectionType = 'simple' | 'branching';
 
+export interface ObjectionVariant {
+  label: string;
+  rebuttal: string;
+}
+
 export interface SimpleObjection {
   id: string;
   label: string;
   category: ObjectionCategory;
   type: 'simple';
   order: number;
-  rebuttal: string;
+  rebuttal: string;                      // default / canonical line
+  variants?: ObjectionVariant[];         // optional alternative angles; UI shows a chip row
   note?: string;
 }
 
@@ -223,8 +229,15 @@ function parseObjection(raw: string): Objection {
       paths,
     };
   }
-  // Simple objection: the body IS the rebuttal
+  // Simple objection: the body IS the rebuttal. Optional `variants` in
+  // frontmatter as an array of {label, rebuttal}.
   const { body: cleanBody, note } = extractNote(body.trim());
+  const rawVariants = Array.isArray(fm.variants) ? fm.variants : null;
+  const variants: ObjectionVariant[] | undefined = rawVariants?.length
+    ? rawVariants
+        .filter((v: any) => v && typeof v.label === 'string' && typeof v.rebuttal === 'string')
+        .map((v: any): ObjectionVariant => ({ label: v.label, rebuttal: v.rebuttal }))
+    : undefined;
   return {
     id: fm.id,
     label: fm.label,
@@ -232,6 +245,7 @@ function parseObjection(raw: string): Objection {
     type: 'simple',
     order: fm.order ?? 999,
     rebuttal: cleanBody,
+    variants,
     note: note || undefined,
   };
 }
@@ -388,7 +402,20 @@ export function listFollowUps(): FollowUpSequence[] {
 // TOKEN INTERPOLATION
 // ============================================================================
 
-const TOKEN_RE = /\[(Company Name|Name|city|state|their trade)\]/g;
+const TOKEN_RE = /\[(Company Name|Name|city|state|their trade|review_count|review_avg|reviews)\]/g;
+
+// scores.reviews is formatted "41 · 4.9★" by the dashboard. Pull the two
+// numbers out for separate interpolation when an objection wants just the
+// count (e.g. "you've got 41 reviews") or just the rating ("4.9 stars").
+function parseReviewsField(raw: string | undefined, want: 'count' | 'avg' | 'combined'): string {
+  if (!raw) return '';
+  if (want === 'combined') return raw;
+  const m = raw.match(/^\s*(\d+)\s*[·•]\s*([\d.]+)/);
+  if (m) return want === 'count' ? m[1] : m[2];
+  // Fallback: strip non-digits for count, return empty for avg.
+  if (want === 'count') return raw.replace(/[^\d]/g, '');
+  return '';
+}
 
 function tokenValue(token: string, ctx: LeadContext): string {
   switch (token) {
@@ -402,6 +429,12 @@ function tokenValue(token: string, ctx: LeadContext): string {
       return ctx.state || '';
     case 'their trade':
       return ctx.trade || 'your trade';
+    case 'review_count':
+      return parseReviewsField(ctx.scores?.reviews, 'count');
+    case 'review_avg':
+      return parseReviewsField(ctx.scores?.reviews, 'avg');
+    case 'reviews':
+      return parseReviewsField(ctx.scores?.reviews, 'combined');
     default:
       return `[${token}]`;
   }
