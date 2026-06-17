@@ -144,7 +144,7 @@ function PlannedSessionCard({ session, onEdit }: { session: Session; onEdit: () 
   );
 }
 
-function SessionEditModal({ open, session, industries, showToast, onClose, onSaved }: {
+export function SessionEditModal({ open, session, industries, showToast, onClose, onSaved }: {
   open: boolean;
   session: Session | null;
   industries: IndustrySpec[];

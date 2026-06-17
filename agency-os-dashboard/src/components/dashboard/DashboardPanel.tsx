@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ShowToast, Tab } from '../../lib/types';
 import {
-  api, ApiError, industryLabel,
+  api, ApiError,
   type DashboardTodayResponse, type DemoWithLead, type CallbackWithLead,
   type AgencySummary, type ObjectionOverviewItem, type AnalyticsRange,
 } from '../../lib/api';
-import type { Session } from '../../lib/types';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
-import { MondayView, FridayView } from './MondayFridayViews';
+import { ProspectingTaskBlock } from './MondayFridayViews';
 import { RescheduleDemoModal } from './RescheduleDemoModal';
+import { WeekPlanner } from './WeekPlanner';
 
 /**
  * Top-level Dashboard panel.
@@ -91,8 +91,10 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
     <>
       <div className="sec-header">
         <div>
-          <div className="sec-title">{titleForMode(data.mode, data.today)}</div>
-          <div className="sec-sub">{subForMode(data.mode)}</div>
+          <div className="sec-title">Call sessions</div>
+          <div className="sec-sub">
+            {dayLabelToday(data.today)} · week of {data.today}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 7 }}>
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>↻ Refresh</Button>
@@ -102,8 +104,9 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
         </div>
       </div>
 
-      {/* Priority strip is pinned to top on calling days; informational on others. */}
-      {(data.mode === 'calling' || hasAnyPriority(data.priorityStrip)) && (
+      {/* Priority strip — demos awaiting status, callbacks due, no-show recovery.
+          Renders whenever there's anything to action; otherwise stays hidden. */}
+      {hasAnyPriority(data.priorityStrip) && (
         <PriorityStrip
           data={data.priorityStrip}
           showToast={showToast}
@@ -120,22 +123,19 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
         onRescheduled={load}
       />
 
-      {/* Day-specific view */}
-      {data.mode === 'calling' && (
-        <SessionsGrid sessions={data.sessions} onOpenSession={onOpenSession} showToast={showToast} onReload={load} />
-      )}
-      {data.mode === 'prep' && (
-        <MondayView showToast={showToast} onReload={load} onSwitchTab={onSwitchTab} />
-      )}
-      {data.mode === 'review' && (
-        <FridayView showToast={showToast} onSwitchTab={onSwitchTab} />
-      )}
-      {data.mode === 'quiet' && (
-        <NonCallingDayView mode={data.mode} sessions={data.sessions} onOpenSession={onOpenSession} />
-      )}
+      {/* Week planner — full Mon-Fri view regardless of day-of-week. Active
+          session (even if from a prior day) surfaces in the Working Now
+          banner so it's always reachable. */}
+      <WeekPlanner showToast={showToast} onOpenSession={onOpenSession} />
 
-      {/* Always-on analytics — agency summary + objections overview.
-          Renders under whichever day-specific view is active. */}
+      {/* Weekly prospecting nudge — kept persistent because the operator
+          still needs the 50-leads-per-week target visible regardless of
+          which day they open the dashboard. */}
+      <div style={{ marginTop: 24 }}>
+        <ProspectingTaskBlock onSwitchTab={onSwitchTab} showToast={showToast} />
+      </div>
+
+      {/* Always-on analytics — agency summary + objections overview. */}
       <AnalyticsSection />
     </>
   );
@@ -252,21 +252,10 @@ function ObjectionCard({ item }: { item: ObjectionOverviewItem }) {
   );
 }
 
-// ---------- Title / subtitle helpers ----------
+// ---------- Header label ----------
 
-function titleForMode(mode: string, date: string): string {
-  const day = new Date(`${date}T12:00:00-06:00`).toLocaleDateString('en-US', { weekday: 'long' });
-  if (mode === 'calling') return `${day} — Calling Day`;
-  if (mode === 'prep') return `${day} — Week Ahead`;
-  if (mode === 'review') return `${day} — Week in Review`;
-  return `${day}`;
-}
-
-function subForMode(mode: string): string {
-  if (mode === 'calling') return 'Priority actions + today\'s sessions. Click a session to start calling.';
-  if (mode === 'prep') return 'Plan the week. Sessions for Tue-Thu auto-compose by industry rotation.';
-  if (mode === 'review') return 'Last week\'s metrics. Recovery list for callbacks you missed.';
-  return 'Quiet day — read-only view.';
+function dayLabelToday(date: string): string {
+  return new Date(`${date}T12:00:00-06:00`).toLocaleDateString('en-US', { weekday: 'long' });
 }
 
 // ---------- Priority strip ----------
@@ -449,186 +438,7 @@ function CallbackRow({ cb }: { cb: CallbackWithLead }) {
   );
 }
 
-// ---------- Sessions grid (calling-day view) ----------
-
-interface SessionsGridProps {
-  sessions: Session[];
-  onOpenSession?: (sessionId: number) => void;
-  showToast: ShowToast;
-  onReload: () => Promise<void> | void;
-}
-
-function SessionsGrid({ sessions, onOpenSession, showToast, onReload }: SessionsGridProps) {
-  if (sessions.length === 0) {
-    return (
-      <div style={{
-        marginTop: 16,
-        padding: '30px 20px',
-        textAlign: 'center',
-        color: 'var(--text3)',
-        background: 'var(--surface)',
-        border: '1px dashed var(--border)',
-        borderRadius: 6,
-      }}>
-        No sessions scheduled for today.
-        <div style={{ fontSize: '0.7rem', marginTop: 6 }}>
-          Hit <strong>+ Generate week</strong> above to auto-compose Mon-Fri sessions.
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div style={{
-      marginTop: 16,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-      gap: 12,
-    }}>
-      {sessions.map((s) => (
-        <SessionCard key={s.id} session={s} onOpen={onOpenSession} showToast={showToast} onReload={onReload} />
-      ))}
-    </div>
-  );
-}
-
-interface SessionCardProps {
-  session: Session;
-  onOpen?: (id: number) => void;
-  showToast: ShowToast;
-  onReload: () => Promise<void> | void;
-}
-
-function SessionCard({ session, onOpen, showToast, onReload }: SessionCardProps) {
-  const [busy, setBusy] = useState(false);
-  const isActive = session.status === 'active';
-  const isPlanned = session.status === 'planned';
-  const isComplete = session.status === 'complete';
-  const accent = isActive ? 'var(--accent)' : isComplete ? 'var(--green)' : 'var(--border)';
-
-  async function handleStart() {
-    setBusy(true);
-    try {
-      await api.sessions.start(session.id);
-      showToast('Session started', 'success');
-      await onReload();
-      onOpen?.(session.id);
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not start: ${msg}`, 'error');
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div style={{
-      background: 'var(--surface)',
-      border: `1px solid ${accent}`,
-      borderLeft: `3px solid ${accent}`,
-      borderRadius: 6,
-      padding: 14,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>
-            {sessionTitle(session)}
-          </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-            {compositionLine(session)}
-          </div>
-        </div>
-        <SessionStatusBadge status={session.status} />
-      </div>
-      {!isComplete && !isPlanned && (
-        // Progress is per-session-lead but we don't have that in the today
-        // payload; for now show a stub. Phase 5 wires real progress via
-        // /api/sessions/:id when the execution view opens.
-        <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text3)' }}>
-          Active — click Continue to resume calling.
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 7, marginTop: 10 }}>
-        {isPlanned && (
-          <Button variant="primary" size="sm" disabled={busy} onClick={handleStart}>
-            {busy ? <><Spinner /> Starting…</> : '▶ Start'}
-          </Button>
-        )}
-        {isActive && (
-          <Button variant="primary" size="sm" onClick={() => onOpen?.(session.id)}>
-            ▶ Continue
-          </Button>
-        )}
-        {isComplete && (
-          <Button variant="ghost" size="sm" onClick={() => onOpen?.(session.id)}>
-            View recap
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function sessionTitle(s: Session): string {
-  // Prefix with the localized day-of-week so calling-day cards never look
-  // ambiguous when multiple days' sessions stack up (e.g., on Monday-view
-  // where Tue/Wed/Thu cards live side by side). Calling-day view only ever
-  // shows today's sessions, but the prefix is still useful as orientation.
-  const dayLabel = new Date(`${s.session_date}T12:00:00-06:00`)
-    .toLocaleDateString('en-US', { weekday: 'short' });
-  const block = s.block === 'morning' ? 'Morning' : 'Evening';
-  return `${dayLabel} · ${block} — ${industryLabel(s.industry)}`;
-}
-
-function compositionLine(s: Session): string {
-  const parts = [
-    `${s.lead_count_target} leads`,
-    `score ${s.score_floor}+`,
-  ];
-  const geo = safeJsonArray(s.geographic_filter);
-  if (geo.length > 0) parts.push(geo.slice(0, 3).join(', ') + (geo.length > 3 ? '…' : ''));
-  return parts.join(' · ');
-}
-
-function SessionStatusBadge({ status }: { status: string }) {
-  if (status === 'active') return <Badge color="yellow">Active</Badge>;
-  if (status === 'complete') return <Badge color="green">Complete</Badge>;
-  return <Badge color="gray">Planned</Badge>;
-}
-
-// ---------- Non-calling day placeholder views (Mon/Fri/Sat/Sun) ----------
-
-function NonCallingDayView({ mode, sessions, onOpenSession }: { mode: string; sessions: Session[]; onOpenSession?: (id: number) => void }) {
-  return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{
-        padding: '20px 16px',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        color: 'var(--text2)',
-        fontSize: '0.78rem',
-        lineHeight: 1.6,
-      }}>
-        {mode === 'prep' && <><strong>Prep day.</strong> Week-ahead view + prospecting block land in Phase 7. For now, generate the week above.</>}
-        {mode === 'review' && <><strong>Review day.</strong> Week metrics + callback recovery list land in Phase 7.</>}
-        {mode === 'quiet' && <><strong>Quiet day.</strong> The next calling week is Tue-Thu. Use this time for fulfillment work.</>}
-      </div>
-
-      {sessions.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <div className="sec-title" style={{ fontSize: '0.78rem', marginBottom: 8 }}>Sessions for today</div>
-          <SessionsGrid sessions={sessions} onOpenSession={onOpenSession} showToast={() => undefined} onReload={() => undefined} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ---------- helpers ----------
-
-function safeJsonArray(raw: string | null): string[] {
-  if (!raw) return [];
-  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; }
-  catch { return []; }
-}
 
 function formatDateTime(iso: string): string {
   try {

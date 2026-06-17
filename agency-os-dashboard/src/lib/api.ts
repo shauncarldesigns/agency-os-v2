@@ -354,7 +354,7 @@ export const api = {
   sessions: {
     today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
     week: (date?: string) =>
-      apiFetch<{ week: WeekDates; sessions: Session[] }>(`/api/sessions/week${qs({ date })}`),
+      apiFetch<{ week: WeekDates; sessions: SessionWithProgress[]; activeSession: SessionWithProgress | null }>(`/api/sessions/week${qs({ date })}`),
     get: (id: number) =>
       apiFetch<{ session: Session; leads: Array<Lead & { position: number; call_outcome: CallOutcome | null; is_callback: number; session_lead_id: number }> }>(`/api/sessions/${id}`),
     generateWeek: (weekStart?: string) =>
@@ -481,6 +481,16 @@ const INDUSTRY_FALLBACK: IndustrySpec[] = [
 export interface SessionRecap {
   total: number; called: number; voicemails: number; notInterested: number;
   callbacks: number; booked: number; skipped: number; bookingRate: number;
+}
+
+export interface SessionWithProgress extends Session {
+  lead_count: number;
+  called_count: number;
+  booked_count: number;
+  callback_count: number;
+  voicemail_count: number;
+  not_interested_count: number;
+  skipped_count: number;
 }
 
 export type AnalyticsRange = '30d' | 'all';
