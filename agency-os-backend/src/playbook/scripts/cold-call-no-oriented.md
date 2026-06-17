@@ -53,21 +53,15 @@ stages:
 
 ## Stage: intro
 
-"My name is Shaun — I help local businesses here in Wisconsin build their online presence. Have I caught you at a terrible time?"
+"My name is Shaun — I build websites for local businesses here in Wisconsin to help with their online presence. Have I caught you at a terrible time?"
 
 > "Terrible time" invites a No — "No, what's up?" — puts them at ease immediately.
 
 ## Stage: hook
 
-"I was looking you guys up on Google and saw some really great reviews but I didn't see a website — is that something you are working on?"
+"I was looking you guys up on Google and saw some really great reviews but I didn't see a website — So I actually went ahead and put a site together for you just to see what it could look like. I'm not here to pitch you anything — would it be ridiculous to schedule a call so I can just show it to you?"
 
 > Either answer opens the door: "working on it" = active interest; "not really" = invitation to show what could be there.
-
-## Stage: reveal
-
-"I actually went ahead and put together a site for you just to see what it could look like. I'm not here to pitch you anything — would it be ridiculous to spend 15 minutes on a call so I can just show it to you?"
-
-> Inviting a No — "No, that's not ridiculous" = they just agreed to the call.
 
 ## Stage: if-hesitate
 
