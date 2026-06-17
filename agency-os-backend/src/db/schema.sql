@@ -383,3 +383,23 @@ CREATE TABLE IF NOT EXISTS weekly_rotation (
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 INSERT OR IGNORE INTO weekly_rotation (id) VALUES (1);
+
+-- ==================================================
+-- PLAYBOOK_GENERATIONS — Claude-generated rebuttal log
+-- ==================================================
+CREATE TABLE IF NOT EXISTS playbook_generations (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id             INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+  objection_id        TEXT NOT NULL,
+  request_json        TEXT NOT NULL,
+  response_json       TEXT,
+  model               TEXT NOT NULL,
+  used_variant_index  INTEGER,
+  duration_ms         INTEGER NOT NULL,
+  status              TEXT NOT NULL,                  -- 'success' | 'parse_error' | 'api_error'
+  error_message       TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_playbook_gen_objection ON playbook_generations(objection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_playbook_gen_lead ON playbook_generations(lead_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_playbook_gen_used ON playbook_generations(objection_id, used_variant_index) WHERE used_variant_index IS NOT NULL;
