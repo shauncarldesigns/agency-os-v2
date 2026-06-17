@@ -80,21 +80,144 @@ sessionsRouter.get('/week', async (c) => {
   `;
 
   const sessions = await c.env.DB
-    .prepare(`${PROGRESS_SELECT} WHERE s.session_date BETWEEN ? AND ? ORDER BY s.session_date, CASE s.block WHEN 'morning' THEN 0 ELSE 1 END`)
+    .prepare(`${PROGRESS_SELECT} WHERE s.kind = 'auto' AND s.session_date BETWEEN ? AND ? ORDER BY s.session_date, CASE s.block WHEN 'morning' THEN 0 ELSE 1 END`)
     .bind(week.monday, week.friday)
     .all<Session & { lead_count: number; called_count: number; booked_count: number; callback_count: number; voicemail_count: number; not_interested_count: number; skipped_count: number }>();
 
   // Active session lookup — partial index idx_session_active makes this O(1).
   // Returned even if it's outside the queried week so the operator can always
-  // reach a stuck-active session from a prior day.
+  // reach a stuck-active auto session from a prior day. Filtered to kind='auto'
+  // because the hot session has its own dashboard card; surfacing both as
+  // "WORKING NOW" would confuse the operator.
   const activeRow = await c.env.DB
-    .prepare(`${PROGRESS_SELECT} WHERE s.status = 'active' LIMIT 1`)
+    .prepare(`${PROGRESS_SELECT} WHERE s.status = 'active' AND s.kind = 'auto' LIMIT 1`)
     .first<Session & { lead_count: number; called_count: number; booked_count: number; callback_count: number; voicemail_count: number; not_interested_count: number; skipped_count: number }>();
 
   return c.json({
     week,
     sessions: sessions.results ?? [],
     activeSession: activeRow ?? null,
+  });
+});
+
+// --------------------------------------------------------------------
+// HOT LEADS — operator-curated priority queue.
+// One persistent session per database; rows added via the Pipeline bulk
+// "Add to hot leads" action. Kind='hot' so it doesn't show in the week
+// grid; lives in its own dashboard card above the WeekPlanner.
+// --------------------------------------------------------------------
+
+const HOT_SESSION_DATE = 'hot';
+const HOT_SESSION_BLOCK = 'hot';
+
+async function findOrCreateHotSession(env: Env): Promise<Session> {
+  const existing = await env.DB
+    .prepare(`SELECT * FROM sessions WHERE kind = 'hot' LIMIT 1`)
+    .first<Session>();
+  if (existing) return existing;
+
+  await env.DB.prepare(
+    `INSERT INTO sessions (session_date, block, industry, score_floor, lead_count_target, status, kind, started_at)
+     VALUES (?, ?, 'mixed', 0, 0, 'active', 'hot', datetime('now'))`
+  ).bind(HOT_SESSION_DATE, HOT_SESSION_BLOCK).run();
+
+  const created = await env.DB
+    .prepare(`SELECT * FROM sessions WHERE kind = 'hot' LIMIT 1`)
+    .first<Session>();
+  if (!created) throw new Error('Failed to create hot session');
+  return created;
+}
+
+// GET /hot — returns the hot session (or null if none yet) with progress
+sessionsRouter.get('/hot', async (c) => {
+  const HOT_PROGRESS_SELECT = `
+    SELECT
+      s.*,
+      COALESCE(sl_agg.lead_count, 0) AS lead_count,
+      COALESCE(sl_agg.called_count, 0) AS called_count,
+      COALESCE(sl_agg.booked_count, 0) AS booked_count,
+      COALESCE(sl_agg.callback_count, 0) AS callback_count,
+      COALESCE(sl_agg.voicemail_count, 0) AS voicemail_count,
+      COALESCE(sl_agg.not_interested_count, 0) AS not_interested_count,
+      COALESCE(sl_agg.skipped_count, 0) AS skipped_count
+    FROM sessions s
+    LEFT JOIN (
+      SELECT session_id,
+        COUNT(*) AS lead_count,
+        SUM(CASE WHEN call_outcome IS NOT NULL THEN 1 ELSE 0 END) AS called_count,
+        SUM(CASE WHEN call_outcome = 'booked' THEN 1 ELSE 0 END) AS booked_count,
+        SUM(CASE WHEN call_outcome = 'callback' THEN 1 ELSE 0 END) AS callback_count,
+        SUM(CASE WHEN call_outcome = 'voicemail' THEN 1 ELSE 0 END) AS voicemail_count,
+        SUM(CASE WHEN call_outcome = 'not_interested' THEN 1 ELSE 0 END) AS not_interested_count,
+        SUM(CASE WHEN call_outcome = 'skipped' THEN 1 ELSE 0 END) AS skipped_count
+      FROM session_leads GROUP BY session_id
+    ) sl_agg ON sl_agg.session_id = s.id
+    WHERE s.kind = 'hot' LIMIT 1
+  `;
+  const session = await c.env.DB.prepare(HOT_PROGRESS_SELECT).first<Session & {
+    lead_count: number; called_count: number; booked_count: number;
+    callback_count: number; voicemail_count: number; not_interested_count: number; skipped_count: number;
+  }>();
+  return c.json({ session: session ?? null });
+});
+
+// POST /hot/add — body { lead_ids: number[] }. Finds (or creates) the hot
+// session, appends each lead as a session_lead. Duplicates silently
+// ignored via INSERT OR IGNORE (unique idx_session_lead_unique).
+sessionsRouter.post('/hot/add', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { lead_ids?: unknown };
+  const leadIds = Array.isArray(body.lead_ids)
+    ? body.lead_ids.filter((n): n is number => Number.isInteger(n))
+    : [];
+  if (leadIds.length === 0) {
+    return c.json(badRequest('lead_ids must be a non-empty array of integers'), 400);
+  }
+
+  const hot = await findOrCreateHotSession(c.env);
+
+  // Verify each lead exists + isn't soft-deleted before inserting. Cheap to
+  // do in one IN(...) query.
+  const placeholders = leadIds.map(() => '?').join(',');
+  const validRows = await c.env.DB
+    .prepare(`SELECT id FROM leads WHERE deleted_at IS NULL AND id IN (${placeholders})`)
+    .bind(...leadIds).all<{ id: number }>();
+  const validIds = new Set((validRows.results ?? []).map(r => r.id));
+  const skippedInvalid = leadIds.length - validIds.size;
+
+  // Get next position (append at end).
+  const maxPosRow = await c.env.DB
+    .prepare(`SELECT COALESCE(MAX(position), -1) AS max_pos FROM session_leads WHERE session_id = ?`)
+    .bind(hot.id).first<{ max_pos: number }>();
+  let pos = (maxPosRow?.max_pos ?? -1) + 1;
+
+  let added = 0;
+  let duplicates = 0;
+  for (const leadId of leadIds) {
+    if (!validIds.has(leadId)) continue;
+    const result = await c.env.DB
+      .prepare(`INSERT OR IGNORE INTO session_leads (session_id, lead_id, position, is_callback) VALUES (?, ?, ?, 0)`)
+      .bind(hot.id, leadId, pos).run();
+    if (result.meta.changes > 0) {
+      added++;
+      pos++;
+    } else {
+      duplicates++;
+    }
+  }
+
+  // Ensure status='active' so the cockpit can dial it. Hot sessions never
+  // formally "complete" — they're an ongoing queue.
+  if (hot.status !== 'active') {
+    await c.env.DB.prepare(`UPDATE sessions SET status = 'active', started_at = COALESCE(started_at, datetime('now')) WHERE id = ?`)
+      .bind(hot.id).run();
+  }
+
+  log('info', 'sessions', `Hot leads: +${added} (${duplicates} dup, ${skippedInvalid} invalid)`);
+  return c.json({
+    session_id: hot.id,
+    added,
+    duplicates,
+    skipped_invalid: skippedInvalid,
   });
 });
 
@@ -230,14 +353,17 @@ sessionsRouter.post('/:id/start', async (c) => {
   if (!session) return c.json(notFound('Session'), 404);
   if (session.status === 'complete') return c.json(badRequest('Session already complete'), 400);
 
-  // Active-session-exclusivity: reject if another session is active.
+  // Active-session-exclusivity: only conflicts within the same `kind`. An
+  // operator can have one active auto session AND an active hot session
+  // (curated priority queue) in parallel — they're different surfaces.
   if (session.status === 'planned') {
     const active = await c.env.DB
-      .prepare(`SELECT id, session_date, block FROM sessions WHERE status = 'active' LIMIT 1`)
+      .prepare(`SELECT id, session_date, block FROM sessions WHERE status = 'active' AND kind = ? LIMIT 1`)
+      .bind(session.kind)
       .first<{ id: number; session_date: string; block: string }>();
     if (active && active.id !== id) {
       return c.json(conflict(
-        `Another session is still active (${active.session_date} ${active.block}). Wrap it first.`
+        `Another ${session.kind} session is still active (${active.session_date} ${active.block}). Wrap it first.`
       ), 409);
     }
   }

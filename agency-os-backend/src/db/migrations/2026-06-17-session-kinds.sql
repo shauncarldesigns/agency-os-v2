@@ -1,0 +1,21 @@
+-- Sessions — kind column (Hot leads feature)
+--
+-- Adds a `kind` discriminator on the sessions table:
+--   'auto' — composed by the industry-rotation recipe (default; existing rows)
+--   'hot'  — operator-curated priority queue, hand-picked from the Pipeline
+--
+-- The hot session is a persistent ongoing queue (not time-boxed). The active-
+-- session-exclusivity rule is loosened: only one 'auto' session can be active
+-- at a time, but a 'hot' session can be active simultaneously with one auto
+-- session. WeekPlanner filters to kind='auto' so the hot session has its own
+-- dashboard surface above the week grid.
+--
+-- The hot session uses a sentinel session_date ('hot') + block ('hot') to
+-- avoid colliding with the unique (session_date, block) index. Lexical date
+-- comparisons in the composer/week queries (`BETWEEN '2026-06-15' AND
+-- '2026-06-19'`) naturally exclude this sentinel since 'h' sorts after digits.
+--
+-- Run via: npx wrangler d1 execute agency-os-v2 --remote \
+--   --file=src/db/migrations/2026-06-17-session-kinds.sql
+
+ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'auto';
