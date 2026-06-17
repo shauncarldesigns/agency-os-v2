@@ -355,6 +355,17 @@ interface OutcomeBody {
     scheduledFor: string;          // ISO datetime
     honeybookConfirmed?: boolean;
   };
+  // Playbook objection-hit log (Phase 4a). Each entry: which objection
+  // was tapped, when (seconds from call start), optional path picked
+  // for branching objections, and whether the operator marked it
+  // Handled / Didn't-Land / left unmarked.
+  objectionHits?: Array<{
+    objection_id: string;
+    path_id?: string;
+    handled: boolean | null;
+    timestamp_s: number;
+    generation_id?: number | null;
+  }>;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -395,9 +406,10 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     skipped: '',  // unused; skipped never writes to call_log or lead.outcome
   } as const)[body.outcome];
   if (body.outcome !== 'skipped') {
+    const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
     await c.env.DB.prepare(
-      `INSERT INTO call_log (lead_id, outcome, notes) VALUES (?, ?, ?)`
-    ).bind(body.leadId, friendlyOutcome, notes).run();
+      `INSERT INTO call_log (lead_id, outcome, notes, objection_hits) VALUES (?, ?, ?, ?)`
+    ).bind(body.leadId, friendlyOutcome, notes, objectionHits).run();
   }
 
   // 2. Update session_leads with the outcome.

@@ -4,6 +4,10 @@ import type {
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
 } from './types';
+import type {
+  ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
+  GenerateRebuttalRequest, GenerateRebuttalResponse, ObjectionHit,
+} from './playbook';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
 const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
@@ -388,6 +392,23 @@ export const api = {
     update: (id: number, body: { status?: CallbackStatus; due_date?: string; notes?: string }) =>
       apiFetch<{ callback: Callback }>(`/api/callbacks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   },
+  playbook: {
+    scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
+    script: (id: string) => apiFetch<{ script: Script }>(`/api/playbook/scripts/${id}`),
+    objections: () => apiFetch<{ by_category: ObjectionsByCategory }>('/api/playbook/objections'),
+    objection: (id: string) => apiFetch<{ objection: Objection }>(`/api/playbook/objections/${id}`),
+    followUp: (id: string) => apiFetch<{ sequence: FollowUpSequence }>(`/api/playbook/follow-ups/${id}`),
+    generateRebuttal: (body: GenerateRebuttalRequest) =>
+      apiFetch<GenerateRebuttalResponse>('/api/playbook/generate-rebuttal', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    markUsed: (generationId: number, variantIndex: number) =>
+      apiFetch<{ ok: true }>(`/api/playbook/generations/${generationId}/mark-used`, {
+        method: 'POST',
+        body: JSON.stringify({ variant_index: variantIndex }),
+      }),
+  },
 };
 
 // --- Dashboard / sessions response types ---
@@ -465,6 +486,7 @@ export interface SessionOutcomeBody {
   callbackDate?: string;
   blockHint?: SessionBlock;
   demoData?: { scheduledFor: string; honeybookConfirmed?: boolean };
+  objectionHits?: ObjectionHit[];
 }
 
 export { API_BASE };
