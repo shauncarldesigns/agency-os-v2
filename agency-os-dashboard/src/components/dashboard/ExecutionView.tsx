@@ -6,6 +6,7 @@ import type {
   ObjectionsByCategory, ObjectionCategory,
   ObjectionHit, RebuttalVariant, LeadContext,
 } from '../../lib/playbook';
+import { interpolate, tradeLabel } from '../../lib/playbook';
 import { usePlaybook } from '../../lib/usePlaybook';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
@@ -124,6 +125,16 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // Script + stage state.
   const script: Script | null = playbook?.defaultScript ?? null;
   const linearStages = useMemo(() => (script?.stages ?? []).filter((s) => !s.branch), [script]);
+
+  // Token-interpolation context — feeds [Company Name] / [Name] / [city] /
+  // [state] / [their trade] across every script + rebuttal render.
+  const leadCtx: LeadContext = useMemo(() => ({
+    company: lead?.company ?? '',
+    contact_name: lead?.contact ?? undefined,
+    city: lead?.city ?? undefined,
+    state: lead?.state ?? undefined,
+    trade: tradeLabel(lead?.industry),
+  }), [lead]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   useEffect(() => {
     if (script && currentStageId === null) {
@@ -301,10 +312,13 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
       ? (Object.values(playbook.objections).flat() as Objection[]).find((o) => o.id === objectionId)
       : null;
     if (!obj) return '';
-    if (obj.type === 'simple') return obj.rebuttal;
-    if (!pathId) return obj.diagnostic.prompt;
-    return obj.paths.find((p) => p.id === pathId)?.rebuttal ?? obj.diagnostic.prompt;
-  }, [playbook]);
+    const raw = obj.type === 'simple'
+      ? obj.rebuttal
+      : !pathId
+        ? obj.diagnostic.prompt
+        : obj.paths.find((p) => p.id === pathId)?.rebuttal ?? obj.diagnostic.prompt;
+    return interpolate(raw, leadCtx);
+  }, [playbook, leadCtx]);
 
   const handleGenerate = useCallback(async () => {
     if (!activeObj || !lead || generating) return;
@@ -569,6 +583,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               currentStage={currentStage}
               currentStageIdx={linearIdx}
               nextStage={nextStage}
+              ctx={leadCtx}
               onBack={backStage}
               onAdvance={advanceStage}
               onJumpToStage={(id) => setCurrentStageId(id)}
@@ -590,6 +605,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               generated={generated && generated.forObjectionId === activeObj.objectionId ? generated : null}
               generating={generating}
               marking={marking}
+              ctx={leadCtx}
               onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
               onHandled={handleHandled}
               onDidntLand={handleDidntLand}
@@ -650,13 +666,14 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
 // ============================================================================
 
 function ScriptPanel({
-  script, linearStages, currentStage, currentStageIdx, nextStage, onBack, onAdvance, onJumpToStage,
+  script, linearStages, currentStage, currentStageIdx, nextStage, ctx, onBack, onAdvance, onJumpToStage,
 }: {
   script: Script | null;
   linearStages: Stage[];
   currentStage: Stage | null;
   currentStageIdx: number;
   nextStage: Stage | null;
+  ctx: LeadContext;
   onBack: () => void;
   onAdvance: () => void;
   onJumpToStage: (id: string) => void;
@@ -698,14 +715,14 @@ function ScriptPanel({
       {currentStage && (
         <div className="cockpit-stage-active">
           <div className="cockpit-stage-heading">Say this · {currentStage.label}</div>
-          <div className="cockpit-stage-body">{currentStage.body}</div>
-          {currentStage.note && <div className="cockpit-stage-note">↳ {currentStage.note}</div>}
+          <div className="cockpit-stage-body">{interpolate(currentStage.body, ctx)}</div>
+          {currentStage.note && <div className="cockpit-stage-note">↳ {interpolate(currentStage.note, ctx)}</div>}
         </div>
       )}
       {nextStage && (
         <div className="cockpit-stage-next">
           <div className="cockpit-stage-next-heading">Next · {nextStage.label}</div>
-          <div className="cockpit-stage-next-body">{truncate(nextStage.body, 120)}</div>
+          <div className="cockpit-stage-next-body">{truncate(interpolate(nextStage.body, ctx), 120)}</div>
         </div>
       )}
       <div className="cockpit-stage-controls">
@@ -779,7 +796,7 @@ function ObjectionPanel({
 // ============================================================================
 
 function ActiveObjectionPanel({
-  objection, activePath, variantOverride, generated, generating, marking,
+  objection, activePath, variantOverride, generated, generating, marking, ctx,
   onPathTap, onHandled, onDidntLand, onGenerate, onUseVariant, onBack,
 }: {
   objection: Objection;
@@ -788,6 +805,7 @@ function ActiveObjectionPanel({
   generated: GeneratedState | null;
   generating: boolean;
   marking: number | null;
+  ctx: LeadContext;
   onPathTap: (p: BranchingPath) => void;
   onHandled: () => void;
   onDidntLand: () => void;
@@ -811,13 +829,13 @@ function ActiveObjectionPanel({
           <div className="cockpit-rebuttal-heading" style={{ color: '#afa9ec' }}>
             ✨ Using generated variant — {variantOverride.angle}
           </div>
-          <div className="cockpit-rebuttal-body">{variantOverride.rebuttal}</div>
+          <div className="cockpit-rebuttal-body">{interpolate(variantOverride.rebuttal, ctx)}</div>
         </div>
       ) : isBranching ? (
         <>
           <div className="cockpit-rebuttal-card">
             <div className="cockpit-rebuttal-heading">Diagnose first — say this:</div>
-            <div className="cockpit-rebuttal-body">{(objection as BranchingObjection).diagnostic.prompt}</div>
+            <div className="cockpit-rebuttal-body">{interpolate((objection as BranchingObjection).diagnostic.prompt, ctx)}</div>
           </div>
           {!path ? (
             <>
@@ -841,16 +859,16 @@ function ActiveObjectionPanel({
           ) : (
             <div className="cockpit-rebuttal-card">
               <div className="cockpit-rebuttal-heading">{path.label} — say this:</div>
-              <div className="cockpit-rebuttal-body">{path.rebuttal}</div>
-              {path.note && <div className="cockpit-rebuttal-note">↳ {path.note}</div>}
+              <div className="cockpit-rebuttal-body">{interpolate(path.rebuttal, ctx)}</div>
+              {path.note && <div className="cockpit-rebuttal-note">↳ {interpolate(path.note, ctx)}</div>}
             </div>
           )}
         </>
       ) : (
         <div className="cockpit-rebuttal-card">
           <div className="cockpit-rebuttal-heading">Stock rebuttal — say this:</div>
-          <div className="cockpit-rebuttal-body">{(objection as { rebuttal: string }).rebuttal}</div>
-          {('note' in objection && objection.note) && <div className="cockpit-rebuttal-note">↳ {objection.note}</div>}
+          <div className="cockpit-rebuttal-body">{interpolate((objection as { rebuttal: string }).rebuttal, ctx)}</div>
+          {('note' in objection && objection.note) && <div className="cockpit-rebuttal-note">↳ {interpolate(objection.note, ctx)}</div>}
         </div>
       )}
 
@@ -868,7 +886,7 @@ function ActiveObjectionPanel({
           {generated.variants.map((v, i) => (
             <div key={i} className="cockpit-gen-variant">
               <div className="cockpit-gen-angle">{v.angle}</div>
-              <div className="cockpit-gen-rebuttal">{v.rebuttal}</div>
+              <div className="cockpit-gen-rebuttal">{interpolate(v.rebuttal, ctx)}</div>
               <button type="button" className="cockpit-btn-use" onClick={() => onUseVariant(i)} disabled={marking === i}>
                 {marking === i ? 'Using…' : 'Use this'}
               </button>
