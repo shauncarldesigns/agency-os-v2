@@ -32,13 +32,18 @@ leadCallsRouter.post('/:id/calls', async (c) => {
     const outcome = body.outcome as string | undefined;
     const notes = body.notes as string | undefined;
     const followupDate = (body.followup_date ?? body.followupDate) as string | undefined;
+    // Playbook objection-hit log (Phase 4a). Accepts an array; stored as JSON.
+    const objectionHitsRaw = body.objection_hits ?? body.objectionHits;
+    const objectionHits = Array.isArray(objectionHitsRaw) && objectionHitsRaw.length
+      ? JSON.stringify(objectionHitsRaw)
+      : null;
 
     if (!outcome) return c.json(badRequest('outcome is required'), 400);
     if (!notes) return c.json(badRequest('notes is required'), 400);
 
     const result = await c.env.DB
-      .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date) VALUES (?, ?, ?, ?)')
-      .bind(leadId, outcome, notes, followupDate ?? null)
+      .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date, objection_hits) VALUES (?, ?, ?, ?, ?)')
+      .bind(leadId, outcome, notes, followupDate ?? null, objectionHits)
       .run();
 
     // Update lead's last outcome + followup
