@@ -747,17 +747,18 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-exit:hover { color: var(--text2); }
 
 .cockpit-leadhead { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 12px 14px; margin-bottom: 10px; }
-.cockpit-leadhead-grid { display: grid; grid-template-columns: 1fr 1.7fr 1.4fr; gap: 12px; align-items: center; }
+.cockpit-leadhead-grid { display: grid; grid-template-columns: minmax(180px, auto) minmax(420px, 1fr) auto; gap: 12px; align-items: center; }
 .cockpit-company-label { font-size: 0.6rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
 .cockpit-company-name { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.02em; color: var(--text); margin-top: 2px; }
 .cockpit-company-meta { font-size: 0.7rem; color: var(--text3); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .cockpit-company-meta a { color: var(--text2); text-decoration: none; }
 .cockpit-company-meta a:hover { color: var(--accent); }
 .cockpit-call-cluster { display: flex; flex-direction: row; gap: 8px; align-items: stretch; }
-.cockpit-call-cluster > * { flex: 1 1 0; min-width: 0; }
-.cockpit-phone-hero { background: var(--surface2); border: 1px solid var(--accent); border-radius: var(--rl); padding: 7px 12px; }
+.cockpit-call-cluster > * { min-width: 0; }
+.cockpit-call-cluster > .iefield { flex: 1 1 0; }
+.cockpit-phone-hero { flex: 0 0 auto; background: var(--surface2); border: 1px solid var(--accent); border-radius: var(--rl); padding: 7px 12px; }
 .cockpit-phone-label { font-size: 0.6rem; color: var(--accent); letter-spacing: 0.08em; font-weight: 600; }
-.cockpit-phone-number { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.cockpit-phone-number { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
 .cockpit-phone-number a { color: inherit; text-decoration: none; }
 
 /* InlineEditField — click-to-edit cells for owner / email capture mid-call. */
@@ -774,7 +775,7 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .iefield-boxed { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rl); padding: 5px 12px; cursor: text; }
 .iefield-boxed:not(:disabled):hover { border-color: var(--border2); }
 .iefield-boxed.iefield-editing { padding: 4px 10px; }
-.cockpit-scores { display: flex; gap: 16px; justify-content: flex-end; }
+.cockpit-scores { display: flex; gap: 14px; }
 .cockpit-score-label { font-size: 0.6rem; color: var(--text3); letter-spacing: 0.05em; text-transform: uppercase; }
 .cockpit-score-val { font-size: 0.82rem; font-weight: 600; }
 .cockpit-score-good { color: var(--green); }
