@@ -10,6 +10,7 @@ import { interpolate, tradeLabel } from '../../lib/playbook';
 import { usePlaybook } from '../../lib/usePlaybook';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
+import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
 
@@ -209,6 +210,26 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setCurrentStageId(linearStages[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
+
+  // Persist an inline edit (owner name / email) on the active lead. PUTs the
+  // partial to /api/leads/:id, merges the server response into the local
+  // leads array so both the cockpit header AND BookingPane (which reads the
+  // same lead prop) see the new value immediately.
+  const handleLeadFieldUpdate = useCallback(async (field: 'contact' | 'email', value: string | null) => {
+    if (!lead) return;
+    try {
+      const res = await api.leads.update(lead.id, { [field]: value });
+      setLeads((prev) => {
+        const next = prev.slice();
+        const idx = next.findIndex((l) => l.id === lead.id);
+        if (idx >= 0) next[idx] = { ...next[idx], ...res.lead };
+        return next;
+      });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not save: ${msg}`, 'error');
+    }
+  }, [lead, showToast]);
 
   const findNextUncalled = useCallback((fromIndex: number, list: LeadWithSession[]): number => {
     const total = list.length;
@@ -577,20 +598,35 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             </div>
             <div className="cockpit-company-name">{lead.company}</div>
             <div className="cockpit-company-meta">
-              {lead.email && <a href={`mailto:${lead.email}`}>✉ {lead.email}</a>}
               {lead.website && <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer">🌐 {cleanDomain(lead.website)} ↗</a>}
               {(() => {
                 const maps = googleMapsUrl(lead);
                 return maps ? <a href={maps} target="_blank" rel="noreferrer">🗺️ Maps ↗</a> : null;
               })()}
-              {lead.contact && <span>👤 {lead.contact}</span>}
             </div>
           </div>
-          <div className="cockpit-phone-hero">
-            <div className="cockpit-phone-label">📞 CALL</div>
-            <div className="cockpit-phone-number">
-              {lead.phone ? <a href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a> : '—'}
+          <div className="cockpit-call-cluster">
+            <div className="cockpit-phone-hero">
+              <div className="cockpit-phone-label">📞 CALL</div>
+              <div className="cockpit-phone-number">
+                {lead.phone ? <a href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a> : '—'}
+              </div>
             </div>
+            <InlineEditField
+              label="Owner"
+              variant="boxed"
+              value={lead.contact}
+              placeholder="+ add owner name"
+              onSave={(v) => handleLeadFieldUpdate('contact', v)}
+            />
+            <InlineEditField
+              label="Email"
+              variant="boxed"
+              type="email"
+              value={lead.email}
+              placeholder="+ add email"
+              onSave={(v) => handleLeadFieldUpdate('email', v)}
+            />
           </div>
           <div className="cockpit-scores">
             <ScoreChip label="REVIEWS" value={`${lead.google_review_count ?? 0}${lead.google_rating ? ` · ${lead.google_rating}★` : ''}`} kind={reviewKind(lead.google_review_count)} />
@@ -611,6 +647,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
           showToast={showToast}
           onConfirm={handleBookingConfirm}
           onCancel={() => setBookingMode(false)}
+          onLeadFieldUpdate={handleLeadFieldUpdate}
         />
       ) : (
         <>
