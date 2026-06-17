@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
+import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone } from '../../lib/format';
 
 /**
@@ -22,6 +23,11 @@ interface BookingPaneProps {
   /** Called when operator hits "← Back to outcomes" — returns to the
    *  outcome buttons without writing anything. */
   onCancel: () => void;
+  /** Persist an inline edit on the active lead. Mirrors the cockpit
+   *  header — owner name / email captured here update the lead record
+   *  and propagate everywhere else (Pipeline modal, BookingPane copy
+   *  fields, etc). */
+  onLeadFieldUpdate?: (field: 'contact' | 'email', value: string | null) => Promise<void> | void;
 }
 
 // The HoneyBook placement ID driving the embed. Same as the original modal.
@@ -45,7 +51,7 @@ function ensureHoneyBookScript() {
   e?.parentNode?.insertBefore(t, e);
 }
 
-export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPaneProps) {
+export function BookingPane({ lead, showToast, onConfirm, onCancel, onLeadFieldUpdate }: BookingPaneProps) {
   const [scheduledFor, setScheduledFor] = useState(defaultDateTimeLocal());
   const [honeybookConfirmed, setHoneybookConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -118,9 +124,24 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPan
         <p style={hintStyle}>Click any field to copy. The "Copy all" button copies everything as a multi-line block.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           <CopyField label="Company" value={lead.company} copied={copied === 'company'} onCopy={() => copy('company', lead.company)} />
-          <CopyField label="Contact name" value={lead.contact ?? ''} copied={copied === 'contact'} onCopy={() => copy('contact', lead.contact)} />
+          <EditableField
+            label="Contact name"
+            value={lead.contact}
+            placeholder="+ add name"
+            copied={copied === 'contact'}
+            onCopy={() => copy('contact', lead.contact)}
+            onSave={onLeadFieldUpdate ? (v) => onLeadFieldUpdate('contact', v) : undefined}
+          />
           <CopyField label="Phone" value={lead.phone ? formatPhone(lead.phone) : ''} copied={copied === 'phone'} onCopy={() => copy('phone', lead.phone)} />
-          <CopyField label="Email" value={lead.email ?? ''} copied={copied === 'email'} onCopy={() => copy('email', lead.email)} />
+          <EditableField
+            label="Email"
+            value={lead.email}
+            placeholder="+ add email"
+            type="email"
+            copied={copied === 'email'}
+            onCopy={() => copy('email', lead.email)}
+            onSave={onLeadFieldUpdate ? (v) => onLeadFieldUpdate('email', v) : undefined}
+          />
           <CopyField label="City / State" value={[lead.city, lead.state].filter(Boolean).join(', ')} copied={copied === 'where'} onCopy={() => copy('where', [lead.city, lead.state].filter(Boolean).join(', '))} />
         </div>
         <div style={{ marginTop: 10 }}>
@@ -219,6 +240,51 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <div style={fieldLabelStyle}>{label}</div>
       {children}
+    </div>
+  );
+}
+
+function EditableField({
+  label, value, placeholder, type = 'text', copied, onCopy, onSave,
+}: {
+  label: string;
+  value: string | null | undefined;
+  placeholder: string;
+  type?: 'text' | 'email';
+  copied: boolean;
+  onCopy: () => void;
+  onSave?: (next: string | null) => Promise<void> | void;
+}) {
+  // Three-row stack: label, editable input, copy chip below. Persist the
+  // edit via the parent's update callback so it flows into the lead record.
+  // If no onSave wired up, falls back to read-only CopyField behavior.
+  if (!onSave) {
+    return <CopyField label={label} value={value ?? ''} copied={copied} onCopy={onCopy} />;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <InlineEditField
+        label={label}
+        variant="boxed"
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onSave={onSave}
+      />
+      <button
+        type="button"
+        onClick={onCopy}
+        disabled={!value}
+        style={{
+          alignSelf: 'flex-start',
+          background: 'transparent', border: 'none', padding: 0,
+          fontSize: '0.6rem', color: copied ? 'var(--green)' : 'var(--text3)',
+          fontFamily: 'inherit', cursor: value ? 'pointer' : 'default',
+          opacity: value ? 1 : 0.5,
+        }}
+      >
+        {copied ? '✓ Copied' : '📋 Copy'}
+      </button>
     </div>
   );
 }
