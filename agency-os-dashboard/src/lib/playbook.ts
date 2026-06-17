@@ -130,3 +130,28 @@ export interface ObjectionHit {
   timestamp_s: number;
   generation_id?: number | null;
 }
+
+// === Token interpolation (mirrors agency-os-backend/services/playbook.ts) ===
+
+const TOKEN_RE = /\[(Company Name|Name|city|state|their trade)\]/g;
+
+export function interpolate(text: string, ctx: LeadContext): string {
+  return text.replace(TOKEN_RE, (_, token) => {
+    switch (token) {
+      case 'Company Name': return ctx.company || '';
+      case 'Name': return ctx.contact_name || 'there';
+      case 'city': return ctx.city || '';
+      case 'state': return ctx.state || '';
+      case 'their trade': return ctx.trade || 'your trade';
+      default: return `[${token}]`;
+    }
+  });
+}
+
+// Normalizes Google Places primaryType strings into something readable
+// inside a sentence. "plumber" → "plumber", "roofing_contractor" → "roofing
+// contractor", "general_contractor" → "general contractor", etc.
+export function tradeLabel(industry: string | null | undefined): string {
+  if (!industry) return '';
+  return industry.replace(/_/g, ' ').toLowerCase().trim();
+}
