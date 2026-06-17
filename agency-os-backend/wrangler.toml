@@ -16,6 +16,11 @@ crons = [
   "0 * * * *"     # Hourly — DNS poll for projects still awaiting NS delegation
 ]
 
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
 [vars]
 ENV = "production"
 
