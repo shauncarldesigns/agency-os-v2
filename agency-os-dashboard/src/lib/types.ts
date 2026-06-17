@@ -62,6 +62,7 @@ export interface CallEntry {
   outcome: string;
   notes: string;
   followup_date: string | null;
+  recording_url: string | null;     // R2 public URL when operator recorded this call
   created_at: string;
 }
 

@@ -8,6 +8,10 @@ binding = "DB"
 database_name = "agency-os-v2"
 database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
 
+[[r2_buckets]]
+binding = "RECORDINGS"
+bucket_name = "agency-os-recordings"
+
 [triggers]
 crons = [
   "0 6 * * *",     # Daily 6am — refresh PageSpeed for live Tier 3 sites

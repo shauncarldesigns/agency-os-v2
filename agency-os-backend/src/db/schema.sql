@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS call_log (
   notes           TEXT NOT NULL,
   followup_date   TEXT,
   objection_hits  TEXT,                                          -- JSON array; see playbook spec
+  recording_url   TEXT,                                          -- R2 pub URL when operator recorded the call
   created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_call_lead ON call_log(lead_id, created_at DESC);
