@@ -4,6 +4,11 @@
 
 export type ObjectionCategory = 'standard' | 'deep-dive' | 'closing';
 
+export interface ObjectionVariant {
+  label: string;
+  rebuttal: string;
+}
+
 export interface SimpleObjection {
   id: string;
   label: string;
@@ -11,6 +16,7 @@ export interface SimpleObjection {
   type: 'simple';
   order: number;
   rebuttal: string;
+  variants?: ObjectionVariant[];
   note?: string;
 }
 
@@ -126,6 +132,7 @@ export interface GenerateRebuttalResponse {
 export interface ObjectionHit {
   objection_id: string;
   path_id?: string;
+  variant_label?: string;         // for SimpleObjection variants — which angle was used
   handled: boolean | null;
   timestamp_s: number;
   generation_id?: number | null;
@@ -133,7 +140,19 @@ export interface ObjectionHit {
 
 // === Token interpolation (mirrors agency-os-backend/services/playbook.ts) ===
 
-const TOKEN_RE = /\[(Company Name|Name|city|state|their trade)\]/g;
+const TOKEN_RE = /\[(Company Name|Name|city|state|their trade|review_count|review_avg|reviews)\]/g;
+
+// scores.reviews is the combined "41 · 4.9★" display string; tokens
+// [review_count] / [review_avg] parse the two numbers out for separate
+// use inside dialogue. [reviews] returns the combined format unchanged.
+function parseReviewsField(raw: string | undefined, want: 'count' | 'avg' | 'combined'): string {
+  if (!raw) return '';
+  if (want === 'combined') return raw;
+  const m = raw.match(/^\s*(\d+)\s*[·•]\s*([\d.]+)/);
+  if (m) return want === 'count' ? m[1] : m[2];
+  if (want === 'count') return raw.replace(/[^\d]/g, '');
+  return '';
+}
 
 export function interpolate(text: string, ctx: LeadContext): string {
   return text.replace(TOKEN_RE, (_, token) => {
@@ -143,6 +162,9 @@ export function interpolate(text: string, ctx: LeadContext): string {
       case 'city': return ctx.city || '';
       case 'state': return ctx.state || '';
       case 'their trade': return ctx.trade || 'your trade';
+      case 'review_count': return parseReviewsField(ctx.scores?.reviews, 'count');
+      case 'review_avg': return parseReviewsField(ctx.scores?.reviews, 'avg');
+      case 'reviews': return parseReviewsField(ctx.scores?.reviews, 'combined');
       default: return `[${token}]`;
     }
   });

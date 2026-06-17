@@ -530,6 +530,7 @@ interface OutcomeBody {
   objectionHits?: Array<{
     objection_id: string;
     path_id?: string;
+    variant_label?: string;     // for SimpleObjection variants — which angle was used
     handled: boolean | null;
     timestamp_s: number;
     generation_id?: number | null;
