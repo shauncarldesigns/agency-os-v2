@@ -19,6 +19,9 @@ paths:
     label: Just brushing me off
     short_label: Brushing off
     sets_followup_days: 14
+  - id: seasonal-slowdown
+    label: Plan for when it slows down
+    short_label: Seasonal
   - id: assumption-flip
     label: Try the assumption flip
     short_label: Assumption flip
@@ -45,6 +48,12 @@ That's exactly what a good website does for you — it filters the calls. People
 Totally fair — most of the guys I work with were too busy when I first called too. That's actually how I know you're worth calling. Can I check back in two weeks when things might be calmer?
 
 > Reframes "busy" as a compliment, sets a soft follow-up that's hard to say no to.
+
+## Path: seasonal-slowdown
+
+That actually makes sense — you're in your busy season right now which is great — but that also means in 4 months you're going to be staring at a quiet phone wondering where the next job is coming from. Wouldn't it be worth getting something built now so it's already working for you by the time things slow down?
+
+> Every Wisconsin trades guy KNOWS the winter slowdown is coming. You're not selling them on a problem they don't have — you're reminding them of one they already worry about. The image of the "quiet phone" hits hard because most have lived that exact moment.
 
 ## Path: assumption-flip
 
