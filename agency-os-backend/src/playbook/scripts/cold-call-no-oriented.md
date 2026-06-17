@@ -25,6 +25,10 @@ stages:
     label: IF HESITATE
     short_label: Hesitate
     branch: true
+  - id: busy-redirect
+    label: IF BUSY — REDIRECT TO DEMO
+    short_label: Busy → Demo
+    branch: true
   - id: label-1
     label: LABEL
     short_label: Label
@@ -85,6 +89,12 @@ stages:
 "Is it a bad idea to at least take a look before you decide it's not for you?"
 
 > Only use if they pause or push back after HOOK. Then advance to LABEL.
+
+## Stage: busy-redirect
+
+"Totally — and honestly we don't need to do this conversation twice. Let me just send you a calendar invite for a 10-minute demo this week. That way next time we talk it's me showing you the actual site instead of me explaining what it is. What works better — tomorrow morning or end of the day Thursday?"
+
+> Use when they say something like "I'm heading into back-to-back calls" or "can we do this another time." Three plays working at once: (1) "we don't need to do this conversation twice" protects their time; (2) skip the callback, go straight to the demo; (3) closed-ended choice (tomorrow morning vs Thursday afternoon), not "what works for you."
 
 ## Stage: label-1
 
