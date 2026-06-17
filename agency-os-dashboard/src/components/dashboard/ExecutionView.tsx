@@ -1,37 +1,46 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Lead, ShowToast, Session, CallOutcome, SessionBlock, CallEntry } from '../../lib/types';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type { Lead, ShowToast, Session, CallOutcome, SessionBlock } from '../../lib/types';
 import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
-import { Button } from '../shared/Button';
+import type {
+  Stage, Script, Objection, BranchingObjection, BranchingPath,
+  ObjectionsByCategory, ObjectionCategory,
+  ObjectionHit, RebuttalVariant, LeadContext,
+} from '../../lib/playbook';
+import { usePlaybook } from '../../lib/usePlaybook';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
-import { formatPhone, parseList, googleMapsUrl } from '../../lib/format';
+import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
 
 /**
- * Full-screen one-lead-at-a-time execution view.
+ * Calling cockpit — the operator's whole world during an active session.
  *
- * Loaded when the operator clicks Continue/Start on a session card.
- * Pulls /api/sessions/:id/next-lead repeatedly until the session is done,
- * showing the lead's call prep data + outcome buttons.
+ * Replaces the prior Brief-Studio-styled exec view with the spec's
+ * lead-header / script-panel / objection-panel / notes / outcome-bar
+ * layout. Preserves all session lifecycle plumbing (lead loading,
+ * navigation, autosave drafts, booking pane, post-booking prompt,
+ * burn-through completion).
  *
- * Keyboard shortcuts (baked in from day one — retrofitting later is annoying):
- *   1 = Voicemail
- *   2 = Not interested
- *   3 = Callback (focuses date picker)
- *   4 = Booked demo (triggers booking modal via onBookDemo callback)
- *   S = Skip (no log entry, silent advance)
- *   ← = previous-lead navigation isn't implemented yet (Phase 9 polish)
- *   Esc = close any inline picker
+ * New behaviors:
+ *   - Tap an objection chip → script panel swaps for the rebuttal card,
+ *     chip highlights, [MM:SS · OBJECTION: ...] auto-logs to notes.
+ *   - Branching objection → diagnostic prompt + 3 path cards; tap a path
+ *     to reveal that rebuttal and log `→ {path label}` to notes.
+ *   - ✨ Generate alternative calls /api/playbook/generate-rebuttal and
+ *     renders 3 variant cards; "Use this" calls /mark-used and swaps
+ *     the displayed rebuttal in place.
+ *   - Outcome tap (Voicemail / Not interested / Callback / Booked)
+ *     submits the call_log row with the objection_hits[] array attached.
+ *
+ * Keyboard shortcuts (preserved from prior version):
+ *   1 = Voicemail, 2 = Not interested, 3 = Callback, 4 = Booked demo
+ *   ← = Previous lead, → / S = Skip for now, Esc = close any picker
  */
 
 interface ExecutionViewProps {
   sessionId: number;
   showToast: ShowToast;
-  /** Closes the execution view + reloads the dashboard. */
   onClose: () => void;
-  /** Operator opted to pause the session and go build the just-booked
-   *  demo's site. App switches to the Sites tab and deep-links into the
-   *  project's Brief Studio so Quick Brief is one click away. */
   onPauseAndBuild?: (projectId: number) => void;
 }
 
@@ -39,33 +48,31 @@ interface LeadWithSession extends Lead {
   position?: number;
   is_callback?: number;
   session_lead_id?: number;
-  // Per-session call outcome (null until operator records something). Comes
-  // from the session_leads JOIN in /api/sessions/:id.
   call_outcome?: CallOutcome | null;
   called_at?: string | null;
 }
 
-// Log-a-call outcome dropdown options. Mirrors the Pipeline LeadModal's
-// CallLogTab so call_log entries are consistent across surfaces. The 4
-// session-action outcomes (voicemail/not_interested/callback/booked)
-// remain distinct because they drive session_leads state — not part of
-// this dropdown.
-const LOG_OUTCOMES = [
-  'No Answer',
-  'Voicemail Left',
-  'Spoke with Owner',
-  'Spoke with Gatekeeper',
-  'Callback Requested',
-  'Not Interested',
-  'Interested',
-  'Qualified for Tier',
-];
+interface ActiveObjectionState {
+  objectionId: string;
+  pathId?: string;            // for branching, once operator picks
+  variantOverride?: {         // when operator clicks "Use this" on a generation
+    angle: string;
+    rebuttal: string;
+    variantIndex: number;
+    generationId: number;
+  };
+}
+
+interface GeneratedState {
+  generationId: number;
+  variants: RebuttalVariant[];
+  forObjectionId: string;
+}
 
 export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }: ExecutionViewProps) {
+  const { data: playbook, loading: playbookLoading, error: playbookError } = usePlaybook();
+
   const [session, setSession] = useState<Session | null>(null);
-  // Full lead list, kept client-side so the operator can navigate
-  // forward/backward without re-fetching. currentIndex is the position they're
-  // looking at; lead derives from leads[currentIndex].
   const [leads, setLeads] = useState<LeadWithSession[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -75,15 +82,11 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   const calledCount = leads.filter((l) => l.call_outcome != null).length;
   const allDone = leads.length > 0 && calledCount === leads.length;
 
-  // Notes textarea state. Drafts persist in localStorage so the operator
-  // doesn't lose mid-call typing if the modal closes (browser refresh,
-  // session pause, accidental Esc). Keyed by session_lead_id so each lead's
-  // notes are independent. Cleared on outcome.
+  // Per-lead notes (auto-saved to localStorage, restored on navigation).
   const [notes, setNotes] = useState('');
   const notesRef = useRef(notes);
   useEffect(() => { notesRef.current = notes; }, [notes]);
   const draftKey = lead?.session_lead_id ? `exec-notes-${lead.session_lead_id}` : null;
-  // Debounced write — 800ms after typing stops.
   useEffect(() => {
     if (!draftKey) return;
     const t = setTimeout(() => {
@@ -91,60 +94,73 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
         if (notes.trim()) localStorage.setItem(draftKey, notes);
         else localStorage.removeItem(draftKey);
       } catch { /* silent */ }
-    }, 800);
+    }, 500);
     return () => clearTimeout(t);
   }, [notes, draftKey]);
-  // Clear draft when outcome is recorded.
   const clearDraft = useCallback(() => {
     if (!draftKey) return;
     try { localStorage.removeItem(draftKey); } catch { /* silent */ }
   }, [draftKey]);
 
-  // Inline callback date picker visible state.
+  // Per-call objection hit log + active objection state.
+  const [objectionHits, setObjectionHits] = useState<ObjectionHit[]>([]);
+  const objectionHitsRef = useRef(objectionHits);
+  useEffect(() => { objectionHitsRef.current = objectionHits; }, [objectionHits]);
+  const [activeObj, setActiveObj] = useState<ActiveObjectionState | null>(null);
+  const [generated, setGenerated] = useState<GeneratedState | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [marking, setMarking] = useState<number | null>(null);
+
+  // Per-lead call timer (used for MM:SS in objection-hit log and notes tags).
+  const [callStartMs, setCallStartMs] = useState<number>(() => Date.now());
+  // Tick once per second so the utility-row "ON CALL 1:48" updates live.
+  const [tickSeconds, setTickSeconds] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setTickSeconds((s) => s + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
+  const callElapsedS = Math.max(0, Math.floor((Date.now() - callStartMs) / 1000)) + (tickSeconds * 0);
+
+  // Script + stage state.
+  const script: Script | null = playbook?.defaultScript ?? null;
+  const linearStages = useMemo(() => (script?.stages ?? []).filter((s) => !s.branch), [script]);
+  const [currentStageId, setCurrentStageId] = useState<string | null>(null);
+  useEffect(() => {
+    if (script && currentStageId === null) {
+      setCurrentStageId(linearStages[0]?.id ?? script.stages[0]?.id ?? null);
+    }
+  }, [script, currentStageId, linearStages]);
+
+  const currentStage = script?.stages.find((s) => s.id === currentStageId) ?? null;
+  const linearIdx = linearStages.findIndex((s) => s.id === currentStageId);
+  const nextStage = linearIdx >= 0 ? linearStages[linearIdx + 1] ?? null : null;
+
+  // Inline callback picker.
   const [callbackOpen, setCallbackOpen] = useState(false);
   const [callbackDate, setCallbackDate] = useState(defaultCallbackDate());
   const [callbackBlock, setCallbackBlock] = useState<SessionBlock>('morning');
 
-  // Booking-mode flag — when true, the main column swaps to the BookingPane
-  // (split-pane HoneyBook embed + copy fields). Stays true until the operator
-  // either confirms (advances) or cancels (back to outcome buttons). Auto-
-  // resets when the lead changes so it doesn't leak across Previous/Next.
+  // Booking mode (BookingPane takeover when operator hits Booked).
   const [bookingMode, setBookingMode] = useState(false);
 
-  // Log-a-call form state. Outcome dropdown defaults to "Spoke with Owner" —
-  // the richest path. Follow-up date is optional. Notes is the same textarea
-  // the outcome buttons also pull from, so the operator can type once and
-  // either Save Call Entry (just log) OR click an outcome button (log +
-  // advance + drive session state).
-  const [logOutcome, setLogOutcome] = useState(LOG_OUTCOMES[2]);
-  const [logFollowup, setLogFollowup] = useState('');
-  const [savingCall, setSavingCall] = useState(false);
-  // Incremented each time a call entry is saved so the sidebar PriorCalls
-  // card knows to refetch. Cheap pattern — no need for context or events.
-  const [priorCallsRefresh, setPriorCallsRefresh] = useState(0);
+  // Pending post-booking prompt (offer Pause & build demo path).
+  const [pendingBooked, setPendingBooked] = useState<{ projectId: number; company: string } | null>(null);
 
-  // Pitch card generation state (lazy — operator clicks ↻ to generate).
-  const [generatingPitchCard, setGeneratingPitchCard] = useState(false);
+  // ===========================================================================
+  // SESSION LOADING + LEAD NAVIGATION
+  // ===========================================================================
 
-  // Full session load — fetches all leads, sets currentIndex to the first
-  // uncalled position so the operator naturally starts where they left off
-  // even after a refresh. Called on mount and after Extend +20 (the burn-
-  // through "extend" path needs fresh data).
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.sessions.get(sessionId);
       setSession(res.session);
       setLeads(res.leads);
-      // Park on the first uncalled lead; fall back to position 0 if everyone's
-      // already been called (burn-through screen will catch that).
       const firstUncalled = res.leads.findIndex((l) => l.call_outcome == null);
       setCurrentIndex(firstUncalled === -1 ? 0 : firstUncalled);
-      setCallbackOpen(false);
-      setNotes('');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not load execution view: ${msg}`, 'error');
+      showToast(`Could not load session: ${msg}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -152,51 +168,34 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
 
   useEffect(() => { void load(); }, [load]);
 
-  // Re-seed the notes textarea when the current lead changes (Previous/Next/
-  // advance). LocalStorage drafts are keyed by session_lead_id so each lead's
-  // notes survive navigation away and back. Also resets bookingMode, the
-  // callback picker, and the log-a-call form fields so none leak across
-  // navigation.
+  // Reset per-lead state when the active lead changes (navigation, advance).
   useEffect(() => {
-    if (!draftKey) { setNotes(''); return; }
-    try {
-      const saved = localStorage.getItem(draftKey);
-      setNotes(saved ?? '');
-    } catch { setNotes(''); }
+    if (!draftKey) { setNotes(''); }
+    else {
+      try { setNotes(localStorage.getItem(draftKey) ?? ''); }
+      catch { setNotes(''); }
+    }
+    setObjectionHits([]);
+    setActiveObj(null);
+    setGenerated(null);
     setCallbackOpen(false);
     setBookingMode(false);
-    setLogOutcome(LOG_OUTCOMES[2]);
-    setLogFollowup('');
+    setCallStartMs(Date.now());
+    setCurrentStageId(linearStages[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
 
-  // Advance helper: jump to the next uncalled lead AFTER the given index.
-  // If none remain forward, wrap to the first uncalled before the index
-  // (lets the operator finish the leads they skipped on the way). Returns
-  // the new index — caller is responsible for setCurrentIndex.
-  const findNextUncalledIndex = useCallback((fromIndex: number): number => {
-    const total = leads.length;
-    if (total === 0) return 0;
+  const findNextUncalled = useCallback((fromIndex: number, list: LeadWithSession[]): number => {
+    const total = list.length;
     for (let i = fromIndex + 1; i < total; i++) {
-      if (leads[i].call_outcome == null) return i;
+      if (list[i].call_outcome == null) return i;
     }
-    // Wrap — pick up any skipped-earlier uncalled leads from the start.
     for (let i = 0; i <= fromIndex; i++) {
-      if (leads[i].call_outcome == null) return i;
+      if (list[i].call_outcome == null) return i;
     }
-    // Nothing uncalled left anywhere. Caller will see allDone === true and
-    // render the burn-through screen.
     return total;
-  }, [leads]);
+  }, []);
 
-  // Holds the project that was just created when the operator booked a demo.
-  // Drives the post-booking prompt (Continue calling vs Pause & build demo).
-  // Null when no booking is pending operator action.
-  const [pendingBooked, setPendingBooked] = useState<{ projectId: number; company: string } | null>(null);
-
-  // Record an outcome. Updates the in-memory leads array (so navigation
-  // continues to reflect the new state without a full refetch) then advances
-  // to the next uncalled position.
   const recordOutcome = useCallback(async (
     outcome: CallOutcome,
     extra: Partial<SessionOutcomeBody> = {},
@@ -204,578 +203,675 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     if (!lead || recording) return;
     setRecording(true);
     try {
+      const hits = objectionHitsRef.current;
       const res = await api.sessions.outcome(sessionId, {
         leadId: lead.id,
         outcome,
         notes: notesRef.current.trim() || undefined,
+        objectionHits: hits.length ? hits : undefined,
         ...extra,
       });
       clearDraft();
-      // Stash the booking result so the post-booking prompt can offer the
-      // "Pause & build demo" path. recordOutcome still advances normally —
-      // operator can dismiss the prompt to keep calling.
       if (outcome === 'booked' && res.project) {
         setPendingBooked({ projectId: res.project.id, company: lead.company });
       }
-      // Mutate the local copy so the NEXT findNextUncalled call sees this
-      // outcome and skips past it. Important: spread into a new array so React
-      // notices the change.
       const updated = leads.slice();
       updated[currentIndex] = { ...updated[currentIndex], call_outcome: outcome, called_at: new Date().toISOString() };
       setLeads(updated);
-      // Compute next index from the UPDATED list (not the closed-over stale one).
-      const next = (() => {
-        const total = updated.length;
-        for (let i = currentIndex + 1; i < total; i++) {
-          if (updated[i].call_outcome == null) return i;
-        }
-        for (let i = 0; i <= currentIndex; i++) {
-          if (updated[i].call_outcome == null) return i;
-        }
-        return total; // → burn-through
-      })();
-      setCurrentIndex(next);
+      setCurrentIndex(findNextUncalled(currentIndex, updated));
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not record outcome: ${msg}`, 'error');
     } finally {
       setRecording(false);
     }
-  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast]);
+  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast, findNextUncalled]);
 
-  // Outcome button handlers.
-  const handleVoicemail = useCallback(() => recordOutcome('voicemail'), [recordOutcome]);
-  const handleNotInterested = useCallback(() => recordOutcome('not_interested'), [recordOutcome]);
-  const handleCallbackToggle = useCallback(() => { setCallbackOpen((v) => !v); }, []);
+  // ===========================================================================
+  // OBJECTION HANDLING
+  // ===========================================================================
+
+  // Append a line to notes without trampling existing content. Used for both
+  // objection-hit auto-tags and path selection.
+  const appendNote = useCallback((line: string) => {
+    setNotes((prev) => prev ? `${prev}\n${line}` : line);
+  }, []);
+
+  const handleObjectionTap = useCallback((objection: Objection) => {
+    const ts = Math.max(0, Math.floor((Date.now() - callStartMs) / 1000));
+    setActiveObj({ objectionId: objection.id });
+    setGenerated(null);
+    setObjectionHits((prev) => [
+      ...prev,
+      { objection_id: objection.id, handled: null, timestamp_s: ts },
+    ]);
+    appendNote(`[${formatMMSS(ts)} · OBJECTION: ${objection.label}]`);
+  }, [callStartMs, appendNote]);
+
+  const handlePathTap = useCallback((objection: BranchingObjection, path: BranchingPath) => {
+    setActiveObj((prev) => prev ? { ...prev, pathId: path.id } : prev);
+    // Update last objection-hit with the path.
+    setObjectionHits((prev) => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].objection_id === objection.id) {
+          next[i] = { ...next[i], path_id: path.id };
+          break;
+        }
+      }
+      return next;
+    });
+    appendNote(`→ ${path.short_label}`);
+  }, [appendNote]);
+
+  const handleHandled = useCallback(() => {
+    if (!activeObj) return;
+    setObjectionHits((prev) => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].objection_id === activeObj.objectionId) {
+          next[i] = { ...next[i], handled: true };
+          break;
+        }
+      }
+      return next;
+    });
+    setActiveObj(null);
+    setGenerated(null);
+  }, [activeObj]);
+
+  const handleDidntLand = useCallback(() => {
+    if (!activeObj) return;
+    setObjectionHits((prev) => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].objection_id === activeObj.objectionId) {
+          next[i] = { ...next[i], handled: false };
+          break;
+        }
+      }
+      return next;
+    });
+    setActiveObj(null);
+    setGenerated(null);
+  }, [activeObj]);
+
+  const stockRebuttalFor = useCallback((objectionId: string, pathId?: string): string => {
+    const obj = playbook?.objections
+      ? (Object.values(playbook.objections).flat() as Objection[]).find((o) => o.id === objectionId)
+      : null;
+    if (!obj) return '';
+    if (obj.type === 'simple') return obj.rebuttal;
+    if (!pathId) return obj.diagnostic.prompt;
+    return obj.paths.find((p) => p.id === pathId)?.rebuttal ?? obj.diagnostic.prompt;
+  }, [playbook]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!activeObj || !lead || generating) return;
+    const objection = findObjection(playbook?.objections, activeObj.objectionId);
+    if (!objection) return;
+    setGenerating(true);
+    try {
+      const ctx: LeadContext = {
+        company: lead.company,
+        contact_name: lead.contact ?? undefined,
+        city: lead.city ?? undefined,
+        state: lead.state ?? undefined,
+        trade: lead.industry ?? undefined,
+      };
+      const stock = stockRebuttalFor(activeObj.objectionId, activeObj.pathId);
+      const resp = await api.playbook.generateRebuttal({
+        objection_id: activeObj.objectionId,
+        lead_id: lead.id,
+        lead_context: ctx,
+        current_stage: currentStageId ?? undefined,
+        call_duration_seconds: Math.floor((Date.now() - callStartMs) / 1000),
+        free_text_notes: notesRef.current || undefined,
+        stock_rebuttal_already_tried: stock,
+      });
+      setGenerated({
+        generationId: resp.generation_id,
+        variants: resp.variants,
+        forObjectionId: activeObj.objectionId,
+      });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not generate alternatives: ${msg}`, 'error');
+    } finally {
+      setGenerating(false);
+    }
+  }, [activeObj, lead, generating, playbook, stockRebuttalFor, currentStageId, callStartMs, showToast]);
+
+  const handleUseVariant = useCallback(async (variantIndex: number) => {
+    if (!generated || !activeObj) return;
+    const variant = generated.variants[variantIndex];
+    if (!variant) return;
+    setMarking(variantIndex);
+    try {
+      await api.playbook.markUsed(generated.generationId, variantIndex);
+      setActiveObj({
+        ...activeObj,
+        variantOverride: {
+          angle: variant.angle,
+          rebuttal: variant.rebuttal,
+          variantIndex,
+          generationId: generated.generationId,
+        },
+      });
+      // Stamp generation id onto the most recent objection_hit for this objection.
+      setObjectionHits((prev) => {
+        const next = prev.slice();
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].objection_id === activeObj.objectionId) {
+            next[i] = { ...next[i], generation_id: generated.generationId };
+            break;
+          }
+        }
+        return next;
+      });
+      setGenerated(null);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not mark variant: ${msg}`, 'error');
+    } finally {
+      setMarking(null);
+    }
+  }, [generated, activeObj, showToast]);
+
+  // ===========================================================================
+  // STAGE NAVIGATION
+  // ===========================================================================
+
+  const advanceStage = useCallback(() => {
+    if (!nextStage) return;
+    setCurrentStageId(nextStage.id);
+  }, [nextStage]);
+
+  const backStage = useCallback(() => {
+    if (linearIdx <= 0) return;
+    const prev = linearStages[linearIdx - 1];
+    if (prev) setCurrentStageId(prev.id);
+  }, [linearIdx, linearStages]);
+
+  // ===========================================================================
+  // OUTCOME HANDLERS
+  // ===========================================================================
+
+  const handleVoicemail = useCallback(() => void recordOutcome('voicemail'), [recordOutcome]);
+  const handleNotInterested = useCallback(() => void recordOutcome('not_interested'), [recordOutcome]);
+  const handleCallbackToggle = useCallback(() => setCallbackOpen((v) => !v), []);
   const handleCallbackConfirm = useCallback(async () => {
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
     setCallbackOpen(false);
   }, [recordOutcome, callbackDate, callbackBlock]);
-  // Save Call Entry — writes a call_log row WITHOUT advancing or driving any
-  // session_leads state. Used for richer in-between captures ("spoke with
-  // receptionist, owner out till Thursday") that don't fit the 4 quick
-  // outcome buttons. Operator can still click an outcome button afterward to
-  // formally advance.
-  const handleSaveCallEntry = useCallback(async () => {
-    if (!lead || savingCall) return;
-    if (!notesRef.current.trim()) {
-      showToast('Add some notes before saving', 'error');
-      return;
-    }
-    setSavingCall(true);
-    try {
-      await api.calls.create(lead.id, {
-        outcome: logOutcome,
-        notes: notesRef.current.trim(),
-        followup_date: logFollowup || null,
-      });
-      clearDraft();
-      setNotes('');
-      setLogFollowup('');
-      setPriorCallsRefresh((n) => n + 1);
-      showToast('Call logged', 'success');
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Save failed: ${msg}`, 'error');
-    } finally {
-      setSavingCall(false);
-    }
-  }, [lead, savingCall, logOutcome, logFollowup, clearDraft, showToast]);
-
-  // Booked demo opens the inline BookingPane. recordOutcome happens when the
-  // operator hits "Mark booked & advance" inside the pane.
   const handleBookedDemo = useCallback(() => {
     if (!lead) return;
     setBookingMode(true);
   }, [lead]);
   const handleBookingConfirm = useCallback(async (scheduledFor: string, honeybookConfirmed: boolean) => {
     await recordOutcome('booked', { demoData: { scheduledFor, honeybookConfirmed } });
-    // bookingMode auto-clears via the lead-change effect when recordOutcome
-    // advances to the next lead. No explicit reset needed.
   }, [recordOutcome]);
 
-  // Navigation handlers — no DB writes, pure index movement. "Skip for now"
-  // is just Next that doesn't record an outcome; the lead stays in 'uncalled'
-  // state and naturally cycles back via the recordOutcome wrap-around logic.
+  // ===========================================================================
+  // NAVIGATION
+  // ===========================================================================
+
   const canGoBack = currentIndex > 0;
   const handlePrevious = useCallback(() => {
     if (canGoBack) setCurrentIndex((i) => i - 1);
   }, [canGoBack]);
-  // Skip-for-now: advances to next uncalled (wraps if at end), matching
-  // outcome-button advance semantics. The lead stays uncalled, so subsequent
-  // cycles will surface it again. This replaces the old generic "Next" —
-  // they overlapped enough that two buttons just confused the operator.
   const handleSkip = useCallback(() => {
-    setCurrentIndex(findNextUncalledIndex(currentIndex));
-  }, [findNextUncalledIndex, currentIndex]);
+    setCurrentIndex(findNextUncalled(currentIndex, leads));
+  }, [findNextUncalled, currentIndex, leads]);
 
-  // Pitch card on-demand generation. Caches on the lead row server-side and
-  // also updates the local leads array so navigating away+back shows the
-  // freshly-generated text.
-  const handleGeneratePitchCard = useCallback(async () => {
-    if (!lead || generatingPitchCard) return;
-    setGeneratingPitchCard(true);
-    try {
-      const res = await api.dashboard.generatePitchCard(lead.id);
-      const updated = leads.slice();
-      updated[currentIndex] = {
-        ...updated[currentIndex],
-        pitch_card_text: res.pitch_card_text,
-        pitch_card_generated_at: res.generated_at,
-      };
-      setLeads(updated);
-      showToast('Pitch card generated', 'success');
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not generate: ${msg}`, 'error');
-    } finally {
-      setGeneratingPitchCard(false);
-    }
-  }, [lead, generatingPitchCard, showToast, leads, currentIndex]);
+  // ===========================================================================
+  // KEYBOARD SHORTCUTS
+  // ===========================================================================
 
-  // Keyboard shortcuts:
-  //   1-4 = outcomes (unchanged)
-  //   ← = Previous (back through positions, sees called + uncalled)
-  //   → or S = Next / Skip for now (advance to next uncalled, wraps)
-  //   Esc = close callback picker
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
       if (recording || loading) return;
       switch (e.key) {
-        case '1': e.preventDefault(); void handleVoicemail(); break;
-        case '2': e.preventDefault(); void handleNotInterested(); break;
+        case '1': e.preventDefault(); handleVoicemail(); break;
+        case '2': e.preventDefault(); handleNotInterested(); break;
         case '3': e.preventDefault(); handleCallbackToggle(); break;
         case '4': e.preventDefault(); handleBookedDemo(); break;
         case 's': case 'S': case 'ArrowRight': e.preventDefault(); handleSkip(); break;
         case 'ArrowLeft': e.preventDefault(); handlePrevious(); break;
-        case 'Escape': e.preventDefault(); setCallbackOpen(false); break;
+        case 'Escape': e.preventDefault(); setCallbackOpen(false); setActiveObj(null); setGenerated(null); break;
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [recording, loading, handleVoicemail, handleNotInterested, handleCallbackToggle, handleBookedDemo, handleSkip, handlePrevious]);
 
-  if (loading) {
+  // ===========================================================================
+  // RENDER
+  // ===========================================================================
+
+  if (loading || playbookLoading) {
     return (
-      <div className="exec-page">
-        <div className="exec-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
-          <Spinner /> Loading session…
-        </div>
+      <div className="cockpit-page" style={{ textAlign: 'center', paddingTop: 80 }}>
+        <Spinner /> <span style={{ marginLeft: 8, color: 'var(--text3)' }}>Loading…</span>
+      </div>
+    );
+  }
+
+  if (playbookError) {
+    return (
+      <div className="cockpit-page" style={{ textAlign: 'center', paddingTop: 80, color: 'var(--red)' }}>
+        Could not load playbook content: {playbookError.message}
       </div>
     );
   }
 
   if (allDone || !lead) {
     return (
-      <div className="exec-page">
-        <div className="exec-card" style={{ width: 540 }}>
-          <BurnThroughComplete
-            sessionId={sessionId}
-            progress={{ total: leads.length, called: calledCount }}
-            showToast={showToast}
-            onExtend={async (count) => {
-              const r = await api.sessions.extend(sessionId, count);
-              showToast(
-                `Added ${r.added} leads${r.widened.length > 0 ? ` (widened: ${r.widened.length} step${r.widened.length === 1 ? '' : 's'})` : ''}`,
-                'success'
-              );
-              await load();
-            }}
-            onWrap={async () => {
-              await api.sessions.complete(sessionId);
-              showToast('Session complete', 'success');
-              onClose();
-            }}
-            onJumpNext={() => {
-              // Phase 9 polish: actually navigate to the next block. For now,
-              // just close and bounce back to the dashboard.
-              showToast('Jump-to-next ships in Phase 9 polish — wrap this session and click the next card.', 'default');
-              onClose();
-            }}
-          />
-        </div>
+      <div className="cockpit-page">
+        <BurnThroughComplete
+          sessionId={sessionId}
+          progress={{ total: leads.length, called: calledCount }}
+          showToast={showToast}
+          onExtend={async (count) => {
+            const r = await api.sessions.extend(sessionId, count);
+            showToast(`Added ${r.added} leads${r.widened.length ? ` (widened: ${r.widened.length})` : ''}`, 'success');
+            await load();
+          }}
+          onWrap={async () => {
+            await api.sessions.complete(sessionId);
+            showToast('Session complete', 'success');
+            onClose();
+          }}
+        />
       </div>
     );
   }
 
-  const reviewCount = lead.google_review_count ?? 0;
-  const rating = lead.google_rating;
-  const tier = lead.recommended_tier as 1 | 2 | 3 | null;
+  const objection = activeObj ? findObjection(playbook?.objections, activeObj.objectionId) : null;
+  const totalHits = objectionHits.length;
 
   return (
-    <div className="exec-page">
-      {/* Post-booking prompt — modal overlay on top of the page. Asks the
-          operator whether to keep calling or pause and go build the demo
-          site now. Only renders briefly after a successful booking. */}
+    <div className="cockpit-page">
       {pendingBooked && (
         <PostBookingPrompt
           company={pendingBooked.company}
           onContinue={() => setPendingBooked(null)}
           onPauseAndBuild={() => {
-            const projectId = pendingBooked.projectId;
+            const id = pendingBooked.projectId;
             setPendingBooked(null);
-            onPauseAndBuild?.(projectId);
+            onPauseAndBuild?.(id);
           }}
         />
       )}
 
-      {/* Topbar — Brief-Studio style. Always visible above the 2-col layout. */}
-      <div className="bs-topbar">
-        <div>
-          <button type="button" className="bs-back" onClick={onClose}>← Exit session</button>
-          <div className="bs-breadcrumb">
-            {session ? `${session.session_date} · ${session.block === 'morning' ? 'Morning' : 'Evening'}` : ''}
+      <div className="cockpit-utility">
+        <span>
+          <button className="cockpit-exit" type="button" onClick={onClose}>← Exit</button>
+          {session && ` · ${session.session_date} · ${session.block === 'morning' ? 'Morning' : 'Evening'}`}
+        </span>
+        <span>
+          {currentIndex + 1} of {leads.length} · {calledCount} called · ON CALL {formatMMSS(callElapsedS)}
+        </span>
+      </div>
+
+      <div className="cockpit-leadhead">
+        <div className="cockpit-leadhead-grid">
+          <div>
+            <div className="cockpit-company-label">
+              {[lead.industry, lead.city, lead.state].filter(Boolean).join(' · ')}
+              {lead.is_callback === 1 && <> · <Badge color="yellow">Callback</Badge></>}
+            </div>
+            <div className="cockpit-company-name">{lead.company}</div>
+            <div className="cockpit-company-meta">
+              {lead.email && <a href={`mailto:${lead.email}`}>✉ {lead.email}</a>}
+              {lead.website && <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer">🌐 {cleanDomain(lead.website)} ↗</a>}
+              {(() => {
+                const maps = googleMapsUrl(lead);
+                return maps ? <a href={maps} target="_blank" rel="noreferrer">🗺️ Maps ↗</a> : null;
+              })()}
+              {lead.contact && <span>👤 {lead.contact}</span>}
+            </div>
           </div>
-          <h1 className="bs-title">{lead.company}</h1>
-        </div>
-        <div className="bs-topbar-meta">
-          {lead.is_callback === 1 && <Badge color="yellow">Callback</Badge>}
-          <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
-        </div>
-      </div>
-
-      {/* Sub-header — contact info strip under the title. Kept outside the
-          2-col layout so it spans the full width and reads like a top-of-page
-          contact card. */}
-      <div style={{
-        fontSize: '0.78rem', color: 'var(--text3)',
-        padding: '0 0 14px',
-        display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
-      }}>
-        <span>{[lead.city, lead.state].filter(Boolean).join(', ') || '—'}</span>
-        {lead.phone && (
-          <a href={`tel:${lead.phone}`} style={{ color: 'var(--text)', fontFamily: 'ui-monospace,monospace' }}>
-            📞 {formatPhone(lead.phone)}
-          </a>
-        )}
-        {lead.website && (
-          <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
-            🌐 {cleanDomain(lead.website)} ↗
-          </a>
-        )}
-        {(() => {
-          const maps = googleMapsUrl(lead);
-          if (!maps) return null;
-          return (
-            <a href={maps} target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}>
-              🗺️ Maps ↗
-            </a>
-          );
-        })()}
-        {lead.email && (
-          <a href={`mailto:${lead.email}`} style={{ color: 'var(--text2)' }}>
-            ✉ {lead.email}
-          </a>
-        )}
-        {lead.contact && <span>👤 {lead.contact}</span>}
-      </div>
-
-      {/* Two-column body, Brief Studio classes. */}
-      <div className="bs-layout">
-        <main className="bs-main">
-          {bookingMode ? (
-            <BookingPane
-              lead={lead}
-              showToast={showToast}
-              onConfirm={handleBookingConfirm}
-              onCancel={() => setBookingMode(false)}
+          <div className="cockpit-phone-hero">
+            <div className="cockpit-phone-label">📞 CALL</div>
+            <div className="cockpit-phone-number">
+              {lead.phone ? <a href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a> : '—'}
+            </div>
+          </div>
+          <div className="cockpit-scores">
+            <ScoreChip label="REVIEWS" value={`${lead.google_review_count ?? 0}${lead.google_rating ? ` · ${lead.google_rating}★` : ''}`} kind={reviewKind(lead.google_review_count)} />
+            <ScoreChip label="GBP" value={lead.gbp_claimed ? '✓ Claimed' : '— Unclaimed'} kind={lead.gbp_claimed ? 'good' : 'warn'} />
+            <ScoreChip label="WEBSITE" value={lead.website ? '✓ Has site' : '— none'} kind={lead.website ? 'good' : 'bad'} />
+            <ScoreChip
+              label="SCORE"
+              value={`${lead.opportunity_score ?? '—'}${lead.recommended_tier ? ` · T${lead.recommended_tier}` : ''}`}
+              kind={scoreKind(lead.opportunity_score)}
             />
-          ) : (
-            <>
-              {/* Pitch card */}
-              <PitchCard
-                text={lead.pitch_card_text}
-                generatedAt={lead.pitch_card_generated_at}
-                onRegenerate={handleGeneratePitchCard}
-                busy={generatingPitchCard}
-              />
+          </div>
+        </div>
+      </div>
 
-              {/* Log a Call form — capture detailed notes + optional follow-up.
-                  Save Call Entry just writes call_log without advancing. The
-                  outcome buttons below will use the same notes + advance + drive
-                  session state. */}
-              <LogACallCard
-                outcome={logOutcome}
-                setOutcome={setLogOutcome}
-                followup={logFollowup}
-                setFollowup={setLogFollowup}
-                notes={notes}
-                setNotes={setNotes}
-                saving={savingCall}
-                onClear={() => { setNotes(''); setLogFollowup(''); }}
-                onSave={handleSaveCallEntry}
-              />
+      {bookingMode ? (
+        <BookingPane
+          lead={lead}
+          showToast={showToast}
+          onConfirm={handleBookingConfirm}
+          onCancel={() => setBookingMode(false)}
+        />
+      ) : (
+        <>
+          <div className="cockpit-grid">
+            <ScriptPanel
+              script={script}
+              linearStages={linearStages}
+              currentStage={currentStage}
+              currentStageIdx={linearIdx}
+              nextStage={nextStage}
+              onBack={backStage}
+              onAdvance={advanceStage}
+              onJumpToStage={(id) => setCurrentStageId(id)}
+            />
+            <ObjectionPanel
+              byCategory={playbook?.objections ?? emptyByCategory()}
+              activeObjectionId={activeObj?.objectionId ?? null}
+              hits={objectionHits}
+              totalHits={totalHits}
+              onTap={handleObjectionTap}
+            />
+          </div>
 
-              {/* Inline callback picker (visible on outcome=3) */}
-              {callbackOpen && (
-                <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.3)', borderRadius: 6 }}>
-                  <div style={labelStyle}>Callback date</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
-                    <input
-                      type="date"
-                      value={callbackDate}
-                      onChange={(e) => setCallbackDate(e.target.value)}
-                      style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'inherit' }}
-                    />
-                    <select
-                      value={callbackBlock}
-                      onChange={(e) => setCallbackBlock(e.target.value as SessionBlock)}
-                      style={{ padding: '6px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)' }}
-                    >
-                      <option value="morning">Morning</option>
-                      <option value="evening">Evening</option>
-                    </select>
-                    <Button variant="primary" size="sm" disabled={recording} onClick={handleCallbackConfirm}>
-                      Confirm callback
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setCallbackOpen(false)}>Cancel</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Outcome buttons — inline at the end of the workflow */}
-              <div style={{ marginTop: 16 }}>
-                <OutcomeButtons
-                  recording={recording}
-                  onVoicemail={handleVoicemail}
-                  onNotInterested={handleNotInterested}
-                  onCallback={handleCallbackToggle}
-                  onBooked={handleBookedDemo}
-                />
-              </div>
-
-              {/* Nav row — only when not booking */}
-              <NavRow
-                canGoBack={canGoBack}
-                recording={recording}
-                onPrevious={handlePrevious}
-                onSkip={handleSkip}
-              />
-            </>
+          {activeObj && objection && (
+            <ActiveObjectionPanel
+              objection={objection}
+              activePath={activeObj.pathId}
+              variantOverride={activeObj.variantOverride}
+              generated={generated && generated.forObjectionId === activeObj.objectionId ? generated : null}
+              generating={generating}
+              marking={marking}
+              onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
+              onHandled={handleHandled}
+              onDidntLand={handleDidntLand}
+              onGenerate={handleGenerate}
+              onUseVariant={handleUseVariant}
+              onBack={() => { setActiveObj(null); setGenerated(null); }}
+            />
           )}
-        </main>
+        </>
+      )}
 
-        {/* Right sidebar — reference material. Same Brief Studio card pattern
-            so it feels consistent across the app. */}
-        <aside className="bs-sidebar">
-          <ScoreSidebarCard lead={lead} reviewCount={reviewCount} rating={rating} tier={tier} />
-          <SignalsSidebarCard lead={lead} />
-          <PriorCallsSidebarCard leadId={lead.id} refreshKey={priorCallsRefresh} key={lead.id} />
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-// ---------- sub-components ----------
-
-function ProgressDashes({ total, called, currentIndex }: { total: number; called: number; currentIndex: number }) {
-  // "N of M" reflects the operator's current position, not just called count
-  // (since Previous/Next navigation can put them on any position regardless
-  // of outcome state). Dashes light up for any lead with an outcome.
-  const visible = Math.min(total, 40);
-  if (visible === 0) return <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>0 / 0</span>;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
-        {currentIndex + 1} of {total}
-        <span style={{ marginLeft: 6, opacity: 0.7 }}>· {called} called</span>
-      </span>
-      <div style={{ display: 'flex', gap: 2 }}>
-        {Array.from({ length: visible }).map((_, i) => {
-          // Three visual states: current position (filled accent w/ ring),
-          // called (filled accent), uncalled (border).
-          const isCurrent = i === currentIndex;
-          const isCalled = i < currentIndex; // approximation — see note below
-          return (
-            <span
-              key={i}
-              style={{
-                width: isCurrent ? 9 : 7,
-                height: isCurrent ? 5 : 3,
-                background: isCalled ? 'var(--accent)' : 'var(--border)',
-                outline: isCurrent ? '1px solid var(--accent)' : undefined,
-                outlineOffset: isCurrent ? 1 : 0,
-                transition: 'all 80ms',
-              }}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Sidebar cards — Brief Studio styled, reference material that updates as the
-// operator navigates between leads. None of these allow editing; pure read.
-// ============================================================================
-
-function ScoreSidebarCard({ lead, reviewCount, rating, tier }: {
-  lead: Lead;
-  reviewCount: number;
-  rating: number | null;
-  tier: 1 | 2 | 3 | null;
-}) {
-  return (
-    <div className="bs-side-card">
-      <div className="bs-side-title">Scores</div>
-      <div className="bs-side-row bs-side-row-status">
-        <span>Reviews</span>
-        <span className={reviewCount > 0 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
-          {reviewCount > 0 ? `${reviewCount}${rating != null ? ` · ${rating.toFixed(1)}★` : ''}` : '— none'}
-        </span>
-      </div>
-      <div className="bs-side-row bs-side-row-status">
-        <span>GBP</span>
-        <span className={lead.gbp_claimed === 1 ? 'bs-side-status-ok' : 'bs-side-status-na'}>
-          {lead.gbp_claimed === 1 ? '✓ Claimed' : '⚠ Unclaimed'}
-        </span>
-      </div>
-      <div className="bs-side-row bs-side-row-status">
-        <span>Website</span>
-        <span className={lead.website ? 'bs-side-status-ok' : 'bs-side-status-na'}>
-          {lead.website ? `PSI ${lead.pagespeed_mobile ?? '?'}` : '— none'}
-        </span>
-      </div>
-      <div className="bs-side-row bs-side-row-status">
-        <span>Opportunity</span>
-        <span className="bs-side-status-ok">
-          {lead.opportunity_score != null ? lead.opportunity_score : '—'}
-          {tier ? ` · Tier ${tier}` : ''}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SignalsSidebarCard({ lead }: { lead: Lead }) {
-  const signals: Array<{ text: string; severity: 'high' | 'normal' }> = [];
-  if (lead.gbp_claimed === 0) signals.push({ text: 'Unclaimed GBP', severity: 'high' });
-  if (!lead.website) signals.push({ text: 'No website', severity: 'high' });
-  else if (lead.pagespeed_mobile != null) {
-    signals.push({ text: `Mobile PSI ${lead.pagespeed_mobile}`, severity: lead.pagespeed_mobile < 50 ? 'high' : 'normal' });
-  }
-  if (lead.gbp_photos_count != null && lead.gbp_photos_count < 5) {
-    signals.push({ text: `${lead.gbp_photos_count} GBP photos`, severity: 'normal' });
-  }
-  const owners = parseList<string>(lead.owner_names);
-  if (owners.length > 0) signals.push({ text: `Owner: ${owners[0]}`, severity: 'normal' });
-
-  if (signals.length === 0) {
-    return (
-      <div className="bs-side-card">
-        <div className="bs-side-title">Signals</div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', padding: '6px 0' }}>
-          No flagged signals.
+      <div className="cockpit-notes-panel">
+        <div className="cockpit-panel-header">
+          <span className="cockpit-panel-title orange">📝 NOTES</span>
+          <span className="cockpit-panel-meta">auto-saves · objection chips auto-tag in</span>
         </div>
+        <textarea
+          className="cockpit-notes-textarea"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Start typing or tap an objection to log it..."
+        />
+      </div>
+
+      {callbackOpen && (
+        <div className="cockpit-callback-row">
+          <span style={{ fontSize: '0.72rem', color: 'var(--text2)' }}>Callback on:</span>
+          <input type="date" value={callbackDate} onChange={(e) => setCallbackDate(e.target.value)} />
+          <select value={callbackBlock} onChange={(e) => setCallbackBlock(e.target.value as SessionBlock)}>
+            <option value="morning">Morning</option>
+            <option value="evening">Evening</option>
+          </select>
+          <button type="button" className="cockpit-btn-primary" onClick={() => void handleCallbackConfirm()} disabled={recording}>
+            Confirm callback
+          </button>
+          <button type="button" className="cockpit-btn" onClick={() => setCallbackOpen(false)}>Cancel</button>
+        </div>
+      )}
+
+      <div className="cockpit-outcome-bar">
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}>📵 Voicemail</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}>✕ Not interested</button>
+        <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}>↻ Callback</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}>✓ Booked demo</button>
+      </div>
+
+      <div className="cockpit-navrow">
+        <button type="button" className="cockpit-btn" onClick={handlePrevious} disabled={!canGoBack}>← Previous</button>
+        <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
+        <button type="button" className="cockpit-btn" onClick={handleSkip}>Skip for now →</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SCRIPT PANEL
+// ============================================================================
+
+function ScriptPanel({
+  script, linearStages, currentStage, currentStageIdx, nextStage, onBack, onAdvance, onJumpToStage,
+}: {
+  script: Script | null;
+  linearStages: Stage[];
+  currentStage: Stage | null;
+  currentStageIdx: number;
+  nextStage: Stage | null;
+  onBack: () => void;
+  onAdvance: () => void;
+  onJumpToStage: (id: string) => void;
+}) {
+  if (!script) {
+    return (
+      <div className="cockpit-panel">
+        <div className="cockpit-panel-header">
+          <span className="cockpit-panel-title blue">📖 SCRIPT</span>
+        </div>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text3)' }}>No script loaded.</div>
       </div>
     );
   }
   return (
-    <div className="bs-side-card">
-      <div className="bs-side-title">Signals</div>
-      {signals.map((s, i) => (
-        <div key={i} className="bs-side-row" style={{
-          color: s.severity === 'high' ? 'var(--text)' : 'var(--text2)',
-          fontWeight: s.severity === 'high' ? 600 : 400,
-        }}>
-          • {s.text}
+    <div className="cockpit-panel">
+      <div className="cockpit-panel-header">
+        <span className="cockpit-panel-title blue">📖 {script.label.toUpperCase()}</span>
+        <span className="cockpit-panel-meta">
+          Stage {Math.max(currentStageIdx + 1, 1)} of {linearStages.length}
+        </span>
+      </div>
+      <div className="cockpit-stage-crumbs">
+        {linearStages.map((s, i) => {
+          const isActive = s.id === currentStage?.id;
+          const isDone = i < currentStageIdx;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className={`cockpit-stage-chip${isActive ? ' active' : isDone ? ' done' : ''}`}
+              onClick={() => onJumpToStage(s.id)}
+            >
+              {isDone ? '✓ ' : isActive ? '● ' : ''}{s.short_label}
+            </button>
+          );
+        })}
+      </div>
+      {currentStage && (
+        <div className="cockpit-stage-active">
+          <div className="cockpit-stage-heading">Say this · {currentStage.label}</div>
+          <div className="cockpit-stage-body">{currentStage.body}</div>
+          {currentStage.note && <div className="cockpit-stage-note">↳ {currentStage.note}</div>}
         </div>
-      ))}
+      )}
+      {nextStage && (
+        <div className="cockpit-stage-next">
+          <div className="cockpit-stage-next-heading">Next · {nextStage.label}</div>
+          <div className="cockpit-stage-next-body">{truncate(nextStage.body, 120)}</div>
+        </div>
+      )}
+      <div className="cockpit-stage-controls">
+        <button type="button" className="cockpit-btn" onClick={onBack} disabled={currentStageIdx <= 0}>← Back</button>
+        <button type="button" className="cockpit-btn-primary" onClick={onAdvance} disabled={!nextStage}>Advance →</button>
+      </div>
     </div>
   );
 }
 
-function PriorCallsSidebarCard({ leadId, refreshKey = 0 }: { leadId: number; refreshKey?: number }) {
-  // Inline render of the call history in sidebar-card style. Lazy-loads on
-  // first mount per lead (key={lead.id} at the call site resets this).
-  // refreshKey is bumped by the parent after a Save Call Entry so the list
-  // refetches without needing a manual reload.
-  const [expanded, setExpanded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [calls, setCalls] = useState<CallEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// ============================================================================
+// OBJECTION PANEL
+// ============================================================================
 
-  // Load count eagerly so the sidebar title can show "(N)" without a click.
-  // Re-fetches when leadId or refreshKey change.
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setLoading(true);
-    api.leads.get(leadId)
-      .then((res) => { if (!cancelled) setCalls(res.calls); })
-      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : (err as Error).message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [leadId, refreshKey]);
+const CAT_LABEL: Record<ObjectionCategory, string> = {
+  'standard': 'Standard',
+  'deep-dive': 'Deep dive · branches',
+  'closing': 'Closing',
+};
 
-  const count = calls?.length ?? 0;
-  const hasAny = count > 0;
-
+function ObjectionPanel({
+  byCategory, activeObjectionId, hits, totalHits, onTap,
+}: {
+  byCategory: ObjectionsByCategory;
+  activeObjectionId: string | null;
+  hits: ObjectionHit[];
+  totalHits: number;
+  onTap: (o: Objection) => void;
+}) {
+  const cats: ObjectionCategory[] = ['standard', 'deep-dive', 'closing'];
   return (
-    <div className="bs-side-card">
-      <div className="bs-side-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Prior calls{calls != null ? ` (${count})` : ''}</span>
-        {hasAny && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            style={{
-              background: 'transparent', border: 'none', color: 'var(--text2)',
-              cursor: 'pointer', fontSize: '0.66rem', padding: '0 4px',
-              fontFamily: 'inherit', textTransform: 'none', letterSpacing: 0,
-            }}
-          >
-            {expanded ? '▾ Hide' : '▸ Show'}
-          </button>
-        )}
+    <div className="cockpit-panel">
+      <div className="cockpit-panel-header">
+        <span className="cockpit-panel-title coral">🎯 OBJECTIONS</span>
+        <span className="cockpit-panel-meta" style={{ color: totalHits ? 'var(--yellow)' : undefined }}>
+          {totalHits} hit{totalHits === 1 ? '' : 's'}
+        </span>
+      </div>
+      {cats.map((cat) => {
+        const items = byCategory[cat] ?? [];
+        if (!items.length) return null;
+        return (
+          <div key={cat}>
+            <div className="cockpit-obj-cat">{CAT_LABEL[cat]}</div>
+            <div className="cockpit-obj-grid">
+              {items.map((o) => {
+                const isActive = o.id === activeObjectionId;
+                const wasHit = hits.some((h) => h.objection_id === o.id);
+                const isWide = items.length % 2 === 1 && items.indexOf(o) === items.length - 1;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    className={`cockpit-obj-chip${isActive ? ' active' : ''}${wasHit && !isActive ? ' hit' : ''}${isWide ? ' full' : ''}`}
+                    onClick={() => onTap(o)}
+                  >
+                    {isActive ? '● ' : ''}{o.label}{o.type === 'branching' ? ' ↗' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// ACTIVE OBJECTION PANEL (simple OR branching)
+// ============================================================================
+
+function ActiveObjectionPanel({
+  objection, activePath, variantOverride, generated, generating, marking,
+  onPathTap, onHandled, onDidntLand, onGenerate, onUseVariant, onBack,
+}: {
+  objection: Objection;
+  activePath?: string;
+  variantOverride?: ActiveObjectionState['variantOverride'];
+  generated: GeneratedState | null;
+  generating: boolean;
+  marking: number | null;
+  onPathTap: (p: BranchingPath) => void;
+  onHandled: () => void;
+  onDidntLand: () => void;
+  onGenerate: () => void;
+  onUseVariant: (index: number) => void;
+  onBack: () => void;
+}) {
+  const isBranching = objection.type === 'branching';
+  const path = isBranching ? (objection as BranchingObjection).paths.find((p) => p.id === activePath) : null;
+  return (
+    <div className="cockpit-active-obj">
+      <div className="cockpit-panel-header">
+        <span className="cockpit-panel-title coral">
+          🎯 {isBranching ? 'BRANCHING REBUTTAL' : 'REBUTTAL'} · "{objection.label.toUpperCase()}"
+        </span>
+        <button type="button" className="cockpit-btn" style={{ padding: '3px 8px' }} onClick={onBack}>← back</button>
       </div>
 
-      {loading && (
-        <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Spinner /> Loading…
+      {variantOverride ? (
+        <div className="cockpit-rebuttal-card" style={{ borderColor: '#afa9ec' }}>
+          <div className="cockpit-rebuttal-heading" style={{ color: '#afa9ec' }}>
+            ✨ Using generated variant — {variantOverride.angle}
+          </div>
+          <div className="cockpit-rebuttal-body">{variantOverride.rebuttal}</div>
         </div>
-      )}
-
-      {!loading && error && (
-        <div style={{ fontSize: '0.68rem', color: 'var(--red)', padding: '6px 0' }}>
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && !hasAny && (
-        <div style={{ fontSize: '0.7rem', color: 'var(--text3)', padding: '6px 0', fontStyle: 'italic' }}>
-          No prior calls logged.
-        </div>
-      )}
-
-      {!loading && !error && hasAny && expanded && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, maxHeight: 320, overflowY: 'auto' }}>
-          {/* Newest first — backend returns ORDER BY created_at DESC. */}
-          {calls!.map((c) => (
-            <div key={c.id} style={{
-              padding: '7px 9px',
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              fontSize: '0.72rem',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
-                <span style={{ fontWeight: 600 }}>{c.outcome}</span>
-                <span style={{ color: 'var(--text3)', fontSize: '0.64rem' }}>{formatCallTimestamp(c.created_at)}</span>
+      ) : isBranching ? (
+        <>
+          <div className="cockpit-rebuttal-card">
+            <div className="cockpit-rebuttal-heading">Diagnose first — say this:</div>
+            <div className="cockpit-rebuttal-body">{(objection as BranchingObjection).diagnostic.prompt}</div>
+          </div>
+          {!path ? (
+            <>
+              <div className="cockpit-path-label">↓ Then branch on their answer:</div>
+              <div className="cockpit-path-grid">
+                {(objection as BranchingObjection).paths.map((p, i) => (
+                  <button key={p.id} type="button" className="cockpit-path-card" onClick={() => onPathTap(p)}>
+                    <div className="cockpit-path-tag">Path {String.fromCharCode(65 + i)}</div>
+                    <div className="cockpit-path-name">{p.label} →</div>
+                    {(p.drop_ask_to || p.follow_up_note || p.sets_followup_days) && (
+                      <div className="cockpit-path-desc">
+                        {p.drop_ask_to && `Drop ask to ${p.drop_ask_to}`}
+                        {p.follow_up_note && p.follow_up_note}
+                        {p.sets_followup_days && `Set ${p.sets_followup_days}-day followup`}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
-              {c.notes && (
-                <div style={{ color: 'var(--text2)', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
-                  {c.notes}
-                </div>
-              )}
-              {c.followup_date && (
-                <div style={{ color: 'var(--text3)', fontSize: '0.64rem', marginTop: 3 }}>
-                  Followup: {c.followup_date}
-                </div>
-              )}
+            </>
+          ) : (
+            <div className="cockpit-rebuttal-card">
+              <div className="cockpit-rebuttal-heading">{path.label} — say this:</div>
+              <div className="cockpit-rebuttal-body">{path.rebuttal}</div>
+              {path.note && <div className="cockpit-rebuttal-note">↳ {path.note}</div>}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="cockpit-rebuttal-card">
+          <div className="cockpit-rebuttal-heading">Stock rebuttal — say this:</div>
+          <div className="cockpit-rebuttal-body">{(objection as { rebuttal: string }).rebuttal}</div>
+          {('note' in objection && objection.note) && <div className="cockpit-rebuttal-note">↳ {objection.note}</div>}
+        </div>
+      )}
+
+      <div className="cockpit-obj-actions">
+        <button type="button" className="cockpit-btn-success" onClick={onHandled}>✓ Handled — continue</button>
+        <button type="button" className="cockpit-btn-danger" onClick={onDidntLand}>✕ Didn't land</button>
+        <button type="button" className="cockpit-btn-generate" onClick={onGenerate} disabled={generating}>
+          {generating ? '✨ Generating…' : '✨ Generate alternative'}
+        </button>
+      </div>
+
+      {generated && (
+        <div className="cockpit-gen-results">
+          <div className="cockpit-gen-label">✨ Generated alternatives · {generated.variants.length} angles</div>
+          {generated.variants.map((v, i) => (
+            <div key={i} className="cockpit-gen-variant">
+              <div className="cockpit-gen-angle">{v.angle}</div>
+              <div className="cockpit-gen-rebuttal">{v.rebuttal}</div>
+              <button type="button" className="cockpit-btn-use" onClick={() => onUseVariant(i)} disabled={marking === i}>
+                {marking === i ? 'Using…' : 'Use this'}
+              </button>
             </div>
           ))}
         </div>
@@ -784,389 +880,131 @@ function PriorCallsSidebarCard({ leadId, refreshKey = 0 }: { leadId: number; ref
   );
 }
 
-// Post-booking prompt — fires after a successful "Mark booked & advance" so
-// the operator can choose to either keep the calling rhythm or pause and go
-// build the demo site immediately (the user's stated workflow: stop calling,
-// prep the demo). Renders as a small modal-style overlay above the page so
-// it doesn't interrupt the underlying state.
+// ============================================================================
+// SMALL SHARED COMPONENTS + HELPERS
+// ============================================================================
+
+function ScoreChip({ label, value, kind }: { label: string; value: string; kind: 'good' | 'warn' | 'bad' | 'neutral' }) {
+  const cls = kind === 'good' ? 'cockpit-score-good' : kind === 'warn' ? 'cockpit-score-warn' : kind === 'bad' ? 'cockpit-score-bad' : '';
+  return (
+    <div>
+      <div className="cockpit-score-label">{label}</div>
+      <div className={`cockpit-score-val ${cls}`}>{value}</div>
+    </div>
+  );
+}
+
+function ProgressDashes({ total, called, currentIndex }: { total: number; called: number; currentIndex: number }) {
+  const cap = Math.min(total, 30);
+  const items = Array.from({ length: cap });
+  return (
+    <div className="cockpit-progress-dashes" title={`${called} of ${total} called`}>
+      {items.map((_, i) => {
+        const cls = i < called ? 'done' : i === currentIndex ? 'now' : '';
+        return <span key={i} className={`cockpit-progress-dash${cls ? ` ${cls}` : ''}`} />;
+      })}
+    </div>
+  );
+}
+
 function PostBookingPrompt({ company, onContinue, onPauseAndBuild }: {
   company: string; onContinue: () => void; onPauseAndBuild: () => void;
 }) {
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 2000,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
-    }}>
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
-        maxWidth: 480, width: '100%',
-        padding: '22px 24px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
-      }}>
-        <div style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--green)', marginBottom: 6 }}>
-          ✓ Demo booked
-        </div>
-        <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 4 }}>
-          {company}
-        </div>
-        <p style={{ fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.55, margin: '6px 0 18px' }}>
-          A prospect project was created. Want to <strong>pause the session and go build
-          the demo site now</strong>, or keep calling and come back to it later?
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="ghost" size="sm" onClick={onContinue}>Keep calling</Button>
-          <Button variant="primary" size="sm" onClick={onPauseAndBuild}>🛠 Pause & build demo</Button>
+    <div className="cockpit-overlay">
+      <div className="cockpit-overlay-card">
+        <div className="cockpit-overlay-title">✓ DEMO BOOKED</div>
+        <div className="cockpit-overlay-sub">Booked a demo with <strong>{company}</strong>. Build the demo site now, or keep calling?</div>
+        <div className="cockpit-overlay-actions">
+          <button type="button" className="cockpit-btn-success" onClick={onPauseAndBuild}>🛠 Pause & build demo</button>
+          <button type="button" className="cockpit-btn" onClick={onContinue}>Keep calling →</button>
         </div>
       </div>
     </div>
-  );
-}
-
-// "Log a Call" form — flexible call-entry capture inside the execution view.
-// Mirrors the Pipeline LeadModal's CallLogTab look (orange-tinted header bar,
-// outcome dropdown + follow-up date row, free-form notes). Two save paths:
-//   1. "Save Call Entry" button — just writes call_log, doesn't advance
-//   2. Outcome buttons below — write call_log AND advance + drive session state
-// Both share the notes textarea, so the operator types once and picks an
-// action.
-interface LogACallCardProps {
-  outcome: string;
-  setOutcome: (v: string) => void;
-  followup: string;
-  setFollowup: (v: string) => void;
-  notes: string;
-  setNotes: (v: string) => void;
-  saving: boolean;
-  onClear: () => void;
-  onSave: () => void;
-}
-
-function LogACallCard({
-  outcome, setOutcome, followup, setFollowup, notes, setNotes, saving, onClear, onSave,
-}: LogACallCardProps) {
-  const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return (
-    <div style={{
-      marginTop: 14,
-      padding: '14px 16px',
-      background: 'rgba(255,107,43,0.06)',
-      border: '1px solid rgba(255,107,43,0.25)',
-      borderRadius: 8,
-    }}>
-      {/* Header strip */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--accent)' }}>
-          📞 Log a call
-        </div>
-        <div style={{ fontSize: '0.62rem', color: 'var(--text3)' }}>Today · {now}</div>
-      </div>
-
-      {/* Outcome + Follow-up date row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginBottom: 10 }}>
-        <div>
-          <div style={fieldLabelStyle}>Outcome</div>
-          <select
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            style={fieldInputStyle}
-          >
-            {LOG_OUTCOMES.map((o) => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <div style={fieldLabelStyle}>Follow-up date</div>
-          <input
-            type="date"
-            value={followup}
-            onChange={(e) => setFollowup(e.target.value)}
-            style={fieldInputStyle}
-          />
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={fieldLabelStyle}>Call notes</div>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="What did they say? What's the next action? Any objections to handle?"
-          rows={3}
-          style={{ ...fieldInputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-        />
-      </div>
-
-      {/* Footer — Clear + Save Call Entry. Outcome buttons live below this
-          card in the main column and will use the same `notes` value. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7 }}>
-        <Button variant="ghost" size="sm" onClick={onClear} disabled={saving}>Clear</Button>
-        <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
-          {saving ? <><Spinner /> Saving…</> : '💾 Save Call Entry'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-const fieldLabelStyle: React.CSSProperties = {
-  fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.4px',
-  color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 4,
-};
-const fieldInputStyle: React.CSSProperties = {
-  width: '100%', background: 'var(--surface2)',
-  border: '1px solid var(--border)', borderRadius: 4,
-  padding: '7px 10px', fontSize: '0.78rem',
-  color: 'var(--text)', fontFamily: 'inherit',
-};
-
-function PitchCard({ text, generatedAt, onRegenerate, busy }: { text: string | null; generatedAt: string | null; onRegenerate: () => void; busy: boolean }) {
-  return (
-    <div style={{
-      marginTop: 12,
-      padding: '12px 14px',
-      background: 'rgba(167,139,250,0.06)',
-      border: '1px solid rgba(167,139,250,0.3)',
-      borderRadius: 6,
-      position: 'relative',
-    }}>
-      <div style={{ ...labelStyle, color: '#a78bfa', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>💎 Pitch card</span>
-        <button
-          onClick={onRegenerate}
-          disabled={busy}
-          style={{
-            background: 'transparent',
-            border: '1px solid rgba(167,139,250,0.4)',
-            color: '#a78bfa',
-            borderRadius: 3,
-            padding: '2px 8px',
-            fontSize: '0.62rem',
-            cursor: busy ? 'default' : 'pointer',
-            opacity: busy ? 0.5 : 1,
-            textTransform: 'none',
-            letterSpacing: 0,
-          }}
-        >
-          {busy ? '…' : (text ? '↻ Regenerate' : '✦ Generate')}
-        </button>
-      </div>
-      {text ? (
-        <>
-          <div style={{ fontSize: '0.84rem', color: 'var(--text)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-            {text}
-          </div>
-          {generatedAt && (
-            <div style={{ fontSize: '0.6rem', color: 'var(--text3)', marginTop: 6 }}>
-              Generated {new Date(generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ fontSize: '0.74rem', color: 'var(--text3)', fontStyle: 'italic' }}>
-          Not generated yet. Click <strong>✦ Generate</strong> for a 2-3 sentence pre-call script.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function formatCallTimestamp(iso: string): string {
-  try {
-    return new Date(iso.replace(' ', 'T')).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
-  } catch { return iso; }
-}
-
-interface OutcomeButtonsProps {
-  recording: boolean;
-  onVoicemail: () => void;
-  onNotInterested: () => void;
-  onCallback: () => void;
-  onBooked: () => void;
-}
-
-function OutcomeButtons({ recording, onVoicemail, onNotInterested, onCallback, onBooked }: OutcomeButtonsProps) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: 8,
-      padding: '12px 18px',
-      borderTop: '1px solid var(--border)',
-      background: 'var(--surface2)',
-    }}>
-      <OutcomeBtn label="Voicemail" sub="1" onClick={onVoicemail} disabled={recording} />
-      <OutcomeBtn label="Not interested" sub="2" onClick={onNotInterested} disabled={recording} accent="red" />
-      <OutcomeBtn label="Callback" sub="3" onClick={onCallback} disabled={recording} accent="yellow" />
-      <OutcomeBtn label="Booked demo" sub="4" onClick={onBooked} disabled={recording} accent="green" />
-    </div>
-  );
-}
-
-// Nav row — sits below outcome buttons. Neither button writes to the DB.
-// Previous walks back through positions (sees called + uncalled). Skip-for-now
-// advances to the next uncalled lead, wrapping if at the end so skipped leads
-// naturally come back around. The generic "Next" was removed — it duplicated
-// Skip enough to confuse the operator without earning the screen space.
-interface NavRowProps {
-  canGoBack: boolean;
-  recording: boolean;
-  onPrevious: () => void;
-  onSkip: () => void;
-}
-function NavRow({ canGoBack, recording, onPrevious, onSkip }: NavRowProps) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      padding: '8px 18px 12px',
-      borderTop: '1px solid var(--border)',
-      background: 'var(--surface2)',
-      gap: 6,
-    }}>
-      <NavBtn label="← Previous" sub="←" onClick={onPrevious} disabled={recording || !canGoBack} align="left" />
-      <NavBtn label="Skip for now →" sub="S" onClick={onSkip} disabled={recording} align="right" />
-    </div>
-  );
-}
-
-function NavBtn({ label, sub, onClick, disabled, align }: {
-  label: string; sub: string; onClick: () => void; disabled: boolean; align: 'left' | 'center' | 'right';
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '5px 10px',
-        background: 'transparent',
-        border: 'none',
-        color: 'var(--text3)',
-        fontSize: '0.7rem',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.4 : 1,
-        fontFamily: 'inherit',
-        textAlign: align,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-      }}
-    >
-      <span>{label}</span>
-      <span style={{ fontSize: '0.55rem', opacity: 0.6, marginTop: 1 }}>[{sub}]</span>
-    </button>
-  );
-}
-
-function OutcomeBtn({ label, sub, onClick, disabled, accent, ghost }: {
-  label: string; sub: string; onClick: () => void; disabled: boolean;
-  accent?: 'red' | 'yellow' | 'green'; ghost?: boolean;
-}) {
-  const colors: Record<NonNullable<typeof accent>, { bg: string; border: string; color: string }> = {
-    red: { bg: 'transparent', border: 'rgba(248,113,113,0.5)', color: 'var(--red)' },
-    yellow: { bg: 'transparent', border: 'rgba(245,200,66,0.5)', color: 'var(--yellow)' },
-    green: { bg: 'var(--green)', border: 'var(--green)', color: 'white' },
-  };
-  const style = accent ? colors[accent] : { bg: 'var(--surface)', border: 'var(--border)', color: 'var(--text)' };
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: ghost ? '7px 12px' : '10px 12px',
-        background: style.bg,
-        border: `1px solid ${style.border}`,
-        borderRadius: 4,
-        color: style.color,
-        fontSize: ghost ? '0.7rem' : '0.78rem',
-        fontWeight: 600,
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        fontFamily: 'inherit',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 2,
-      }}
-    >
-      <span>{label}</span>
-      <span style={{ fontSize: '0.6rem', opacity: 0.6, fontWeight: 400 }}>[{sub}]</span>
-    </button>
   );
 }
 
 function BurnThroughComplete({
-  sessionId, progress, onExtend, onWrap, onJumpNext, showToast,
+  sessionId: _sid, progress, showToast: _t, onExtend, onWrap,
 }: {
   sessionId: number;
   progress: { total: number; called: number };
   showToast: ShowToast;
   onExtend: (count: number) => Promise<void>;
   onWrap: () => Promise<void>;
-  onJumpNext: () => void;
 }) {
-  const [busy, setBusy] = useState<'extend' | 'wrap' | null>(null);
-
-  async function handleExtend() {
-    setBusy('extend');
-    try { await onExtend(20); } catch (e) { showToast(`Extend failed: ${(e as Error).message}`, 'error'); }
-    finally { setBusy(null); }
-  }
-  async function handleWrap() {
-    setBusy('wrap');
-    try { await onWrap(); } catch (e) { showToast(`Wrap failed: ${(e as Error).message}`, 'error'); }
-    finally { setBusy(null); }
-  }
-
+  const [busy, setBusy] = useState(false);
+  const wrap = (fn: () => Promise<void>) => async () => {
+    setBusy(true);
+    try { await fn(); } finally { setBusy(false); }
+  };
   return (
-    <div style={{ padding: '24px 22px' }}>
-      <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 6 }}>
-        ✓ Session burned through
+    <div style={{ textAlign: 'center', maxWidth: 480, margin: '60px auto', padding: 24, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--rl)' }}>
+      <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.6rem', letterSpacing: 2, color: 'var(--accent)', marginBottom: 10 }}>
+        🔥 SESSION COMPLETE
       </div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 18 }}>
-        {progress.called} / {progress.total} dialed in session {sessionId}. Three options:
+      <div style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: 20 }}>
+        Called {progress.called} of {progress.total} leads. Nothing left in the queue.
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Button variant="primary" size="sm" onClick={handleExtend} disabled={busy !== null}>
-          {busy === 'extend' ? <><Spinner /> Extending…</> : '+ Extend +20 (keep going)'}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onJumpNext} disabled={busy !== null}>
-          ▶ Jump to next block
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleWrap} disabled={busy !== null}>
-          {busy === 'wrap' ? <><Spinner /> Wrapping…</> : '✓ Wrap & log'}
-        </Button>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+        <button type="button" className="cockpit-btn" onClick={wrap(() => onExtend(20))} disabled={busy}>+20 leads</button>
+        <button type="button" className="cockpit-btn-primary" onClick={wrap(onWrap)} disabled={busy}>Wrap session →</button>
       </div>
     </div>
   );
 }
 
-// ---------- helpers ----------
+// ----- helpers -----
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '0.6rem',
-  fontWeight: 700,
-  letterSpacing: '0.5px',
-  color: 'var(--text3)',
-  textTransform: 'uppercase',
-};
+function findObjection(byCat: ObjectionsByCategory | undefined, id: string | null | undefined): Objection | null {
+  if (!byCat || !id) return null;
+  for (const cat of Object.keys(byCat) as ObjectionCategory[]) {
+    const o = byCat[cat].find((x) => x.id === id);
+    if (o) return o;
+  }
+  return null;
+}
+
+function emptyByCategory(): ObjectionsByCategory {
+  return { 'standard': [], 'deep-dive': [], 'closing': [] };
+}
+
+function formatMMSS(totalS: number): string {
+  const m = Math.floor(totalS / 60);
+  const s = totalS % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function truncate(s: string, n: number): string {
+  const trimmed = s.trim();
+  return trimmed.length > n ? trimmed.slice(0, n - 1) + '…' : trimmed;
+}
 
 function defaultCallbackDate(): string {
-  // 3 days out per spec default.
   const d = new Date();
-  d.setDate(d.getDate() + 3);
+  d.setDate(d.getDate() + 7);
   return d.toISOString().slice(0, 10);
 }
 
 function normalizeUrl(url: string): string {
-  return url.startsWith('http') ? url : `https://${url}`;
+  if (!url) return '';
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
 function cleanDomain(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
+  return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+}
+
+function reviewKind(count: number | null | undefined): 'good' | 'warn' | 'bad' | 'neutral' {
+  if (count == null) return 'neutral';
+  if (count >= 25) return 'good';
+  if (count >= 10) return 'warn';
+  return 'bad';
+}
+
+function scoreKind(score: number | null | undefined): 'good' | 'warn' | 'bad' | 'neutral' {
+  if (score == null) return 'neutral';
+  if (score >= 70) return 'good';
+  if (score >= 50) return 'warn';
+  return 'bad';
 }
