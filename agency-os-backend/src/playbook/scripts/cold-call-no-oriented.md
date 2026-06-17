@@ -13,9 +13,6 @@ stages:
   - id: hook
     label: HOOK
     short_label: Hook
-  - id: reveal
-    label: REVEAL
-    short_label: Reveal
   - id: if-hesitate
     label: IF HESITATE
     short_label: Hesitate
@@ -67,7 +64,7 @@ stages:
 
 "Is it a bad idea to at least take a look before you decide it's not for you?"
 
-> Only use if they pause or push back after REVEAL. Then advance to LABEL.
+> Only use if they pause or push back after HOOK. Then advance to LABEL.
 
 ## Stage: label-1
 
