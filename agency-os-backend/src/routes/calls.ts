@@ -91,3 +91,82 @@ callsRouter.delete('/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM call_log WHERE id = ?').bind(id).run();
   return c.json({ success: true });
 });
+
+// ============================================================================
+// RECORDING RECOVERY — list R2 objects for a lead + attach orphans to call_log
+// ----------------------------------------------------------------------------
+// Safety net for any recording that uploaded successfully but never got a
+// call_log row (e.g. operator navigated away pre-fix-86 before tapping an
+// outcome). Lists every R2 key under calls/{leadId}/ and marks which are
+// already referenced by a call_log row. Frontend offers an "attach" action
+// for orphans.
+// ============================================================================
+
+const PUBLIC_BASE_DEFAULT = 'https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev';
+
+leadCallsRouter.get('/:id/recordings', async (c) => {
+  const leadId = parseInt(c.req.param('id'), 10);
+  if (isNaN(leadId)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(leadId).first();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  const base = c.env.RECORDINGS_PUBLIC_URL || PUBLIC_BASE_DEFAULT;
+
+  // List R2 objects under this lead's prefix.
+  const listed = await c.env.RECORDINGS.list({ prefix: `calls/${leadId}/` });
+
+  // Fetch all call_log rows for this lead that already point at recordings.
+  // Build a set of URLs for fast attach-status lookup.
+  const callsWithRecording = await c.env.DB
+    .prepare(`SELECT id, recording_url FROM call_log WHERE lead_id = ? AND recording_url IS NOT NULL`)
+    .bind(leadId)
+    .all<{ id: number; recording_url: string }>();
+  const attachedByUrl = new Map<string, number>();
+  for (const row of (callsWithRecording.results ?? [])) {
+    attachedByUrl.set(row.recording_url, row.id);
+  }
+
+  const recordings = listed.objects.map((obj) => {
+    const url = `${base}/${obj.key}`;
+    const callId = attachedByUrl.get(url) ?? null;
+    return {
+      key: obj.key,
+      url,
+      size_bytes: obj.size,
+      uploaded_at: obj.uploaded,
+      attached: callId !== null,
+      call_id: callId,
+    };
+  });
+
+  // Sort newest first.
+  recordings.sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
+
+  return c.json({ recordings });
+});
+
+leadCallsRouter.post('/:id/recordings/attach', async (c) => {
+  const leadId = parseInt(c.req.param('id'), 10);
+  if (isNaN(leadId)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const body = await c.req.json().catch(() => ({})) as { url?: string };
+  if (!body.url) return c.json(badRequest('url is required'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(leadId).first();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  // Idempotent — if a call_log row already holds this URL, return that row.
+  const existing = await c.env.DB
+    .prepare(`SELECT id FROM call_log WHERE lead_id = ? AND recording_url = ? LIMIT 1`)
+    .bind(leadId, body.url)
+    .first<{ id: number }>();
+  if (existing) return c.json({ call_id: existing.id, created: false });
+
+  const result = await c.env.DB
+    .prepare(`INSERT INTO call_log (lead_id, outcome, notes, recording_url) VALUES (?, 'Recording', ?, ?)`)
+    .bind(leadId, '(orphan recording re-attached from R2)', body.url)
+    .run();
+
+  return c.json({ call_id: result.meta.last_row_id, created: true });
+});

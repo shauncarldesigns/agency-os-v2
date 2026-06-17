@@ -422,6 +422,17 @@ export const api = {
       }
       return res.json();
     },
+    // Lists every R2 object under a lead's prefix + whether it's already
+    // attached to a call_log row. Frontend uses this to detect orphans.
+    listForLead: (leadId: number) =>
+      apiFetch<{ recordings: RecordingObject[] }>(`/api/leads/${leadId}/recordings`),
+    // Creates a placeholder call_log row pointing at an orphan R2 URL.
+    // Idempotent — re-attaching the same URL returns the existing call_id.
+    attach: (leadId: number, url: string) =>
+      apiFetch<{ call_id: number; created: boolean }>(
+        `/api/leads/${leadId}/recordings/attach`,
+        { method: 'POST', body: JSON.stringify({ url }) }
+      ),
   },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
@@ -518,6 +529,15 @@ export interface SessionWithProgress extends Session {
   voicemail_count: number;
   not_interested_count: number;
   skipped_count: number;
+}
+
+export interface RecordingObject {
+  key: string;
+  url: string;
+  size_bytes: number;
+  uploaded_at: string;
+  attached: boolean;
+  call_id: number | null;
 }
 
 export type AnalyticsRange = '30d' | 'all';
