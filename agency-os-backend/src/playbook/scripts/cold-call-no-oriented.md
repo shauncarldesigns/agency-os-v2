@@ -13,6 +13,10 @@ stages:
   - id: hook
     label: HOOK
     short_label: Hook
+  - id: cost
+    label: IF THEY ASK "HOW MUCH?"
+    short_label: Cost
+    branch: true
   - id: if-hesitate
     label: IF HESITATE
     short_label: Hesitate
@@ -59,6 +63,12 @@ stages:
 "I was looking you guys up on Google and saw some really great reviews but I didn't see a website — So I actually went ahead and put a site together for you just to see what it could look like. I'm not here to pitch you anything — would it be ridiculous to schedule a call so I can just show it to you?"
 
 > Either answer opens the door: "working on it" = active interest; "not really" = invitation to show what could be there.
+
+## Stage: cost
+
+"Would it be out of line to show you what it looks like first before we even talk about numbers?"
+
+> This is key — never discuss price until they've seen the site. Seeing it built specifically for them changes the whole conversation.
 
 ## Stage: if-hesitate
 
