@@ -380,6 +380,11 @@ export const api = {
       apiFetch<{ ok: boolean; demo: Demo | null; callbackId: number | null; project: Project | null }>(
         `/api/sessions/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }
       ),
+    hot: () => apiFetch<{ session: SessionWithProgress | null }>(`/api/sessions/hot`),
+    hotAdd: (leadIds: number[]) =>
+      apiFetch<{ session_id: number; added: number; duplicates: number; skipped_invalid: number }>(
+        `/api/sessions/hot/add`, { method: 'POST', body: JSON.stringify({ lead_ids: leadIds }) }
+      ),
   },
   demos: {
     list: (filters?: { status?: string; date?: string }) =>

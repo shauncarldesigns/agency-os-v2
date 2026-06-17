@@ -26,6 +26,7 @@ export function EnrichmentStrip({
   leads, selectedIds, onClearSelection, showToast, onComplete,
 }: EnrichmentStripProps) {
   const [running, setRunning] = useState(false);
+  const [addingHot, setAddingHot] = useState(false);
 
   const total = leads.length;
   const enriched = leads.filter(l => l.enrichment_status === 'enriched').length;
@@ -93,6 +94,29 @@ export function EnrichmentStrip({
       showToast(`Enrichment failed: ${(err as Error).message}`, 'error');
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleAddToHot() {
+    if (addingHot || !hasSelection) return;
+    const ids = leads.filter((l) => selectedIds.has(l.id)).map((l) => l.id);
+    setAddingHot(true);
+    try {
+      const result = await api.sessions.hotAdd(ids);
+      const parts: string[] = [];
+      if (result.added > 0) parts.push(`${result.added} added to hot leads`);
+      if (result.duplicates > 0) parts.push(`${result.duplicates} already in queue`);
+      if (result.skipped_invalid > 0) parts.push(`${result.skipped_invalid} skipped`);
+      showToast(parts.join(' · ') || 'Nothing to add', result.added > 0 ? 'success' : 'default');
+      if (result.added > 0) {
+        // HotLeadsCard listens for this and auto-refetches.
+        window.dispatchEvent(new CustomEvent('hotleads:added'));
+      }
+      onClearSelection();
+    } catch (err) {
+      showToast(`Add to hot leads failed: ${(err as Error).message}`, 'error');
+    } finally {
+      setAddingHot(false);
     }
   }
 
@@ -183,14 +207,27 @@ export function EnrichmentStrip({
           <div style={{ fontSize: '0.6rem', color: 'var(--text3)', textAlign: 'right' }}>{pct}% complete</div>
         </div>
       )}
-      <Button
-        variant="primary"
-        size="xs"
-        disabled={buttonDisabled}
-        onClick={handleEnrichAll}
-      >
-        {buttonLabel}
-      </Button>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {hasSelection && (
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={addingHot || running}
+            onClick={handleAddToHot}
+            title="Add the selected leads to the operator-curated hot leads queue on the dashboard"
+          >
+            {addingHot ? <>⏳ Adding…</> : <>🔥 Add to hot leads ({selectedCount})</>}
+          </Button>
+        )}
+        <Button
+          variant="primary"
+          size="xs"
+          disabled={buttonDisabled}
+          onClick={handleEnrichAll}
+        >
+          {buttonLabel}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { Badge } from '../shared/Badge';
 import { ProspectingTaskBlock } from './MondayFridayViews';
 import { RescheduleDemoModal } from './RescheduleDemoModal';
 import { WeekPlanner } from './WeekPlanner';
+import { HotLeadsCard } from './HotLeadsCard';
 
 /**
  * Top-level Dashboard panel.
@@ -121,6 +122,15 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
         showToast={showToast}
         onClose={() => setReschedulingDemo(null)}
         onRescheduled={load}
+      />
+
+      {/* Hot leads — operator-curated priority queue, separate from the
+          auto-composed weekly sessions. Lives above the week grid because
+          these are higher-priority calls the operator hand-picked. */}
+      <HotLeadsCard
+        showToast={showToast}
+        onOpenSession={onOpenSession}
+        onSwitchTab={onSwitchTab}
       />
 
       {/* Week planner — full Mon-Fri view regardless of day-of-week. Active

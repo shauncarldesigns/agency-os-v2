@@ -868,6 +868,32 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 }
 
 /* ============================================================================
+   HOT LEADS CARD — operator-curated priority queue
+   ============================================================================ */
+
+.hotleads-card {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--red);
+  border-radius: var(--rl);
+  padding: 14px 18px; margin-bottom: 16px;
+}
+.hotleads-card-active {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.10), rgba(248, 113, 113, 0.02));
+  border-color: var(--red);
+}
+.hotleads-body { flex: 1; min-width: 0; }
+.hotleads-tag { font-size: 0.62rem; color: var(--red); letter-spacing: 0.12em; font-weight: 700; margin-bottom: 4px; }
+.hotleads-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem; letter-spacing: 1.4px; color: var(--text); margin-bottom: 3px; }
+.hotleads-sub { font-size: 0.72rem; color: var(--text2); line-height: 1.55; }
+.hotleads-sub strong { color: var(--text); font-weight: 600; }
+
+@media (max-width: 700px) {
+  .hotleads-card { flex-direction: column; align-items: stretch; }
+}
+
+/* ============================================================================
    WEEK PLANNER — replaces day-of-week-routed sessions grid
    ============================================================================ */
 

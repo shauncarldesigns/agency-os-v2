@@ -308,13 +308,14 @@ CREATE INDEX IF NOT EXISTS idx_report_proj ON report_history(project_id, period)
 
 CREATE TABLE IF NOT EXISTS sessions (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_date      TEXT NOT NULL,
-  block             TEXT NOT NULL,                            -- 'morning' | 'evening'
-  industry          TEXT NOT NULL,
+  session_date      TEXT NOT NULL,                            -- 'YYYY-MM-DD' for auto, 'hot' for the hot session
+  block             TEXT NOT NULL,                            -- 'morning' | 'evening' | 'hot'
+  industry          TEXT NOT NULL,                            -- Google Places primaryType, or 'mixed' for hot
   geographic_filter TEXT,                                     -- JSON array of cities; null = full service area
   score_floor       INTEGER NOT NULL DEFAULT 50,
   lead_count_target INTEGER NOT NULL DEFAULT 40,
   status            TEXT NOT NULL DEFAULT 'planned',          -- planned | active | complete
+  kind              TEXT NOT NULL DEFAULT 'auto',             -- 'auto' (composed) | 'hot' (operator-curated)
   started_at        TEXT,
   completed_at      TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now'))

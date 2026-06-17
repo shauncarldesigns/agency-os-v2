@@ -304,6 +304,8 @@ export type CallOutcome = 'voicemail' | 'not_interested' | 'callback' | 'booked'
 export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
 export type CallbackStatus = 'pending' | 'completed' | 'missed';
 
+export type SessionKind = 'auto' | 'hot';
+
 export interface Session {
   id: number;
   session_date: string;
@@ -313,6 +315,7 @@ export interface Session {
   score_floor: number;
   lead_count_target: number;
   status: SessionStatus;
+  kind: SessionKind;                  // 'auto' (composed) | 'hot' (operator-curated)
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
