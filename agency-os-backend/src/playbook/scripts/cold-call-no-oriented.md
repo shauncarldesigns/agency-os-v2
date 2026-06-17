@@ -100,7 +100,7 @@ stages:
 
 ## Stage: confirm
 
-"Perfect. What's the best number to send you a calendar invite?"
+"Perfect. What's the best email to send you a calendar invite?"
 
 > Clean and done. Don't oversell after they agree.
 
