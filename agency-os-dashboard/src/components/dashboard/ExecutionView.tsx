@@ -648,7 +648,6 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
           showToast={showToast}
           onConfirm={handleBookingConfirm}
           onCancel={() => setBookingMode(false)}
-          onLeadFieldUpdate={handleLeadFieldUpdate}
         />
       ) : (
         <>
