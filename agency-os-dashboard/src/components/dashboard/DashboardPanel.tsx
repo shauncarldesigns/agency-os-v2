@@ -3,6 +3,7 @@ import type { ShowToast, Tab } from '../../lib/types';
 import {
   api, ApiError, industryLabel,
   type DashboardTodayResponse, type DemoWithLead, type CallbackWithLead,
+  type AgencySummary, type ObjectionOverviewItem, type AnalyticsRange,
 } from '../../lib/api';
 import type { Session } from '../../lib/types';
 import { Button } from '../shared/Button';
@@ -132,7 +133,122 @@ export function DashboardPanel({ showToast, onOpenSession, onSwitchTab }: Dashbo
       {data.mode === 'quiet' && (
         <NonCallingDayView mode={data.mode} sessions={data.sessions} onOpenSession={onOpenSession} />
       )}
+
+      {/* Always-on analytics — agency summary + objections overview.
+          Renders under whichever day-specific view is active. */}
+      <AnalyticsSection />
     </>
+  );
+}
+
+// ---------- Analytics section (Phase 5) ----------
+
+function AnalyticsSection() {
+  const [range, setRange] = useState<AnalyticsRange>('30d');
+  const [summary, setSummary] = useState<AgencySummary | null>(null);
+  const [objections, setObjections] = useState<ObjectionOverviewItem[]>([]);
+  const [totalCalls, setTotalCalls] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([api.dashboard.agencySummary(range), api.dashboard.objectionsOverview(range)])
+      .then(([s, o]) => {
+        if (cancelled) return;
+        setSummary(s);
+        setObjections(o.objections);
+        setTotalCalls(o.total_calls);
+      })
+      .catch(() => { /* silent — section just stays blank on error */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [range]);
+
+  return (
+    <div className="analytics-section">
+      <div className="analytics-header">
+        <h2 className="analytics-title">Agency summary</h2>
+        <div className="analytics-range">
+          <button
+            type="button"
+            className={`analytics-range-btn${range === '30d' ? ' active' : ''}`}
+            onClick={() => setRange('30d')}
+          >Last 30 days</button>
+          <button
+            type="button"
+            className={`analytics-range-btn${range === 'all' ? ' active' : ''}`}
+            onClick={() => setRange('all')}
+          >All time</button>
+        </div>
+      </div>
+
+      {loading && !summary ? (
+        <div style={{ padding: 18, color: 'var(--text3)' }}><Spinner /> Loading metrics…</div>
+      ) : summary && (
+        <div className="analytics-grid">
+          <AnalyticsCard label="Calls / day" value={summary.calls_per_day.toString()} sub={`${summary.total_calls} calls · ${summary.call_days} days`} />
+          <AnalyticsCard label="Dial → set" value={`${summary.dial_to_set_rate_pct}%`} sub={`${summary.demos_booked} demos booked`} accent="green" />
+          <AnalyticsCard label="Demos held" value={summary.demos_held.toString()} sub={`${summary.demos_no_show} no-shows`} />
+          <AnalyticsCard label="New projects" value={summary.new_projects.toString()} sub={range === '30d' ? 'last 30 days' : 'all time'} />
+        </div>
+      )}
+
+      <div className="analytics-header" style={{ marginTop: 24 }}>
+        <h2 className="analytics-title">Objections overview</h2>
+        <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+          {totalCalls > 0 ? `Across ${totalCalls} calls` : 'No call data yet'}
+        </div>
+      </div>
+
+      {objections.length === 0 ? (
+        <div style={{ padding: 18, color: 'var(--text3)', fontSize: '0.78rem', border: '1px dashed var(--border)', borderRadius: 'var(--rl)' }}>
+          Tap an objection chip during a call to start populating this view.
+        </div>
+      ) : (
+        <div className="objections-grid">
+          {objections.map((o) => <ObjectionCard key={o.objection_id} item={o} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: 'green' | 'yellow' | 'red' }) {
+  const cls = accent ? `accent-${accent}` : '';
+  return (
+    <div className="analytics-card">
+      <div className="analytics-card-label">{label}</div>
+      <div className={`analytics-card-value ${cls}`}>{value}</div>
+      {sub && <div className="analytics-card-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function ObjectionCard({ item }: { item: ObjectionOverviewItem }) {
+  // Spec: handled-rate < 30% triggers a red "rewrite this" CTA.
+  // We only flag when there's enough data to be meaningful (5+ hits).
+  const lowHandled = item.total_hits >= 5 && item.handled_rate_pct < 30;
+  const handledColor = item.handled_rate_pct >= 60
+    ? 'var(--green)'
+    : item.handled_rate_pct >= 30 ? 'var(--yellow)' : 'var(--red)';
+  return (
+    <div className="objection-card">
+      <div className="objection-card-top">
+        <span className="objection-card-label">{item.label}</span>
+        <span className="objection-card-hits">{item.total_hits} hit{item.total_hits === 1 ? '' : 's'}</span>
+      </div>
+      <div className="objection-freq-bar">
+        <div className="objection-freq-fill" style={{ width: `${Math.min(100, item.frequency_pct * 4)}%` }} />
+      </div>
+      <div className="objection-card-bottom">
+        <span className="objection-freq-text">{item.frequency_pct}% of calls</span>
+        <span style={{ color: handledColor, fontWeight: 600 }}>{item.handled_rate_pct}% handled</span>
+      </div>
+      {lowHandled && (
+        <div className="objection-card-cta">⚠ Low handled-rate — consider rewriting</div>
+      )}
+    </div>
   );
 }
 
