@@ -18,6 +18,7 @@ import { sessionsRouter } from './routes/sessions';
 import { callbacksRouter } from './routes/callbacks';
 import { demosRouter } from './routes/demos';
 import { dashboardRouter } from './routes/dashboard';
+import { playbookRouter } from './routes/playbook';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -55,6 +56,8 @@ app.route('/api/sessions', sessionsRouter);
 app.route('/api/callbacks', callbacksRouter);
 app.route('/api/demos', demosRouter);
 app.route('/api/dashboard', dashboardRouter);
+// Playbook content (read endpoints + /_debug). Phase 3 adds /generate-rebuttal here.
+app.route('/api/playbook', playbookRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {

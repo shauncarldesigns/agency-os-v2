@@ -1,0 +1,420 @@
+// Playbook runtime — loads, parses, and caches all script / objection /
+// follow-up markdown files. Bundled at build time via wrangler.toml
+// [[rules]] type="Text" — Workers have no runtime fs.
+
+import { parse as parseYaml } from 'yaml';
+
+import coldCallMd from '../playbook/scripts/cold-call-no-oriented.md';
+import demoTier3Md from '../playbook/scripts/demo-tier3-primary.md';
+import demoTier2Md from '../playbook/scripts/demo-tier2-primary.md';
+
+import wordOfMouthMd from '../playbook/objections/word-of-mouth.md';
+import facebookPageMd from '../playbook/objections/facebook-page.md';
+import cantAffordMd from '../playbook/objections/cant-afford.md';
+import badExperienceMd from '../playbook/objections/bad-experience.md';
+import notTechSavvyMd from '../playbook/objections/not-tech-savvy.md';
+import talkToPartnerMd from '../playbook/objections/talk-to-partner.md';
+import tooBusyMd from '../playbook/objections/too-busy.md';
+import sendEmailMd from '../playbook/objections/send-email.md';
+import busyPlusEmailMd from '../playbook/objections/busy-plus-email.md';
+
+import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export type ObjectionCategory = 'standard' | 'deep-dive' | 'closing';
+export type ObjectionType = 'simple' | 'branching';
+
+export interface SimpleObjection {
+  id: string;
+  label: string;
+  category: ObjectionCategory;
+  type: 'simple';
+  order: number;
+  rebuttal: string;
+  note?: string;
+}
+
+export interface BranchingPath {
+  id: string;
+  label: string;
+  short_label: string;
+  rebuttal: string;
+  note?: string;
+  drop_ask_to?: string;
+  follow_up_note?: string;
+  sets_followup_days?: number;
+}
+
+export interface BranchingObjection {
+  id: string;
+  label: string;
+  category: ObjectionCategory;
+  type: 'branching';
+  order: number;
+  diagnostic: { prompt: string };
+  paths: BranchingPath[];
+}
+
+export type Objection = SimpleObjection | BranchingObjection;
+
+export interface Stage {
+  id: string;
+  label: string;
+  short_label: string;
+  body: string;
+  note?: string;
+  branch?: boolean;
+}
+
+export interface Script {
+  id: string;
+  label: string;
+  method?: string;
+  default?: boolean;
+  fallback?: string;
+  use_when?: string;
+  stages: Stage[];
+}
+
+export interface ScriptSummary {
+  id: string;
+  label: string;
+  method?: string;
+  default?: boolean;
+  stage_count: number;
+}
+
+export interface FollowUpTouch {
+  id: string;
+  label: string;
+  short_label: string;
+  body: string;
+  note?: string;
+}
+
+export interface FollowUpSequence {
+  id: string;
+  label: string;
+  description?: string;
+  touches: FollowUpTouch[];
+}
+
+export interface LeadContext {
+  company: string;
+  contact_name?: string;
+  city?: string;
+  state?: string;
+  trade?: string;
+  signals?: string[];
+  scores?: {
+    reviews?: string;
+    gbp?: string;
+    website?: string;
+    opportunity?: string;
+  };
+}
+
+// ============================================================================
+// PARSER INTERNALS
+// ============================================================================
+
+const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
+
+function splitFrontmatter(raw: string): { fm: any; body: string } {
+  const normalized = raw.replace(/\r\n/g, '\n');
+  const m = FRONTMATTER_RE.exec(normalized);
+  if (!m) throw new Error('Invalid playbook markdown: missing YAML frontmatter');
+  const fm = parseYaml(m[1]) ?? {};
+  const body = m[2] ?? '';
+  return { fm, body };
+}
+
+// Lines that start with `>` get pulled into the note; everything else
+// stays in the body. Collapses runs of blank lines.
+function extractNote(raw: string): { body: string; note: string } {
+  const bodyLines: string[] = [];
+  const noteLines: string[] = [];
+  for (const line of raw.split('\n')) {
+    if (/^\s*>/.test(line)) {
+      noteLines.push(line.replace(/^\s*>\s?/, ''));
+    } else {
+      bodyLines.push(line);
+    }
+  }
+  return {
+    body: bodyLines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+    note: noteLines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+  };
+}
+
+// Split body by "## {prefix}: {id}" headers (Stage / Path / Touch).
+// Map<id, {body, note}>.
+function splitSections(body: string, prefix: string): Map<string, { body: string; note: string }> {
+  const out = new Map<string, { body: string; note: string }>();
+  const re = new RegExp(`^##\\s+${prefix}:\\s+(.+)$`, 'gm');
+  const matches = Array.from(body.matchAll(re));
+  for (let i = 0; i < matches.length; i++) {
+    const id = matches[i][1].trim();
+    const start = matches[i].index! + matches[i][0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : body.length;
+    const raw = body.slice(start, end).trim();
+    out.set(id, extractNote(raw));
+  }
+  return out;
+}
+
+function parseScript(raw: string): Script {
+  const { fm, body } = splitFrontmatter(raw);
+  const sections = splitSections(body, 'Stage');
+  const stages: Stage[] = ((fm.stages as any[]) ?? []).map((s) => {
+    const sec = sections.get(s.id);
+    if (!sec) throw new Error(`Script ${fm.id}: missing "## Stage: ${s.id}" body`);
+    return {
+      id: s.id,
+      label: s.label,
+      short_label: s.short_label,
+      branch: s.branch,
+      body: sec.body,
+      note: sec.note || undefined,
+    };
+  });
+  return {
+    id: fm.id,
+    label: fm.label,
+    method: fm.method,
+    default: fm.default,
+    fallback: fm.fallback,
+    use_when: fm.use_when,
+    stages,
+  };
+}
+
+function parseObjection(raw: string): Objection {
+  const { fm, body } = splitFrontmatter(raw);
+  if (fm.type === 'branching') {
+    const sections = splitSections(body, 'Path');
+    const paths: BranchingPath[] = ((fm.paths as any[]) ?? []).map((p) => {
+      const sec = sections.get(p.id);
+      if (!sec) throw new Error(`Objection ${fm.id}: missing "## Path: ${p.id}" body`);
+      return {
+        id: p.id,
+        label: p.label,
+        short_label: p.short_label,
+        rebuttal: sec.body,
+        note: sec.note || undefined,
+        drop_ask_to: p.drop_ask_to,
+        follow_up_note: p.follow_up_note,
+        sets_followup_days: p.sets_followup_days,
+      };
+    });
+    if (!fm.diagnostic?.prompt) {
+      throw new Error(`Branching objection ${fm.id}: missing diagnostic.prompt`);
+    }
+    return {
+      id: fm.id,
+      label: fm.label,
+      category: fm.category,
+      type: 'branching',
+      order: fm.order ?? 999,
+      diagnostic: { prompt: fm.diagnostic.prompt },
+      paths,
+    };
+  }
+  // Simple objection: the body IS the rebuttal
+  const { body: cleanBody, note } = extractNote(body.trim());
+  return {
+    id: fm.id,
+    label: fm.label,
+    category: fm.category,
+    type: 'simple',
+    order: fm.order ?? 999,
+    rebuttal: cleanBody,
+    note: note || undefined,
+  };
+}
+
+function parseFollowUp(raw: string): FollowUpSequence {
+  const { fm, body } = splitFrontmatter(raw);
+  const sections = splitSections(body, 'Touch');
+  const touches: FollowUpTouch[] = ((fm.touches as any[]) ?? []).map((t) => {
+    const sec = sections.get(t.id);
+    if (!sec) throw new Error(`Follow-up ${fm.id}: missing "## Touch: ${t.id}" body`);
+    return {
+      id: t.id,
+      label: t.label,
+      short_label: t.short_label,
+      body: sec.body,
+      note: sec.note || undefined,
+    };
+  });
+  return {
+    id: fm.id,
+    label: fm.label,
+    description: fm.description,
+    touches,
+  };
+}
+
+// ============================================================================
+// FILE REGISTRIES
+// ============================================================================
+
+const SCRIPT_FILES: Record<string, string> = {
+  'cold-call-no-oriented': coldCallMd,
+  'demo-tier3-primary': demoTier3Md,
+  'demo-tier2-primary': demoTier2Md,
+};
+
+const OBJECTION_FILES: Record<string, string> = {
+  'word-of-mouth': wordOfMouthMd,
+  'facebook-page': facebookPageMd,
+  'cant-afford': cantAffordMd,
+  'bad-experience': badExperienceMd,
+  'not-tech-savvy': notTechSavvyMd,
+  'talk-to-partner': talkToPartnerMd,
+  'too-busy': tooBusyMd,
+  'send-email': sendEmailMd,
+  'busy-plus-email': busyPlusEmailMd,
+};
+
+const FOLLOW_UP_FILES: Record<string, string> = {
+  'email-sequence': emailSequenceMd,
+};
+
+// ============================================================================
+// LAZY CACHES (per Worker instance)
+// ============================================================================
+
+let scriptCache: Map<string, Script> | null = null;
+let objectionCache: Map<string, Objection> | null = null;
+let followUpCache: Map<string, FollowUpSequence> | null = null;
+
+function loadScripts(): Map<string, Script> {
+  if (scriptCache) return scriptCache;
+  const m = new Map<string, Script>();
+  for (const [id, raw] of Object.entries(SCRIPT_FILES)) {
+    const s = parseScript(raw);
+    if (s.id !== id) throw new Error(`Script filename "${id}" vs frontmatter id "${s.id}" mismatch`);
+    m.set(id, s);
+  }
+  scriptCache = m;
+  return m;
+}
+
+function loadObjections(): Map<string, Objection> {
+  if (objectionCache) return objectionCache;
+  const m = new Map<string, Objection>();
+  for (const [id, raw] of Object.entries(OBJECTION_FILES)) {
+    const o = parseObjection(raw);
+    if (o.id !== id) throw new Error(`Objection filename "${id}" vs frontmatter id "${o.id}" mismatch`);
+    m.set(id, o);
+  }
+  objectionCache = m;
+  return m;
+}
+
+function loadFollowUps(): Map<string, FollowUpSequence> {
+  if (followUpCache) return followUpCache;
+  const m = new Map<string, FollowUpSequence>();
+  for (const [id, raw] of Object.entries(FOLLOW_UP_FILES)) {
+    const f = parseFollowUp(raw);
+    if (f.id !== id) throw new Error(`Follow-up filename "${id}" vs frontmatter id "${f.id}" mismatch`);
+    m.set(id, f);
+  }
+  followUpCache = m;
+  return m;
+}
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+export function getScript(id: string): Script | null {
+  return loadScripts().get(id) ?? null;
+}
+
+export function listScripts(): ScriptSummary[] {
+  return Array.from(loadScripts().values()).map((s) => ({
+    id: s.id,
+    label: s.label,
+    method: s.method,
+    default: s.default,
+    stage_count: s.stages.length,
+  }));
+}
+
+export function getDefaultScript(): Script | null {
+  for (const s of loadScripts().values()) {
+    if (s.default) return s;
+  }
+  return null;
+}
+
+export function getObjection(id: string): Objection | null {
+  return loadObjections().get(id) ?? null;
+}
+
+export function listObjections(): Objection[] {
+  return Array.from(loadObjections().values()).sort((a, b) => {
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.order - b.order;
+  });
+}
+
+export function listObjectionsByCategory(): Record<ObjectionCategory, Objection[]> {
+  const out: Record<ObjectionCategory, Objection[]> = {
+    'standard': [],
+    'deep-dive': [],
+    'closing': [],
+  };
+  for (const o of listObjections()) {
+    out[o.category].push(o);
+  }
+  return out;
+}
+
+export function getFollowUp(id: string): FollowUpSequence | null {
+  return loadFollowUps().get(id) ?? null;
+}
+
+export function listFollowUps(): FollowUpSequence[] {
+  return Array.from(loadFollowUps().values());
+}
+
+// ============================================================================
+// TOKEN INTERPOLATION
+// ============================================================================
+
+const TOKEN_RE = /\[(Company Name|Name|city|state|their trade)\]/g;
+
+function tokenValue(token: string, ctx: LeadContext): string {
+  switch (token) {
+    case 'Company Name':
+      return ctx.company || '';
+    case 'Name':
+      return ctx.contact_name || 'there';
+    case 'city':
+      return ctx.city || '';
+    case 'state':
+      return ctx.state || '';
+    case 'their trade':
+      return ctx.trade || 'your trade';
+    default:
+      return `[${token}]`;
+  }
+}
+
+export function interpolate(text: string, ctx: LeadContext): string {
+  return text.replace(TOKEN_RE, (_, token) => tokenValue(token, ctx));
+}
+
+export function renderStage(stage: Stage, ctx: LeadContext): string {
+  return interpolate(stage.body, ctx);
+}
+
+export function renderRebuttal(rebuttal: string, ctx: LeadContext): string {
+  return interpolate(rebuttal, ctx);
+}
