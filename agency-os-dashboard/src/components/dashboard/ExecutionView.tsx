@@ -13,6 +13,7 @@ import { Badge } from '../shared/Badge';
 import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
+import { RecordButton } from './RecordButton';
 
 /**
  * Calling cockpit — the operator's whole world during an active session.
@@ -114,15 +115,13 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   const [generating, setGenerating] = useState(false);
   const [marking, setMarking] = useState<number | null>(null);
 
-  // Per-lead call timer (used for MM:SS in objection-hit log and notes tags).
+  // Per-lead call timer — rebased to recording-start when the operator hits
+  // the Record button. Falls back to cockpit-mount time if they never record,
+  // so objection-hit timestamps still capture some signal.
   const [callStartMs, setCallStartMs] = useState<number>(() => Date.now());
-  // Tick once per second so the utility-row "ON CALL 1:48" updates live.
-  const [tickSeconds, setTickSeconds] = useState(0);
-  useEffect(() => {
-    const i = setInterval(() => setTickSeconds((s) => s + 1), 1000);
-    return () => clearInterval(i);
-  }, []);
-  const callElapsedS = Math.max(0, Math.floor((Date.now() - callStartMs) / 1000)) + (tickSeconds * 0);
+  // R2 URL of the most recent recording for this lead, set by RecordButton's
+  // onRecorded callback. Persisted on the next outcome submit.
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
 
   // Script + stage state.
   const script: Script | null = playbook?.defaultScript ?? null;
@@ -207,6 +206,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setCallbackOpen(false);
     setBookingMode(false);
     setCallStartMs(Date.now());
+    setRecordingUrl(null);
     setCurrentStageId(linearStages[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
@@ -255,6 +255,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
         outcome,
         notes: notesRef.current.trim() || undefined,
         objectionHits: hits.length ? hits : undefined,
+        recordingUrl: recordingUrl ?? undefined,
         ...extra,
       });
       clearDraft();
@@ -271,7 +272,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     } finally {
       setRecording(false);
     }
-  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast, findNextUncalled]);
+  }, [lead, sessionId, recording, leads, currentIndex, clearDraft, showToast, findNextUncalled, recordingUrl]);
 
   // ===========================================================================
   // OBJECTION HANDLING
@@ -584,9 +585,16 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
           <button className="cockpit-exit" type="button" onClick={onClose}>← Exit</button>
           {session && ` · ${session.session_date} · ${session.block === 'morning' ? 'Morning' : 'Evening'}`}
         </span>
-        <span>
-          {currentIndex + 1} of {leads.length} · {calledCount} called · ON CALL {formatMMSS(callElapsedS)}
-        </span>
+        <div className="cockpit-utility-right">
+          <span>{currentIndex + 1} of {leads.length} · {calledCount} called</span>
+          <RecordButton
+            leadId={lead.id}
+            showToast={showToast}
+            resetKey={lead.session_lead_id ?? lead.id}
+            onStart={() => setCallStartMs(Date.now())}
+            onRecorded={(url) => setRecordingUrl(url)}
+          />
+        </div>
       </div>
 
       <div className="cockpit-leadhead">

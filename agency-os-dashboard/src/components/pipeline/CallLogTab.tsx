@@ -135,6 +135,11 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                   <button className="btn btn-ghost btn-xs" style={{ padding: '2px 6px' }} onClick={() => handleDelete(c.id)} aria-label="Delete entry">✕</button>
                 </div>
                 <div className="call-entry-notes">{c.notes}</div>
+                {c.recording_url && (
+                  <div className="call-entry-followup">
+                    🎙 <a href={c.recording_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Play recording ↗</a>
+                  </div>
+                )}
                 {c.followup_date && (
                   <div className="call-entry-followup">📅 Follow-up: {new Date(c.followup_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
                 )}

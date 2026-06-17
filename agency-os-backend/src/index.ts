@@ -19,6 +19,7 @@ import { callbacksRouter } from './routes/callbacks';
 import { demosRouter } from './routes/demos';
 import { dashboardRouter } from './routes/dashboard';
 import { playbookRouter } from './routes/playbook';
+import { recordingsRouter } from './routes/recordings';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -58,6 +59,8 @@ app.route('/api/demos', demosRouter);
 app.route('/api/dashboard', dashboardRouter);
 // Playbook content (read endpoints + /_debug). Phase 3 adds /generate-rebuttal here.
 app.route('/api/playbook', playbookRouter);
+// Call recordings — multipart upload → R2, returns public URL.
+app.route('/api/recordings', recordingsRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {

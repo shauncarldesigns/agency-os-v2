@@ -535,6 +535,10 @@ interface OutcomeBody {
     timestamp_s: number;
     generation_id?: number | null;
   }>;
+  // R2 public URL of an audio recording the operator captured during the
+  // call. Saved to call_log.recording_url on the row this outcome creates.
+  // null/undefined when the operator didn't record.
+  recordingUrl?: string | null;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -576,9 +580,10 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   } as const)[body.outcome];
   if (body.outcome !== 'skipped') {
     const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
+    const recordingUrl = body.recordingUrl ?? null;
     await c.env.DB.prepare(
-      `INSERT INTO call_log (lead_id, outcome, notes, objection_hits) VALUES (?, ?, ?, ?)`
-    ).bind(body.leadId, friendlyOutcome, notes, objectionHits).run();
+      `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?)`
+    ).bind(body.leadId, friendlyOutcome, notes, objectionHits, recordingUrl).run();
   }
 
   // 2. Update session_leads with the outcome.

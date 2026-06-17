@@ -37,13 +37,14 @@ leadCallsRouter.post('/:id/calls', async (c) => {
     const objectionHits = Array.isArray(objectionHitsRaw) && objectionHitsRaw.length
       ? JSON.stringify(objectionHitsRaw)
       : null;
+    const recordingUrl = (body.recording_url ?? body.recordingUrl) as string | null | undefined;
 
     if (!outcome) return c.json(badRequest('outcome is required'), 400);
     if (!notes) return c.json(badRequest('notes is required'), 400);
 
     const result = await c.env.DB
-      .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date, objection_hits) VALUES (?, ?, ?, ?, ?)')
-      .bind(leadId, outcome, notes, followupDate ?? null, objectionHits)
+      .prepare('INSERT INTO call_log (lead_id, outcome, notes, followup_date, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(leadId, outcome, notes, followupDate ?? null, objectionHits, recordingUrl ?? null)
       .run();
 
     // Update lead's last outcome + followup

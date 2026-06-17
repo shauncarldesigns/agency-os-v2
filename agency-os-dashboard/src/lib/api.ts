@@ -401,6 +401,24 @@ export const api = {
     update: (id: number, body: { status?: CallbackStatus; due_date?: string; notes?: string }) =>
       apiFetch<{ callback: Callback }>(`/api/callbacks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   },
+  recordings: {
+    upload: async (leadId: number, blob: Blob, ext = 'webm'): Promise<{ url: string; key: string; bytes: number }> => {
+      const form = new FormData();
+      form.append('file', blob, `recording.${ext}`);
+      form.append('leadId', String(leadId));
+      form.append('ext', ext);
+      const res = await fetch(`${API_BASE}/api/recordings`, {
+        method: 'POST',
+        headers: { 'X-API-Key': API_KEY },
+        body: form,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new ApiError(`Upload failed: ${res.status} ${text}`, res.status);
+      }
+      return res.json();
+    },
+  },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
     script: (id: string) => apiFetch<{ script: Script }>(`/api/playbook/scripts/${id}`),
@@ -537,6 +555,7 @@ export interface SessionOutcomeBody {
   blockHint?: SessionBlock;
   demoData?: { scheduledFor: string; honeybookConfirmed?: boolean };
   objectionHits?: ObjectionHit[];
+  recordingUrl?: string | null;
 }
 
 export { API_BASE };
