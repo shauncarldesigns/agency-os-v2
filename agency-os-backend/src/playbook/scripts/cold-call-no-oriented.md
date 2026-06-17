@@ -108,11 +108,11 @@ stages:
 
 "Look, worst case you spend ten minutes and tell me to pound sand. Best case you actually like it and we can move forward. What's a good day this week?"
 
-↳ "Pound sand" is the magic phrase here. Trades guys talk like this. It lowers the social cost of saying no while also making it feel ridiculous to refuse — because the worst case is laughably small.
+> "Pound sand" is the magic phrase here. Trades guys talk like this. It lowers the social cost of saying no while also making it feel ridiculous to refuse — because the worst case is laughably small.
 
 "Ten minutes and you'll see exactly what's possible for your business — even if you decide it's not for you, you'll walk away with ideas."
 
-↳ Promises a takeaway regardless. Hard to say no to "you'll walk away with ideas" because there's no downside.
+> Promises a takeaway regardless. Hard to say no to "you'll walk away with ideas" because there's no downside.
 
 "I put together something that would just add to that. Fifteen minutes — if it doesn't feel right you'll know immediately."
 
@@ -124,7 +124,7 @@ stages:
 
 "Awesome, I'll get that over to you in a few minutes. Look for it from Shaun Carl Designs. Appreciate the time today — I'll see you [day/time]."
 
-↳ The "appreciate the time" lands well with trades guys. Feels genuine, not corporate.
+> The "appreciate the time" lands well with trades guys. Feels genuine, not corporate.
 
 ## Stage: terrible-time
 
