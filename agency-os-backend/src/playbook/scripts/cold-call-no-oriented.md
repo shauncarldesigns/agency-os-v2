@@ -18,6 +18,10 @@ stages:
     label: IF NOT INTERESTED
     short_label: Not interested
     branch: true
+  - id: angry-disarm
+    label: IF "I GET THESE CALLS ALL THE TIME"
+    short_label: Angry disarm
+    branch: true
   - id: hook
     label: HOOK
     short_label: Hook
@@ -46,6 +50,10 @@ stages:
   - id: close-3
     label: CLOSE — ADD TO WHAT YOU BUILT
     short_label: Close 3
+  - id: narrow-time
+    label: NARROW THE TIME
+    short_label: Narrow time
+    branch: true
   - id: confirm
     label: CONFIRM
     short_label: Confirm
@@ -75,11 +83,19 @@ stages:
 
 > Almost nobody says no to this. Keeps the door open for a future callback.
 
+## Stage: angry-disarm
+
+"Yeah, fair. Here's the thing — I can actually solve that problem for you. I already built your website. Once it's live, these calls stop. Want to take a look?"
+
+> Use when they interrupt the intro with hostility — "I get these calls all the time," "not interested, don't call back," "stop bugging me." Collapses the disarm and the reframe into one breath. Their complaint becomes your hook. "Yeah, fair" must sound like a peer agreeing, not a sales tactic — slow down the first 5 seconds.
+
 ## Stage: hook
 
 "I was looking you guys up on Google and saw some really great reviews but I didn't see a website — So I actually went ahead and put a site together for you just to see what it could look like. I'm not here to pitch you anything — would it be ridiculous to schedule a call so I can just show it to you?"
 
 > Either answer opens the door: "working on it" = active interest; "not really" = invitation to show what could be there.
+>
+> **Never argue with a stated fact.** If they say "I have a website," assume your research missed it and pivot to "Oh nice — how are you ranking?" instead of pushing back. Same rule for any factual claim they make.
 
 ## Stage: busy-redirect
 
@@ -122,6 +138,12 @@ stages:
 "I put together something that would just add to that. Fifteen minutes — if it doesn't feel right you'll know immediately."
 
 > The "add to that" framing implies you've earned the right to add to their existing success. Use when the prospect's already been giving "we're doing fine without it" energy.
+
+## Stage: narrow-time
+
+"Evenings probably better, right? I know you're out on jobs during the day. Six or seven?"
+
+> Use when they've agreed in principle but can't pick a time. Binary choice removes the friction of pulling out the calendar — they just pick one. The "I know you're out on jobs" line shows you understand their day.
 
 ## Stage: confirm
 
