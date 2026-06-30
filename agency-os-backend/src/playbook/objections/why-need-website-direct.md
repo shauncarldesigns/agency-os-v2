@@ -16,8 +16,16 @@ variants:
       ▸ Closes the "are they even still in business?" doubt. Reviews without a website look like maybe you're gone.
       ▸ Lets you charge more. Customers who research you online already trust you before they pick up the phone.
       ▸ Tells you where leads come from. Stop flying blind on marketing.
+  - label: Busy + referrals
+    rebuttal: "Fair question. Look, here's what I'm hearing — you're busy, word of mouth works, you don't see the problem. But let me ask you something: when you do get slow, what happens? You start sweating. A website running in the background means by the time winter hits or things slow down, you're already pulling in calls. You built it now while you're slammed, it's working for you when you need it most."
 ---
 
 Honestly? Some businesses really don't. But you've got [review_count] reviews at [review_avg] stars — that's a lot of trust people have built up. Right now when someone Googles you they see those stars and then nothing else. A website's just where you put the proof that backs up the reputation you already built. Worth ten minutes to see what that could look like?
 
-> Default angle: "Match your reputation" — leans on the social proof the prospect already has. Switch to the "10pm Googler" variant when the prospect's review count is low or their reaction signals they need the friction-removal framing more than the social-proof one. Switch to "Quick Fire" when you need to scan a list of short benefit one-liners instead of reading a polished paragraph — pick the one that matches what they just said. One sharp benefit beats four generic ones.
+> Pick the variant that matches what you're hearing from the prospect:
+> - **Default ("Match your reputation")** — leans on social proof. Use when their review count is strong and visible.
+> - **10pm Googler** — friction-removal angle. Use when review count is low OR they need the late-night-search framing more than social proof.
+> - **Quick Fire** — scannable list of 7 short benefit one-liners. Use when you need to deliver a sharp benefit fast without reading a paragraph. Pick the one that matches what they just said.
+> - **Busy + referrals** — late-game synthesis pivot. Use when you've already heard them say they're busy AND that word-of-mouth works — this acknowledges both, then pivots to the seasonal-slowdown anxiety play.
+>
+> One sharp benefit beats four generic ones. Don't dump the whole list — pick the angle that matches their actual objection.
