@@ -20,6 +20,7 @@ import busyPlusEmailMd from '../playbook/objections/busy-plus-email.md';
 import whyNeedWebsiteMd from '../playbook/objections/why-need-website.md';
 import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-direct.md';
 import angryDisarmMd from '../playbook/objections/angry-disarm.md';
+import totalBrushOffMd from '../playbook/objections/total-brush-off.md';
 
 import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
 
@@ -298,6 +299,7 @@ const OBJECTION_FILES: Record<string, string> = {
   'why-need-website': whyNeedWebsiteMd,
   'why-need-website-direct': whyNeedWebsiteDirectMd,
   'angry-disarm': angryDisarmMd,
+  'total-brush-off': totalBrushOffMd,
 };
 
 const FOLLOW_UP_FILES: Record<string, string> = {
