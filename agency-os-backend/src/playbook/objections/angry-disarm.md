@@ -26,9 +26,9 @@ Yeah, I get it — that's bold. But here's the thing: I only do this for busines
 
 ## Path: dont-need-busy
 
-Here's the thing though — you know why you're getting hammered with these calls? Because you don't have a website, you're an easy target. Once you have a website, guys like me see that and move on. So building this actually stops the cold calls and starts the real calls from actual customers looking to hire you.
+That actually makes sense — you're in your busy season right now which is great. But that also means in 4 months you're going to be staring at a quiet phone wondering where the next job is coming from. Wouldn't it be worth getting something built now so it's already working for you by the time things slow down?
 
-> Brilliant reframe — turns the very thing they're complaining about (constant sales calls) into the reason to act. Their pain becomes your selling point. After Handled, advance to the Close stages on the script.
+> Validates their busy season instead of arguing with it, then flips to the seasonal-slowdown anxiety every trades guy already worries about. The "quiet phone" image hits hard because most have lived that exact moment. After Handled, advance to the Close stages on the script.
 
 ## Path: not-worth-time
 
