@@ -18,10 +18,6 @@ stages:
     label: IF NOT INTERESTED
     short_label: Not interested
     branch: true
-  - id: angry-disarm
-    label: IF "I GET THESE CALLS ALL THE TIME"
-    short_label: Angry disarm
-    branch: true
   - id: hook
     label: HOOK
     short_label: Hook
@@ -82,12 +78,6 @@ stages:
 "That's completely fair. Is it crazy to just leave you my number in case anything changes down the road?"
 
 > Almost nobody says no to this. Keeps the door open for a future callback.
-
-## Stage: angry-disarm
-
-"Yeah, fair. Here's the thing — I can actually solve that problem for you. I already built your website. Once it's live, these calls stop. Want to take a look?"
-
-> Use when they interrupt the intro with hostility — "I get these calls all the time," "not interested, don't call back," "stop bugging me." Collapses the disarm and the reframe into one breath. Their complaint becomes your hook. "Yeah, fair" must sound like a peer agreeing, not a sales tactic — slow down the first 5 seconds.
 
 ## Stage: hook
 
