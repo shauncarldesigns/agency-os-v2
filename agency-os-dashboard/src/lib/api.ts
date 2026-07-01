@@ -467,6 +467,16 @@ export interface CallbackWithLead extends Callback {
   company: string; phone: string | null;
 }
 
+export interface VoicemailToRedial {
+  id: number;
+  company: string;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  industry: string | null;
+  last_called_at: string;
+}
+
 export interface DashboardTodayResponse {
   today: string;
   mode: 'prep' | 'calling' | 'review' | 'quiet';
@@ -476,6 +486,7 @@ export interface DashboardTodayResponse {
     noShowRecovery: DemoWithLead[];
     demosToday: DemoWithLead[];
     callbacksDue: CallbackWithLead[];
+    voicemailsToRedial: VoicemailToRedial[];
   };
 }
 
