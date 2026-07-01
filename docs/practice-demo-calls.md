@@ -8,7 +8,7 @@
 
 # Demo Call Script — The Full Flow
 
-A complete script for the booked demo call. The structure: **set the agenda → explain the web → walk the demo → present three plans → let them self-identify → close.**
+A complete script for the booked demo call. The structure: **set the agenda → domain check → explain the web if needed → share screen → educate on the Google landscape → walk the demo → three plans → let them self-identify → close.**
 
 The principle: educate first, anchor high, let them choose into the best plan. Tier 1 and Tier 2 are doing the selling work for Tier 3.
 
@@ -16,46 +16,77 @@ The principle: educate first, anchor high, let them choose into the best plan. T
 
 ## 1. Set The Agenda
 
-> *"Hey [Name], Shaun here — appreciate you making the time. Here's what I want to do in the next 15 minutes: first I want to explain how websites actually work — because most guys don't, and I want you to understand what you're paying for. Then I'll walk you through the demo I built for you. Then I'll show you the three ways we could work together. Sound good?"*
+> *"Hey [Name], Shaun here — appreciate you making the time. Here's what I want to do in the next 15 minutes: I'm going to walk you through the demo I built for you, explain how it actually works, and then show you three ways we could move forward. Sound good?"*
 
-↳ Setting the three-part agenda upfront keeps them with you through the educational section. They know there's a payoff coming.
-
----
-
-## 2. Explain The Web (90 seconds)
-
-> *"Before we get into anything, let me explain how websites actually work on the internet."*
-
-> *"There's really two pieces: a domain and a host."*
-
-> *"The domain is your address — like 'tomsplumbing.com'. You register that at places like GoDaddy, Namecheap, or Cloudflare — usually like $15 to $20 a year. That also gives you a branded email — tom@tomsplumbing.com — instead of tomsplumbing1972@gmail.com."*
-
-> *"Then you've got hosting. That's where the actual website lives — kind of like the building at the address. Hosting runs monthly because the lights have to stay on for someone to find you."*
-
-> *"Two different things, two different costs. Make sense so far?"*
-
-↳ The "address vs building" analogy lands instantly with trades guys. They deal with physical infrastructure every day. Don't move to pricing until they nod — getting a "yeah I'm with you" earns the right to talk numbers.
+↳ Setting the three-part agenda upfront keeps them with you. They know there's a payoff coming.
 
 ---
 
-## 3. Walk Through The Demo (8–10 min)
+## 2. Domain Check
 
-> *"Alright, let me show you what I built. Can you see the link I sent over okay?"*
+Ask before anything else — this determines whether you spend 90 seconds on the domain education or skip straight to the screen share.
 
-↳ If trouble: *"Just open your browser and paste that link in — should take two seconds."*
+> *"Perfect. Quick thing before we jump in — do you already own a domain for the business?"*
 
-### The walkthrough — 3 points only:
+**If they say yes:**
 
-> *"This is your homepage — your name, your number, your reviews. Everything on this page has one job — get someone to call you. This is what someone finds when they search [their trade] in Green Bay at night instead of finding nothing."*
+> *"Perfect, we'll use that. Let me pull up a couple things on my screen for you."*
 
-Hit only these three:
-1. **Their branding on it** — makes it feel real and personal
-2. **Phone number prominent on every page** — speaks their language
-3. **Reviews section** — they're proud of these
+Skip to Section 4 (Screen Share).
 
-Don't over-explain. The site should sell itself.
+**If they say no:**
 
-### The pause — most important moment:
+> *"No problem at all. So a domain is just your web address — like tomsplumbing.com. It's your storefront on the internet. You register it through a company like GoDaddy or Namecheap, costs about $15 to $20 a year, and it also gives you a branded email — tom@tomsplumbing.com instead of something generic."*
+
+> *"The other piece is hosting — that's where the actual website lives, kind of like the building at that address. Hosting runs monthly because it needs to stay online for people to find you."*
+
+> *"Two different things, two different costs — but you don't need to worry about any of that on the monthly plans. I handle domain and hosting for you. I'll walk you through your three options and you'll see what makes sense."*
+
+> *"Let me pull up a couple things on my screen for you."*
+
+↳ The "address vs building" analogy lands instantly with trades guys. They deal with physical infrastructure every day. Bundling domain + hosting into the monthly plan removes an objection before it can form.
+
+---
+
+## 3. Share Your Screen
+
+> *"Alright, I'm gonna share my screen now so I can show you a couple things. Can you see that okay on your end?"*
+
+↳ Wait for confirmation before continuing. If they can't see the screen, the rest of the call is pointless — pause and fix it.
+
+---
+
+## 4. Google Landscape Education
+
+Before showing the demo site, educate on where sites need to appear. This gives them the vocabulary to understand the value of the Growth plan later.
+
+> *"Before I show you the site, I want to show you something real quick. This is what happens when someone in your area searches for your type of service on Google right now — so you understand the terminology we're gonna talk about."*
+
+> *"At the very top you've got sponsored ads — those are paid listings. Then right below that is the map pack — that's the three local businesses with their location, reviews, phone number. That's the primo real estate for getting calls."*
+
+> *"Below that you've got organic search results — that's where your website shows up if you rank naturally. And now Google's also showing AI Overviews — those are AI-generated answers to questions."*
+
+> *"So when we talk about getting you ranked, we're talking about showing up in that map pack, on the first page of organic results, and in those AI search results. That's everywhere your customers are actually looking."*
+
+↳ Four different terms get introduced (sponsored ads, map pack, organic, AI Overviews). By the time the Growth plan comes up you can reference "map pack" and "AI search" and they'll know what you mean. Without this section, the Growth plan sounds like jargon.
+
+---
+
+## 5. Walk Through The Demo
+
+> *"Alright, now let me show you the demo I built for you. Can you see that okay?"*
+
+> *"So here's your homepage. You're going to see your name right at the top, your number's prominent so someone can call you instantly. As you look down the page, you're going to see the services you actually offer listed out. Then your reviews — these are the social proof that makes someone actually trust you enough to pick up the phone. Every single one of those reviews is a reason someone chose you over your competitor."*
+
+> *"You've also got an FAQ section — this matters because Google's AI is now looking through sites for answers to common questions. If someone asks an AI chatbot a question and your FAQs answer that, your business could show up in those AI search results."*
+
+> *"The whole thing is built to do one thing — get someone to call you or fill out a form. Your services so they know you do what they need, your reviews so they trust you, your FAQs so AI can find you, your number so they can reach you instantly. No distractions, no fluff."*
+
+↳ Hit five things and only five things: (1) name at top, (2) phone number prominent, (3) services listed, (4) reviews section, (5) FAQ section as the AI-search hook. The FAQ mention is the setup for later — it plants the seed that ranking has moving parts.
+
+---
+
+## 6. The Pause
 
 > *"What do you think so far?"*
 
@@ -63,75 +94,71 @@ Don't over-explain. The site should sell itself.
 
 ---
 
-## 4. The Bridge — Gut Check & Frame The Pitch
-
-> *(After "What do you think so far?")*
+## 7. Gut Check + Editable Disclaimer
 
 > *"Okay — quick gut check. Anything you saw that doesn't feel right, or that you'd want done differently?"*
 
-> *(They respond — handle whatever comes up. Usually it's "no, looks good.")*
+*(Let them respond — handle whatever comes up.)*
 
-> *"And one thing to keep in mind — everything on this site is fully editable. The images, the colors, the wording — all of it. The photos you're seeing are placeholders, so any of your own job photos, team shots, before-and-afters — we drop those in. Anything you want changed, we change it. This is a starting point, not a finished product."*
+> *"Perfect. One thing to know — everything on this site is fully editable. The images, the colors, the wording — all of it. The photos you're seeing are placeholders, so your logo, your branding colors, any job photos or before-and-afters — we drop those in. Anything you want changed, we change it. This is a starting point, not a finished product."*
 
-> *(Pause briefly — let that sink in.)*
+> *"So here's the thing — I've got three different ways we can work together depending on what makes sense for your situation."*
 
-> *"So based on what we just talked about — your reviews, the area you serve, the fact that you don't really have a presence online yet — let me walk you through how we'd actually work together. I've got three different ways I do this depending on where someone is at."*
-
-> *(Then into the plans.)*
-
-↳ Three things happening here: (1) gut check surfaces objections cheaply before pricing, (2) "fully editable / placeholders / starting point" kills the "those aren't my trucks" objection and lowers commitment perception, (3) the personalized recap proves you were listening and frames the plans as tailored recommendations, not a generic menu.
+↳ Three things happening: (1) gut check surfaces objections cheaply before pricing, (2) the "fully editable / placeholders / starting point" line kills the "those aren't my trucks" objection, (3) the "three different ways" phrasing frames the plans as tailored options rather than a fixed menu.
 
 ---
 
-## 5. Present The Three Plans
+## 8. Present The Three Plans
 
-Anchor high. Walk down from $950 → $799 + $79/mo → $499/mo. Each plan is doing some sales work for the next one.
+Anchor high. Walk down from $950 → $799 + $79/mo → $499/mo. Each plan is doing sales work for the next one.
 
 ### Launch Plan — $950 (one-time)
 
-> *"The Launch Plan is the basic option. I build your site, hand you the code, and you handle hosting and any future changes yourself. No monthly costs to me, but you're on your own for everything after delivery. That's $950, one-time, and the site is yours."*
+> *"The Launch Plan is $950, one-time. I build it, hand you the code, you own it completely. But you're handling hosting and any changes yourself after that."*
 
-↳ Plants the seed that they probably don't want to deal with tech themselves. The "you're on your own" frame isn't selling against the plan — it's just being honest. It sets up Tier 2 perfectly.
+↳ Plants the seed that they probably don't want to deal with tech themselves. The "you're on your own" frame isn't selling against the plan — it's just honest. Sets up Tier 2.
 
 ### Build & Maintain Plan — $799 + $79/mo (or $50/mo annual)
 
-> *"The Build and Maintain Plan is where I take the tech headache off your plate. I build 5 custom pages, host the site, maintain it, and any changes you need — new phone number, photos, hours, whatever — you just text me. That's $799 to build, then $79 a month for hosting and maintenance. Pay for the year upfront and that drops to $50 a month."*
+> *"Build and Maintain is $799 upfront, then $79 a month. Pay for the year upfront and that drops to $50 a month. I build it, host it, maintain it — any changes you need, you just text me. No tech headache on your end."*
 
-> *"This gets you a site you don't have to worry about — but I want to be straight with you, just having a site doesn't mean you'll be first on Google."*
+> *"But here's the thing — just having a website doesn't guarantee you'll show up on the first page of Google or in the map pack. You need active ranking strategy behind it."*
 
-↳ The "I want to be straight with you" pivot is the bridge to Tier 3. Pause for a beat after that line. Let it land. You want them thinking *"wait — having a site isn't enough?"* before you pitch the next plan. Their curiosity should be leading the conversation by the time you start Tier 3.
+↳ The "just having a website doesn't guarantee you'll rank" pivot is the bridge to Tier 3. Pause after that line. You want them thinking *"wait — what does the ranking strategy look like?"* before you launch into the Growth pitch.
 
 ### Growth Plan — $499/mo (no upfront, 6-month commitment)
 
-> *"And that's actually where the Growth Plan comes in — this is the one I designed for guys who want to actually rank, not just exist online. I build you a full 8-to-10 page site, free, no upfront cost. Then every month I add 3 service area pages targeting the towns you actually work in. I fully manage your Google Business Profile — posts, photos, offers, automated review requests. Google rewards businesses that look active and alive — that's what this plan keeps you doing every month."*
+> *"And that's where the Growth Plan comes in. This one, I give you a site completely free. But we have a marketing strategy to rank you on Google."*
 
-> *"The goal isn't just a site that sits there — it's getting you into the Google map pack so when someone types '[plumber/roofer/electrician] near me' in De Pere, you show up."*
+> *"Here's what that looks like: every month I'm adding three new service area pages targeting the towns and cities you actually work in. I'm fully managing your Google Business Profile with posts and photos, review requests go out automatically so your reputation builds itself, your business gets listed in 62 local directories so you show up everywhere, and I'm posting on social media to keep you visible."*
+
+> *"I'm also tracking your rankings with monthly reports so you see exactly what's working — which keywords are bringing you calls, where you're showing up on Google, in the map pack, and in AI search results like ChatGPT and Gemini."*
+
+> *"The goal is getting you visible everywhere your customers are actually searching — Google Maps, Google search, AI tools, social platforms. That's what keeps you ranked and keeps the calls coming."*
 
 > *"That's $499 a month with a 6-month commitment."*
 
-↳ The "active and alive" line is your one-sentence education on why GBP management matters — without lecturing. If they ask why it matters more, expand: *"Compare that to a competitor whose GBP hasn't been touched in 8 months — Google starts to forget about them. We just want to make sure you're not that competitor."*
-
-The "doors" metaphor also works well if they ask why service area pages help: *"Every new page is another door for someone in Howard or Ashwaubenon to find you. By month 6 you have 18 of those doors open."*
+↳ The Growth pitch is a full paragraph of value before the price. The "62 local directories" and "monthly ranking reports" and "ChatGPT / Gemini" specificity signals real ongoing work — not a black-box promise. Landing the price at the end after all that value makes $499/mo feel proportionate.
 
 ---
 
-## 6. The Anchoring Close — "Which Feels Closest?"
+## 9. The Anchoring Close — "Which Feels Closest?"
 
-After you've laid out all three, frame the comparison for them. Don't ask them to commit — ask them to identify with a plan:
+After all three plans, frame the comparison and let them identify with one instead of committing to one.
 
-> *"So you've got three ways to go: $950 and you're on your own, $799 plus $79 a month and I handle everything but the marketing side, or $499 a month with the full website free and I'm actively pushing you up the Google rankings every month. Which one feels closest to where you're at?"*
+> *"So you've got three ways to go: $950 and you're on your own, $799 plus $79 a month and I handle everything, or $499 a month with the full website free and I'm actively getting you ranked across Google, the map pack, and AI search. Which one feels closest to where you're at?"*
 
 ↳ Asking *"which one feels closest to where you're at?"* instead of *"which one do you want?"* is the magic. They're not committing — they're just identifying. Once they say *"probably the Growth one"* you're halfway closed.
 
 ---
 
-## 7. Handle What Comes Up
+## 10. Handle What Comes Up
 
-### If they pick Growth:
+### If they pick Launch:
 
-> *"Perfect — honestly that's the one I'd pick for a business in your spot. Let me grab your details and we'll get started."*
+> *"Just so you're going in eyes-open — you'll be responsible for security patches, updates, and anything that needs changing down the road. You comfortable with that piece?"*
 
-Move immediately into onboarding. Don't linger or they'll talk themselves out of it.
+↳ Not manipulation — a fair comfort check. If they say no, the conversation naturally moves back up to Build & Maintain.
 
 ### If they pick Build & Maintain:
 
@@ -139,17 +166,17 @@ Move immediately into onboarding. Don't linger or they'll talk themselves out of
 
 ↳ The 90-day check-in is your built-in upsell conversation.
 
-### If they pick Launch:
+### If they pick Growth:
 
-> *"Totally understand wanting to own it outright. Just so you're going in eyes-open — once I hand it off, hosting, updates, security, all of that's on you. You comfortable with that piece?"*
+> *"Perfect — honestly that's the one I'd pick for a business in your spot. Let me grab your details and we'll get started."*
 
-↳ This isn't manipulation — it's actually fair to ask. If they say no, the conversation naturally moves back up to Build & Maintain.
+Move immediately into onboarding. Don't linger or they'll talk themselves out of it.
 
 ### If they say "I need to think about it":
 
 > *"Totally fair — what's the main thing you'd be thinking through?"*
 
-↳ Listen, handle specifically, then:
+Listen, handle specifically, then:
 
 > *"What would need to be true for this to be an easy yes?"*
 
@@ -167,7 +194,7 @@ Move immediately into onboarding. Don't linger or they'll talk themselves out of
 
 ---
 
-## 8. Lock In The First Payment
+## 11. Lock In The First Payment
 
 For Growth and Build & Maintain — close on the first payment before hanging up. It triggers Merchynt onboarding and the GBP claim.
 
@@ -181,9 +208,9 @@ For Growth and Build & Maintain — close on the first payment before hanging up
 
 | Plan | Price | What You Get | Best For |
 |------|-------|--------------|----------|
-| **Launch** | $950 one-time | Site, code delivered | DIY types who want to own it |
-| **Build & Maintain** | $799 + $79/mo ($50 annual) | Site + hosting + changes | "I don't want to think about it" |
-| **Growth** | $499/mo (6-mo min) | Free site + GBP management + 3 new pages/mo | Anyone who wants to actually rank |
+| **Launch** | $950 one-time | Site + code delivered | DIY types who want to own it |
+| **Build & Maintain** | $799 + $79/mo ($50 annual) | Site + hosting + changes on demand | "I don't want to think about it" |
+| **Growth** | $499/mo (6-mo min) | Free site + GBP management + 3 new pages/mo + 62 directories + social + monthly ranking reports (Google, map pack, AI search) | Anyone who wants to actually rank |
 
 ---
 
@@ -191,12 +218,13 @@ For Growth and Build & Maintain — close on the first payment before hanging up
 
 What you want happening in their head as you walk through this:
 
-1. *"Domain and hosting — okay, I get how this works now."*
-2. *"Wow, the demo actually looks good. They put real effort into this."*
-3. *"$950 to build it myself? That's a lot — and then I have to figure out hosting?"*
-4. *"$799 plus $79 a month, no tech headache. That's more like it."*
-5. *"Wait — but just having a site isn't enough to rank on Google?"*
-6. *"$499 a month and the site is FREE? And they're actively working to rank me? That's actually a no-brainer."*
+1. *"Okay, I get the basics of how websites work now."*
+2. *"That's where I want to be on Google — the map pack."*
+3. *"Wow, the demo actually looks good. They put real effort into this."*
+4. *"$950 to build it myself? That's a lot — and then I have to figure out hosting?"*
+5. *"$799 plus $79 a month, no tech headache. That's more like it."*
+6. *"Wait — but just having a site doesn't get me ranked?"*
+7. *"$499 a month and the site is FREE? And they're actually working to rank me everywhere — Google, map pack, AI search? That's actually a no-brainer."*
 
 By the time you ask *"which one feels closest to where you're at?"* — the Growth plan has done its own selling.
 
