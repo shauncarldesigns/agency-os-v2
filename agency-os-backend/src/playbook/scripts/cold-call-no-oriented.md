@@ -75,9 +75,9 @@ stages:
 
 ## Stage: not-interested
 
-"That's completely fair. Is it crazy to just leave you my number in case anything changes down the road?"
+"Totally fair. But I'm not here to pitch you -- I've already went ahead and built you a website. Would it be crazy to spend 10 minutes to take a look at it?"
 
-> Almost nobody says no to this. Keeps the door open for a future callback.
+> Almost nobody says no to this.
 
 ## Stage: hook
 
