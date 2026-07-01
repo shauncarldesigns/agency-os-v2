@@ -75,7 +75,7 @@ stages:
 
 ## Stage: not-interested
 
-"Totally fair. But I'm not here to pitch you -- I've already went ahead and built you a website. Would it be crazy to spend 10 minutes to take a look at it?"
+"Totally fair. But I'm not here to pitch you -- I've already went ahead and built you a website. Would it be crazy to spend 10 minutes ona screen-share to take a look at it?"
 
 > Almost nobody says no to this.
 
