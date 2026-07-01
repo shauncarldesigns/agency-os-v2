@@ -3,6 +3,7 @@ import type { ShowToast, Tab } from '../../lib/types';
 import {
   api, ApiError,
   type DashboardTodayResponse, type DemoWithLead, type CallbackWithLead,
+  type VoicemailToRedial,
   type AgencySummary, type ObjectionOverviewItem, type AnalyticsRange,
 } from '../../lib/api';
 import { Button } from '../shared/Button';
@@ -276,6 +277,7 @@ function hasAnyPriority(strip: DashboardTodayResponse['priorityStrip']): boolean
     || strip.noShowRecovery.length > 0
     || strip.demosToday.length > 0
     || strip.callbacksDue.length > 0
+    || strip.voicemailsToRedial.length > 0
   );
 }
 
@@ -336,6 +338,13 @@ function PriorityStrip({ data, showToast, onReload, onReschedule }: PriorityStri
         <PriorityGroup label={`Callbacks due today (${data.callbacksDue.length})`} accent="green">
           {data.callbacksDue.map((cb) => (
             <CallbackRow key={cb.id} cb={cb} />
+          ))}
+        </PriorityGroup>
+      )}
+      {data.voicemailsToRedial.length > 0 && (
+        <PriorityGroup label={`Voicemails to redial (${data.voicemailsToRedial.length})`} accent="yellow">
+          {data.voicemailsToRedial.map((v) => (
+            <VoicemailRow key={v.id} vm={v} />
           ))}
         </PriorityGroup>
       )}
@@ -444,6 +453,23 @@ function CallbackRow({ cb }: { cb: CallbackWithLead }) {
         </div>
       </div>
       <Badge color={overdue ? 'yellow' : 'green'}>{overdue ? 'Overdue' : 'Due'}</Badge>
+    </div>
+  );
+}
+
+function VoicemailRow({ vm }: { vm: VoicemailToRedial }) {
+  const daysAgo = Math.max(0, Math.floor((Date.now() - new Date(vm.last_called_at).getTime()) / (1000 * 60 * 60 * 24)));
+  const label = daysAgo === 0 ? 'today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
+  return (
+    <div className="priority-row">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <strong style={{ fontSize: '0.82rem' }}>{vm.company}</strong>
+        <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+          Left VM {label} · {vm.phone ?? '—'}
+          {(vm.city || vm.state) ? ` · ${[vm.city, vm.state].filter(Boolean).join(', ')}` : ''}
+        </div>
+      </div>
+      <Badge color={daysAgo >= 7 ? 'yellow' : 'gray'}>{daysAgo >= 7 ? 'Aging' : 'Redial'}</Badge>
     </div>
   );
 }

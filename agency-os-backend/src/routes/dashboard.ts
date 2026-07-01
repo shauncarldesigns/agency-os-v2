@@ -29,6 +29,7 @@ dashboardRouter.get('/', async (c) => {
     noShowRecovery,
     demosToday,
     callbacksDue,
+    voicemailsToRedial,
   ] = await Promise.all([
     c.env.DB.prepare(`SELECT * FROM sessions WHERE session_date = ? ORDER BY CASE block WHEN 'morning' THEN 0 ELSE 1 END`).bind(today).all<Session>(),
     c.env.DB.prepare(`
@@ -56,6 +57,21 @@ dashboardRouter.get('/', async (c) => {
       WHERE cb.due_date <= ? AND cb.status = 'pending'
       ORDER BY cb.due_date ASC, cb.id ASC LIMIT 50
     `).bind(today).all(),
+    // Voicemails to redial — leads where we left a voicemail recently and
+    // still need to reach them. Excludes not_interested / dead / qualified
+    // / client (those don't need a redial). Ordered oldest-first so the
+    // aging ones surface at the top.
+    c.env.DB.prepare(`
+      SELECT id, company, phone, city, state, last_called_at, industry
+      FROM leads
+      WHERE outcome = 'Voicemail Left'
+        AND last_called_at IS NOT NULL
+        AND last_called_at >= datetime('now', '-14 day')
+        AND status IN ('cold', 'contacted')
+        AND deleted_at IS NULL
+      ORDER BY last_called_at ASC
+      LIMIT 50
+    `).all(),
   ]);
 
   return c.json({
@@ -67,6 +83,7 @@ dashboardRouter.get('/', async (c) => {
       noShowRecovery: noShowRecovery.results ?? [],
       demosToday: demosToday.results ?? [],
       callbacksDue: callbacksDue.results ?? [],
+      voicemailsToRedial: voicemailsToRedial.results ?? [],
     },
   });
 });
