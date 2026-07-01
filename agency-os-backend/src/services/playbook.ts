@@ -12,7 +12,7 @@ import wordOfMouthMd from '../playbook/objections/word-of-mouth.md';
 import facebookPageMd from '../playbook/objections/facebook-page.md';
 import cantAffordMd from '../playbook/objections/cant-afford.md';
 import badExperienceMd from '../playbook/objections/bad-experience.md';
-import notTechSavvyMd from '../playbook/objections/not-tech-savvy.md';
+import tooBusySimpleMd from '../playbook/objections/too-busy-simple.md';
 import talkToPartnerMd from '../playbook/objections/talk-to-partner.md';
 import tooBusyMd from '../playbook/objections/too-busy.md';
 import sendEmailMd from '../playbook/objections/send-email.md';
@@ -291,7 +291,7 @@ const OBJECTION_FILES: Record<string, string> = {
   'facebook-page': facebookPageMd,
   'cant-afford': cantAffordMd,
   'bad-experience': badExperienceMd,
-  'not-tech-savvy': notTechSavvyMd,
+  'too-busy-simple': tooBusySimpleMd,
   'talk-to-partner': talkToPartnerMd,
   'too-busy': tooBusyMd,
   'send-email': sendEmailMd,
