@@ -217,6 +217,83 @@ objection chips + notes textarea with auto-tagged objection lines. The
 operator can still open a lead's modal from Pipeline for full historical
 context.
 
+## Hot Leads (added 2026-06-17)
+
+Operator-curated priority queue separate from auto-composed sessions. Pipeline
+row checkboxes get a "🔥 Add to hot leads" bulk button; a red-accented "Hot
+Leads" card sits above the WeekPlanner on the dashboard.
+
+- **Sentinel row on `sessions`** — one persistent hot session per DB with
+  `session_date='hot'`, `block='hot'`, `industry='mixed'`, `status='active'`
+  indefinitely. Kind discriminated by new `sessions.kind` column ('auto' |
+  'hot'). Migration `2026-06-17-session-kinds.sql`.
+- **Active-session lock loosens per-kind.** Two active sessions are allowed
+  as long as they're different kinds (one auto + one hot). Same-kind conflict
+  still throws 409.
+- **WeekPlanner filters `kind='auto'`** so the hot session doesn't appear in
+  the weekly grid; `activeSession` field also filtered to auto so the
+  "WORKING NOW" banner only surfaces auto sessions.
+- **New endpoints:** `GET /api/sessions/hot`, `POST /api/sessions/hot/add`
+  (body `{lead_ids: number[]}`, INSERT OR IGNORE for dedup).
+
+## Call Recordings (added 2026-07-01)
+
+Mid-call audio capture via browser MediaRecorder API → R2 bucket → public URL
+persists on `call_log.recording_url`.
+
+- **R2 bucket:** `agency-os-recordings`, public access enabled. Base URL:
+  `https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev`. Binding name in
+  Worker: `RECORDINGS` (see `wrangler.toml`).
+- **Cockpit Record button** in utility row has 4 states: idle / recording
+  (pulses red, live MM:SS) / uploading / done. Timer rebases to
+  record-start when clicked, so objection-hit timestamps are relative to the
+  recording rather than cockpit-mount time.
+- **`POST /api/recordings`** — multipart upload. Streams to R2 via
+  `R2.put(file.stream())`. Immediately creates a placeholder call_log row
+  with `outcome='Recording'` so the recording is never orphaned. Returns
+  `{ url, key, bytes, call_id }`.
+- **Outcome merge logic:** if the cockpit passes `recordingCallId` in the
+  outcome submit, `POST /api/sessions/:id/outcome` and
+  `POST /api/leads/:id/calls` UPDATE that row instead of INSERTing a new
+  one. Keeps recording + outcome as a single call_log entry.
+- **Orphan recovery:** `GET /api/leads/:id/recordings` lists R2 objects
+  under `calls/{leadId}/`, cross-references with `call_log` to mark each
+  as attached or orphan. `POST /api/leads/:id/recordings/attach` creates
+  a placeholder call_log row for an orphan URL. CallLogTab renders a
+  yellow "orphan recording" block with a "Save to call log" button.
+- **Playback:** Pipeline LeadModal's CallLogTab renders "🎙 Play recording ↗"
+  link on any call_log entry with a recording_url. Opens in a new browser
+  tab with native audio controls.
+
+Migration: `2026-06-17-call-log-recording-url.sql` (added `recording_url TEXT`
+column).
+
+## Voicemails to Redial (added 2026-07-01)
+
+Sixth section on the dashboard Priority Strip alongside demos-awaiting /
+no-show / demos-today / callbacks-due.
+
+Query: leads with `outcome='Voicemail Left'`, `last_called_at` within 14 days,
+`status IN ('cold','contacted')`, ordered oldest-first, limit 50. Badge on
+each row flips gray (Redial) → yellow (Aging) at 7+ days.
+
+Returned from `GET /api/dashboard` under `priorityStrip.voicemailsToRedial`.
+
+## Reference docs under `docs/` (added 2026-07-01)
+
+Not parsed by the app. Human/AI-readable snapshots of the playbook + demo
+flows, for Claude chat sessions running practice calls.
+
+- `docs/practice-cold-calls.md` — mirror of live cold-call script + objection
+  library + demo scripts + email follow-up.
+- `docs/practice-demo-calls.md` — full demo call flow (more polished than
+  the app's runtime demo scripts — includes domain check, Google landscape
+  education, 5-point walkthrough with FAQ→AI hook, expanded Growth pitch).
+
+Regenerate by re-reading all files under `agency-os-backend/src/playbook/`
+and reassembling. Runtime demo scripts and this doc may drift — sync as a
+separate PR when the operator asks.
+
 ## Cloudflare DNS management (added 2026-06-14)
 
 Every project can have a Cloudflare zone for its client domain. Records are

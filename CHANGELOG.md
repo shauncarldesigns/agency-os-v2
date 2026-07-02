@@ -7,6 +7,75 @@ Backend Worker auto-deploys via CI on merge. Dashboard requires manual
 `cd agency-os-dashboard && npm run deploy` — entries below note "dashboard"
 when a manual deploy was needed.
 
+## 2026-07
+
+### Practice reference docs + polish (PRs #106–#108)
+
+- **[#108](https://github.com/shauncarldesigns/agency-os-v2/pull/108) Update `practice-demo-calls.md` to latest operator-authored version.** Adds domain check flow, Google-landscape education, 5-point walkthrough with FAQ→AI hook, beefier Growth pitch (62 directories + monthly ranking reports + ChatGPT/Gemini). No app change.
+- **[#107](https://github.com/shauncarldesigns/agency-os-v2/pull/107) Add `docs/practice-demo-calls.md` reference doc.** Full-flow demo call script for Claude chat practice sessions. Sibling to practice-cold-calls.md.
+- **[#106](https://github.com/shauncarldesigns/agency-os-v2/pull/106) Add `docs/practice-cold-calls.md` reference doc.** Human/AI-readable snapshot of the live cold-call playbook — every stage, every objection chip, every variant, both demo scripts, email follow-up, and quick-reference table. Not parsed by the app.
+
+### Dashboard — voicemail visibility (PR #105)
+
+- **[#105](https://github.com/shauncarldesigns/agency-os-v2/pull/105) Voicemails to redial priority strip + stuck-status cleanup.** Sixth section on the dashboard Priority Strip alongside demos-awaiting / no-show / demos-today / callbacks-due. Query: leads with `outcome='Voicemail Left'`, `last_called_at` within 14 days, `status IN ('cold','contacted')`, ordered oldest-first. Badge flips gray→yellow at 7+ days. Also included: one-shot data cleanup of leads stuck at `status='cold'` with an outcome recorded. Backend + dashboard.
+
+### Playbook content churn (PRs #103–#104)
+
+- **[#104](https://github.com/shauncarldesigns/agency-os-v2/pull/104) Replace Not-tech-savvy standard chip with Too Busy (simple).** Standard-panel version of the seasonal-slowdown play — one-shot tap for a quick redirect. Deep Dive's `Too busy ↗` branching chip is the escalation path.
+- **[#103](https://github.com/shauncarldesigns/agency-os-v2/pull/103) Swap Word-of-mouth rebuttal.** New copy: referral-hesitation reframe ("the next thing that person does is Google you").
+- **[#102](https://github.com/shauncarldesigns/agency-os-v2/pull/102) Add "Busy + referrals" variant to Why-need-website-direct.** Fourth angle pill — late-game synthesis pivot when the operator's heard both busy + word-of-mouth.
+
+### Playbook content — Angry Disarm restructure (PRs #97–#101)
+
+- **[#101](https://github.com/shauncarldesigns/agency-os-v2/pull/101) Add Total Brush-Off chip (last-resort simple objection).** Recycles the "getting hammered with these calls" rebuttal removed from angry-disarm Path B. Deep Dive, order 5. Note flags mouthy tone.
+- **[#100](https://github.com/shauncarldesigns/agency-os-v2/pull/100) Swap Angry Disarm Path B rebuttal.** Replaces the cold-calls reframe with the seasonal-slowdown play ("busy season now → quiet phone in 4 months").
+- **[#99](https://github.com/shauncarldesigns/agency-os-v2/pull/99) Add Quick Fire variant to Why-need-website-direct.** Third angle pill — scannable list of 7 short benefit one-liners for rapid-fire delivery.
+- **[#98](https://github.com/shauncarldesigns/agency-os-v2/pull/98) Move Angry Disarm from script-branch to deep-dive branching objection.** Same content, better surface — chip in objection panel (order 0) with 3 paths (Built it? / Don't need it / Not worth time).
+- **[#97](https://github.com/shauncarldesigns/agency-os-v2/pull/97) Cherry-pick angry-disarm + narrow-time stages from ChatGPT-generated draft.** Two net-new stages + "never argue a stated fact" addendum on Hook note.
+
+### Playbook content (PRs #91–#95)
+
+- **[#95](https://github.com/shauncarldesigns/agency-os-v2/pull/95) Cold-call script restructure.** Dropped label/mirror/label-2 (never used), split close into three angles (Pound Sand / Walk Away With Ideas / Add To What You Built), reordered so terrible-time + not-interested sit right after Intro.
+- **[#94](https://github.com/shauncarldesigns/agency-os-v2/pull/94) Add Busy → Demo redirect stage (branch).** Aggressive close for "I'm heading into back-to-back" — skip callback, go straight to demo invite with binary time.
+- **[#93](https://github.com/shauncarldesigns/agency-os-v2/pull/93) Add Pushback stage (branch).** For "you built me a website?" energy.
+- **[#92](https://github.com/shauncarldesigns/agency-os-v2/pull/92) Brief Studio inline-editable Client card.** Owner / Phone / Email always visible + click-to-edit. Prefills from linked lead when project field is empty.
+- **[#91](https://github.com/shauncarldesigns/agency-os-v2/pull/91) Add seasonal-slowdown path to Too busy.** Turns "you're busy right now" into the seasonal-slowdown anxiety play. Fifth path.
+
+### Cockpit UX + branch stages (PRs #88–#90)
+
+- **[#90](https://github.com/shauncarldesigns/agency-os-v2/pull/90) Fix render branch stages in cockpit breadcrumb.** Previously the cockpit filtered branch:true stages OUT of the breadcrumb — they were silently invisible. Now renders every stage; branches get dashed border + italic. Fixes visibility of `Cost`, `Pushback`, `Hesitate`, `Terrible time`, `Not interested`.
+- **[#89](https://github.com/shauncarldesigns/agency-os-v2/pull/89) Add Cost stage (branch).** For "how much does this cost?" — deflect until after demo.
+- **[#88](https://github.com/shauncarldesigns/agency-os-v2/pull/88) Fix drop reveal stage + surface playbook parse errors usefully.** Removes stale `reveal` stage reference. Adds Hono `onError` handler so parser failures return the actual error message + broken file instead of a generic 500.
+
+### Playbook content (PRs #78–#80)
+
+- **[#80](https://github.com/shauncarldesigns/agency-os-v2/pull/80) Fix register why-need-website + why-need-website-direct in OBJECTION_FILES.** PR #79 added the files but forgot the explicit imports in `services/playbook.ts`. Wrangler Text-rule only bundles imported markdown, so the chips didn't appear until this fix.
+- **[#79](https://github.com/shauncarldesigns/agency-os-v2/pull/79) SimpleObjection variants mechanism + review-count tokens + Why-need-website objections.** New variants[] array on simple objections renders as a chip row (`[Default] [Variant Label]`). New interpolation tokens `[review_count]`, `[review_avg]`, `[reviews]`. Two new objections: `why-need-website` (branching, 3 paths) + `why-need-website-direct` (simple with 2 initial variants). ExecutionView populates `scores.reviews` from `lead.google_review_count + rating` for the tokens to resolve.
+- **[#78](https://github.com/shauncarldesigns/agency-os-v2/pull/78) Playbook: tighten Intro + Hook lines on cold-call script.** New Intro: "help them get found on Google." New Hook: neutral "is that something you are working on?" replaces the leading-question framing.
+
+### Cockpit polish (PRs #81–#84)
+
+- **[#84](https://github.com/shauncarldesigns/agency-os-v2/pull/84) BookingPane: revert contact/email to read-only CopyField.** Cockpit header already handles inline edit; BookingPane just displays copy-to-clipboard chips.
+- **[#83](https://github.com/shauncarldesigns/agency-os-v2/pull/83) Cockpit header: fix wrapped phone + orphan score gap.** Grid columns re-sized to auto so scores hug the right edge; phone hero pinned to content width with white-space: nowrap.
+- **[#82](https://github.com/shauncarldesigns/agency-os-v2/pull/82) Cockpit: row layout for owner/email + prefill from enrichment.** Phone hero + Owner + Email flow horizontally to the right of the phone. Owner prefills from `owner_names` mined during enrichment (faded italic + "from reviews" hint).
+- **[#81](https://github.com/shauncarldesigns/agency-os-v2/pull/81) Inline-editable owner + email on cockpit header + BookingPane.** New `InlineEditField` shared component. Click-to-edit, autofocus, commits on blur/Enter, cancels on Escape.
+
+### Call Recordings (PRs #85–#87)
+
+- **[#87](https://github.com/shauncarldesigns/agency-os-v2/pull/87) Orphan recording recovery.** `GET /api/leads/:id/recordings` lists every R2 object under `calls/{leadId}/` prefix and marks which are already attached to a call_log row. `POST /api/leads/:id/recordings/attach` creates a placeholder call_log row for orphans. CallLogTab renders yellow "orphan recordings" block with "Save to call log" button.
+- **[#86](https://github.com/shauncarldesigns/agency-os-v2/pull/86) Recordings always create a call_log row + merge with outcome.** `/api/recordings` now INSERTs a placeholder call_log row (`outcome='Recording'`) immediately after R2 upload succeeds. If the operator then submits an outcome, the outcome handler UPDATEs that row instead of creating a duplicate. Recordings never orphan.
+- **[#85](https://github.com/shauncarldesigns/agency-os-v2/pull/85) Call recordings — MediaRecorder + R2 + cockpit Record button.** New R2 bucket `agency-os-recordings` (public). Cockpit utility row gets a Record button with 4 states (idle / recording / uploading / done). MediaRecorder API + getUserMedia. Recordings saved at `calls/{leadId}/{ts}-{rand}.webm`. Timer rebases to record-start. Lead modal shows "🎙 Play recording ↗" link on any call_log entry with a URL.
+
+### Week Planner + Hot Leads (PRs #76–#77)
+
+- **[#77](https://github.com/shauncarldesigns/agency-os-v2/pull/77) Hot leads — operator-curated priority queue.** Pipeline bulk action button "🔥 Add to hot leads (N)". Backend lazily creates a single hot session (sentinel `session_date='hot'`, `block='hot'`, `kind='hot'`) and appends leads as session_leads rows. Loosens active-session lock to per-kind so hot + one auto session can coexist. New Hot Leads card above the WeekPlanner on the dashboard.
+- **[#76](https://github.com/shauncarldesigns/agency-os-v2/pull/76) Week planner — unified weekly sessions view.** Replaces the day-of-week-routed sessions grid. "Working Now" banner surfaces active session regardless of date (fixes stuck-Tuesday-on-Wednesday bug). Session cards show per-outcome progress via `GET /api/sessions/week` aggregates. Drops the calling / prep / review / quiet mode routing.
+
+### Docs refresh (PRs #74–#75)
+
+- **[#75](https://github.com/shauncarldesigns/agency-os-v2/pull/75) Cockpit token interpolation on scripts + rebuttals.** Fix: cockpit was rendering `[Company Name]` and other tokens literally instead of interpolating them. Client-side `interpolate()` mirrors backend. `tradeLabel()` normalizes Google Places `primaryType` for the `[their trade]` slot.
+- **[#74](https://github.com/shauncarldesigns/agency-os-v2/pull/74) Docs sync after playbook system shipped (#67-#73).** Refreshed CHANGELOG, CLAUDE.md, HANDOFF.md.
+
 ## 2026-06
 
 ### Playbook system — Chris Voss sales cockpit (6 PRs)
