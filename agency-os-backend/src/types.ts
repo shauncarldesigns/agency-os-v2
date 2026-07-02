@@ -268,6 +268,8 @@ export interface Callback {
   created_at: string;
 }
 
+export type DemoInterestLevel = 'hot' | 'warm' | 'cold';
+
 export interface Demo {
   id: number;
   lead_id: number;
@@ -277,6 +279,7 @@ export interface Demo {
   honeybook_confirmed: number;        // bool — 0 or 1
   outcome_notes: string | null;
   status_set_at: string | null;
+  interest_level: DemoInterestLevel | null;
   created_at: string;
 }
 

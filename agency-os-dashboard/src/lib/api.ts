@@ -588,7 +588,7 @@ export interface SessionOutcomeBody {
   notes?: string;
   callbackDate?: string;
   blockHint?: SessionBlock;
-  demoData?: { scheduledFor: string; honeybookConfirmed?: boolean };
+  demoData?: { scheduledFor: string; honeybookConfirmed?: boolean; interestLevel: 'hot' | 'warm' | 'cold' };
   objectionHits?: ObjectionHit[];
   recordingUrl?: string | null;
   recordingCallId?: number | null;

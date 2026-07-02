@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Lead, ShowToast } from '../../lib/types';
+import type { Lead, ShowToast, DemoInterestLevel } from '../../lib/types';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { formatPhone } from '../../lib/format';
@@ -17,8 +17,8 @@ interface BookingPaneProps {
   lead: Lead;
   showToast: ShowToast;
   /** Called when operator hits "Mark booked & advance" — same signature as
-   *  the old BookDemoModal's onConfirm. */
-  onConfirm: (scheduledFor: string, honeybookConfirmed: boolean) => Promise<void> | void;
+   *  the old BookDemoModal's onConfirm, plus the interest-level pick. */
+  onConfirm: (scheduledFor: string, honeybookConfirmed: boolean, interestLevel: DemoInterestLevel) => Promise<void> | void;
   /** Called when operator hits "← Back to outcomes" — returns to the
    *  outcome buttons without writing anything. */
   onCancel: () => void;
@@ -48,6 +48,7 @@ function ensureHoneyBookScript() {
 export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPaneProps) {
   const [scheduledFor, setScheduledFor] = useState(defaultDateTimeLocal());
   const [honeybookConfirmed, setHoneybookConfirmed] = useState(false);
+  const [interestLevel, setInterestLevel] = useState<DemoInterestLevel | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +61,7 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPan
   useEffect(() => {
     setScheduledFor(defaultDateTimeLocal());
     setHoneybookConfirmed(false);
+    setInterestLevel(null);
     setCopied(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
@@ -79,10 +81,14 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPan
       showToast('Enter the agreed date/time first', 'error');
       return;
     }
+    if (!interestLevel) {
+      showToast('Pick their interest level (hot / warm / cold) first', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
       const iso = new Date(scheduledFor).toISOString();
-      await onConfirm(iso, honeybookConfirmed);
+      await onConfirm(iso, honeybookConfirmed, interestLevel);
     } catch (err) {
       showToast(`Could not record booking: ${(err as Error).message}`, 'error');
     } finally {
@@ -164,7 +170,7 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPan
 
       {/* Step 3 — Confirm */}
       <Section title="3 · Record the booking">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <Field label="Agreed date/time (your local time)">
             <input
               type="datetime-local"
@@ -184,6 +190,38 @@ export function BookingPane({ lead, showToast, onConfirm, onCancel }: BookingPan
             </label>
           </Field>
         </div>
+        <Field label="Their interest level (required)">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {INTEREST_OPTIONS.map((opt) => {
+              const selected = interestLevel === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setInterestLevel(opt.value)}
+                  style={{
+                    flex: 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '10px 12px',
+                    background: selected ? opt.selectedBg : 'var(--surface2)',
+                    border: `1px solid ${selected ? opt.selectedBorder : 'var(--border)'}`,
+                    borderRadius: 6,
+                    color: selected ? opt.selectedText : 'var(--text2)',
+                    fontSize: '0.82rem',
+                    fontWeight: selected ? 700 : 500,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    transition: 'background 0.12s, border-color 0.12s',
+                  }}
+                  aria-pressed={selected}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>{opt.icon}</span>
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Field>
       </Section>
 
       {/* Footer — Cancel + Confirm */}
@@ -268,6 +306,22 @@ const inputStyle: React.CSSProperties = {
 const hintStyle: React.CSSProperties = {
   margin: '0 0 10px', fontSize: '0.68rem', color: 'var(--text3)', lineHeight: 1.5,
 };
+
+// Interest-level picker options. Rendered as a 3-chip row in Step 3;
+// selected state uses the option's accent colors. Values map to
+// demos.interest_level on the backend.
+const INTEREST_OPTIONS: Array<{
+  value: DemoInterestLevel;
+  label: string;
+  icon: string;
+  selectedBg: string;
+  selectedBorder: string;
+  selectedText: string;
+}> = [
+  { value: 'hot',  label: 'Hot',  icon: '🔥', selectedBg: 'rgba(255,80,60,0.14)',  selectedBorder: 'rgba(255,80,60,0.55)',  selectedText: '#ff6a52' },
+  { value: 'warm', label: 'Warm', icon: '☀️', selectedBg: 'rgba(245,180,50,0.14)', selectedBorder: 'rgba(245,180,50,0.55)', selectedText: '#f5b432' },
+  { value: 'cold', label: 'Cold', icon: '❄️', selectedBg: 'rgba(90,160,255,0.14)', selectedBorder: 'rgba(90,160,255,0.55)', selectedText: '#5aa0ff' },
+];
 
 // Mirror of ExecutionView's helper — parses the first owner name out of the
 // JSON-stringified owner_names column written by enrichment. Returns null if
