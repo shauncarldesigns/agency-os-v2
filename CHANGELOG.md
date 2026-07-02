@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Demo interest level (PR #111)
+
+- **[#111](https://github.com/shauncarldesigns/agency-os-v2/pull/111) Demo booking interest-level picker + surface.** Adds a required Hot / Warm / Cold pick to BookingPane so the operator's read of the prospect at booking time is recorded. 🔥 / ☀️ / ❄️ icons render next to the company name on the Priority Strip demo cards (Awaiting Status, No-Show Recovery, Demos Today) so temperature is visible before dialing the demo. The temperature is also prepended onto the linked call_log notes (e.g. `🔥 Hot interest`) so it persists in the LeadModal CallLogTab. Backend + dashboard + migration (`2026-07-02-demos-interest-level.sql`, apply after merge).
+
 ### Practice reference docs + polish (PRs #106–#108)
 
 - **[#108](https://github.com/shauncarldesigns/agency-os-v2/pull/108) Update `practice-demo-calls.md` to latest operator-authored version.** Adds domain check flow, Google-landscape education, 5-point walkthrough with FAQ→AI hook, beefier Growth pitch (62 directories + monthly ranking reports + ChatGPT/Gemini). No app change.

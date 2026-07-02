@@ -520,8 +520,8 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     if (!lead) return;
     setBookingMode(true);
   }, [lead]);
-  const handleBookingConfirm = useCallback(async (scheduledFor: string, honeybookConfirmed: boolean) => {
-    await recordOutcome('booked', { demoData: { scheduledFor, honeybookConfirmed } });
+  const handleBookingConfirm = useCallback(async (scheduledFor: string, honeybookConfirmed: boolean, interestLevel: 'hot' | 'warm' | 'cold') => {
+    await recordOutcome('booked', { demoData: { scheduledFor, honeybookConfirmed, interestLevel } });
   }, [recordOutcome]);
 
   // ===========================================================================

@@ -399,7 +399,9 @@ function DemoAwaitingRow({ demo, showToast, onChanged, onReschedule }: {
   return (
     <div className="priority-row">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <strong style={{ fontSize: '0.82rem' }}>{demo.company}</strong>
+        <strong style={{ fontSize: '0.82rem' }}>
+          <InterestIcon level={demo.interest_level} />{demo.company}
+        </strong>
         <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
           Scheduled {formatDateTime(demo.scheduled_for)} · {[demo.city, demo.state].filter(Boolean).join(', ')}
         </div>
@@ -417,7 +419,9 @@ function NoShowRow({ demo }: { demo: DemoWithLead }) {
   return (
     <div className="priority-row">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <strong style={{ fontSize: '0.82rem' }}>{demo.company}</strong>
+        <strong style={{ fontSize: '0.82rem' }}>
+          <InterestIcon level={demo.interest_level} />{demo.company}
+        </strong>
         <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
           Originally {formatDateTime(demo.scheduled_for)} · {demo.phone ?? '—'}
         </div>
@@ -431,13 +435,34 @@ function DemoTodayRow({ demo }: { demo: DemoWithLead }) {
   return (
     <div className="priority-row">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <strong style={{ fontSize: '0.82rem' }}>{demo.company}</strong>
+        <strong style={{ fontSize: '0.82rem' }}>
+          <InterestIcon level={demo.interest_level} />{demo.company}
+        </strong>
         <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
           {formatDateTime(demo.scheduled_for)} · {demo.phone ?? '—'}
         </div>
       </div>
       <Badge color="blue">Today</Badge>
     </div>
+  );
+}
+
+// Small icon shown next to the company name on demo cards. Tells the
+// operator at a glance how warm the prospect was when they booked, so they
+// know how in-depth to get on the demo call. Nothing renders for
+// pre-feature demos where interest_level is null.
+function InterestIcon({ level }: { level: import('../../lib/types').DemoInterestLevel | null }) {
+  if (!level) return null;
+  const map = {
+    hot:  { icon: '🔥', title: 'Hot interest' },
+    warm: { icon: '☀️', title: 'Warm interest' },
+    cold: { icon: '❄️', title: 'Cold interest' },
+  } as const;
+  const { icon, title } = map[level];
+  return (
+    <span title={title} aria-label={title} style={{ marginRight: 6, fontSize: '0.95rem' }}>
+      {icon}
+    </span>
   );
 }
 

@@ -522,6 +522,7 @@ interface OutcomeBody {
   demoData?: {                     // required when outcome='booked'
     scheduledFor: string;          // ISO datetime
     honeybookConfirmed?: boolean;
+    interestLevel: 'hot' | 'warm' | 'cold';  // operator's read of prospect temperature
   };
   // Playbook objection-hit log (Phase 4a). Each entry: which objection
   // was tapped, when (seconds from call start), optional path picked
@@ -586,6 +587,17 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   if (body.outcome !== 'skipped') {
     const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
     const recordingUrl = body.recordingUrl ?? null;
+    // Booked outcome — prepend an interest-level tag onto the notes so the
+    // temperature persists in the CallLogTab notes display when the operator
+    // opens the lead to prep for the demo call.
+    const INTEREST_TAG = {
+      hot: '🔥 Hot interest',
+      warm: '☀️ Warm interest',
+      cold: '❄️ Cold interest',
+    } as const;
+    const callLogNotes = body.outcome === 'booked' && body.demoData?.interestLevel
+      ? (notes ? `${INTEREST_TAG[body.demoData.interestLevel]}\n${notes}` : INTEREST_TAG[body.demoData.interestLevel])
+      : notes;
     if (body.recordingCallId) {
       // Merge into the placeholder row /api/recordings already created.
       // Keeps recording + outcome on a single call_log entry.
@@ -596,11 +608,11 @@ sessionsRouter.post('/:id/outcome', async (c) => {
                 objection_hits = ?,
                 recording_url = COALESCE(?, recording_url)
           WHERE id = ? AND lead_id = ?`
-      ).bind(friendlyOutcome, notes, objectionHits, recordingUrl, body.recordingCallId, body.leadId).run();
+      ).bind(friendlyOutcome, callLogNotes, objectionHits, recordingUrl, body.recordingCallId, body.leadId).run();
     } else {
       await c.env.DB.prepare(
         `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?)`
-      ).bind(body.leadId, friendlyOutcome, notes, objectionHits, recordingUrl).run();
+      ).bind(body.leadId, friendlyOutcome, callLogNotes, objectionHits, recordingUrl).run();
     }
   }
 
@@ -659,6 +671,10 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     if (!body.demoData?.scheduledFor) {
       return c.json(badRequest(`booked outcome requires demoData.scheduledFor`), 400);
     }
+    const VALID_INTEREST = ['hot', 'warm', 'cold'] as const;
+    if (!body.demoData.interestLevel || !VALID_INTEREST.includes(body.demoData.interestLevel)) {
+      return c.json(badRequest(`booked outcome requires demoData.interestLevel (hot|warm|cold)`), 400);
+    }
 
     // Load the full lead so we can create a project + know the existing
     // project_id (if any — possible if operator already booked once and is
@@ -701,14 +717,15 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     project = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first<Project>() ?? null;
 
     demo = await c.env.DB.prepare(`
-      INSERT INTO demos (lead_id, scheduled_for, status, honeybook_confirmed, outcome_notes)
-      VALUES (?, ?, 'booked', ?, ?)
+      INSERT INTO demos (lead_id, scheduled_for, status, honeybook_confirmed, outcome_notes, interest_level)
+      VALUES (?, ?, 'booked', ?, ?, ?)
       RETURNING *
     `).bind(
       body.leadId,
       body.demoData.scheduledFor,
       body.demoData.honeybookConfirmed ? 1 : 0,
       notes || null,
+      body.demoData.interestLevel,
     ).first<Demo>();
 
     if (demo) {
