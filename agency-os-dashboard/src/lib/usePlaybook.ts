@@ -11,8 +11,14 @@ interface PlaybookContent {
   scripts: ScriptSummary[];
   defaultScriptId: string | null;
   defaultScript: Script | null;
+  // Question-oriented cold-call script. Fetched by known id so the operator
+  // can switch approach mid-session without a reload. null if the backend
+  // isn't yet publishing it (older Worker deploys).
+  questionScript: Script | null;
   objections: ObjectionsByCategory;
 }
+
+const QUESTION_SCRIPT_ID = 'cold-call-question-oriented';
 
 let cache: PlaybookContent | null = null;
 let inflight: Promise<PlaybookContent> | null = null;
@@ -29,13 +35,18 @@ async function loadPlaybook(): Promise<PlaybookContent> {
     const defaultScriptId = scriptsResp.scripts.find((s) => s.default)?.id
       ?? scriptsResp.scripts[0]?.id
       ?? null;
-    const defaultScript = defaultScriptId
-      ? (await api.playbook.script(defaultScriptId)).script
-      : null;
+    const hasQuestionScript = scriptsResp.scripts.some((s) => s.id === QUESTION_SCRIPT_ID);
+    const [defaultScript, questionScript] = await Promise.all([
+      defaultScriptId ? api.playbook.script(defaultScriptId).then((r) => r.script) : Promise.resolve(null),
+      hasQuestionScript
+        ? api.playbook.script(QUESTION_SCRIPT_ID).then((r) => r.script).catch(() => null)
+        : Promise.resolve(null),
+    ]);
     const content: PlaybookContent = {
       scripts: scriptsResp.scripts,
       defaultScriptId,
       defaultScript,
+      questionScript,
       objections: objectionsResp.by_category,
     };
     cache = content;

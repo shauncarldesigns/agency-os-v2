@@ -45,6 +45,15 @@ export type Objection = SimpleObjection | BranchingObjection;
 
 export type ObjectionsByCategory = Record<ObjectionCategory, Objection[]>;
 
+// Answer chip on a Question-oriented stage. Absent on No-oriented stages.
+export interface StageAnswer {
+  id: string;
+  label: string;
+  next_stage_id?: string;
+  objection_id?: string;
+  qualification_tag?: string;
+}
+
 export interface Stage {
   id: string;
   label: string;
@@ -52,6 +61,8 @@ export interface Stage {
   body: string;
   note?: string;
   branch?: boolean;
+  answers?: StageAnswer[];
+  reveal_solution?: boolean;
 }
 
 export interface Script {

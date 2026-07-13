@@ -2,18 +2,46 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { Lead, ShowToast, Session, CallOutcome, SessionBlock } from '../../lib/types';
 import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import type {
-  Stage, Script, Objection, BranchingObjection, BranchingPath, SimpleObjection,
+  Stage, StageAnswer, Script, Objection, BranchingObjection, BranchingPath, SimpleObjection,
   ObjectionsByCategory, ObjectionCategory,
   ObjectionHit, RebuttalVariant, LeadContext,
 } from '../../lib/playbook';
 import { interpolate, tradeLabel } from '../../lib/playbook';
 import { usePlaybook } from '../../lib/usePlaybook';
+import { getStoredCallApproach, setStoredCallApproach, type CallApproach } from '../../lib/callApproachStorage';
 import { Spinner } from '../shared/Spinner';
 import { Badge } from '../shared/Badge';
 import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
 import { RecordButton } from './RecordButton';
+import { ApproachSelector } from './ApproachSelector';
+import { QuestionOrientedPanel } from './QuestionOrientedPanel';
+
+// Objection IDs that mention websites, cost, or the operator's offering.
+// Hidden in the Question-oriented objection panel until the operator has
+// reached the Solution Reveal stage — the whole point of the discovery
+// flow is that the solution stays hidden until a problem is identified.
+const WEBSITE_SPECIFIC_OBJECTION_IDS = new Set<string>([
+  'word-of-mouth',
+  'facebook-page',
+  'cant-afford',
+  'bad-experience',
+  'send-email',
+  'busy-plus-email',
+  'why-need-website',
+  'why-need-website-direct',
+]);
+
+// Filter objection categories to hide website-specific chips when the
+// operator hasn't yet revealed the solution. Empty categories drop out.
+function filterObjectionsPreReveal(byCategory: ObjectionsByCategory): ObjectionsByCategory {
+  const out: ObjectionsByCategory = { 'standard': [], 'deep-dive': [], 'closing': [] };
+  (Object.keys(byCategory) as ObjectionCategory[]).forEach((cat) => {
+    out[cat] = (byCategory[cat] ?? []).filter((o) => !WEBSITE_SPECIFIC_OBJECTION_IDS.has(o.id));
+  });
+  return out;
+}
 
 /**
  * Calling cockpit — the operator's whole world during an active session.
@@ -160,6 +188,25 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     }
   }, [script, currentStageId, linearStages]);
 
+  // Call approach — No-oriented (default, pitch-first) vs Question-oriented
+  // (discovery-first). Persisted in localStorage so the operator's choice
+  // sticks across sessions.
+  const [approach, setApproach] = useState<CallApproach>(() => getStoredCallApproach());
+  const questionScript: Script | null = playbook?.questionScript ?? null;
+  // Question-oriented flow tracks its own current stage + history so
+  // switching approaches doesn't clobber No-oriented's currentStageId.
+  const [questionStageId, setQuestionStageId] = useState<string | null>(null);
+  const [questionHistory, setQuestionHistory] = useState<string[]>([]);
+  // solutionRevealed flips true once the operator advances into a stage
+  // marked `reveal_solution: true`. Gates the pre-reveal objection filter
+  // and the sparkle-generate button.
+  const [solutionRevealed, setSolutionRevealed] = useState(false);
+  useEffect(() => {
+    if (approach === 'question_oriented' && questionScript && questionStageId === null) {
+      setQuestionStageId(questionScript.stages[0]?.id ?? null);
+    }
+  }, [approach, questionScript, questionStageId]);
+
   const currentStage = script?.stages.find((s) => s.id === currentStageId) ?? null;
   // Advance / Back walk script.stages and skip past branch:true entries so
   // conditional stages (COST, HESITATE, TERRIBLE-TIME, NOT-INTERESTED) don't
@@ -246,6 +293,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setRecordingUrl(null);
     setRecordingCallId(null);
     setCurrentStageId(linearStages[0]?.id ?? null);
+    setQuestionStageId(questionScript?.stages[0]?.id ?? null);
+    setQuestionHistory([]);
+    setSolutionRevealed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
 
@@ -506,6 +556,82 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   }, [prevStage]);
 
   // ===========================================================================
+  // QUESTION-ORIENTED ANSWER HANDLING
+  // ===========================================================================
+
+  // Operator taps a chip corresponding to what the prospect said. Appends a
+  // structured `[QUESTION: Stage] → Answer` line to the notes, then either
+  // routes to the next stage or opens an objection.
+  const handleQuestionAnswer = useCallback((stage: Stage, answer: StageAnswer) => {
+    appendNote(`[QUESTION: ${stage.label}] → ${answer.label}`);
+    if (answer.objection_id) {
+      const objection = findObjection(playbook?.objections, answer.objection_id);
+      if (objection) {
+        handleObjectionTap(objection);
+      } else {
+        // Objection isn't published yet — surface a note so the operator
+        // sees something happened. Deferred content shows up as a clear
+        // "missing" line instead of a silent no-op.
+        appendNote(`↳ (objection "${answer.objection_id}" not yet in playbook)`);
+      }
+      return;
+    }
+    if (answer.next_stage_id) {
+      const target = questionScript?.stages.find((s) => s.id === answer.next_stage_id);
+      if (!target) return;
+      setQuestionHistory((prev) => (questionStageId ? [...prev, questionStageId] : prev));
+      setQuestionStageId(target.id);
+      if (target.reveal_solution) setSolutionRevealed(true);
+    }
+  }, [appendNote, playbook, handleObjectionTap, questionScript, questionStageId]);
+
+  const handleQuestionBack = useCallback(() => {
+    setQuestionHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice();
+      const last = next.pop()!;
+      setQuestionStageId(last);
+      // Re-derive solutionRevealed: true iff current-or-any-earlier stage
+      // in the history chain had reveal_solution. Cheapest correct
+      // implementation: walk the remaining history + `last` and check.
+      const revealed = [last, ...next].some((sid) =>
+        questionScript?.stages.find((s) => s.id === sid)?.reveal_solution === true
+      );
+      setSolutionRevealed(revealed);
+      return next;
+    });
+  }, [questionScript]);
+
+  const handleQuestionJumpToStage = useCallback((id: string) => {
+    const target = questionScript?.stages.find((s) => s.id === id);
+    if (!target) return;
+    setQuestionHistory((prev) => (questionStageId && questionStageId !== id ? [...prev, questionStageId] : prev));
+    setQuestionStageId(id);
+    if (target.reveal_solution) setSolutionRevealed(true);
+  }, [questionScript, questionStageId]);
+
+  // Approach switcher — confirm before wiping the current Q-oriented
+  // stage progress if the operator has already tapped answers on this
+  // lead. Notes, recording, and objection hits stay put regardless.
+  const handleApproachChange = useCallback((next: CallApproach) => {
+    if (next === approach) return;
+    const questionInProgress = approach === 'question_oriented'
+      && (questionHistory.length > 0
+        || (questionScript && questionStageId !== questionScript.stages[0]?.id));
+    if (questionInProgress) {
+      const ok = window.confirm(
+        'Switching approaches will reset Question-oriented stage progress. Notes and recording stay. Continue?'
+      );
+      if (!ok) return;
+    }
+    setStoredCallApproach(next);
+    setApproach(next);
+    setQuestionStageId(questionScript?.stages[0]?.id ?? null);
+    setQuestionHistory([]);
+    setSolutionRevealed(false);
+  }, [approach, questionHistory, questionScript, questionStageId]);
+
+  // ===========================================================================
   // OUTCOME HANDLERS
   // ===========================================================================
 
@@ -697,21 +823,52 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
         />
       ) : (
         <>
-          <div className="cockpit-grid">
-            <ScriptPanel
-              script={script}
-              linearStages={linearStages}
-              currentStage={currentStage}
-              linearProgressIdx={linearProgressIdx}
-              nextStage={nextStage}
-              prevStage={prevStage}
-              ctx={leadCtx}
-              onBack={backStage}
-              onAdvance={advanceStage}
-              onJumpToStage={(id) => setCurrentStageId(id)}
+          <div className="cockpit-approach-row">
+            <ApproachSelector
+              value={approach}
+              onChange={handleApproachChange}
+              disabled={approach === 'question_oriented' && !questionScript}
             />
+            {approach === 'question_oriented' && solutionRevealed && (
+              <span className="cockpit-approach-reveal-flag">✓ Solution revealed — full objection library unlocked</span>
+            )}
+            {approach === 'question_oriented' && !questionScript && (
+              <span className="cockpit-approach-reveal-flag" style={{ color: 'var(--yellow)' }}>
+                Question-oriented script not yet loaded — falling back to No-oriented
+              </span>
+            )}
+          </div>
+          <div className="cockpit-grid">
+            {approach === 'question_oriented' && questionScript ? (
+              <QuestionOrientedPanel
+                script={questionScript}
+                currentStageId={questionStageId ?? questionScript.stages[0]?.id ?? ''}
+                ctx={leadCtx}
+                onAnswerTap={handleQuestionAnswer}
+                onBack={handleQuestionBack}
+                onJumpToStage={handleQuestionJumpToStage}
+                history={questionHistory}
+              />
+            ) : (
+              <ScriptPanel
+                script={script}
+                linearStages={linearStages}
+                currentStage={currentStage}
+                linearProgressIdx={linearProgressIdx}
+                nextStage={nextStage}
+                prevStage={prevStage}
+                ctx={leadCtx}
+                onBack={backStage}
+                onAdvance={advanceStage}
+                onJumpToStage={(id) => setCurrentStageId(id)}
+              />
+            )}
             <ObjectionPanel
-              byCategory={playbook?.objections ?? emptyByCategory()}
+              byCategory={
+                approach === 'question_oriented' && !solutionRevealed
+                  ? filterObjectionsPreReveal(playbook?.objections ?? emptyByCategory())
+                  : (playbook?.objections ?? emptyByCategory())
+              }
               activeObjectionId={activeObj?.objectionId ?? null}
               hits={objectionHits}
               totalHits={totalHits}
@@ -729,6 +886,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               generating={generating}
               marking={marking}
               ctx={leadCtx}
+              hideGenerate={approach === 'question_oriented' && !solutionRevealed}
               onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
               onVariantTap={(label) => handleVariantTap(activeObj.objectionId, label)}
               onHandled={handleHandled}
@@ -926,7 +1084,7 @@ function ObjectionPanel({
 // ============================================================================
 
 function ActiveObjectionPanel({
-  objection, activePath, activeVariantLabel, variantOverride, generated, generating, marking, ctx,
+  objection, activePath, activeVariantLabel, variantOverride, generated, generating, marking, ctx, hideGenerate,
   onPathTap, onVariantTap, onHandled, onDidntLand, onGenerate, onUseVariant, onBack,
 }: {
   objection: Objection;
@@ -937,6 +1095,9 @@ function ActiveObjectionPanel({
   generating: boolean;
   marking: number | null;
   ctx: LeadContext;
+  /** Hide the ✨ Generate alternative button — used in Question-oriented
+   *  pre-reveal mode to prevent the LLM from leaking website mentions. */
+  hideGenerate?: boolean;
   onPathTap: (p: BranchingPath) => void;
   onVariantTap: (label: string | undefined) => void;
   onHandled: () => void;
@@ -1037,9 +1198,11 @@ function ActiveObjectionPanel({
       <div className="cockpit-obj-actions">
         <button type="button" className="cockpit-btn-success" onClick={onHandled}>✓ Handled — continue</button>
         <button type="button" className="cockpit-btn-danger" onClick={onDidntLand}>✕ Didn't land</button>
-        <button type="button" className="cockpit-btn-generate" onClick={onGenerate} disabled={generating}>
-          {generating ? '✨ Generating…' : '✨ Generate alternative'}
-        </button>
+        {!hideGenerate && (
+          <button type="button" className="cockpit-btn-generate" onClick={onGenerate} disabled={generating}>
+            {generating ? '✨ Generating…' : '✨ Generate alternative'}
+          </button>
+        )}
       </div>
 
       {generated && (
