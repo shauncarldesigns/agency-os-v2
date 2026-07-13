@@ -649,11 +649,7 @@ stages:
 
 ## Stage: permission
 
-"Hey, is this [Name]?"
-
-Then:
-
-"Hey [Name], this is Shaun. I know you weren't expecting my call. Can I ask you a quick question about your business?"
+"Hey [Name], this is Shaun. I know you weren't expecting my call so I'll be quick. Can I ask a couple of quick questions about how business is coming in for you?"
 
 > If they ask what this is about before giving permission, use the branch response. Do not name the offer or imply anything is already being built.
 
@@ -665,7 +661,7 @@ Then:
 
 ## Stage: permission-what-is-this
 
-"Fair question. I work with local businesses, but I don't want to assume you need anything. I was just hoping to understand how customers normally find and evaluate your business."
+"Fair question. I work with local businesses about where customers are coming from but I don't want to assume you need anything. I was just hoping to understand how customers normally find and evaluate your business."
 
 > Do not name the offer or imply anything is already being built.
 
