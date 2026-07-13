@@ -36,6 +36,8 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
   const linearIdx = linearStages.findIndex((s) => s.id === currentStage.id);
   const progressPos = linearIdx >= 0 ? linearIdx : lastLinearCompletedIdx(script, currentStage.id);
   const isMulti = currentStage.selection_mode === 'multiple';
+  const revealReviewsStage = script.stages.find((s) => s.id === 'solution-reveal-reviews');
+  const revealLegitStage = script.stages.find((s) => s.id === 'solution-reveal-legit');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [freeTextAnswer, setFreeTextAnswer] = useState<StageAnswer | null>(null);
   const [freeTextValue, setFreeTextValue] = useState('');
@@ -185,6 +187,26 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
         >
           ← Back
         </button>
+        {revealLegitStage && currentStage.id !== revealLegitStage.id && (
+          <button
+            type="button"
+            className="cockpit-btn cockpit-btn-skip-reveal"
+            onClick={() => onJumpToStage(revealLegitStage.id)}
+            title="Skip the summary and open the legitimacy reveal"
+          >
+            Skip to reveal legit
+          </button>
+        )}
+        {revealReviewsStage && currentStage.id !== revealReviewsStage.id && (
+          <button
+            type="button"
+            className="cockpit-btn cockpit-btn-skip-reveal"
+            onClick={() => onJumpToStage(revealReviewsStage.id)}
+            title="Skip the summary and open the reviews reveal"
+          >
+            Skip to reveal reviews
+          </button>
+        )}
       </div>
     </div>
   );
