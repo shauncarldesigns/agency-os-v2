@@ -20,6 +20,7 @@ import sendEmailMd from '../playbook/objections/send-email.md';
 import busyPlusEmailMd from '../playbook/objections/busy-plus-email.md';
 import whyNeedWebsiteMd from '../playbook/objections/why-need-website.md';
 import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-direct.md';
+import builtWithoutAskingMd from '../playbook/objections/built-without-asking.md';
 import angryDisarmMd from '../playbook/objections/angry-disarm.md';
 import totalBrushOffMd from '../playbook/objections/total-brush-off.md';
 import whyAreYouAskingMd from '../playbook/objections/why-are-you-asking.md';
@@ -362,6 +363,7 @@ const OBJECTION_FILES: Record<string, string> = {
   'busy-plus-email': busyPlusEmailMd,
   'why-need-website': whyNeedWebsiteMd,
   'why-need-website-direct': whyNeedWebsiteDirectMd,
+  'built-without-asking': builtWithoutAskingMd,
   'angry-disarm': angryDisarmMd,
   'total-brush-off': totalBrushOffMd,
   'why-are-you-asking': whyAreYouAskingMd,
