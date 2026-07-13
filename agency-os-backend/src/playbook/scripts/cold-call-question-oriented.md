@@ -594,14 +594,27 @@ stages:
     label: SUMMARY
     short_label: Summary
     answers:
-      - id: accurate
-        label: Yes, accurate
-        next_stage_id: solution-reveal
+      - id: reveal-reviews
+        label: Reveal - reviews
+        next_stage_id: solution-reveal-reviews
+      - id: reveal-legit
+        label: Reveal - legit
+        next_stage_id: solution-reveal-legit
       - id: needs-changes
         label: Needs changes
-  - id: solution-reveal
+  - id: solution-reveal-reviews
     label: SOLUTION REVEAL
-    short_label: Reveal
+    short_label: Reveal - Reviews
+    branch: true
+    reveal_solution: true
+    answers:
+      - id: continue
+        label: Advance to Demo Ask
+        next_stage_id: demo-ask
+  - id: solution-reveal-legit
+    label: SOLUTION REVEAL
+    short_label: Reveal - Legit
+    branch: true
     reveal_solution: true
     answers:
       - id: continue
@@ -764,9 +777,15 @@ Then:
 
 > Confirm the short version before the reveal: "So it sounds like most business comes from referrals, and people check you out online before calling?" Use the Summary card below, but keep it conversational and brief.
 
-## Stage: solution-reveal
+## Stage: solution-reveal-reviews
 
 "Right. The good news is your reviews are strong. But beyond that, there isn't much showing what you actually do, the kind of work you've completed, or why someone should feel confident calling."
+
+"That's exactly why I called. I put together an example that shows your services, your reviews, your work, and gives people a professional place to land after they search."
+
+> This is the first stage where website-specific language is allowed. Do not claim a website guarantees leads, revenue, better customers, or replaces referrals. The truthful claim is that it gives customers a clear, professional place to understand the business after they search.
+
+## Stage: solution-reveal-legit
 
 "So when someone checks you out, they may see a phone number and some reviews, but not enough to get a full picture of the business. In some cases, that can make a legitimate company look less established than it really is."
 
