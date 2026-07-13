@@ -5,6 +5,7 @@
 import { parse as parseYaml } from 'yaml';
 
 import coldCallMd from '../playbook/scripts/cold-call-no-oriented.md';
+import coldCallQuestionMd from '../playbook/scripts/cold-call-question-oriented.md';
 import demoTier3Md from '../playbook/scripts/demo-tier3-primary.md';
 import demoTier2Md from '../playbook/scripts/demo-tier2-primary.md';
 
@@ -21,6 +22,8 @@ import whyNeedWebsiteMd from '../playbook/objections/why-need-website.md';
 import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-direct.md';
 import angryDisarmMd from '../playbook/objections/angry-disarm.md';
 import totalBrushOffMd from '../playbook/objections/total-brush-off.md';
+import whyAreYouAskingMd from '../playbook/objections/why-are-you-asking.md';
+import earlyNotInterestedMd from '../playbook/objections/early-not-interested.md';
 
 import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
 
@@ -70,6 +73,19 @@ export interface BranchingObjection {
 
 export type Objection = SimpleObjection | BranchingObjection;
 
+// Answer choice attached to a Stage. Used by Question-oriented mode: the
+// operator taps a chip corresponding to what the prospect said, which
+// records a note, may set a qualification tag for later summarization, and
+// either advances to the next stage or opens an objection. Absent on the
+// No-oriented script; that flow just uses linear Advance / Back.
+export interface StageAnswer {
+  id: string;
+  label: string;
+  next_stage_id?: string;
+  objection_id?: string;
+  qualification_tag?: string;
+}
+
 export interface Stage {
   id: string;
   label: string;
@@ -77,6 +93,11 @@ export interface Stage {
   body: string;
   note?: string;
   branch?: boolean;
+  answers?: StageAnswer[];
+  // Marks the point in a Question-oriented script where the solution may
+  // be revealed. Any stage from this one on unlocks website-specific
+  // objections and lets the operator mention what Shaun does.
+  reveal_solution?: boolean;
 }
 
 export interface Script {
@@ -182,6 +203,18 @@ function parseScript(raw: string): Script {
   const stages: Stage[] = ((fm.stages as any[]) ?? []).map((s) => {
     const sec = sections.get(s.id);
     if (!sec) throw new Error(`Script ${fm.id}: missing "## Stage: ${s.id}" body`);
+    const rawAnswers = Array.isArray(s.answers) ? s.answers : null;
+    const answers: StageAnswer[] | undefined = rawAnswers?.length
+      ? rawAnswers
+          .filter((a: any) => a && typeof a.id === 'string' && typeof a.label === 'string')
+          .map((a: any): StageAnswer => ({
+            id: a.id,
+            label: a.label,
+            next_stage_id: typeof a.next_stage_id === 'string' ? a.next_stage_id : undefined,
+            objection_id: typeof a.objection_id === 'string' ? a.objection_id : undefined,
+            qualification_tag: typeof a.qualification_tag === 'string' ? a.qualification_tag : undefined,
+          }))
+      : undefined;
     return {
       id: s.id,
       label: s.label,
@@ -189,6 +222,8 @@ function parseScript(raw: string): Script {
       branch: s.branch,
       body: sec.body,
       note: sec.note || undefined,
+      answers,
+      reveal_solution: s.reveal_solution === true ? true : undefined,
     };
   });
   return {
@@ -282,6 +317,7 @@ function parseFollowUp(raw: string): FollowUpSequence {
 
 const SCRIPT_FILES: Record<string, string> = {
   'cold-call-no-oriented': coldCallMd,
+  'cold-call-question-oriented': coldCallQuestionMd,
   'demo-tier3-primary': demoTier3Md,
   'demo-tier2-primary': demoTier2Md,
 };
@@ -300,6 +336,8 @@ const OBJECTION_FILES: Record<string, string> = {
   'why-need-website-direct': whyNeedWebsiteDirectMd,
   'angry-disarm': angryDisarmMd,
   'total-brush-off': totalBrushOffMd,
+  'why-are-you-asking': whyAreYouAskingMd,
+  'early-not-interested': earlyNotInterestedMd,
 };
 
 const FOLLOW_UP_FILES: Record<string, string> = {

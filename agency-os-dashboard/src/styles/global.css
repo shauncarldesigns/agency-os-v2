@@ -809,6 +809,23 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-panel-title.orange { color: var(--accent); }
 .cockpit-panel-meta { font-size: 0.65rem; color: var(--text3); }
 
+.cockpit-approach-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cockpit-approach-reveal-flag { font-size: 0.62rem; letter-spacing: 0.05em; color: var(--green); font-weight: 600; text-transform: uppercase; }
+.cockpit-approach-switcher { display: inline-flex; align-items: center; gap: 4px; }
+.cockpit-approach-label { font-size: 0.55rem; letter-spacing: 0.08em; color: var(--text3); font-weight: 700; text-transform: uppercase; margin-right: 4px; }
+.cockpit-approach-chip { background: var(--surface2); color: var(--text3); border: 1px solid var(--border2); border-radius: 4px; padding: 3px 9px; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; font-family: inherit; cursor: pointer; transition: color 0.12s, background 0.12s, border-color 0.12s; }
+.cockpit-approach-chip:hover:not(:disabled) { color: var(--text); border-color: var(--blue); }
+.cockpit-approach-chip.active { background: var(--blue); color: #071a2f; border-color: var(--blue); }
+.cockpit-approach-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cockpit-answer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin: 10px 0 12px; }
+.cockpit-answer-label { grid-column: 1 / -1; font-size: 0.58rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+.cockpit-answer-chip { background: rgba(96, 165, 250, 0.06); color: var(--blue); border: 1px solid rgba(96, 165, 250, 0.35); border-radius: 4px; padding: 8px 10px; font-size: 0.72rem; font-family: inherit; cursor: pointer; text-align: left; transition: background 0.12s, border-color 0.12s; }
+.cockpit-answer-chip:hover { background: rgba(96, 165, 250, 0.14); border-color: var(--blue); }
+.cockpit-answer-chip.has-objection { background: rgba(240, 153, 123, 0.06); color: #f0997b; border-color: rgba(240, 153, 123, 0.35); }
+.cockpit-answer-chip.has-objection:hover { background: rgba(240, 153, 123, 0.14); border-color: #f0997b; }
+.cockpit-answer-chip-hint { font-size: 0.58rem; color: var(--text3); font-weight: 400; margin-left: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+
 .cockpit-stage-crumbs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
 .cockpit-stage-chip { font-size: 0.58rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; background: var(--surface2); color: var(--text3); font-weight: 600; border: none; cursor: pointer; font-family: inherit; }
 .cockpit-stage-chip.done { color: var(--green); }
