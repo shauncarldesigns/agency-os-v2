@@ -870,6 +870,8 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-btn { background: transparent; color: var(--text2); border: 1px solid var(--border2); border-radius: var(--r); padding: 6px 12px; font-size: 0.7rem; font-family: inherit; cursor: pointer; }
 .cockpit-btn:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
 .cockpit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cockpit-btn-skip-reveal { color: var(--blue); border-color: rgba(96, 165, 250, 0.4); }
+.cockpit-btn-skip-reveal:hover:not(:disabled) { background: rgba(96, 165, 250, 0.08); border-color: var(--blue); }
 .cockpit-btn-primary { background: var(--green); color: #04342c; border: none; padding: 6px 16px; font-weight: 600; }
 .cockpit-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 
