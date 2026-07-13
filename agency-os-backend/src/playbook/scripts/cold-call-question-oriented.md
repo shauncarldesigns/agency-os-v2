@@ -779,9 +779,9 @@ Then:
 
 ## Stage: solution-reveal-reviews
 
-"Right. The good news is your reviews are strong. But beyond that, there isn't much showing what you actually do, the kind of work you've completed, or why someone should feel confident calling."
+"Hey, the good news is your reviews are strong, but beyond that, there isn't much showing what you do or why to choose you."
 
-"That's exactly why I called. I put together an example that shows your services, your reviews, your work, and gives people a professional place to land after they search."
+"That's why I called today. I looked you up, saw the great reviews, but didn't find a site that showcases your business, so I put together a quick example that gives people a professional place to land after they search."
 
 > This is the first stage where website-specific language is allowed. Do not claim a website guarantees leads, revenue, better customers, or replaces referrals. The truthful claim is that it gives customers a clear, professional place to understand the business after they search.
 
