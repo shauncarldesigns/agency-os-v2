@@ -470,12 +470,12 @@ stages:
         summary_value: not_really
       - id: never-thought
         label: I have never thought about it
-        next_stage_id: repeated-questions
+        next_stage_id: missing-information
         summary_field: current_process_assessment
         summary_value: never_thought_about_it
       - id: not-sure
         label: I am not sure
-        next_stage_id: repeated-questions
+        next_stage_id: missing-information
         summary_field: current_process_assessment
         summary_value: not_sure
   - id: first-impression-everything-fine
@@ -483,7 +483,7 @@ stages:
     short_label: Working
     branch: true
     selection_mode: multiple
-    continue_stage_id: graceful-exit
+    continue_stage_id: summary
     answers:
       - id: services
         label: Services
