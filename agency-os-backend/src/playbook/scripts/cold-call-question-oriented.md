@@ -25,40 +25,47 @@ stages:
     short_label: Lead source
     answers:
       - id: referrals
-        label: Word of mouth / referrals
+        label: REFERRALS
         next_stage_id: customer-journey-referrals
         summary_field: lead_source
         summary_value: referrals
       - id: google
-        label: Google
+        label: GOOGLE
         next_stage_id: customer-journey-google
         summary_field: lead_source
         summary_value: google
       - id: social
-        label: Facebook / social media
+        label: FACEBOOK / SOCIAL
         next_stage_id: customer-journey-social
         summary_field: lead_source
         summary_value: social
       - id: repeat
-        label: Repeat customers
+        label: REPEAT CUSTOMERS
         next_stage_id: customer-journey-repeat
         summary_field: lead_source
         summary_value: repeat_customers
       - id: paid-leads
-        label: Paid lead services
+        label: PAID LEADS
         next_stage_id: customer-journey-paid-leads
         summary_field: lead_source
         summary_value: paid_leads
       - id: mixed
-        label: A mix of sources
+        label: MIX OF SOURCES
         next_stage_id: customer-journey-mixed
         summary_field: lead_source
         summary_value: mixed
       - id: not-sure
-        label: Not sure
+        label: NOT SURE
         next_stage_id: customer-journey-not-sure
         summary_field: lead_source
         summary_value: not_sure
+      - id: other
+        label: OTHER
+        next_stage_id: customer-journey-not-sure
+        summary_field: lead_source
+        summary_value: other
+        free_text: true
+        free_text_label: Source
   - id: permission-what-is-this
     label: PERMISSION — WHAT IS THIS ABOUT
     short_label: What is this?
@@ -640,7 +647,7 @@ Then:
 
 "How are most of your new customers finding you right now?"
 
-> Store the source neutrally. The point is to learn how the name travels, not to imply their current source is broken.
+> Keep this completely open-ended. Do not read the chip options out loud. Listen to the answer, then classify it with the closest chip so the app has structured data for the summary.
 
 ## Stage: permission-what-is-this
 

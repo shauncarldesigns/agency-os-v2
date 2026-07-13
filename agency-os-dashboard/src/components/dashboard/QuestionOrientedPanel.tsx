@@ -37,12 +37,20 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
   const progressPos = linearIdx >= 0 ? linearIdx : lastLinearCompletedIdx(script, currentStage.id);
   const isMulti = currentStage.selection_mode === 'multiple';
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [freeTextAnswer, setFreeTextAnswer] = useState<StageAnswer | null>(null);
+  const [freeTextValue, setFreeTextValue] = useState('');
 
   useEffect(() => {
-    const selectedForStage = answers
-      .filter((answer) => answer.stageId === currentStage.id)
-      .map((answer) => answer.answerId);
-    setSelectedIds(new Set(selectedForStage));
+    const answersForStage = answers.filter((answer) => answer.stageId === currentStage.id);
+    setSelectedIds(new Set(answersForStage.map((answer) => answer.answerId)));
+    const recordedFreeText = answersForStage.find((answer) =>
+      currentStage.answers?.some((stageAnswer) => stageAnswer.id === answer.answerId && stageAnswer.free_text)
+    );
+    const freeTextStageAnswer = recordedFreeText
+      ? currentStage.answers?.find((answer) => answer.id === recordedFreeText.answerId && answer.free_text) ?? null
+      : null;
+    setFreeTextAnswer(freeTextStageAnswer);
+    setFreeTextValue(freeTextStageAnswer ? stripFreeTextLabel(recordedFreeText?.answerLabel ?? '', freeTextStageAnswer.label) : '');
   }, [answers, currentStage.id]);
 
   return (
@@ -92,7 +100,7 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
         <div className="cockpit-answer-grid">
           <div className="cockpit-answer-label">They said…</div>
           {currentStage.answers.map((a) => {
-            const selected = selectedIds.has(a.id);
+            const selected = selectedIds.has(a.id) || freeTextAnswer?.id === a.id;
             return (
             <button
               key={a.id}
@@ -107,6 +115,9 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
                     else next.add(a.id);
                     return next;
                   });
+                } else if (a.free_text) {
+                  setFreeTextAnswer(a);
+                  setFreeTextValue('');
                 } else {
                   onAnswerTap(currentStage, a);
                 }
@@ -124,6 +135,30 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
             </button>
           );
           })}
+          {freeTextAnswer && !isMulti && (
+            <div className="cockpit-answer-free-text">
+              <label>
+                <span>{freeTextAnswer.free_text_label ?? 'Details'}</span>
+                <input
+                  type="text"
+                  value={freeTextValue}
+                  onChange={(e) => setFreeTextValue(e.target.value)}
+                  placeholder="Type what they said"
+                  autoFocus
+                />
+              </label>
+              <button
+                type="button"
+                className="cockpit-answer-continue"
+                disabled={!freeTextValue.trim()}
+                onClick={() => {
+                  onAnswerTap(currentStage, withFreeTextAnswer(freeTextAnswer, freeTextValue));
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          )}
           {isMulti && (
             <button
               type="button"
@@ -153,6 +188,20 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
       </div>
     </div>
   );
+}
+
+function withFreeTextAnswer(answer: StageAnswer, value: string): StageAnswer {
+  const trimmed = value.trim();
+  return {
+    ...answer,
+    label: `${answer.label}: ${trimmed}`,
+    summary_value: trimmed || answer.summary_value,
+  };
+}
+
+function stripFreeTextLabel(label: string, prefix: string): string {
+  const marker = `${prefix}: `;
+  return label.startsWith(marker) ? label.slice(marker.length) : '';
 }
 
 // If the operator is currently on a branch (or an unrouted stage),

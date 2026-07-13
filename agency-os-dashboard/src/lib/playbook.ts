@@ -61,6 +61,8 @@ export interface StageAnswer {
   qualification_tag?: string;
   summary_field?: DiscoverySummaryField;
   summary_value?: string;
+  free_text?: boolean;
+  free_text_label?: string;
 }
 
 export interface Stage {

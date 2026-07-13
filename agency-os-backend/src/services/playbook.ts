@@ -93,6 +93,8 @@ export interface StageAnswer {
   qualification_tag?: string;
   summary_field?: DiscoverySummaryField;
   summary_value?: string;
+  free_text?: boolean;
+  free_text_label?: string;
 }
 
 export interface Stage {
@@ -226,6 +228,8 @@ function parseScript(raw: string): Script {
             qualification_tag: typeof a.qualification_tag === 'string' ? a.qualification_tag : undefined,
             summary_field: isDiscoverySummaryField(a.summary_field) ? a.summary_field : undefined,
             summary_value: typeof a.summary_value === 'string' ? a.summary_value : undefined,
+            free_text: a.free_text === true ? true : undefined,
+            free_text_label: typeof a.free_text_label === 'string' ? a.free_text_label : undefined,
           }))
       : undefined;
     return {
