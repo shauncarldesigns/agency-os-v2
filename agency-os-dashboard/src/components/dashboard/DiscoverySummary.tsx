@@ -163,6 +163,9 @@ function buildDiscoverySummary(answers: QuestionCallAnswer[]): string {
   const assessment = latestActionPhrase(buckets.current_process_assessment);
 
   if (leadSourceValue === 'referrals' && (nextStepValue === 'google_business' || nextStepValue === 'some_look_up')) {
+    if (looksFor) {
+      return `So it sounds like most business comes from referrals, people check you out online before calling, and when they do they mostly find ${looksFor}. Is that accurate?`;
+    }
     return 'So it sounds like most business comes from referrals, and people check you out online before calling. Is that accurate?';
   }
 
@@ -220,6 +223,9 @@ function phraseFor(answer: QuestionCallAnswer): string {
       reviews: 'reviews',
       services: 'services',
       photos: 'photos',
+      phone_number: 'a phone number',
+      google_profile: 'your Google profile',
+      facebook_page: 'your Facebook page',
       contact_information: 'contact information',
       service_area: 'service area',
       proof_legitimate: 'proof the business is legitimate',
@@ -227,6 +233,7 @@ function phraseFor(answer: QuestionCallAnswer): string {
       availability: 'availability',
       photos_examples: 'photos or examples',
       not_sure: 'the basics',
+      not_much: 'not much beyond the basics',
     },
     missing_information: {
       services: 'services offered',

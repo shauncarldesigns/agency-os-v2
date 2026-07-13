@@ -86,7 +86,7 @@ stages:
         summary_value: call_immediately
       - id: google-business
         label: Google the business
-        next_stage_id: summary
+        next_stage_id: customer-looks-for-referral-google
         summary_field: customer_next_step
         summary_value: google_business
       - id: check-reviews
@@ -130,40 +130,40 @@ stages:
         summary_field: customer_next_step
         summary_value: not_sure
   - id: customer-looks-for-referral-google
-    label: CUSTOMER LOOKS FOR
-    short_label: Looks for
+    label: WHAT THEY FIND
+    short_label: What they find
     branch: true
     selection_mode: multiple
-    continue_stage_id: first-impression
+    continue_stage_id: summary
     answers:
       - id: reviews
-        label: Reviews
+        label: REVIEWS
         summary_field: customer_looks_for
         summary_value: reviews
-      - id: services
-        label: Services
+      - id: phone-number
+        label: PHONE NUMBER
         summary_field: customer_looks_for
-        summary_value: services
+        summary_value: phone_number
+      - id: google-profile
+        label: GOOGLE PROFILE
+        summary_field: customer_looks_for
+        summary_value: google_profile
+      - id: facebook-page
+        label: FACEBOOK PAGE
+        summary_field: customer_looks_for
+        summary_value: facebook_page
       - id: photos
-        label: Photos
+        label: PHOTOS
         summary_field: customer_looks_for
         summary_value: photos
-      - id: contact
-        label: Contact information
-        summary_field: customer_looks_for
-        summary_value: contact_information
-      - id: service-area
-        label: Service area
-        summary_field: customer_looks_for
-        summary_value: service_area
-      - id: legitimacy
-        label: Proof the business is legitimate
-        summary_field: customer_looks_for
-        summary_value: proof_legitimate
       - id: not-sure
-        label: Not sure
+        label: NOT SURE
         summary_field: customer_looks_for
         summary_value: not_sure
+      - id: not-much
+        label: NOT MUCH
+        summary_field: customer_looks_for
+        summary_value: not_much
   - id: customer-journey-google
     label: CUSTOMER JOURNEY — GOOGLE
     short_label: Journey · Google
@@ -658,7 +658,7 @@ Then:
 
 ## Stage: customer-journey-referrals
 
-"When someone gets your name from a friend or neighbor, what do you think they usually do next?"
+"Got it. After someone is referred to you, how do they usually check you out?"
 
 > Listen for whether they call directly, look the business up, ask for proof, or rely completely on the referrer.
 
@@ -670,9 +670,9 @@ Then:
 
 ## Stage: customer-looks-for-referral-google
 
-"When they Google you, what do you think they are usually looking for?"
+"And when they Google you, what do you think they'll find?"
 
-> Multi-select everything the owner names. Use only what they say in the summary.
+> Multi-select what they name. This identifies the gap before the reveal without adding a long diagnostic loop.
 
 ## Stage: customer-journey-google
 
@@ -766,17 +766,17 @@ Then:
 
 ## Stage: solution-reveal
 
-"That's exactly why I called. When folks check you out, there's not really one clear place that quickly shows your work or why someone should choose you."
+"Right. The good news is your reviews are strong. But beyond that, there isn't much showing what you actually do, the kind of work you've completed, or why someone should feel confident calling."
 
-Then connect it to the confirmed summary:
+"So when someone checks you out, they may see a phone number and some reviews, but not enough to get a full picture of the business. In some cases, that can make a legitimate company look less established than it really is."
 
-"That's the kind of thing I organize into a simple website."
+"That's exactly why I called. I put together an example that shows your services, your reviews, your work, and gives people a professional place to land after they search."
 
 > This is the first stage where website-specific language is allowed. Do not claim a website guarantees leads, revenue, better customers, or replaces referrals. The truthful claim is that it gives customers a clear, professional place to understand the business after they search.
 
 ## Stage: demo-ask
 
-"I put together a quick example for your business. Would it be unreasonable to spend 10 minutes taking a look?"
+"Would it be unreasonable to spend ten minutes taking a look?"
 
 Alternative:
 
