@@ -4,7 +4,7 @@ import { api, ApiError, type SessionOutcomeBody } from '../../lib/api';
 import type {
   Stage, StageAnswer, Script, Objection, BranchingObjection, BranchingPath, SimpleObjection,
   ObjectionsByCategory, ObjectionCategory,
-  ObjectionHit, RebuttalVariant, LeadContext,
+  ObjectionHit, RebuttalVariant, LeadContext, QuestionCallAnswer,
 } from '../../lib/playbook';
 import { interpolate, tradeLabel } from '../../lib/playbook';
 import { usePlaybook } from '../../lib/usePlaybook';
@@ -201,6 +201,10 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // marked `reveal_solution: true`. Gates the pre-reveal objection filter
   // and the sparkle-generate button.
   const [solutionRevealed, setSolutionRevealed] = useState(false);
+  // Answered chips across the current Q-oriented call. Keyed by stage id,
+  // captured on each tap. Feeds the Discovery Summary card at the Solution
+  // Reveal stage. Resets on lead change alongside the other Q-state.
+  const [questionAnswers, setQuestionAnswers] = useState<QuestionCallAnswer[]>([]);
   useEffect(() => {
     if (approach === 'question_oriented' && questionScript && questionStageId === null) {
       setQuestionStageId(questionScript.stages[0]?.id ?? null);
@@ -296,6 +300,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setQuestionStageId(questionScript?.stages[0]?.id ?? null);
     setQuestionHistory([]);
     setSolutionRevealed(false);
+    setQuestionAnswers([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.session_lead_id]);
 
@@ -371,6 +376,27 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // objection-hit auto-tags and path selection.
   const appendNote = useCallback((line: string) => {
     setNotes((prev) => prev ? `${prev}\n${line}` : line);
+  }, []);
+
+  const replaceQuestionNote = useCallback((stageLabel: string, answerLabels: string[]) => {
+    const header = `[QUESTION: ${stageLabel}]`;
+    const block = answerLabels.length
+      ? [header, ...answerLabels.map((label) => `→ ${label}`)].join('\n')
+      : '';
+    setNotes((prev) => {
+      const lines = prev.split('\n');
+      const kept: string[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i] === header) {
+          while (i + 1 < lines.length && lines[i + 1].startsWith('→ ')) i++;
+          continue;
+        }
+        kept.push(lines[i]);
+      }
+      const cleaned = kept.join('\n').trimEnd();
+      if (!block) return cleaned;
+      return cleaned ? `${cleaned}\n${block}` : block;
+    });
   }, []);
 
   const handleObjectionTap = useCallback((objection: Objection) => {
@@ -559,11 +585,43 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // QUESTION-ORIENTED ANSWER HANDLING
   // ===========================================================================
 
-  // Operator taps a chip corresponding to what the prospect said. Appends a
-  // structured `[QUESTION: Stage] → Answer` line to the notes, then either
-  // routes to the next stage or opens an objection.
+  const recordQuestionAnswers = useCallback((stage: Stage, answers: StageAnswer[]) => {
+    const timestamp = new Date().toISOString();
+    const records: QuestionCallAnswer[] = answers.map((answer) => ({
+      stageId: stage.id,
+      stageLabel: stage.label,
+      answerId: answer.id,
+      answerLabel: answer.label,
+      qualificationTag: answer.qualification_tag,
+      summaryField: answer.summary_field,
+      summaryValue: answer.summary_value,
+      timestamp,
+    }));
+    setQuestionAnswers((prev) => [
+      ...prev.filter((record) => record.stageId !== stage.id),
+      ...records,
+    ]);
+    replaceQuestionNote(stage.label, answers.map((answer) => answer.label));
+  }, [replaceQuestionNote]);
+
+  const advanceQuestionStage = useCallback((nextStageId: string | undefined) => {
+    if (!nextStageId) return;
+    const target = questionScript?.stages.find((s) => s.id === nextStageId);
+    if (!target) return;
+    setQuestionHistory((prev) => (questionStageId ? [...prev, questionStageId] : prev));
+    setQuestionStageId(target.id);
+    if (target.reveal_solution) setSolutionRevealed(true);
+  }, [questionScript, questionStageId]);
+
+  // Operator taps a chip corresponding to what the prospect said. Records
+  // a structured question note + answer history, then either routes to the
+  // next stage or opens an objection.
   const handleQuestionAnswer = useCallback((stage: Stage, answer: StageAnswer) => {
-    appendNote(`[QUESTION: ${stage.label}] → ${answer.label}`);
+    recordQuestionAnswers(stage, [answer]);
+    if (stage.id === 'demo-ask' && answer.id === 'book') {
+      setBookingMode(true);
+      return;
+    }
     if (answer.objection_id) {
       const objection = findObjection(playbook?.objections, answer.objection_id);
       if (objection) {
@@ -576,14 +634,15 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
       }
       return;
     }
-    if (answer.next_stage_id) {
-      const target = questionScript?.stages.find((s) => s.id === answer.next_stage_id);
-      if (!target) return;
-      setQuestionHistory((prev) => (questionStageId ? [...prev, questionStageId] : prev));
-      setQuestionStageId(target.id);
-      if (target.reveal_solution) setSolutionRevealed(true);
-    }
-  }, [appendNote, playbook, handleObjectionTap, questionScript, questionStageId]);
+    advanceQuestionStage(answer.next_stage_id);
+  }, [recordQuestionAnswers, playbook, handleObjectionTap, appendNote, advanceQuestionStage]);
+
+  const handleQuestionMultiContinue = useCallback((stage: Stage, answers: StageAnswer[]) => {
+    if (answers.length === 0) return;
+    recordQuestionAnswers(stage, answers);
+    const explicitNext = answers.find((answer) => answer.next_stage_id)?.next_stage_id;
+    advanceQuestionStage(explicitNext ?? stage.continue_stage_id);
+  }, [recordQuestionAnswers, advanceQuestionStage]);
 
   const handleQuestionBack = useCallback(() => {
     setQuestionHistory((prev) => {
@@ -629,6 +688,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setQuestionStageId(questionScript?.stages[0]?.id ?? null);
     setQuestionHistory([]);
     setSolutionRevealed(false);
+    setQuestionAnswers([]);
   }, [approach, questionHistory, questionScript, questionStageId]);
 
   // ===========================================================================
@@ -844,9 +904,12 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
                 script={questionScript}
                 currentStageId={questionStageId ?? questionScript.stages[0]?.id ?? ''}
                 ctx={leadCtx}
+                answers={questionAnswers}
                 onAnswerTap={handleQuestionAnswer}
+                onMultiAnswerContinue={handleQuestionMultiContinue}
                 onBack={handleQuestionBack}
                 onJumpToStage={handleQuestionJumpToStage}
+                onCopyToNotes={appendNote}
                 history={questionHistory}
               />
             ) : (

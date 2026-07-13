@@ -3,6 +3,13 @@
 // in Phase 4b will pull heavily from this surface.
 
 export type ObjectionCategory = 'standard' | 'deep-dive' | 'closing';
+export type DiscoverySummaryField =
+  | 'lead_source'
+  | 'customer_next_step'
+  | 'customer_looks_for'
+  | 'missing_information'
+  | 'repeated_questions'
+  | 'current_process_assessment';
 
 export interface ObjectionVariant {
   label: string;
@@ -52,6 +59,8 @@ export interface StageAnswer {
   next_stage_id?: string;
   objection_id?: string;
   qualification_tag?: string;
+  summary_field?: DiscoverySummaryField;
+  summary_value?: string;
 }
 
 export interface Stage {
@@ -62,7 +71,20 @@ export interface Stage {
   note?: string;
   branch?: boolean;
   answers?: StageAnswer[];
+  selection_mode?: 'single' | 'multiple';
+  continue_stage_id?: string;
   reveal_solution?: boolean;
+}
+
+export interface QuestionCallAnswer {
+  stageId: string;
+  stageLabel: string;
+  answerId: string;
+  answerLabel: string;
+  qualificationTag?: string;
+  summaryField?: DiscoverySummaryField;
+  summaryValue?: string;
+  timestamp: string;
 }
 
 export interface Script {

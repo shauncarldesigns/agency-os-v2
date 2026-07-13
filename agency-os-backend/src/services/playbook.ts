@@ -33,6 +33,13 @@ import emailSequenceMd from '../playbook/follow-ups/email-sequence.md';
 
 export type ObjectionCategory = 'standard' | 'deep-dive' | 'closing';
 export type ObjectionType = 'simple' | 'branching';
+export type DiscoverySummaryField =
+  | 'lead_source'
+  | 'customer_next_step'
+  | 'customer_looks_for'
+  | 'missing_information'
+  | 'repeated_questions'
+  | 'current_process_assessment';
 
 export interface ObjectionVariant {
   label: string;
@@ -75,7 +82,7 @@ export type Objection = SimpleObjection | BranchingObjection;
 
 // Answer choice attached to a Stage. Used by Question-oriented mode: the
 // operator taps a chip corresponding to what the prospect said, which
-// records a note, may set a qualification tag for later summarization, and
+// records a note, may set legacy qualification tags / summary metadata, and
 // either advances to the next stage or opens an objection. Absent on the
 // No-oriented script; that flow just uses linear Advance / Back.
 export interface StageAnswer {
@@ -84,6 +91,8 @@ export interface StageAnswer {
   next_stage_id?: string;
   objection_id?: string;
   qualification_tag?: string;
+  summary_field?: DiscoverySummaryField;
+  summary_value?: string;
 }
 
 export interface Stage {
@@ -94,6 +103,8 @@ export interface Stage {
   note?: string;
   branch?: boolean;
   answers?: StageAnswer[];
+  selection_mode?: 'single' | 'multiple';
+  continue_stage_id?: string;
   // Marks the point in a Question-oriented script where the solution may
   // be revealed. Any stage from this one on unlocks website-specific
   // objections and lets the operator mention what Shaun does.
@@ -213,6 +224,8 @@ function parseScript(raw: string): Script {
             next_stage_id: typeof a.next_stage_id === 'string' ? a.next_stage_id : undefined,
             objection_id: typeof a.objection_id === 'string' ? a.objection_id : undefined,
             qualification_tag: typeof a.qualification_tag === 'string' ? a.qualification_tag : undefined,
+            summary_field: isDiscoverySummaryField(a.summary_field) ? a.summary_field : undefined,
+            summary_value: typeof a.summary_value === 'string' ? a.summary_value : undefined,
           }))
       : undefined;
     return {
@@ -223,6 +236,8 @@ function parseScript(raw: string): Script {
       body: sec.body,
       note: sec.note || undefined,
       answers,
+      selection_mode: s.selection_mode === 'multiple' ? 'multiple' : undefined,
+      continue_stage_id: typeof s.continue_stage_id === 'string' ? s.continue_stage_id : undefined,
       reveal_solution: s.reveal_solution === true ? true : undefined,
     };
   });
@@ -235,6 +250,15 @@ function parseScript(raw: string): Script {
     use_when: fm.use_when,
     stages,
   };
+}
+
+function isDiscoverySummaryField(value: unknown): value is DiscoverySummaryField {
+  return value === 'lead_source'
+    || value === 'customer_next_step'
+    || value === 'customer_looks_for'
+    || value === 'missing_information'
+    || value === 'repeated_questions'
+    || value === 'current_process_assessment';
 }
 
 function parseObjection(raw: string): Objection {
