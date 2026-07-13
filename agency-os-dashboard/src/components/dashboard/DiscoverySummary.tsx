@@ -153,12 +153,18 @@ function summaryRows(answers: QuestionCallAnswer[]): Array<{ label: string; valu
 
 function buildDiscoverySummary(answers: QuestionCallAnswer[]): string {
   const buckets = buildBuckets(answers);
+  const leadSourceValue = buckets.lead_source.at(-1)?.summaryValue;
+  const nextStepValue = buckets.customer_next_step.at(-1)?.summaryValue;
   const leadSource = latestLabel(buckets.lead_source);
   const nextStep = latestLabel(buckets.customer_next_step);
   const looksFor = joinedLabels(buckets.customer_looks_for);
   const missing = joinedLabels(buckets.missing_information);
   const repeated = joinedLabels(buckets.repeated_questions);
   const assessment = latestActionPhrase(buckets.current_process_assessment);
+
+  if (leadSourceValue === 'referrals' && (nextStepValue === 'google_business' || nextStepValue === 'some_look_up')) {
+    return 'So it sounds like most business comes from referrals, and people check you out online before calling. Is that accurate?';
+  }
 
   const sentences: string[] = [];
   if (leadSource) sentences.push(`most of your new customers come through ${leadSource}`);

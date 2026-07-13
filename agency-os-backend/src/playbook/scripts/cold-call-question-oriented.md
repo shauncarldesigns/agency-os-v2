@@ -21,8 +21,8 @@ stages:
         label: Not interested
         objection_id: early-not-interested
   - id: lead-source
-    label: LEAD SOURCE
-    short_label: Lead source
+    label: DISCOVERY QUESTION
+    short_label: Discovery
     answers:
       - id: referrals
         label: REFERRALS
@@ -86,27 +86,27 @@ stages:
         summary_value: call_immediately
       - id: google-business
         label: Google the business
-        next_stage_id: customer-looks-for-referral-google
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: google_business
       - id: check-reviews
         label: Check reviews
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: check_reviews
       - id: facebook
         label: Look on Facebook
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: look_on_facebook
       - id: ask-referrer
         label: Ask the person who referred them
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: ask_referrer
       - id: not-sure
         label: Not sure
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: not_sure
   - id: referral-call-followup
@@ -116,17 +116,17 @@ stages:
     answers:
       - id: most-call
         label: Most call immediately
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: most_call_immediately
       - id: some-look-up
         label: Some probably look us up
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: some_look_up
       - id: not-sure
         label: Not sure
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: not_sure
   - id: customer-looks-for-referral-google
@@ -169,7 +169,7 @@ stages:
     short_label: Journey · Google
     branch: true
     selection_mode: multiple
-    continue_stage_id: first-impression-google
+    continue_stage_id: summary
     answers:
       - id: reviews
         label: Reviews
@@ -236,27 +236,27 @@ stages:
     answers:
       - id: contact-direct
         label: Contact us directly
-        next_stage_id: first-impression-social
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: contact_directly
       - id: google-after
         label: Google us afterward
-        next_stage_id: first-impression-social
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: google_after_social
       - id: check-reviews
         label: Check reviews
-        next_stage_id: first-impression-social
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: check_reviews
       - id: browse-posts
         label: Browse posts and photos
-        next_stage_id: first-impression-social
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: browse_posts_photos
       - id: not-sure
         label: Not sure
-        next_stage_id: first-impression-social
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: not_sure
   - id: first-impression-social
@@ -296,22 +296,22 @@ stages:
         summary_value: call_immediately
       - id: google-business
         label: Google the business
-        next_stage_id: customer-looks-for-referral-google
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: google_business
       - id: check-reviews
         label: Check reviews
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: check_reviews
       - id: ask-referrer
         label: Ask the repeat customer more questions
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: ask_referrer
       - id: not-sure
         label: Not sure
-        next_stage_id: first-impression
+        next_stage_id: summary
         summary_field: customer_next_step
         summary_value: not_sure
   - id: customer-journey-paid-leads
@@ -319,7 +319,7 @@ stages:
     short_label: Journey · Paid
     branch: true
     selection_mode: multiple
-    continue_stage_id: first-impression
+    continue_stage_id: summary
     answers:
       - id: price
         label: Price
@@ -391,22 +391,22 @@ stages:
     answers:
       - id: yes
         label: Yes
-        next_stage_id: repeated-questions
+        next_stage_id: summary
         summary_field: current_process_assessment
         summary_value: asks_source
       - id: sometimes
         label: Sometimes
-        next_stage_id: repeated-questions
+        next_stage_id: summary
         summary_field: current_process_assessment
         summary_value: sometimes_asks_source
       - id: no
         label: 'No'
-        next_stage_id: repeated-questions
+        next_stage_id: summary
         summary_field: current_process_assessment
         summary_value: does_not_ask_source
       - id: forget
         label: I usually forget
-        next_stage_id: repeated-questions
+        next_stage_id: summary
         summary_field: current_process_assessment
         summary_value: usually_forgets
   - id: repeated-questions
@@ -447,6 +447,7 @@ stages:
   - id: first-impression
     label: FIRST IMPRESSION
     short_label: First impression
+    branch: true
     answers:
       - id: yes-definitely
         label: Yes, definitely
@@ -677,7 +678,7 @@ Then:
 
 "When someone finds you on Google, what do you think they usually look at before calling?"
 
-> Multi-select the specifics they name, then continue to the first-impression check.
+> Multi-select the specifics they name, then confirm the short summary and move to the reveal.
 
 ## Stage: first-impression-google
 
@@ -761,21 +762,21 @@ Then:
 
 "So it sounds like..."
 
-> Use the Summary card below. It should only contain what they explicitly selected or what you manually edited after confirming it with them.
+> Confirm the short version before the reveal: "So it sounds like most business comes from referrals, and people check you out online before calling?" Use the Summary card below, but keep it conversational and brief.
 
 ## Stage: solution-reveal
 
-"The reason I asked is that I help local businesses create a clear place for referred customers to land after they search."
+"That's exactly why I called. When folks check you out, there's not really one clear place that quickly shows your work or why someone should choose you."
 
 Then connect it to the confirmed summary:
 
-"You mentioned that most customers [journey detail]. That is exactly the kind of information I organize into a simple website."
+"That's the kind of thing I organize into a simple website."
 
 > This is the first stage where website-specific language is allowed. Do not claim a website guarantees leads, revenue, better customers, or replaces referrals. The truthful claim is that it gives customers a clear, professional place to understand the business after they search.
 
 ## Stage: demo-ask
 
-"I actually put together an example of what that could look like for your business. Would it be unreasonable to spend ten minutes looking at it together?"
+"I put together a quick example for your business. Would it be unreasonable to spend 10 minutes taking a look?"
 
 Alternative:
 
