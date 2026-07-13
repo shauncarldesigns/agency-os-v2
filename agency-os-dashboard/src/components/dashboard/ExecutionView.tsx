@@ -31,6 +31,7 @@ const WEBSITE_SPECIFIC_OBJECTION_IDS = new Set<string>([
   'busy-plus-email',
   'why-need-website',
   'why-need-website-direct',
+  'built-without-asking',
 ]);
 
 // Filter objection categories to hide website-specific chips when the
