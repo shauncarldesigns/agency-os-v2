@@ -1,5 +1,7 @@
-import type { Script, Stage, StageAnswer, LeadContext } from '../../lib/playbook';
+import { useEffect, useState } from 'react';
+import type { Script, Stage, StageAnswer, LeadContext, QuestionCallAnswer } from '../../lib/playbook';
 import { interpolate } from '../../lib/playbook';
+import { DiscoverySummary } from './DiscoverySummary';
 
 // Discovery-first cockpit panel. Replaces the linear ScriptPanel when the
 // operator has picked Question-oriented mode.
@@ -14,19 +16,34 @@ interface QuestionOrientedPanelProps {
   script: Script;
   currentStageId: string;
   ctx: LeadContext;
+  answers: QuestionCallAnswer[];
   onAnswerTap: (stage: Stage, answer: StageAnswer) => void;
+  onMultiAnswerContinue: (stage: Stage, answers: StageAnswer[]) => void;
   onBack: () => void;
   onJumpToStage: (id: string) => void;
+  onCopyToNotes: (line: string) => void;
   /** History of visited stage IDs so Back knows where to go. */
   history: string[];
 }
 
 export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
-  const { script, currentStageId, ctx, onAnswerTap, onBack, onJumpToStage, history } = props;
+  const {
+    script, currentStageId, ctx, answers, onAnswerTap, onMultiAnswerContinue,
+    onBack, onJumpToStage, onCopyToNotes, history,
+  } = props;
   const currentStage = script.stages.find((s) => s.id === currentStageId) ?? script.stages[0];
   const linearStages = script.stages.filter((s) => !s.branch);
   const linearIdx = linearStages.findIndex((s) => s.id === currentStage.id);
   const progressPos = linearIdx >= 0 ? linearIdx : lastLinearCompletedIdx(script, currentStage.id);
+  const isMulti = currentStage.selection_mode === 'multiple';
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const selectedForStage = answers
+      .filter((answer) => answer.stageId === currentStage.id)
+      .map((answer) => answer.answerId);
+    setSelectedIds(new Set(selectedForStage));
+  }, [answers, currentStage.id]);
 
   return (
     <div className="cockpit-panel">
@@ -64,15 +81,36 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
         )}
       </div>
 
+      {currentStage.id === 'summary' && (
+        <DiscoverySummary
+          answers={answers}
+          onCopyToNotes={onCopyToNotes}
+        />
+      )}
+
       {currentStage.answers && currentStage.answers.length > 0 && (
         <div className="cockpit-answer-grid">
           <div className="cockpit-answer-label">They said…</div>
-          {currentStage.answers.map((a) => (
+          {currentStage.answers.map((a) => {
+            const selected = selectedIds.has(a.id);
+            return (
             <button
               key={a.id}
               type="button"
-              className={`cockpit-answer-chip${a.objection_id ? ' has-objection' : ''}`}
-              onClick={() => onAnswerTap(currentStage, a)}
+              className={`cockpit-answer-chip${a.objection_id ? ' has-objection' : ''}${selected ? ' selected' : ''}`}
+              aria-pressed={isMulti ? selected : undefined}
+              onClick={() => {
+                if (isMulti) {
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(a.id)) next.delete(a.id);
+                    else next.add(a.id);
+                    return next;
+                  });
+                } else {
+                  onAnswerTap(currentStage, a);
+                }
+              }}
               title={
                 a.objection_id
                   ? `Opens objection: ${a.objection_id}`
@@ -84,7 +122,21 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
               {a.label}
               {a.objection_id && <span className="cockpit-answer-chip-hint"> · objection</span>}
             </button>
-          ))}
+          );
+          })}
+          {isMulti && (
+            <button
+              type="button"
+              className="cockpit-answer-continue"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                const selectedAnswers = (currentStage.answers ?? []).filter((answer) => selectedIds.has(answer.id));
+                onMultiAnswerContinue(currentStage, selectedAnswers);
+              }}
+            >
+              Continue
+            </button>
+          )}
         </div>
       )}
 
