@@ -828,6 +828,11 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-answer-chip-hint { font-size: 0.58rem; color: var(--text3); font-weight: 400; margin-left: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
 .cockpit-answer-continue { grid-column: 1 / -1; justify-self: end; background: var(--blue); color: #071a2f; border: 1px solid var(--blue); border-radius: 4px; padding: 8px 14px; font-size: 0.68rem; font-weight: 700; font-family: inherit; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; }
 .cockpit-answer-continue:disabled { opacity: 0.45; cursor: not-allowed; }
+.cockpit-answer-free-text { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px; }
+.cockpit-answer-free-text label { display: grid; gap: 4px; }
+.cockpit-answer-free-text span { font-size: 0.58rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+.cockpit-answer-free-text input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 4px; padding: 7px 9px; font-family: inherit; font-size: 0.74rem; outline: none; }
+.cockpit-answer-free-text input:focus { border-color: var(--blue); }
 
 .cockpit-discovery-summary { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px; margin: 10px 0 12px; display: grid; gap: 10px; }
 .cockpit-discovery-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
