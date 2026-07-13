@@ -98,7 +98,7 @@ export function QuestionOrientedPanel(props: QuestionOrientedPanelProps) {
 
       {currentStage.answers && currentStage.answers.length > 0 && (
         <div className="cockpit-answer-grid">
-          <div className="cockpit-answer-label">They said…</div>
+          <div className="cockpit-answer-label">Operator chips · choose what they said</div>
           {currentStage.answers.map((a) => {
             const selected = selectedIds.has(a.id) || freeTextAnswer?.id === a.id;
             return (
