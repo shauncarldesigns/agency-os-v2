@@ -17,6 +17,11 @@ stages:
     label: DEMO REVEAL
     short_label: Reveal
     reveal_solution: true
+  - id: rebuttal-reveal
+    label: REVEAL - REBUTTAL
+    short_label: Reveal - Rebuttal
+    branch: true
+    reveal_solution: true
   - id: demo-ask
     label: DEMO ASK
     short_label: Demo ask
@@ -54,6 +59,12 @@ stages:
 "And that's actually why I'm calling. I put a quick demo site together for you - nothing live, no cost. Just a visual, so you can see what it might look like if your online presence matched the reputation your reviews already show."
 
 > This is the first stage where website-specific language is allowed. Be precise: mockup / demo / visual. Do not imply anything is live, authorized, or guaranteed to create leads.
+
+## Stage: rebuttal-reveal
+
+"The reason I asked is that I actually spent a little time looking you guys up and put together a mock-up based on your reviews and the work you do. Nothing live, nothing for sale today. I was mostly curious whether you felt it represented your business better than what people see now."
+
+> Optional reveal after the Website calls objection. This is a recovery reveal for skeptical calls, not the default reveal. After this, jump back into Demo ask.
 
 ## Stage: demo-ask
 
