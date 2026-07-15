@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Quick-oriented call approach (PR #121)
+
+- **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach + narrow objection tray.** Adds a third cockpit approach chip (`Quick-oriented`) alongside No-oriented and Question-oriented. The new script follows the fast reputation-gap flow: strong reviews → limited proof beyond reviews → reputation-match check → demo-site reveal → ten-minute ask. While Quick-oriented is active, the objection panel narrows to six purpose-built chips: I'm busy, Too busy, Already have Facebook, Why do I need a website, Word of mouth, and Pushback. Backend + dashboard.
+
 ### Question-oriented call approach — Phase 1 (PR #112)
 
 - **[#112](https://github.com/shauncarldesigns/agency-os-v2/pull/112) Cold-call cockpit approach selector + Question-oriented skeleton.** Adds a persistent two-chip switcher (`APPROACH: No-oriented / Question-oriented`) above the script panel; choice persists in `localStorage` under `agency-os-call-approach`. Selecting Question-oriented swaps the linear script panel for a discovery-first `QuestionOrientedPanel` — permission → lead-source → dynamic qualification (5 variants routed by the operator's lead-source pick) → impact → desired-outcome → solution reveal → demo ask, with tappable answer chips per stage that auto-tag `[QUESTION: Stage] → Answer` into the notes. Objection panel filters out website-specific chips (word-of-mouth, cant-afford, why-need-website, etc.) until the reveal stage; ✨ Generate alternative is hidden pre-reveal to prevent the LLM from leaking website mentions. No-oriented flow untouched — remains the default. Deferred to PR 2: problem-discovery branches + Discovery Summary card. New markdown: `cold-call-question-oriented.md`, `why-are-you-asking.md`, `early-not-interested.md`. Extends `Stage` with optional `answers[]` and `reveal_solution` fields.

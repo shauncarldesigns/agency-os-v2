@@ -167,18 +167,19 @@ time (409 conflict otherwise).
 
 ## Playbook system (added 2026-06-17)
 
-The calling cockpit (formerly the static ExecutionView) runs an active Chris
-Voss "No-oriented" sales playbook. Scripts + objection rebuttals are authored
-as markdown under `agency-os-backend/src/playbook/`, bundled into the Worker
-at build time, and parsed at runtime via `services/playbook.ts`.
+The calling cockpit (formerly the static ExecutionView) runs active sales
+playbooks. It now supports three cold-call approaches in the cockpit selector:
+No-oriented, Question-oriented, and Quick-oriented. Scripts + objection
+rebuttals are authored as markdown under `agency-os-backend/src/playbook/`,
+bundled into the Worker at build time, and parsed at runtime via
+`services/playbook.ts`.
 
 - **Content layout** — `scripts/*.md` (cold call + demos), `objections/*.md`
-  (9 files: 6 simple, 2 branching, 1 combo), `follow-ups/*.md` (email
-  sequence). Every file has YAML frontmatter; branching objections use
-  `## Path: {id}` body sections matching `paths[].id`, scripts use
-  `## Stage: {id}` matching `stages[].id`. Operator-facing meta (the things
-  to NOT say aloud) goes into `> blockquote` lines and parses out into a
-  separate `note` field.
+  (simple + branching chips), `follow-ups/*.md` (email sequence). Every file
+  has YAML frontmatter; branching objections use `## Path: {id}` body sections
+  matching `paths[].id`, scripts use `## Stage: {id}` matching `stages[].id`.
+  Operator-facing meta (the things to NOT say aloud) goes into `> blockquote`
+  lines and parses out into a separate `note` field.
 - **Bundling — Workers have no fs.** `wrangler.toml` `[[rules]] type =
   "Text" globs = ["**/*.md"]` makes esbuild inline each imported `.md` as
   a string. Adding a new markdown file requires explicit import in
@@ -216,6 +217,12 @@ sidebar Scores+Signals+Prior-Calls are gone; replaced by script panel +
 objection chips + notes textarea with auto-tagged objection lines. The
 operator can still open a lead's modal from Pipeline for full historical
 context.
+
+**Approach-specific objection trays** — Question-oriented hides website-specific
+objections until a reveal stage. Quick-oriented uses a narrow tray of six
+quick-mode objections (`quick-im-busy`, `quick-too-busy`, `quick-facebook-page`,
+`quick-why-website`, `quick-word-of-mouth`, `quick-pushback`) so the short
+call flow stays lightweight.
 
 ## Hot Leads (added 2026-06-17)
 
