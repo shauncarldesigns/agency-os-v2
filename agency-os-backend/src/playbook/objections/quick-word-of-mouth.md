@@ -3,7 +3,7 @@ id: quick-word-of-mouth
 label: Word of mouth
 category: standard
 type: simple
-order: 24
+order: 25
 ---
 
 "That's honestly the best kind of business. I wouldn't want to replace that. The only thing I'm pointing out is what happens after someone hears your name. Most people still Google you before they call, and the demo shows what it could look like if that search backed up the reputation you already have."

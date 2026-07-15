@@ -219,10 +219,10 @@ operator can still open a lead's modal from Pipeline for full historical
 context.
 
 **Approach-specific objection trays** — Question-oriented hides website-specific
-objections until a reveal stage. Quick-oriented uses a narrow tray of six
+objections until a reveal stage. Quick-oriented uses a narrow tray of seven
 quick-mode objections (`quick-im-busy`, `quick-too-busy`, `quick-facebook-page`,
-`quick-why-website`, `quick-word-of-mouth`, `quick-pushback`) so the short
-call flow stays lightweight.
+`quick-why-website`, `quick-cost`, `quick-word-of-mouth`, `quick-pushback`) so
+the short call flow stays lightweight.
 
 ## Hot Leads (added 2026-06-17)
 
