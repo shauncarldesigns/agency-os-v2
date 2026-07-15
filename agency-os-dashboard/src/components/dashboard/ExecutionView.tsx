@@ -34,12 +34,32 @@ const WEBSITE_SPECIFIC_OBJECTION_IDS = new Set<string>([
   'built-without-asking',
 ]);
 
+// Quick-oriented is intentionally narrow: only show the objections that match
+// that short reputation-gap call, so the right side stays low-memory.
+const QUICK_ORIENTED_OBJECTION_IDS = [
+  'quick-im-busy',
+  'quick-too-busy',
+  'quick-facebook-page',
+  'quick-why-website',
+  'quick-word-of-mouth',
+  'quick-pushback',
+] as const;
+
 // Filter objection categories to hide website-specific chips when the
 // operator hasn't yet revealed the solution. Empty categories drop out.
 function filterObjectionsPreReveal(byCategory: ObjectionsByCategory): ObjectionsByCategory {
   const out: ObjectionsByCategory = { 'standard': [], 'deep-dive': [], 'closing': [] };
   (Object.keys(byCategory) as ObjectionCategory[]).forEach((cat) => {
     out[cat] = (byCategory[cat] ?? []).filter((o) => !WEBSITE_SPECIFIC_OBJECTION_IDS.has(o.id));
+  });
+  return out;
+}
+
+function filterObjectionsToIds(byCategory: ObjectionsByCategory, ids: readonly string[]): ObjectionsByCategory {
+  const allowed = new Set(ids);
+  const out: ObjectionsByCategory = { 'standard': [], 'deep-dive': [], 'closing': [] };
+  (Object.keys(byCategory) as ObjectionCategory[]).forEach((cat) => {
+    out[cat] = (byCategory[cat] ?? []).filter((o) => allowed.has(o.id));
   });
   return out;
 }
@@ -156,9 +176,23 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
 
-  // Script + stage state.
-  const script: Script | null = playbook?.defaultScript ?? null;
-  const linearStages = useMemo(() => (script?.stages ?? []).filter((s) => !s.branch), [script]);
+  // Call approach — No-oriented (default, pitch-first), Question-oriented
+  // (discovery-first), or Quick-oriented (fast reputation-gap reveal).
+  // Persisted in localStorage so the operator's choice sticks across sessions.
+  const [approach, setApproach] = useState<CallApproach>(() => getStoredCallApproach());
+
+  // Script + stage state. No-oriented and Quick-oriented use the same linear
+  // ScriptPanel mechanics; Question-oriented has a guided answer-chip panel.
+  const defaultScript: Script | null = playbook?.defaultScript ?? null;
+  const questionScript: Script | null = playbook?.questionScript ?? null;
+  const quickScript: Script | null = playbook?.quickScript ?? null;
+  const activeLinearScript: Script | null = approach === 'quick_oriented'
+    ? (quickScript ?? defaultScript)
+    : defaultScript;
+  const linearStages = useMemo(
+    () => (activeLinearScript?.stages ?? []).filter((s) => !s.branch),
+    [activeLinearScript],
+  );
 
   // Token-interpolation context — feeds [Company Name] / [Name] / [city] /
   // [state] / [their trade] / [review_count] / [review_avg] / [reviews]
@@ -184,16 +218,15 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   }, [lead]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   useEffect(() => {
-    if (script && currentStageId === null) {
-      setCurrentStageId(linearStages[0]?.id ?? script.stages[0]?.id ?? null);
+    if (approach === 'question_oriented' || !activeLinearScript) return;
+    const exists = currentStageId
+      ? activeLinearScript.stages.some((s) => s.id === currentStageId)
+      : false;
+    if (!exists) {
+      setCurrentStageId(linearStages[0]?.id ?? activeLinearScript.stages[0]?.id ?? null);
     }
-  }, [script, currentStageId, linearStages]);
+  }, [approach, activeLinearScript, currentStageId, linearStages]);
 
-  // Call approach — No-oriented (default, pitch-first) vs Question-oriented
-  // (discovery-first). Persisted in localStorage so the operator's choice
-  // sticks across sessions.
-  const [approach, setApproach] = useState<CallApproach>(() => getStoredCallApproach());
-  const questionScript: Script | null = playbook?.questionScript ?? null;
   // Question-oriented flow tracks its own current stage + history so
   // switching approaches doesn't clobber No-oriented's currentStageId.
   const [questionStageId, setQuestionStageId] = useState<string | null>(null);
@@ -212,31 +245,31 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     }
   }, [approach, questionScript, questionStageId]);
 
-  const currentStage = script?.stages.find((s) => s.id === currentStageId) ?? null;
+  const currentStage = activeLinearScript?.stages.find((s) => s.id === currentStageId) ?? null;
   // Advance / Back walk script.stages and skip past branch:true entries so
   // conditional stages (COST, HESITATE, TERRIBLE-TIME, NOT-INTERESTED) don't
   // appear in the default linear flow — but they ARE still reachable via the
   // breadcrumb chip taps below. Works whether currentStageId is on a linear
   // stage or a branch.
-  const currentScriptIdx = script?.stages.findIndex((s) => s.id === currentStageId) ?? -1;
+  const currentScriptIdx = activeLinearScript?.stages.findIndex((s) => s.id === currentStageId) ?? -1;
   const nextStage = (() => {
-    if (!script || currentScriptIdx < 0) return null;
-    for (let i = currentScriptIdx + 1; i < script.stages.length; i++) {
-      if (!script.stages[i].branch) return script.stages[i];
+    if (!activeLinearScript || currentScriptIdx < 0) return null;
+    for (let i = currentScriptIdx + 1; i < activeLinearScript.stages.length; i++) {
+      if (!activeLinearScript.stages[i].branch) return activeLinearScript.stages[i];
     }
     return null;
   })();
   const prevStage = (() => {
-    if (!script || currentScriptIdx <= 0) return null;
+    if (!activeLinearScript || currentScriptIdx <= 0) return null;
     for (let i = currentScriptIdx - 1; i >= 0; i--) {
-      if (!script.stages[i].branch) return script.stages[i];
+      if (!activeLinearScript.stages[i].branch) return activeLinearScript.stages[i];
     }
     return null;
   })();
   // Position-of-current-or-most-recent-linear-stage in linearStages, used by
   // the breadcrumb to compute done/active state on each linear chip.
   const linearProgressIdx = (() => {
-    if (!script || currentScriptIdx < 0) return -1;
+    if (!activeLinearScript || currentScriptIdx < 0) return -1;
     // If current stage is linear, return its position in linearStages.
     const direct = linearStages.findIndex((s) => s.id === currentStageId);
     if (direct >= 0) return direct;
@@ -244,7 +277,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     // in script.stages (that's the "last completed" linear position).
     let count = 0;
     for (let i = 0; i < currentScriptIdx; i++) {
-      if (!script.stages[i].branch) count++;
+      if (!activeLinearScript.stages[i].branch) count++;
     }
     return count - 1; // points at the most recent linear stage they completed
   })();
@@ -297,7 +330,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     setCallStartMs(Date.now());
     setRecordingUrl(null);
     setRecordingCallId(null);
-    setCurrentStageId(linearStages[0]?.id ?? null);
+    setCurrentStageId(linearStages[0]?.id ?? activeLinearScript?.stages[0]?.id ?? null);
     setQuestionStageId(questionScript?.stages[0]?.id ?? null);
     setQuestionHistory([]);
     setSolutionRevealed(false);
@@ -678,19 +711,39 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
     const questionInProgress = approach === 'question_oriented'
       && (questionHistory.length > 0
         || (questionScript && questionStageId !== questionScript.stages[0]?.id));
-    if (questionInProgress) {
+    const linearInProgress = approach !== 'question_oriented'
+      && currentStageId != null
+      && currentStageId !== (linearStages[0]?.id ?? activeLinearScript?.stages[0]?.id ?? null);
+    if (questionInProgress || linearInProgress) {
       const ok = window.confirm(
-        'Switching approaches will reset Question-oriented stage progress. Notes and recording stay. Continue?'
+        'Switching approaches will reset stage progress. Notes and recording stay. Continue?'
       );
       if (!ok) return;
     }
+    const nextScript = next === 'quick_oriented'
+      ? quickScript
+      : next === 'no_oriented'
+        ? defaultScript
+        : null;
+    const nextLinearStages = (nextScript?.stages ?? []).filter((s) => !s.branch);
     setStoredCallApproach(next);
     setApproach(next);
+    setCurrentStageId(nextLinearStages[0]?.id ?? nextScript?.stages[0]?.id ?? null);
     setQuestionStageId(questionScript?.stages[0]?.id ?? null);
     setQuestionHistory([]);
     setSolutionRevealed(false);
     setQuestionAnswers([]);
-  }, [approach, questionHistory, questionScript, questionStageId]);
+  }, [
+    approach,
+    activeLinearScript,
+    currentStageId,
+    defaultScript,
+    linearStages,
+    questionHistory,
+    questionScript,
+    questionStageId,
+    quickScript,
+  ]);
 
   // ===========================================================================
   // OUTCOME HANDLERS
@@ -888,7 +941,10 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             <ApproachSelector
               value={approach}
               onChange={handleApproachChange}
-              disabled={approach === 'question_oriented' && !questionScript}
+              unavailable={{
+                question_oriented: questionScript ? undefined : 'Question-oriented script not yet loaded',
+                quick_oriented: quickScript ? undefined : 'Quick-oriented script not yet loaded',
+              }}
             />
             {approach === 'question_oriented' && solutionRevealed && (
               <span className="cockpit-approach-reveal-flag">✓ Solution revealed — full objection library unlocked</span>
@@ -896,6 +952,11 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             {approach === 'question_oriented' && !questionScript && (
               <span className="cockpit-approach-reveal-flag" style={{ color: 'var(--yellow)' }}>
                 Question-oriented script not yet loaded — falling back to No-oriented
+              </span>
+            )}
+            {approach === 'quick_oriented' && !quickScript && (
+              <span className="cockpit-approach-reveal-flag" style={{ color: 'var(--yellow)' }}>
+                Quick-oriented script not yet loaded — falling back to No-oriented
               </span>
             )}
           </div>
@@ -915,7 +976,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
               />
             ) : (
               <ScriptPanel
-                script={script}
+                script={activeLinearScript}
                 linearStages={linearStages}
                 currentStage={currentStage}
                 linearProgressIdx={linearProgressIdx}
@@ -929,7 +990,9 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             )}
             <ObjectionPanel
               byCategory={
-                approach === 'question_oriented' && !solutionRevealed
+                approach === 'quick_oriented'
+                  ? filterObjectionsToIds(playbook?.objections ?? emptyByCategory(), QUICK_ORIENTED_OBJECTION_IDS)
+                  : approach === 'question_oriented' && !solutionRevealed
                   ? filterObjectionsPreReveal(playbook?.objections ?? emptyByCategory())
                   : (playbook?.objections ?? emptyByCategory())
               }
