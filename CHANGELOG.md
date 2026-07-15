@@ -12,7 +12,7 @@ when a manual deploy was needed.
 ### Quick-oriented call approach (PR #121)
 
 - **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach + narrow objection tray.** Adds a third cockpit approach chip (`Quick-oriented`) alongside No-oriented and Question-oriented. The new script follows the fast reputation-gap flow: strong reviews → limited proof beyond reviews → reputation-match check → demo-site reveal → ten-minute ask. While Quick-oriented is active, the objection panel narrows to six purpose-built chips: I'm busy, Too busy, Already have Facebook, Why do I need a website, Word of mouth, and Pushback. Backend + dashboard.
-- **Quick-oriented Cost objection.** Adds a `Cost` chip to the Quick-oriented objection tray with a grounded under-a-grand option range, then redirects back to the ten-minute demo before detailed pricing. Backend + dashboard.
+- **[#122](https://github.com/shauncarldesigns/agency-os-v2/pull/122) Quick-oriented Cost objection.** Adds a `Cost` chip to the Quick-oriented objection tray with a grounded under-a-grand option range, then redirects back to the ten-minute demo before detailed pricing. Backend + dashboard.
 
 ### Question-oriented call approach — Phase 1 (PR #112)
 
