@@ -24,6 +24,7 @@ import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-dire
 import builtWithoutAskingMd from '../playbook/objections/built-without-asking.md';
 import quickImBusyMd from '../playbook/objections/quick-im-busy.md';
 import quickTooBusyMd from '../playbook/objections/quick-too-busy.md';
+import quickWebsiteCallsMd from '../playbook/objections/quick-website-calls.md';
 import quickFacebookPageMd from '../playbook/objections/quick-facebook-page.md';
 import quickWhyWebsiteMd from '../playbook/objections/quick-why-website.md';
 import quickCostMd from '../playbook/objections/quick-cost.md';
@@ -375,6 +376,7 @@ const OBJECTION_FILES: Record<string, string> = {
   'built-without-asking': builtWithoutAskingMd,
   'quick-im-busy': quickImBusyMd,
   'quick-too-busy': quickTooBusyMd,
+  'quick-website-calls': quickWebsiteCallsMd,
   'quick-facebook-page': quickFacebookPageMd,
   'quick-why-website': quickWhyWebsiteMd,
   'quick-cost': quickCostMd,
