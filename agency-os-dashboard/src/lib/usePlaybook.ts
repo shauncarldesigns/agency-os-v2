@@ -15,10 +15,13 @@ interface PlaybookContent {
   // can switch approach mid-session without a reload. null if the backend
   // isn't yet publishing it (older Worker deploys).
   questionScript: Script | null;
+  // Quick-oriented cold-call script. Same compatibility behavior as above.
+  quickScript: Script | null;
   objections: ObjectionsByCategory;
 }
 
 const QUESTION_SCRIPT_ID = 'cold-call-question-oriented';
+const QUICK_SCRIPT_ID = 'cold-call-quick-oriented';
 
 let cache: PlaybookContent | null = null;
 let inflight: Promise<PlaybookContent> | null = null;
@@ -36,10 +39,14 @@ async function loadPlaybook(): Promise<PlaybookContent> {
       ?? scriptsResp.scripts[0]?.id
       ?? null;
     const hasQuestionScript = scriptsResp.scripts.some((s) => s.id === QUESTION_SCRIPT_ID);
-    const [defaultScript, questionScript] = await Promise.all([
+    const hasQuickScript = scriptsResp.scripts.some((s) => s.id === QUICK_SCRIPT_ID);
+    const [defaultScript, questionScript, quickScript] = await Promise.all([
       defaultScriptId ? api.playbook.script(defaultScriptId).then((r) => r.script) : Promise.resolve(null),
       hasQuestionScript
         ? api.playbook.script(QUESTION_SCRIPT_ID).then((r) => r.script).catch(() => null)
+        : Promise.resolve(null),
+      hasQuickScript
+        ? api.playbook.script(QUICK_SCRIPT_ID).then((r) => r.script).catch(() => null)
         : Promise.resolve(null),
     ]);
     const content: PlaybookContent = {
@@ -47,6 +54,7 @@ async function loadPlaybook(): Promise<PlaybookContent> {
       defaultScriptId,
       defaultScript,
       questionScript,
+      quickScript,
       objections: objectionsResp.by_category,
     };
     cache = content;

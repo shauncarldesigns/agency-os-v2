@@ -6,6 +6,7 @@ import { parse as parseYaml } from 'yaml';
 
 import coldCallMd from '../playbook/scripts/cold-call-no-oriented.md';
 import coldCallQuestionMd from '../playbook/scripts/cold-call-question-oriented.md';
+import coldCallQuickMd from '../playbook/scripts/cold-call-quick-oriented.md';
 import demoTier3Md from '../playbook/scripts/demo-tier3-primary.md';
 import demoTier2Md from '../playbook/scripts/demo-tier2-primary.md';
 
@@ -21,6 +22,12 @@ import busyPlusEmailMd from '../playbook/objections/busy-plus-email.md';
 import whyNeedWebsiteMd from '../playbook/objections/why-need-website.md';
 import whyNeedWebsiteDirectMd from '../playbook/objections/why-need-website-direct.md';
 import builtWithoutAskingMd from '../playbook/objections/built-without-asking.md';
+import quickImBusyMd from '../playbook/objections/quick-im-busy.md';
+import quickTooBusyMd from '../playbook/objections/quick-too-busy.md';
+import quickFacebookPageMd from '../playbook/objections/quick-facebook-page.md';
+import quickWhyWebsiteMd from '../playbook/objections/quick-why-website.md';
+import quickWordOfMouthMd from '../playbook/objections/quick-word-of-mouth.md';
+import quickPushbackMd from '../playbook/objections/quick-pushback.md';
 import angryDisarmMd from '../playbook/objections/angry-disarm.md';
 import totalBrushOffMd from '../playbook/objections/total-brush-off.md';
 import whyAreYouAskingMd from '../playbook/objections/why-are-you-asking.md';
@@ -347,6 +354,7 @@ function parseFollowUp(raw: string): FollowUpSequence {
 const SCRIPT_FILES: Record<string, string> = {
   'cold-call-no-oriented': coldCallMd,
   'cold-call-question-oriented': coldCallQuestionMd,
+  'cold-call-quick-oriented': coldCallQuickMd,
   'demo-tier3-primary': demoTier3Md,
   'demo-tier2-primary': demoTier2Md,
 };
@@ -364,6 +372,12 @@ const OBJECTION_FILES: Record<string, string> = {
   'why-need-website': whyNeedWebsiteMd,
   'why-need-website-direct': whyNeedWebsiteDirectMd,
   'built-without-asking': builtWithoutAskingMd,
+  'quick-im-busy': quickImBusyMd,
+  'quick-too-busy': quickTooBusyMd,
+  'quick-facebook-page': quickFacebookPageMd,
+  'quick-why-website': quickWhyWebsiteMd,
+  'quick-word-of-mouth': quickWordOfMouthMd,
+  'quick-pushback': quickPushbackMd,
   'angry-disarm': angryDisarmMd,
   'total-brush-off': totalBrushOffMd,
   'why-are-you-asking': whyAreYouAskingMd,
