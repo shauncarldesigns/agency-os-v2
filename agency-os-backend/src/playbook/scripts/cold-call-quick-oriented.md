@@ -44,7 +44,7 @@ stages:
 
 ## Stage: reputation-gap
 
-"Well, Beyond those reviews though, I didn't really find much that shows what you actually do or why someone would choose you over a competitor."
+"Well, Beyond those reviews though, I didn't really find much online that shows what you actually do or why someone would choose you over a competitor."
 
 > Keep this about missing proof, not accusation. Do not say they look bad or that their current presence is broken.
 
@@ -62,7 +62,8 @@ stages:
 
 ## Stage: rebuttal-reveal
 
-"The reason I asked is that I actually spent a little time looking you guys up and put together a mock-up based on your reviews and the work you do. Nothing live, nothing for sale today. I was mostly curious whether you felt it represented your business better than what people see now."
+"The reason I asked is that 
+I actually spent a little time looking you guys up and I noticed your reviews paint a really strong picture of your business, but I wasn't seeing the same thing online, so I put together a quick website mock-up to bridge that gap -- just a visual, nothings live, no cost to you"
 
 > Optional reveal after the Website calls objection. This is a recovery reveal for skeptical calls, not the default reveal. After this, jump back into Demo ask.
 
