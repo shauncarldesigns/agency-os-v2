@@ -26,6 +26,7 @@ import quickImBusyMd from '../playbook/objections/quick-im-busy.md';
 import quickTooBusyMd from '../playbook/objections/quick-too-busy.md';
 import quickFacebookPageMd from '../playbook/objections/quick-facebook-page.md';
 import quickWhyWebsiteMd from '../playbook/objections/quick-why-website.md';
+import quickCostMd from '../playbook/objections/quick-cost.md';
 import quickWordOfMouthMd from '../playbook/objections/quick-word-of-mouth.md';
 import quickPushbackMd from '../playbook/objections/quick-pushback.md';
 import angryDisarmMd from '../playbook/objections/angry-disarm.md';
@@ -376,6 +377,7 @@ const OBJECTION_FILES: Record<string, string> = {
   'quick-too-busy': quickTooBusyMd,
   'quick-facebook-page': quickFacebookPageMd,
   'quick-why-website': quickWhyWebsiteMd,
+  'quick-cost': quickCostMd,
   'quick-word-of-mouth': quickWordOfMouthMd,
   'quick-pushback': quickPushbackMd,
   'angry-disarm': angryDisarmMd,

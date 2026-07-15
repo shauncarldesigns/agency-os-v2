@@ -41,6 +41,7 @@ const QUICK_ORIENTED_OBJECTION_IDS = [
   'quick-too-busy',
   'quick-facebook-page',
   'quick-why-website',
+  'quick-cost',
   'quick-word-of-mouth',
   'quick-pushback',
 ] as const;
