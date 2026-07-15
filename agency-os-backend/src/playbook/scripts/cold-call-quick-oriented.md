@@ -21,6 +21,10 @@ stages:
     label: DEMO ASK
     short_label: Demo ask
     reveal_solution: true
+  - id: close
+    label: CLOSE
+    short_label: Close
+    reveal_solution: true
   - id: confirm
     label: CONFIRM
     short_label: Confirm
@@ -55,7 +59,13 @@ stages:
 
 "Would it be unreasonable to spend ten minutes on a screenshare taking a look?"
 
-> Stop after the ask. If they say "you built me a website?" use the Pushback chip. If they ask why they need a website, use that chip and come back to the ten-minute look.
+> Stop after the ask. If they need one more nudge, advance to Close. If they say "you built me a website?" use the Pushback chip. If they ask why they need a website, use that chip and come back to the ten-minute look.
+
+## Stage: close
+
+"Here's how I see it, man. Worst case scenario, you spend ten minutes, you don't like it, you tell me to go pound sand. No cost, no obligation. Best case, you actually like it, and we can move forward. What's a good time tonight to take a look?"
+
+> Use when the first demo ask gets hesitation but not a hard no. It lowers the risk, keeps the tone direct, and turns the next step into a same-day scheduling question.
 
 ## Stage: confirm
 

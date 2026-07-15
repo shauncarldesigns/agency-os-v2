@@ -14,6 +14,7 @@ PR. All D1 migrations applied to remote.
 ## What shipped this session (PR #121)
 
 - **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach.** Cockpit approach selector now has a third option: No-oriented / Question-oriented / Quick-oriented. Quick-oriented is a fast reputation-gap script based on: strong reviews → not much beyond reviews showing the work/difference → reputation-match question → demo-site reveal → ten-minute ask. Its objection tray is intentionally narrow with seven quick-mode chips: I'm busy, Too busy, Already have Facebook, Why do I need a website, Cost, Word of mouth, and Pushback. Backend Worker bundles the new script + seven markdown objections via explicit imports in `services/playbook.ts`; dashboard manually deployed after merge.
+- **[#123](https://github.com/shauncarldesigns/agency-os-v2/pull/123) Quick-oriented close stage.** Adds a `Close` step between Demo ask and Confirm for the "worst case, tell me to go pound sand" same-day close before collecting the calendar-invite email.
 
 ## Prior session snapshot (PRs #74–#108)
 
