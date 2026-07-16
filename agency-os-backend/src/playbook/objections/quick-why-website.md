@@ -6,6 +6,6 @@ type: simple
 order: 24
 ---
 
-"Totally fair. If word of mouth is keeping you busy, that's awesome. That's great business. All I'm saying is, when folks do hear your name and Google you, they don't just find a blank page. The demo is there for you to see what it could look like. No pressure."
+"Honestly, you may not need one. I just thought it was interesting that you've built this great reputation, but online, there's not much there to back it up when new customers check you out."
 
 > Use when they ask why a website matters at all. Keep it low-pressure and tied to the referral/search moment.
