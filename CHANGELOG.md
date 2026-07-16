@@ -15,6 +15,7 @@ when a manual deploy was needed.
 - **[#122](https://github.com/shauncarldesigns/agency-os-v2/pull/122) Quick-oriented Cost objection.** Adds a `Cost` chip to the Quick-oriented objection tray with a grounded under-a-grand option range, then redirects back to the ten-minute demo before detailed pricing. Backend + dashboard.
 - **[#123](https://github.com/shauncarldesigns/agency-os-v2/pull/123) Quick-oriented Close stage.** Adds a `Close` stage between Demo ask and Confirm with the "worst case, tell me to go pound sand" same-day scheduling close. Backend playbook content.
 - **[#124](https://github.com/shauncarldesigns/agency-os-v2/pull/124) Quick-oriented rebuttal reveal path.** Adds a right-side `Website calls` chip for "I get these calls all the time" and a left-side optional `Reveal - Rebuttal` stage between Demo reveal and Demo ask, keeping the skeptical-call reveal out of the objection tray. Backend + dashboard.
+- **[#125](https://github.com/shauncarldesigns/agency-os-v2/pull/125) Cockpit notes beside active rebuttal.** Moves Notes into a side-by-side row with the active rebuttal on desktop, keeps Notes full-width when no rebuttal is open, and stacks cleanly on smaller screens. Dashboard.
 
 ### Question-oriented call approach — Phase 1 (PR #112)
 
