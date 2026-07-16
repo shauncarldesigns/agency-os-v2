@@ -1005,41 +1005,41 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
             />
           </div>
 
-          {activeObj && objection && (
-            <ActiveObjectionPanel
-              objection={objection}
-              activePath={activeObj.pathId}
-              activeVariantLabel={activeObj.variantLabel}
-              variantOverride={activeObj.variantOverride}
-              generated={generated && generated.forObjectionId === activeObj.objectionId ? generated : null}
-              generating={generating}
-              marking={marking}
-              ctx={leadCtx}
-              hideGenerate={approach === 'question_oriented' && !solutionRevealed}
-              onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
-              onVariantTap={(label) => handleVariantTap(activeObj.objectionId, label)}
-              onHandled={handleHandled}
-              onDidntLand={handleDidntLand}
-              onGenerate={handleGenerate}
-              onUseVariant={handleUseVariant}
-              onBack={() => { setActiveObj(null); setGenerated(null); }}
+          <div className={`cockpit-rebuttal-notes-grid${activeObj && objection ? '' : ' no-rebuttal'}`}>
+            {activeObj && objection && (
+              <ActiveObjectionPanel
+                objection={objection}
+                activePath={activeObj.pathId}
+                activeVariantLabel={activeObj.variantLabel}
+                variantOverride={activeObj.variantOverride}
+                generated={generated && generated.forObjectionId === activeObj.objectionId ? generated : null}
+                generating={generating}
+                marking={marking}
+                ctx={leadCtx}
+                hideGenerate={approach === 'question_oriented' && !solutionRevealed}
+                onPathTap={(p) => handlePathTap(objection as BranchingObjection, p)}
+                onVariantTap={(label) => handleVariantTap(activeObj.objectionId, label)}
+                onHandled={handleHandled}
+                onDidntLand={handleDidntLand}
+                onGenerate={handleGenerate}
+                onUseVariant={handleUseVariant}
+                onBack={() => { setActiveObj(null); setGenerated(null); }}
+              />
+            )}
+            <NotesPanel
+              notes={notes}
+              onChange={setNotes}
             />
-          )}
+          </div>
         </>
       )}
 
-      <div className="cockpit-notes-panel">
-        <div className="cockpit-panel-header">
-          <span className="cockpit-panel-title orange">📝 NOTES</span>
-          <span className="cockpit-panel-meta">auto-saves · objection chips auto-tag in</span>
-        </div>
-        <textarea
-          className="cockpit-notes-textarea"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Start typing or tap an objection to log it..."
+      {bookingMode && (
+        <NotesPanel
+          notes={notes}
+          onChange={setNotes}
         />
-      </div>
+      )}
 
       {callbackOpen && (
         <div className="cockpit-callback-row">
@@ -1075,6 +1075,23 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
 // ============================================================================
 // SCRIPT PANEL
 // ============================================================================
+
+function NotesPanel({ notes, onChange }: { notes: string; onChange: (value: string) => void }) {
+  return (
+    <div className="cockpit-notes-panel">
+      <div className="cockpit-panel-header">
+        <span className="cockpit-panel-title orange">📝 NOTES</span>
+        <span className="cockpit-panel-meta">auto-saves · objection chips auto-tag in</span>
+      </div>
+      <textarea
+        className="cockpit-notes-textarea"
+        value={notes}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Start typing or tap an objection to log it..."
+      />
+    </div>
+  );
+}
 
 function ScriptPanel({
   script, linearStages, currentStage, linearProgressIdx, nextStage, prevStage, ctx, onBack, onAdvance, onJumpToStage,

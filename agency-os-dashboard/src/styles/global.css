@@ -919,6 +919,13 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-btn-use { background: #afa9ec; color: #1a1a2a; border: none; border-radius: 4px; padding: 4px 12px; font-size: 0.66rem; font-weight: 600; font-family: inherit; cursor: pointer; }
 .cockpit-btn-use:disabled { opacity: 0.6; cursor: wait; }
 
+.cockpit-rebuttal-notes-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 10px; align-items: stretch; margin-bottom: 10px; }
+.cockpit-rebuttal-notes-grid.no-rebuttal { display: block; }
+.cockpit-rebuttal-notes-grid .cockpit-active-obj,
+.cockpit-rebuttal-notes-grid .cockpit-notes-panel { margin-bottom: 0; }
+.cockpit-rebuttal-notes-grid:not(.no-rebuttal) .cockpit-notes-panel { display: flex; flex-direction: column; min-height: 300px; }
+.cockpit-rebuttal-notes-grid:not(.no-rebuttal) .cockpit-notes-textarea { flex: 1; min-height: 220px; }
+
 .cockpit-notes-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 10px 14px; margin-bottom: 10px; }
 .cockpit-notes-textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; min-height: 80px; font-family: 'DM Mono', monospace; font-size: 0.76rem; color: var(--text); line-height: 1.6; resize: vertical; outline: none; }
 .cockpit-notes-textarea:focus { border-color: var(--accent); }
@@ -949,6 +956,10 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 
 @media (max-width: 960px) {
   .cockpit-grid { grid-template-columns: 1fr; }
+  .cockpit-rebuttal-notes-grid { display: block; }
+  .cockpit-rebuttal-notes-grid .cockpit-active-obj { margin-bottom: 10px; }
+  .cockpit-rebuttal-notes-grid:not(.no-rebuttal) .cockpit-notes-panel { min-height: 0; }
+  .cockpit-rebuttal-notes-grid:not(.no-rebuttal) .cockpit-notes-textarea { min-height: 120px; }
   .cockpit-leadhead-grid { grid-template-columns: 1fr; gap: 10px; }
   .cockpit-scores { justify-content: flex-start; flex-wrap: wrap; }
 }
