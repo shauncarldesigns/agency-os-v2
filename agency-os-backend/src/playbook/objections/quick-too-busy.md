@@ -6,6 +6,6 @@ type: simple
 order: 21
 ---
 
-"That's a good problem to have. I'm not saying you need more leads right this second. I'm saying when someone already hears your name and checks you out, what they find should match the reputation you've built. The demo is just a quick way to see what that could look like."
+"That's a good problem to have. Look, I'm not saying you need more leads today, but when things do slow down — and they always do — this is the kind of thing you want already running. Not something you're scrambling to set up when the phone stops ringing."
 
 > Use when the business says they already have too much work. Agree with the good news, then reframe the site as reputation support, not lead chasing.
