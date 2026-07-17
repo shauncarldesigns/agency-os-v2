@@ -75,7 +75,7 @@ I actually spent a little time looking you guys up and I noticed your reviews pa
 
 ## Stage: close
 
-"Here's how I see it, man. Worst case scenario, you spend ten minutes, you don't like it, you tell me to go pound sand. No cost, no obligation. Best case, you actually like it, and we can move forward. What's a good time tonight to take a look?"
+"Here's how I see it, man. Worst case scenario, you spend ten minutes, you don't like it, you tell me to go pound sand. No cost, no obligation. Best case, you actually like it, we move forward, and replace the cold calls with customer calls. What's a good time to take a look?"
 
 > Use when the first demo ask gets hesitation but not a hard no. It lowers the risk, keeps the tone direct, and turns the next step into a same-day scheduling question.
 
