@@ -63,7 +63,7 @@ I actually spent a little time looking you guys up and I noticed your reviews pa
 
 ## Stage: demo-reveal
 
-"And that's actually why I'm calling. I put a quick demo site together for you - nothing live, no cost. Just a visual, so you can see what it might look like if your online presence matched the reputation your reviews already show."
+"And that's actually why I'm calling. I put together a sample website for you - nothing live, no cost. Just a visual, so you can see what it might look like if your online presence matched the reputation your reviews already show."
 
 > This is the first stage where website-specific language is allowed. Be precise: mockup / demo / visual. Do not imply anything is live, authorized, or guaranteed to create leads.
 
