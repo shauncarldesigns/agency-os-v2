@@ -15,9 +15,6 @@ stages:
     short_label: Reveal - Rebuttal
     branch: true
     reveal_solution: true
-  - id: reputation-check
-    label: REPUTATION CHECK
-    short_label: Check
   - id: demo-reveal
     label: DEMO REVEAL
     short_label: Reveal
@@ -40,9 +37,11 @@ stages:
 
 ## Stage: reputation-gap
 
-"Well, Beyond those reviews though, I didn't really find much online that shows what you actually do or why someone would choose you over a competitor."
+"Well, beyond those reviews though, I didn't really find much online that shows what you actually do or why someone would choose you over a competitor."
 
-> Keep this about missing proof, not accusation. Do not say they look bad or that their current presence is broken.
+"Do you feel like when people Google your business, it matches the reputation you've built?"
+
+> Keep this about missing proof, not accusation. Do not say they look bad or that their current presence is broken. Let them answer. If they shrug, say "That's fair" and reveal. If they challenge the premise, use the relevant objection chip.
 
 ## Stage: rebuttal-reveal
 
@@ -52,12 +51,6 @@ I actually spent a little time looking you guys up and I noticed your reviews pa
 "Would it be unreasonable to spend ten minutes on a screenshare taking a look?"
 
 > Optional reveal after the Website calls objection. Stop after the ask. If they need one more nudge, advance to Close.
-
-## Stage: reputation-check
-
-"Do you feel like when people Google your business, it matches the reputation you've built?"
-
-> Let them answer. If they shrug, say "That's fair" and reveal. If they challenge the premise, use the relevant objection chip.
 
 ## Stage: demo-reveal
 
