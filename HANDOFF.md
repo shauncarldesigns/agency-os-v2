@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-15. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-17. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -11,7 +11,7 @@ All PRs below are **merged to `main`**. The backend Worker auto-deployed via
 CI on each merge. The dashboard was manually deployed after each UI-touching
 PR. All D1 migrations applied to remote.
 
-## What shipped this session (PR #121)
+## What shipped this session (PRs #121-#128)
 
 - **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach.** Cockpit approach selector now has a third option: No-oriented / Question-oriented / Quick-oriented. Quick-oriented is a fast reputation-gap script based on: strong reviews → not much beyond reviews showing the work/difference → reputation-match question → demo-site reveal → ten-minute ask. Its objection tray is intentionally narrow with eight quick-mode chips: I'm busy, Too busy, Website calls, Already have Facebook, Why do I need a website, Cost, Word of mouth, and Pushback. Backend Worker bundles the new script + eight markdown objections via explicit imports in `services/playbook.ts`; dashboard manually deployed after merge.
 - **[#123](https://github.com/shauncarldesigns/agency-os-v2/pull/123) Quick-oriented close stage.** Adds a `Close` step between Demo ask and Confirm for the "worst case, tell me to go pound sand" same-day close before collecting the calendar-invite email.
@@ -19,6 +19,7 @@ PR. All D1 migrations applied to remote.
 - **[#125](https://github.com/shauncarldesigns/agency-os-v2/pull/125) Cockpit notes layout.** When a rebuttal is active, Notes now sits beside the rebuttal on desktop instead of below as a long full-width box; without a rebuttal, Notes remains full-width. Dashboard manually deployed after merge.
 - **[#126](https://github.com/shauncarldesigns/agency-os-v2/pull/126) Quick-oriented chip order.** Moves the optional left-side `Reveal - Rebuttal` chip earlier so the sequence is Gap → Reveal - Rebuttal → Check.
 - **[#127](https://github.com/shauncarldesigns/agency-os-v2/pull/127) Quick-oriented Demo ask removal.** Removes the separate Demo ask chip; the Quick-oriented left-side flow now goes from Reveal / Reveal - Rebuttal directly to Close.
+- **[#128](https://github.com/shauncarldesigns/agency-os-v2/pull/128) Quick-oriented Gap + Check consolidation.** Folds the reputation-match question into the Gap chip and removes the separate Check chip so the active sequence is Opener → Gap → Reveal - Rebuttal → Reveal → Close → Confirm.
 
 ## Prior session snapshot (PRs #74–#108)
 
