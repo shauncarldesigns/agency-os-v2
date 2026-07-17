@@ -18,6 +18,7 @@ when a manual deploy was needed.
 - **[#125](https://github.com/shauncarldesigns/agency-os-v2/pull/125) Cockpit notes beside active rebuttal.** Moves Notes into a side-by-side row with the active rebuttal on desktop, keeps Notes full-width when no rebuttal is open, and stacks cleanly on smaller screens. Dashboard.
 - **[#126](https://github.com/shauncarldesigns/agency-os-v2/pull/126) Move Quick-oriented Reveal - Rebuttal earlier.** Reorders the left-side Quick-oriented chip row so `Reveal - Rebuttal` sits between Gap and Check. Backend playbook content.
 - **[#127](https://github.com/shauncarldesigns/agency-os-v2/pull/127) Remove Quick-oriented Demo ask chip.** Drops the separate Demo ask stage from the Quick-oriented left-side flow so Reveal and Reveal - Rebuttal advance directly to Close. Backend playbook content.
+- **[#128](https://github.com/shauncarldesigns/agency-os-v2/pull/128) Combine Quick-oriented Gap and Check chips.** Folds the reputation-match question into the Gap card and removes the separate Check chip so the quick flow moves straight from combined Gap to Reveal - Rebuttal / Reveal. Backend playbook content.
 
 ### Question-oriented call approach — Phase 1 (PR #112)
 
