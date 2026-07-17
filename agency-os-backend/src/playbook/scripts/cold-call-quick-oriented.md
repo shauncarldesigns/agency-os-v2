@@ -22,10 +22,6 @@ stages:
     label: DEMO REVEAL
     short_label: Reveal
     reveal_solution: true
-  - id: demo-ask
-    label: DEMO ASK
-    short_label: Demo ask
-    reveal_solution: true
   - id: close
     label: CLOSE
     short_label: Close
@@ -50,12 +46,12 @@ stages:
 
 ## Stage: rebuttal-reveal
 
-"The reason I asked is that 
+"The reason I asked is that
 I actually spent a little time looking you guys up and I noticed your reviews paint a really strong picture of your business, but I wasn't seeing the same thing online, so I put together a quick website mock-up to bridge that gap -- just a visual, nothings live, no cost to you"
 
 "Would it be unreasonable to spend ten minutes on a screenshare taking a look?"
 
-> Stop after the ask. If they need one more nudge, advance to Close. If they say "you built me a website?" use the Pushback chip. If they ask why they need a website, use that chip and come back to the ten-minute look.
+> Optional reveal after the Website calls objection. Stop after the ask. If they need one more nudge, advance to Close.
 
 ## Stage: reputation-check
 
@@ -75,7 +71,7 @@ I actually spent a little time looking you guys up and I noticed your reviews pa
 
 "Here's how I see it, man. Worst case scenario, you spend ten minutes, you don't like it, you tell me to go pound sand. No cost, no obligation. Best case, you actually like it, we move forward, and replace the cold calls with customer calls. What's a good time to take a look?"
 
-> Use when the first demo ask gets hesitation but not a hard no. It lowers the risk, keeps the tone direct, and turns the next step into a same-day scheduling question.
+> Use after either reveal when they need one more nudge but not a hard stop. It lowers the risk, keeps the tone direct, and turns the next step into a same-day scheduling question.
 
 ## Stage: confirm
 
