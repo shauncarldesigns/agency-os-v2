@@ -53,7 +53,9 @@ stages:
 "The reason I asked is that 
 I actually spent a little time looking you guys up and I noticed your reviews paint a really strong picture of your business, but I wasn't seeing the same thing online, so I put together a quick website mock-up to bridge that gap -- just a visual, nothings live, no cost to you"
 
-> Optional reveal after the Website calls objection. This is a recovery reveal for skeptical calls, not the default reveal. After this, jump back into Demo ask.
+"Would it be unreasonable to spend ten minutes on a screenshare taking a look?"
+
+> Stop after the ask. If they need one more nudge, advance to Close. If they say "you built me a website?" use the Pushback chip. If they ask why they need a website, use that chip and come back to the ten-minute look.
 
 ## Stage: reputation-check
 
@@ -64,10 +66,6 @@ I actually spent a little time looking you guys up and I noticed your reviews pa
 ## Stage: demo-reveal
 
 "And that's actually why I'm calling. I put together a sample website for you - nothing live, no cost. Just a visual, so you can see what it might look like if your online presence matched the reputation your reviews already show."
-
-> This is the first stage where website-specific language is allowed. Be precise: mockup / demo / visual. Do not imply anything is live, authorized, or guaranteed to create leads.
-
-## Stage: demo-ask
 
 "Would it be unreasonable to spend ten minutes on a screenshare taking a look?"
 
