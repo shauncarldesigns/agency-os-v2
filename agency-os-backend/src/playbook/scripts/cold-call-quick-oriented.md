@@ -10,17 +10,17 @@ stages:
   - id: reputation-gap
     label: REPUTATION GAP
     short_label: Gap
+  - id: rebuttal-reveal
+    label: REVEAL - REBUTTAL
+    short_label: Reveal - Rebuttal
+    branch: true
+    reveal_solution: true
   - id: reputation-check
     label: REPUTATION CHECK
     short_label: Check
   - id: demo-reveal
     label: DEMO REVEAL
     short_label: Reveal
-    reveal_solution: true
-  - id: rebuttal-reveal
-    label: REVEAL - REBUTTAL
-    short_label: Reveal - Rebuttal
-    branch: true
     reveal_solution: true
   - id: demo-ask
     label: DEMO ASK
@@ -48,6 +48,13 @@ stages:
 
 > Keep this about missing proof, not accusation. Do not say they look bad or that their current presence is broken.
 
+## Stage: rebuttal-reveal
+
+"The reason I asked is that 
+I actually spent a little time looking you guys up and I noticed your reviews paint a really strong picture of your business, but I wasn't seeing the same thing online, so I put together a quick website mock-up to bridge that gap -- just a visual, nothings live, no cost to you"
+
+> Optional reveal after the Website calls objection. This is a recovery reveal for skeptical calls, not the default reveal. After this, jump back into Demo ask.
+
 ## Stage: reputation-check
 
 "Do you feel like when people Google your business, it matches the reputation you've built?"
@@ -59,13 +66,6 @@ stages:
 "And that's actually why I'm calling. I put a quick demo site together for you - nothing live, no cost. Just a visual, so you can see what it might look like if your online presence matched the reputation your reviews already show."
 
 > This is the first stage where website-specific language is allowed. Be precise: mockup / demo / visual. Do not imply anything is live, authorized, or guaranteed to create leads.
-
-## Stage: rebuttal-reveal
-
-"The reason I asked is that 
-I actually spent a little time looking you guys up and I noticed your reviews paint a really strong picture of your business, but I wasn't seeing the same thing online, so I put together a quick website mock-up to bridge that gap -- just a visual, nothings live, no cost to you"
-
-> Optional reveal after the Website calls objection. This is a recovery reveal for skeptical calls, not the default reveal. After this, jump back into Demo ask.
 
 ## Stage: demo-ask
 
