@@ -18,6 +18,7 @@ PR. All D1 migrations applied to remote.
 - **[#124](https://github.com/shauncarldesigns/agency-os-v2/pull/124) Quick-oriented rebuttal reveal.** Adds the right-side `Website calls` bridge chip and a left-side optional `Reveal - Rebuttal` branch between Demo reveal and Demo ask for skeptical calls where the normal reveal would feel too pitchy.
 - **[#125](https://github.com/shauncarldesigns/agency-os-v2/pull/125) Cockpit notes layout.** When a rebuttal is active, Notes now sits beside the rebuttal on desktop instead of below as a long full-width box; without a rebuttal, Notes remains full-width. Dashboard manually deployed after merge.
 - **[#126](https://github.com/shauncarldesigns/agency-os-v2/pull/126) Quick-oriented chip order.** Moves the optional left-side `Reveal - Rebuttal` chip earlier so the sequence is Gap → Reveal - Rebuttal → Check.
+- **[#127](https://github.com/shauncarldesigns/agency-os-v2/pull/127) Quick-oriented Demo ask removal.** Removes the separate Demo ask chip; the Quick-oriented left-side flow now goes from Reveal / Reveal - Rebuttal directly to Close.
 
 ## Prior session snapshot (PRs #74–#108)
 
