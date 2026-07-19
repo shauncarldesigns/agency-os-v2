@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — suggested sections (PR #136)
+
+- **[#136](https://github.com/shauncarldesigns/agency-os-v2/pull/136) Pipeline brief gains a SUGGESTED SECTIONS block.** The Automated Pipeline's landingsite brief now includes a suggested page layout — Hero, Services, About, Reviews, Service area with map, Contact form, FAQs — explicitly framed as guidance landingsite may adapt, not a mandate. Each section gets one line tailored from the lead's enrichment (Reviews cites the actual rating/count, Service area anchors on the business's city, FAQs frame topics without inventing answers). Backend.
+
 ### Sidebar shell + light theme (PR #134)
 
 - **[#134](https://github.com/shauncarldesigns/agency-os-v2/pull/134) Phase 3 — sidebar shell + site-wide light theme.** Dark mode is gone. New fixed sidebar layout (AppShell, per the design mockup) with grouped nav, live count badges, mobile drawer, and per-page top bar; old dark Header/Nav deleted. The entire app rethemes to the light slate/blue-indigo palette via a token flip in `global.css` — every legacy panel keeps its functionality and goes light at once (full Tailwind migration continues in follow-ups). Two new pages: **Call Sessions** (week-paginated past/present/upcoming session browser; Dashboard stays today-focused) and **Playbook** (read-only Scripts / Objections / Follow-ups browser + objection Analytics). ExecutionView now renders inside the shell with the sidebar visible instead of taking over the screen. Prospect renamed Lead Finder. Dashboard.
