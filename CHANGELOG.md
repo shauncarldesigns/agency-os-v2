@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Sidebar shell + light theme (PR #134)
+
+- **[#134](https://github.com/shauncarldesigns/agency-os-v2/pull/134) Phase 3 — sidebar shell + site-wide light theme.** Dark mode is gone. New fixed sidebar layout (AppShell, per the design mockup) with grouped nav, live count badges, mobile drawer, and per-page top bar; old dark Header/Nav deleted. The entire app rethemes to the light slate/blue-indigo palette via a token flip in `global.css` — every legacy panel keeps its functionality and goes light at once (full Tailwind migration continues in follow-ups). Two new pages: **Call Sessions** (week-paginated past/present/upcoming session browser; Dashboard stays today-focused) and **Playbook** (read-only Scripts / Objections / Follow-ups browser + objection Analytics). ExecutionView now renders inside the shell with the sidebar visible instead of taking over the screen. Prospect renamed Lead Finder. Dashboard.
+
 ### Automated Pipeline — styling cleanup (PR #132)
 
 - **[#132](https://github.com/shauncarldesigns/agency-os-v2/pull/132) Automated Pipeline styling — 3-col grid + drop button borders.** Lays cards out three-across on desktop (`sm:grid-cols-2 lg:grid-cols-3`, `max-w-6xl` container) instead of a single centered column. Secondary buttons across the panel — filter pills, composer Copy buttons, BriefModal Copy + Regenerate, Undo pill, retry buttons — swap the outline-white style for a soft `bg-slate-100` fill so the queue reads cleaner without hard hairline edges. Dashboard.

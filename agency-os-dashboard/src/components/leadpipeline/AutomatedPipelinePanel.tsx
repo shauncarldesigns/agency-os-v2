@@ -1192,15 +1192,9 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
   );
 
   return (
-    <div className="pipeline-scope min-h-screen bg-slate-50">
+    <div className="min-h-full bg-slate-50">
+      {/* Page title/subtitle live in the AppShell top bar since Phase 3. */}
       <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-5">
-          <h1 className="text-xl font-bold text-slate-900">Automated Pipeline</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Text + site outreach — work your way down the queue
-          </p>
-        </div>
-
         <div className="relative mb-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input

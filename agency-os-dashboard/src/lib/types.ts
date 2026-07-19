@@ -321,7 +321,15 @@ export interface ReportSummary {
   keywordWins: KeywordWin[];
 }
 
-export type Tab = 'dashboard' | 'prospect' | 'pipeline' | 'automated-pipeline' | 'sites' | 'reports';
+export type Tab =
+  | 'dashboard'
+  | 'call-sessions'
+  | 'prospect'
+  | 'pipeline'
+  | 'automated-pipeline'
+  | 'sites'
+  | 'playbook'
+  | 'reports';
 
 export type ToastType = 'default' | 'success' | 'error';
 export type ShowToast = (message: string, type?: ToastType) => void;
