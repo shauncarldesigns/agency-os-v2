@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — verbatim reviews appended (PR #139)
+
+- **[#139](https://github.com/shauncarldesigns/agency-os-v2/pull/139) Pipeline brief now carries the full mined review set verbatim.** After Claude authors the brief, the Worker appends a `CUSTOMER REVIEWS (VERBATIM)` block built straight from `leads.google_reviews` (Google's 5 + Outscraper's backfill up to 50) — numbered, with rating, exact unedited text, author, and recency; rating-only reviews skipped. Deliberately not routed through Claude so landingsite gets exact content with zero paraphrase risk. The prompt now instructs the authored sections to point the builder at the appended block instead of quoting piecemeal. Regenerate a lead's brief to pick it up. Backend.
+
 ### Brief modal — copyable business name (PR #138)
 
 - **[#138](https://github.com/shauncarldesigns/agency-os-v2/pull/138) Copy button on the Site brief modal's business name.** landingsite asks for the business name in a field separate from the brief, so the modal header's subtitle now has a small copy icon next to the name — one click copies it, flips to a checkmark briefly. Dashboard.
