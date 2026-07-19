@@ -20,6 +20,8 @@ import { demosRouter } from './routes/demos';
 import { dashboardRouter } from './routes/dashboard';
 import { playbookRouter } from './routes/playbook';
 import { recordingsRouter } from './routes/recordings';
+import { pipelineRouter } from './routes/pipeline';
+import { redirectRouter } from './routes/redirect';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -31,6 +33,11 @@ app.use('*', cors({
 
 app.get('/', c => c.json({ name: 'agency-os-v2-api', version: '2.0.0', status: 'ok' }));
 app.get('/health', c => c.json({ status: 'ok', ts: new Date().toISOString() }));
+
+// Public click-tracker for Automated Pipeline text links (/r/:lead_id).
+// MUST mount before the /api/* auth middleware so recipient browsers can
+// resolve the redirect without an API key.
+app.route('/', redirectRouter);
 
 app.use('/api/*', authMiddleware());
 
@@ -61,6 +68,8 @@ app.route('/api/dashboard', dashboardRouter);
 app.route('/api/playbook', playbookRouter);
 // Call recordings — multipart upload → R2, returns public URL.
 app.route('/api/recordings', recordingsRouter);
+// Automated Pipeline — text + site outreach queue.
+app.route('/api/pipeline', pipelineRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {

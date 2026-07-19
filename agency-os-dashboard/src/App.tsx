@@ -97,7 +97,7 @@ export default function App() {
         // clip the full-bleed light-mode design. The panel provides its own
         // container (`.pipeline-scope`) with local reset. Phase 3 folds this
         // into the light-mode sidebar shell.
-        <AutomatedPipelinePanel />
+        <AutomatedPipelinePanel showToast={showToast} />
       ) : (
         <main className="main">
           {activeTab === 'dashboard' && (

@@ -52,8 +52,39 @@ export interface Lead {
   last_called_at: string | null;
   demo_booked_at: string | null;
   demo_scheduled_for: string | null;
+  // Automated Pipeline — text + site outreach flow (added 2026-07-19).
+  // Orthogonal to `status` — a lead can be 'contacted' in the cold-call
+  // flow AND 'ready_to_send' in the automated flow at the same time.
+  pipeline_status: 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'engaged' | 'booked' | 'archived';
+  site_url: string | null;                     // UTM-tagged; source of truth for texting
+  site_url_raw: string | null;                 // as-pasted, pre-UTM
+  pipeline_brief: string | null;               // landingsite brief for this lead's site
+  campaign_slug: string | null;                // slugified name used in the UTM campaign
+  clarity_tag: string | null;                  // Clarity custom-tag id
+  pipeline_sessions: number;                   // engagement counter (click-tracker + Clarity)
+  pipeline_last_action_at: string | null;      // ISO timestamp — display string derived client-side
   created_at: string;
   updated_at: string;
+}
+
+// One row per pipeline action. Backs the `/undo` endpoint and the lead
+// detail modal's activity trail.
+export interface LeadActivity {
+  id: number;
+  lead_id: number;
+  action:
+    | 'brief_generated'
+    | 'url_saved'
+    | 'intro_sent'
+    | 'followed_up'
+    | 'called'
+    | 'status_changed'
+    | 'click_tracked'
+    | 'undo';
+  from_status: string | null;
+  to_status: string | null;
+  meta: string | null;                          // JSON blob
+  created_at: string;
 }
 
 export interface CallEntry {
