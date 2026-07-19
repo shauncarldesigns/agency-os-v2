@@ -272,21 +272,54 @@ function EngagementDot({ sessions }: { sessions: number }) {
 interface ModalShellProps {
   title: string;
   subtitle?: string;
+  /** When set, a small copy button renders next to the subtitle that copies
+   *  this string — used by the brief modal so the business name can be
+   *  pasted into landingsite's separate name field without hand-selecting. */
+  subtitleCopy?: string;
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
 
-function ModalShell({ title, subtitle, onClose, children, footer }: ModalShellProps) {
-  // z-[200] beats the dark app's sticky header/nav (z:100 from global.css).
-  // Phase 3 removes global.css and this can revert to z-50.
+function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }: ModalShellProps) {
+  const [subtitleCopied, setSubtitleCopied] = useState(false);
+
+  const handleSubtitleCopy = async () => {
+    if (!subtitleCopy) return;
+    try {
+      await navigator.clipboard.writeText(subtitleCopy);
+      setSubtitleCopied(true);
+      setTimeout(() => setSubtitleCopied(false), 1500);
+    } catch {
+      setSubtitleCopied(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4">
       <div className="w-full sm:max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+            {subtitle && (
+              <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                {subtitle}
+                {subtitleCopy && (
+                  <button
+                    onClick={handleSubtitleCopy}
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    title="Copy business name"
+                    aria-label="Copy business name"
+                  >
+                    {subtitleCopied ? (
+                      <Check className="h-3 w-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -486,6 +519,7 @@ function BriefModal({
     <ModalShell
       title="Site brief"
       subtitle={lead.name}
+      subtitleCopy={lead.name}
       onClose={onClose}
       footer={
         <div>

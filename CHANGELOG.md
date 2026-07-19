@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Brief modal — copyable business name (PR #138)
+
+- **[#138](https://github.com/shauncarldesigns/agency-os-v2/pull/138) Copy button on the Site brief modal's business name.** landingsite asks for the business name in a field separate from the brief, so the modal header's subtitle now has a small copy icon next to the name — one click copies it, flips to a checkmark briefly. Dashboard.
+
 ### Design-language unification (PR #137)
 
 - **[#137](https://github.com/shauncarldesigns/agency-os-v2/pull/137) Whole app now speaks the Automated Pipeline's Tailwind design language.** The legacy stylesheet's component classes were restyled to match the pipeline page exactly: blue→indigo gradient primary buttons with soft glow, borderless soft-fill secondary/ghost buttons, rounded-2xl cards with `shadow-slate-200`-style soft shadows, blue focus rings on all inputs, white pill toasts, softened modals, radii bumped to the 12/16px scale. Dead top-nav/header classes deleted. Every legacy panel (Dashboard, Cold Call Pipeline, Sites, Reports, Lead Finder, modals) picks the language up with zero JSX changes; per-panel Tailwind-utility conversion continues as cleanup. Dashboard.
