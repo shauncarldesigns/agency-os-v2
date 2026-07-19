@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated Pipeline — on-demand brief generation (PR #131)
+
+- **[#131](https://github.com/shauncarldesigns/agency-os-v2/pull/131) Automated Pipeline — on-demand brief generation.** Fixes the placeholder text in the Copy Brief modal. `POST /api/pipeline/leads/:id/brief` now calls Claude Haiku 4.5 with a new landingsite-ready prompt (`prompts/pipelineBrief.ts`) that grounds every claim in the enrichment data, applies the shared anti-fluff word list, and emits fixed section headers (BUSINESS OVERVIEW / TARGET AUDIENCE / PAGE PURPOSE / WHAT MUST APPEAR / WHAT TO EMPHASIZE / CONSTRAINTS). Result caches on `leads.pipeline_brief` and writes a `brief_generated` activity row; `{ regenerate: true }` forces a fresh gen. BriefModal auto-fires generation on open (spinner + inline retry on error) and gains a Regenerate icon button next to Copy. Backend + dashboard.
+
 ### Automated Pipeline — Phase 2 (PR #130)
 
 - **[#130](https://github.com/shauncarldesigns/agency-os-v2/pull/130) Automated Pipeline — D1, Worker endpoints, click tracker, real data.** Turns the Automated Pipeline into a live view over the existing `leads` table. Migration adds `pipeline_status` + `site_url` + `pipeline_brief` + related columns to `leads` and a `lead_activity` audit table. New `/api/pipeline/*` endpoints handle list / detail / site-url save (UTM-tag + status flip) / outreach actions / undo. Public `GET /r/:lead_id` click tracker bumps `pipeline_sessions`, promotes `sent_no_reply → engaged` on first click, and 302s to the tagged URL — the intro/follow-up composers now text `${API_BASE}/r/{lead.id}` so every recipient click hits Layer 1 tracking. Frontend swaps sample data for the fetch, adds loading / error states, and shows a ~6s Undo pill after each optimistic transition. Backend + dashboard + migration (`2026-07-19-lead-pipeline.sql`, apply after merge).
