@@ -71,6 +71,40 @@ function tagUrl(rawUrl: string, slug: string): string {
   return `${rawUrl}${sep}utm_source=sms&utm_medium=text&utm_campaign=${encodeURIComponent(slug)}`;
 }
 
+// Format the lead's full mined review set (Google Places' 5 + Outscraper's
+// backfill up to 50) as a verbatim block appended AFTER the Claude-generated
+// brief. Deliberately NOT routed through Claude: the operator needs exact
+// review content inside landingsite, and a model would paraphrase, trim, or
+// hit output limits. Reviews without text (rating-only) are skipped.
+function formatVerbatimReviews(googleReviewsJson: string | null): string | null {
+  if (!googleReviewsJson) return null;
+  let reviews: Array<{ author?: string; rating?: number; text?: string; relativeTime?: string }>;
+  try {
+    const parsed = JSON.parse(googleReviewsJson);
+    if (!Array.isArray(parsed)) return null;
+    reviews = parsed;
+  } catch {
+    return null;
+  }
+  const withText = reviews.filter(
+    (r) => typeof r.text === 'string' && r.text.trim().length > 0,
+  );
+  if (withText.length === 0) return null;
+
+  const lines: string[] = [
+    'CUSTOMER REVIEWS (VERBATIM)',
+    `All ${withText.length} mined reviews with text, unedited. Use these exact quotes on the site — pick the strongest, attribute by first name, do not rewrite or invent.`,
+    '',
+  ];
+  withText.forEach((r, i) => {
+    const rating = typeof r.rating === 'number' ? `${r.rating}/5` : '—';
+    const author = r.author?.trim() || 'Anonymous';
+    const when = r.relativeTime ? `, ${r.relativeTime}` : '';
+    lines.push(`${i + 1}. [${rating}] "${r.text!.trim()}" — ${author}${when}`);
+  });
+  return lines.join('\n');
+}
+
 async function writeActivity(
   db: D1Database,
   input: {
@@ -385,6 +419,13 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
     briefText = briefText.trim();
     if (!briefText) {
       return c.json({ error: 'Claude returned an empty brief', code: 'CLAUDE_ERROR' }, 502);
+    }
+
+    // Append the full verbatim review set below the authored brief so
+    // landingsite has the exact review content to build with.
+    const reviewsBlock = formatVerbatimReviews(lead.google_reviews);
+    if (reviewsBlock) {
+      briefText = `${briefText}\n\n${reviewsBlock}`;
     }
 
     await c.env.DB.prepare(

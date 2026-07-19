@@ -135,6 +135,7 @@ Rules:
 - Ground every claim in the enrichment data provided. Never invent services, awards, staff members, or history.
 - If the enrichment is sparse, say so honestly ("Reviews do not name specific services; use category-standard defaults for barbershops.") rather than filling gaps with generic marketing copy.
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
+- A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
 - Keep the whole brief under 450 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
