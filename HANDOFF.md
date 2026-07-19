@@ -1,103 +1,125 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-17. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-19. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
 
 ## State
 
-All PRs below are **merged to `main`**. The backend Worker auto-deployed via
-CI on each merge. The dashboard was manually deployed after each UI-touching
-PR. All D1 migrations applied to remote.
+All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
+on each merge. Dashboard manually deployed after each PR. All D1 migrations
+applied to remote.
 
-## What shipped this session (PRs #121-#128)
+## What shipped this session (PRs #129–#134)
 
-- **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach.** Cockpit approach selector now has a third option: No-oriented / Question-oriented / Quick-oriented. Quick-oriented is a fast reputation-gap script based on: strong reviews → not much beyond reviews showing the work/difference → reputation-match question → demo-site reveal → ten-minute ask. Its objection tray is intentionally narrow with eight quick-mode chips: I'm busy, Too busy, Website calls, Already have Facebook, Why do I need a website, Cost, Word of mouth, and Pushback. Backend Worker bundles the new script + eight markdown objections via explicit imports in `services/playbook.ts`; dashboard manually deployed after merge.
-- **[#123](https://github.com/shauncarldesigns/agency-os-v2/pull/123) Quick-oriented close stage.** Adds a `Close` step between Demo ask and Confirm for the "worst case, tell me to go pound sand" same-day close before collecting the calendar-invite email.
-- **[#124](https://github.com/shauncarldesigns/agency-os-v2/pull/124) Quick-oriented rebuttal reveal.** Adds the right-side `Website calls` bridge chip and a left-side optional `Reveal - Rebuttal` branch between Demo reveal and Demo ask for skeptical calls where the normal reveal would feel too pitchy.
-- **[#125](https://github.com/shauncarldesigns/agency-os-v2/pull/125) Cockpit notes layout.** When a rebuttal is active, Notes now sits beside the rebuttal on desktop instead of below as a long full-width box; without a rebuttal, Notes remains full-width. Dashboard manually deployed after merge.
-- **[#126](https://github.com/shauncarldesigns/agency-os-v2/pull/126) Quick-oriented chip order.** Moves the optional left-side `Reveal - Rebuttal` chip earlier so the sequence is Gap → Reveal - Rebuttal → Check.
-- **[#127](https://github.com/shauncarldesigns/agency-os-v2/pull/127) Quick-oriented Demo ask removal.** Removes the separate Demo ask chip; the Quick-oriented left-side flow now goes from Reveal / Reveal - Rebuttal directly to Close.
-- **[#128](https://github.com/shauncarldesigns/agency-os-v2/pull/128) Quick-oriented Gap + Check consolidation.** Folds the reputation-match question into the Gap chip and removes the separate Check chip so the active sequence is Opener → Gap → Reveal - Rebuttal → Reveal → Close → Confirm.
+Two headline features, built from an external design-spec package
+(`agency-os-v2-pipeline/` — README + build brief + two canonical `.jsx`
+visual specs):
 
-## Prior session snapshot (PRs #74–#108)
+### Automated Pipeline (#129, #130, #131, #132, #133)
 
-Multi-day session covering: full call-recording feature (mic → R2 → linked to
-call_log), Hot Leads priority queue, WeekPlanner dashboard restructure,
-substantial playbook content churn, a bunch of cockpit UX polish, Brief Studio
-inline-editable Client card, and two new practice reference docs under `docs/`.
+New text + site outreach motion, parallel to the cold-call motion. Flow:
+enriched lead with no website → Claude generates landingsite brief →
+operator builds site in landingsite.ai → pastes live URL (auto-UTM-tagged) →
+sends tracked intro text via `sms:` deep link → engagement-aware follow-up →
+close on a call.
 
-### Big features
+- **[#129](https://github.com/shauncarldesigns/agency-os-v2/pull/129)** Page shipped against sample data (SMS deep-link viability testable on-device before backend investment). Introduced Tailwind (then preflight-off + `.pipeline-scope` isolation).
+- **[#130](https://github.com/shauncarldesigns/agency-os-v2/pull/130)** D1 migration (`pipeline_status` + 7 more lead columns, `lead_activity` audit table), `/api/pipeline/*` endpoints with server-enforced status transitions, public `/r/:lead_id` click-tracker (bumps `pipeline_sessions`, auto-promotes `sent_no_reply → engaged`, 302s to tagged URL), frontend wired to real data with optimistic actions + 6s Undo pill.
+- **[#131](https://github.com/shauncarldesigns/agency-os-v2/pull/131)** On-demand brief generation — `POST /leads/:id/brief`, Haiku 4.5, new `prompts/pipelineBrief.ts` (fixed section headers, anti-fluff word list, verbatim-quotes-only). BriefModal auto-generates on open, caches on `leads.pipeline_brief`, Regenerate button.
+- **[#132](https://github.com/shauncarldesigns/agency-os-v2/pull/132)** 3-col desktop card grid + borderless secondary buttons.
+- **[#133](https://github.com/shauncarldesigns/agency-os-v2/pull/133)** Scoped preflight-lite killed the native `<button>` border (preflight was globally off at the time; superseded by #134 turning preflight on).
 
-- **[#77](https://github.com/shauncarldesigns/agency-os-v2/pull/77) Hot Leads.** Operator-curated priority queue separate from auto-composed sessions. Pipeline row checkboxes get a "🔥 Add to hot leads" bulk button; a red-accented "Hot Leads" card sits above the WeekPlanner on the dashboard. Backend loosens active-session lock so a hot session can coexist with one auto session. New sentinel `session_date='hot'` / `kind='hot'` + `sessions.kind` migration.
-- **[#76](https://github.com/shauncarldesigns/agency-os-v2/pull/76) Week Planner.** Replaces the day-of-week-routed sessions grid with a full Mon-Fri view. "Working Now" banner surfaces any active session regardless of date (fixed the stuck-Tuesday-session-on-Wednesday bug). Session cards show per-outcome progress via new `GET /api/sessions/week` aggregates. Drops the calling/prep/review/quiet mode routing.
-- **[#85–#87 · #105 Call recordings.** MediaRecorder → R2 bucket `agency-os-recordings` → public URL persists on `call_log.recording_url`. Cockpit gets a Record button in the utility row (idle / recording / uploading / done states) that replaces the static timer + rebases objection-hit timestamps to record-start. Upload endpoint creates a placeholder call_log row immediately so recordings never orphan; outcome submit merges into it. `/api/leads/:id/recordings` + `/attach` for post-hoc recovery of any R2 objects that fell through. Voicemails-to-redial section on the Priority Strip filters aged VMs.
+### Sidebar shell + site-wide light theme (#134)
 
-### Playbook content (~20 PRs)
+**Dark mode is gone.** New `AppShell` (fixed white sidebar, Main/Work nav
+groups, live badges, mobile drawer, per-page top bar with clients/MRR
+stats). Old dark Header/Nav deleted. Nav: Dashboard · Call Sessions ·
+Cold Call Pipeline · Automated Pipeline · Lead Finder · Clients & Sites ·
+Playbook · Reports.
 
-The cold-call script and objection library evolved heavily across the session as the operator dialed prospects and iterated on wording. Notable milestones:
+Light theme was done via a **token flip in `global.css`** (slate palette,
+white surfaces, blue→indigo accent, system fonts; Bebas Neue/DM Sans/DM Mono
+dropped, Google Fonts link removed) — every legacy panel rethemed at once
+with zero functional change. Tailwind preflight is now ON globally.
 
-- Cold-call script restructure ([#95](https://github.com/shauncarldesigns/agency-os-v2/pull/95)) — dropped `label / mirror / label 2`, split `close` into three angles (Pound Sand / Walk Away With Ideas / Add To What You Built), reordered breadcrumb to put terrible-time + not-interested right after Intro.
-- New stages: `cost` ([#89](https://github.com/shauncarldesigns/agency-os-v2/pull/89)), `pushback` ([#93](https://github.com/shauncarldesigns/agency-os-v2/pull/93)), `busy-redirect` ([#94](https://github.com/shauncarldesigns/agency-os-v2/pull/94)), `narrow-time` ([#97](https://github.com/shauncarldesigns/agency-os-v2/pull/97)). All branches so Advance skips them; operator taps mid-call.
-- Branch stages now render in breadcrumb ([#90](https://github.com/shauncarldesigns/agency-os-v2/pull/90)) — fixed silent hiding of `if-hesitate`, `terrible-time`, `not-interested`, and new branches. Dashed border + italic distinguishes from linear chips.
-- New objections: `angry-disarm` (branching, 3 paths, [#98](https://github.com/shauncarldesigns/agency-os-v2/pull/98)), `total-brush-off` (simple last-resort, [#101](https://github.com/shauncarldesigns/agency-os-v2/pull/101)), `too-busy-simple` (replaced `not-tech-savvy` in Standard, [#104](https://github.com/shauncarldesigns/agency-os-v2/pull/104)).
-- Too-busy branching objection gained `seasonal-slowdown` path ([#91](https://github.com/shauncarldesigns/agency-os-v2/pull/91)) — now 5 paths total.
-- `why-need-website-direct` gained variants ([#79](https://github.com/shauncarldesigns/agency-os-v2/pull/79), [#99](https://github.com/shauncarldesigns/agency-os-v2/pull/99), [#102](https://github.com/shauncarldesigns/agency-os-v2/pull/102)) — now 4 angles: Default, 10pm Googler, Quick Fire (7 scannable bullets), Busy + referrals.
-- Playbook parse errors now surface useful messages ([#88](https://github.com/shauncarldesigns/agency-os-v2/pull/88)) instead of generic 500s. Wiring gotcha: every new markdown file needs an explicit `import` + `OBJECTION_FILES` (or scripts / follow-ups) entry in `services/playbook.ts` — fixed twice this session ([#80](https://github.com/shauncarldesigns/agency-os-v2/pull/80), [#98](https://github.com/shauncarldesigns/agency-os-v2/pull/98), [#101](https://github.com/shauncarldesigns/agency-os-v2/pull/101)).
+Two new pages: **Call Sessions** (week-paginated past/present/upcoming
+browser over `/api/sessions/week`; Dashboard stays today-focused) and
+**Playbook** (read-only Scripts/Objections/Follow-ups browser + objection
+analytics; editing stays in the backend markdown files).
 
-### Cockpit UX polish (many PRs)
-
-- Inline-editable Owner + Email on lead header ([#81–#84](https://github.com/shauncarldesigns/agency-os-v2/pull/81)) with prefill from `owner_names` mined during enrichment.
-- Interpolation tokens `[review_count]` / `[review_avg]` / `[reviews]` ([#79](https://github.com/shauncarldesigns/agency-os-v2/pull/79)) added alongside the existing `[Company Name]` / `[Name]` / `[city]` / `[state]` / `[their trade]`. Cockpit populates `scores.reviews` from `lead.google_review_count` + `lead.google_rating`.
-- SimpleObjection variants mechanism ([#79](https://github.com/shauncarldesigns/agency-os-v2/pull/79)) — chip row above rebuttal card when the objection has `variants[]`; tap swaps the body. `variant_label` stamped on the objection_hit for per-variant analytics later.
-
-### Brief Studio + Sites
-
-- Brief Studio Client card: Owner / Phone / Email are now inline-editable ([#92](https://github.com/shauncarldesigns/agency-os-v2/pull/92)) with prefill from the linked lead.
-
-### Docs (reference material, not app-parsed)
-
-- `docs/practice-cold-calls.md` ([#106](https://github.com/shauncarldesigns/agency-os-v2/pull/106)) — mirror of live cold-call script + objection library + demo scripts + email follow-up + rules of engagement, for Claude chat practice sessions.
-- `docs/practice-demo-calls.md` ([#107](https://github.com/shauncarldesigns/agency-os-v2/pull/107), updated [#108](https://github.com/shauncarldesigns/agency-os-v2/pull/108)) — full-flow demo call script (more polished than the app's runtime demo scripts). Includes domain check, Google landscape education, 5-point walkthrough with FAQ→AI hook, expanded Growth pitch.
+**ExecutionView now renders inside the shell** — sidebar stays visible
+during calls (operator decision; was full-viewport takeover).
 
 ## Deploy state
 
-- **Backend Worker:** auto-deployed via CI through PR #108.
-- **Dashboard:** manually deployed after all UI-touching PRs. Last deploy after #105.
-- **D1 migrations applied:** all from this session
-  - `2026-06-17-session-kinds.sql` (Hot Leads `kind` column)
-  - `2026-06-17-call-log-recording-url.sql` (R2 recording URL column)
-- **R2:** `agency-os-recordings` bucket exists, public access enabled, base URL `https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev`
+- **Backend Worker:** auto-deployed via CI through #134.
+- **Dashboard:** manually deployed after #134 (bundle verified at apex).
+- **D1 migrations applied to remote:** `2026-07-19-lead-pipeline.sql`.
+- **Local dev D1 note:** the local miniflare DB was missing every migration
+  from `2026-06-14-calling-dashboard.sql` onward; all were applied locally
+  this session. If a fresh clone's local dashboard 500s on `/api/dashboard`,
+  apply migrations locally in filename order.
 
 ## Notes for next session
 
-### Lead status ↔ outcome semantics (worth knowing)
+### Light-theme migration is mid-flight by design
 
-There was operator confusion mid-session about `lead.status = 'not_interested'` vs `call_log.outcome = 'Not Interested'`. Both exist for good reason — status controls future behavior (excludes from composition, hides from MRR, grays out row), outcome records the historical fact of a specific dial. Voicemail/callback outcomes correctly promote `cold → contacted` in both code paths (`routes/sessions.ts:627-641` + `routes/calls.ts:65-70`). A stuck-at-cold Vanderloop lead ([#105](https://github.com/shauncarldesigns/agency-os-v2/pull/105)) was traced to a chronology + manual-reset artifact, not a code bug. A one-shot cleanup applied on remote D1 normalized any other stuck rows.
+`global.css` (~1,080 lines of legacy semantic classes) now resolves to light
+tokens and everything works, but the intended end state is per-panel Tailwind
+utility migration, then delete `global.css`. Suggested order (least → most
+risky): Sites → Reports → Prospect/Lead Finder → Cold Call Pipeline →
+Dashboard → ExecutionView. No functional change expected per panel; visual
+QA each one.
 
-### Runtime demo scripts drift from `docs/practice-demo-calls.md`
+### Automated Pipeline — deferred pieces
 
-The operator's target demo flow (in the docs) is significantly more polished than the app's runtime demo scripts (`demo-tier3-primary.md`, `demo-tier2-primary.md`). Runtime scripts still lack: domain check, Google landscape education, FAQ→AI walkthrough, 62-directories Growth pitch, "which feels closest?" close. Whether to port those into the runtime cockpit demo is a **pending operator decision**.
+1. **Clarity Layer-2 sync** — cron hitting Clarity Data Export API to enrich
+   `pipeline_sessions` beyond first-click. Layer 1 (click tracker) is live
+   and is the trustworthy signal; Clarity is color. Also: the per-site
+   Clarity snippet + `clarity('set','lead',clarity_tag)` step is documented
+   in the build brief but not yet surfaced as a checklist item in the UI.
+2. **Booked / archived controls** — enum + transitions exist server-side;
+   no UI yet. Booked should hand off to the existing HoneyBook demo flow.
+3. **Queue filter is strict** — `has_website=0 AND enrichment_status='enriched'
+   AND status IN ('cold','contacted')`. Businesses with weak-but-existing
+   sites are excluded; relaxing this is a one-line change in
+   `routes/pipeline.ts` when the operator wants it.
+4. **On-device SMS test still pending operator confirmation** — composers
+   verified in-browser; the `sms:?&body=` prefill needs a real iPhone tap
+   (checklist in PR #129 body).
 
-### Open items / punch list
+### Shell follow-ups
 
-Priority order. None blocking.
+- **Settings page** — sidebar row is a placeholder, no page behind it.
+- **Session/lead counts in Call Sessions page** are week-scoped; an all-time
+  history view would need a new endpoint (current one is week-keyed).
+- **`html{font-size:18px}` kept** for legacy-panel rem sizing. When the last
+  panel migrates to Tailwind, revisit (Tailwind assumes 16px).
 
-1. **Runtime demo scripts update.** Decide whether to bring `demo-tier3-primary.md` + `demo-tier2-primary.md` into alignment with `docs/practice-demo-calls.md`.
-2. **HVAC pool empty** (carried from earlier). Sessions composing for `hvac_contractor` widen → nothing found.
-3. **`reviewExtraction.ts` still requests `differentiators` field** (carried over). Wasted Claude tokens; one-line cleanup.
-4. **Pitch card backfill** (carried over) — 165 leads still have null `pitch_card_text`. The cockpit no longer surfaces it but the field remains.
-5. **Voicemail script (`voicemail.md`)** still missing content — playbook has scripts for cold-call + two demo variants, no voicemail leaving script.
-6. **Generated variant promotion workflow.** `playbook_generations` accumulates Claude alternatives and the operator's "Use this" stamps `used_variant_index`. Manual promotion to markdown source is the intended follow-up when analytics get interesting.
-7. **Angry Disarm chip label** currently reads "🛡 Angry Disarm" — first objection with an emoji in the label. Other emojis (✉, 📞) elsewhere are in operator-facing UI, not labels. Consistency call worth revisiting.
-8. **Auto-project-on-booked** creates a new project every time Booked fires, even if the lead already has one. Session earlier flagged this; not blocking but could double-create.
+### Open items carried from prior sessions
+
+1. Runtime demo scripts vs `docs/practice-demo-calls.md` drift — pending
+   operator decision.
+2. HVAC pool empty (sessions composing for `hvac_contractor` find nothing).
+3. `reviewExtraction.ts` still requests unused `differentiators` field.
+4. Pitch card backfill — many leads still have null `pitch_card_text`.
+5. `voicemail.md` playbook script still missing content.
+6. Generated-variant promotion workflow (playbook_generations → markdown).
+7. Auto-project-on-booked can double-create projects.
 
 ## Recent quirks worth remembering
 
-- **GitHub PAT expired mid-session twice.** The `gh` CLI relies on either keyring auth or `GH_TOKEN` env var from `~/.zshrc`. Refresh at https://github.com/settings/tokens; scopes needed are `repo` + `workflow`. Keyring OAuth (`gho_*`) is the safer default — see `gh auth status`.
-- **Poppler was missing when a PDF came through** (docs/practice-demo-calls.md update). Installed via `brew install poppler`. Read tool wanted `pdftoppm`; fallback path is `pdftotext` for plain content extraction.
-- **`brew install poppler` completed but Read tool cache said not installed** for the same session — worked around by extracting text directly.
+- **`git push` from this environment reports a phantom "failed to push"
+  error while actually succeeding** — happened on 4 of 5 PR branches this
+  session. Always verify with `git fetch && git log origin/<branch>` before
+  re-pushing; the push almost certainly landed.
+- **Pages apex serves a stale bundle for ~30–60s after deploy** (known,
+  documented in CLAUDE.md) — poll with cache-bust before declaring a deploy
+  broken.
+- **GitHub PAT / `gh` auth** — `source ~/.zshrc` before `gh` calls; scopes
+  `repo` + `workflow`.
 
 ## Out of scope (unchanged from prior handoff)
 
@@ -111,3 +133,6 @@ Priority order. None blocking.
 - Vs-industry deltas on agency summary
 - Quota tracking
 - Nested-conditional playbook state machine (would need new parser + UI)
+- Self-hosted site builder (landingsite.ai stays the build tool)
+- A2P/Twilio programmatic texting (`sms:` deep links only)
+- Automated Facebook messaging
