@@ -19,6 +19,9 @@ import {
   MousePointerClick,
   PhoneCall,
   RotateCcw,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, LeadActivity, ShowToast } from '../../lib/types';
@@ -399,24 +402,61 @@ function BriefModal({
   lead,
   onClose,
   onSaveUrl,
+  onBriefGenerated,
 }: {
   lead: PipelineLead;
   onClose: () => void;
   onSaveUrl: (leadId: number, url: string) => Promise<void>;
+  // Called after every successful (re)generation so the panel can keep
+  // leads[] in sync — the next time this lead is opened the modal reads
+  // the fresh brief without re-billing Claude.
+  onBriefGenerated: (leadId: number, brief: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Brief state is owned by the modal so it can drive its own auto-generation
+  // + regeneration flow. `null` means "not yet fetched"; the effect below
+  // fires the initial generate when the modal opens and there's no cached
+  // brief on the lead.
+  const [briefText, setBriefText] = useState<string | null>(lead.brief);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
 
-  const briefText =
-    lead.brief ??
-    // Fallback preamble when the lead doesn't have a pre-generated brief yet.
-    // Phase 3 will wire this to the brief-generation endpoint on demand.
-    `Brief not yet generated for ${lead.name}. Draft one in landingsite.ai using the enrichment data (rating ${lead.rating.toFixed(1)}, ${lead.reviews} reviews, ${lead.address}), then paste the live URL below.`;
+  const runGenerate = useCallback(
+    async (regenerate: boolean) => {
+      setBriefLoading(true);
+      setBriefError(null);
+      try {
+        const { lead: updated } = await api.pipeline.generateBrief(lead.id, { regenerate });
+        const nextBrief = updated.pipeline_brief ?? '';
+        setBriefText(nextBrief);
+        onBriefGenerated(lead.id, nextBrief);
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : 'Brief generation failed';
+        setBriefError(msg);
+      } finally {
+        setBriefLoading(false);
+      }
+    },
+    [lead.id, onBriefGenerated],
+  );
+
+  // Auto-generate on open when there's no cached brief. StrictMode double-
+  // invocation of effects is harmless here — the second call short-circuits
+  // on `briefLoading` and, at worst, the server returns the cached row.
+  useEffect(() => {
+    if (briefText === null && !briefLoading && !briefError) {
+      void runGenerate(false);
+    }
+    // Only meant to fire on mount — deps intentionally empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCopy = async () => {
+    if (!briefText) return;
     try {
       await navigator.clipboard.writeText(briefText);
       setCopied(true);
@@ -474,29 +514,78 @@ function BriefModal({
       }
     >
       <div className="px-5 py-4">
-        <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] leading-relaxed text-slate-700 font-sans">
-          {briefText}
-        </pre>
-        <button
-          onClick={handleCopy}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          {copied ? (
-            <>
-              <Check className="h-4 w-4 text-emerald-500" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4" />
-              Copy brief to clipboard
-            </>
-          )}
-        </button>
-        <p className="mt-3 text-xs text-slate-400">
-          Paste this into landingsite.ai to build the site. Once it's live, drop the URL below —
-          this tags it for tracking and unlocks the text to send.
-        </p>
+        {briefLoading && briefText === null ? (
+          // Initial generation state — no cached content to show, so the
+          // whole brief area becomes a spinner + status line.
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-slate-50 border border-slate-100 py-10 text-center">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            <div>
+              <p className="text-sm font-medium text-slate-700">Generating brief…</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Claude is drafting from the enrichment data. Usually ~10 seconds.
+              </p>
+            </div>
+          </div>
+        ) : briefError ? (
+          // Fetch failed — inline retry rather than closing the modal.
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-rose-800">Couldn't generate the brief.</p>
+                <p className="mt-0.5 text-xs text-rose-600">{briefError}</p>
+                <button
+                  onClick={() => void runGenerate(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] leading-relaxed text-slate-700 font-sans">
+              {briefText}
+            </pre>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={handleCopy}
+                disabled={!briefText}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-500" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy brief to clipboard
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => void runGenerate(true)}
+                disabled={briefLoading}
+                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+                title="Generate a fresh brief"
+              >
+                {briefLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-400">
+              Paste this into landingsite.ai to build the site. Once it's live, drop the URL below —
+              this tags it for tracking and unlocks the text to send.
+            </p>
+          </>
+        )}
       </div>
     </ModalShell>
   );
@@ -1182,7 +1271,18 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
       </div>
 
       {modal?.type === 'brief' && (
-        <BriefModal lead={modal.lead} onClose={() => setModal(null)} onSaveUrl={handleSaveUrl} />
+        <BriefModal
+          lead={modal.lead}
+          onClose={() => setModal(null)}
+          onSaveUrl={handleSaveUrl}
+          onBriefGenerated={(leadId, brief) => {
+            // Keep the parent list in sync with the freshly-generated brief so
+            // the next Copy Brief tap opens against the cached row.
+            setLeads((prev) =>
+              prev.map((l) => (l.id === leadId ? { ...l, brief } : l)),
+            );
+          }}
+        />
       )}
       {modal?.type === 'text' && (
         <TextComposerModal lead={modal.lead} onClose={() => setModal(null)} onSent={markSent} />
