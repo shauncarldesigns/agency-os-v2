@@ -108,15 +108,35 @@ Structure the output as exactly these section headers, in this order, and nothin
 - TARGET AUDIENCE
 - PAGE PURPOSE
 - WHAT MUST APPEAR
+- SUGGESTED SECTIONS
 - WHAT TO EMPHASIZE
 - CONSTRAINTS
+
+SUGGESTED SECTIONS rules: present this as a suggested page layout the
+builder may adapt — open the section with a line like "Suggested layout,
+adapt as fits the business:" so landingsite treats it as guidance, not a
+mandate. List these sections in this order, each with one short line
+tailoring it to THIS business from the enrichment data (skip the tailoring
+line, not the section, when there's nothing specific to say):
+- Hero
+- Services
+- About
+- Reviews
+- Service area with map
+- Contact form
+- FAQs
+For Reviews, reference the actual rating/count. For Service area with map,
+anchor on the business's city/area. For Services, use the mined services if
+present, category-standard defaults if not. Do not invent FAQ answers that
+require facts you don't have — frame FAQ topics instead (hours, service
+area, pricing expectations, how to book).
 
 Rules:
 - Ground every claim in the enrichment data provided. Never invent services, awards, staff members, or history.
 - If the enrichment is sparse, say so honestly ("Reviews do not name specific services; use category-standard defaults for barbershops.") rather than filling gaps with generic marketing copy.
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
-- Keep the whole brief under 400 words. This is a working doc, not marketing copy.
+- Keep the whole brief under 450 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
 
   // Structured data blob for the user turn — Claude parses more reliably
