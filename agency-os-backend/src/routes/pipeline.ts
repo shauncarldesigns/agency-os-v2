@@ -12,6 +12,10 @@
 import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
 import { badRequest, notFound, log, serverError } from '../utils/errors';
+import { buildPipelineBriefPrompt } from '../prompts/pipelineBrief';
+import { callClaude } from '../services/claude';
+
+const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
 // ---------------------------------------------------------------------------
 // Status enum + transition rules (enforced server-side).
@@ -309,6 +313,105 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     return c.json({ lead: updated });
   } catch (err) {
     log('error', 'pipeline', 'POST /leads/:id/action failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/pipeline/leads/:id/brief
+// ---------------------------------------------------------------------------
+// Generates a landingsite.ai-ready brief for the lead, caches it on
+// `leads.pipeline_brief`, and returns the updated row. Idempotent by
+// default — a second call returns the cached brief without re-billing
+// Claude. Pass { regenerate: true } to force a fresh generation.
+//
+// Uses Haiku 4.5 because these briefs are prep material for the operator,
+// not final copy — quality is fine at Haiku and cost stays low even if
+// the operator regenerates a few times per lead.
+pipelineRouter.post('/leads/:id/brief', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+    const body = (await c.req.json().catch(() => ({}))) as { regenerate?: boolean };
+
+    const lead = await c.env.DB.prepare(
+      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+    )
+      .bind(id)
+      .first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+
+    if (lead.pipeline_brief && !body.regenerate) {
+      return c.json({ lead });
+    }
+
+    const prompt = buildPipelineBriefPrompt({
+      company: lead.company,
+      industry: lead.industry,
+      city: lead.city,
+      state: lead.state,
+      address: lead.address,
+      phone: lead.phone,
+      hours: lead.gbp_hours,
+      google_rating: lead.google_rating,
+      google_review_count: lead.google_review_count,
+      extracted_services: lead.extracted_services,
+      extracted_strengths: lead.extracted_strengths,
+      extracted_local_landmarks: lead.extracted_local_landmarks,
+      pitch_quotes: lead.pitch_quotes,
+      owner_names: lead.owner_names,
+      opportunity_reasoning: lead.opportunity_reasoning,
+    });
+
+    let briefText: string;
+    try {
+      briefText = await callClaude(c.env.CLAUDE_API_KEY, prompt.user, {
+        model: BRIEF_MODEL,
+        systemPrompt: prompt.system,
+        cacheSystem: true, // system prompt is stable; ephemeral cache pays off across leads in one session
+        maxTokens: 1500,
+        temperature: 0.6,
+        timeoutMs: 45_000,
+      });
+    } catch (err) {
+      log('error', 'pipeline', `Brief generation failed for lead ${id}`, err);
+      const message = err instanceof Error ? err.message : 'Brief generation failed';
+      return c.json(
+        { error: `Brief generation failed: ${message}`, code: 'CLAUDE_ERROR' },
+        502,
+      );
+    }
+
+    briefText = briefText.trim();
+    if (!briefText) {
+      return c.json({ error: 'Claude returned an empty brief', code: 'CLAUDE_ERROR' }, 502);
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE leads
+         SET pipeline_brief = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+    )
+      .bind(briefText, id)
+      .run();
+
+    await writeActivity(c.env.DB, {
+      leadId: id,
+      action: 'brief_generated',
+      meta: { model: BRIEF_MODEL, regenerated: !!body.regenerate },
+    });
+
+    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+      .bind(id)
+      .first<Lead>();
+    log('info', 'pipeline', `Lead ${id} brief generated`, {
+      chars: briefText.length,
+      regenerated: !!body.regenerate,
+    });
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'pipeline', 'POST /leads/:id/brief failed', err);
     return c.json(serverError(), 500);
   }
 });

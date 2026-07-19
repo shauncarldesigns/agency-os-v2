@@ -463,6 +463,14 @@ export const api = {
       apiFetch<{ lead: Lead } | null>(`/api/pipeline/leads/${id}/undo`, {
         method: 'POST',
       }),
+    // Generates + caches a landingsite-ready brief. Idempotent unless
+    // { regenerate: true } is passed; a second call otherwise returns
+    // the cached brief without re-billing Claude.
+    generateBrief: (id: number, opts?: { regenerate?: boolean }) =>
+      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/brief`, {
+        method: 'POST',
+        body: JSON.stringify({ regenerate: !!opts?.regenerate }),
+      }),
   },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
