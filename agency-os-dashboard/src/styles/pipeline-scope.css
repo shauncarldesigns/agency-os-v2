@@ -1,0 +1,29 @@
+/* Automated Pipeline light-mode isolation (Phase 1).
+ *
+ * The rest of the app (Header, Nav, existing panels) still uses the dark
+ * theme in global.css. Tailwind utilities are enabled here without the
+ * global preflight, so utility classes work but browser defaults aren't
+ * reset. The `.pipeline-scope` wrapper below defeats the inherited dark
+ * body color/font that would otherwise bleed into the new page.
+ *
+ * Phase 3 retires this file when the whole app moves to light mode. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pipeline-scope {
+  /* Override the dark app's inherited body color + DM Sans font. */
+  color: rgb(15 23 42);            /* slate-900 */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  font-weight: 400;
+
+  /* The panel provides its own bg-slate-50; this guarantees no dark edges
+   * peek through if the wrapper's own bg is ever removed. */
+  background: rgb(248 250 252);     /* slate-50 */
+
+  /* Font-smoothing to match the mockup's crisp text rendering. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
