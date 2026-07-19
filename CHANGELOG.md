@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated Pipeline — Phase 2 (PR #130)
+
+- **[#130](https://github.com/shauncarldesigns/agency-os-v2/pull/130) Automated Pipeline — D1, Worker endpoints, click tracker, real data.** Turns the Automated Pipeline into a live view over the existing `leads` table. Migration adds `pipeline_status` + `site_url` + `pipeline_brief` + related columns to `leads` and a `lead_activity` audit table. New `/api/pipeline/*` endpoints handle list / detail / site-url save (UTM-tag + status flip) / outreach actions / undo. Public `GET /r/:lead_id` click tracker bumps `pipeline_sessions`, promotes `sent_no_reply → engaged` on first click, and 302s to the tagged URL — the intro/follow-up composers now text `${API_BASE}/r/{lead.id}` so every recipient click hits Layer 1 tracking. Frontend swaps sample data for the fetch, adds loading / error states, and shows a ~6s Undo pill after each optimistic transition. Backend + dashboard + migration (`2026-07-19-lead-pipeline.sql`, apply after merge).
+
 ### Automated Pipeline — Phase 1 (PR #129)
 
 - **[#129](https://github.com/shauncarldesigns/agency-os-v2/pull/129) Automated Pipeline page (Phase 1) — text + site outreach queue.** Adds a new dashboard tab for the text + site outreach motion (brief → live URL paste → SMS-deep-link intro → engagement-aware follow-up → call prep). Ships against sample data so the whole flow — including `sms:` composer prefill on a real device — can be validated before the backend lands. Existing pipeline renamed to Cold Call Pipeline; the two motions stay separate. Introduces `tailwindcss` (v3, `preflight: false`) and `lucide-react`; the new page renders inside a `.pipeline-scope` wrapper so the existing dark panels stay untouched. Dashboard.
