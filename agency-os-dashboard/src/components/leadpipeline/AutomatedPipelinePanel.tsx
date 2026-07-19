@@ -536,7 +536,7 @@ function BriefModal({
                 <p className="mt-0.5 text-xs text-rose-600">{briefError}</p>
                 <button
                   onClick={() => void runGenerate(true)}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-white"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   Try again
@@ -553,7 +553,7 @@ function BriefModal({
               <button
                 onClick={handleCopy}
                 disabled={!briefText}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-40"
               >
                 {copied ? (
                   <>
@@ -570,7 +570,7 @@ function BriefModal({
               <button
                 onClick={() => void runGenerate(true)}
                 disabled={briefLoading}
-                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-40"
                 title="Generate a fresh brief"
               >
                 {briefLoading ? (
@@ -633,7 +633,7 @@ function TextComposerModal({
         <div className="flex gap-2">
           <button
             onClick={handleCopy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
             {copied ? (
               <>
@@ -736,7 +736,7 @@ function FollowUpModal({
         <div className="flex gap-2">
           <button
             onClick={handleCopy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
             {copied ? (
               <>
@@ -844,7 +844,7 @@ function CallPrepModal({
             onClick={() => {
               void onLogged(lead.id);
             }}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
             Log call
           </button>
@@ -1020,7 +1020,7 @@ function UndoBanner({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-6 z-[210] flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm shadow-lg shadow-slate-900/10 border border-slate-200">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm shadow-lg shadow-slate-900/10">
         <span className="text-slate-700">{message}</span>
         <button
           onClick={onUndo}
@@ -1193,7 +1193,7 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
 
   return (
     <div className="pipeline-scope min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-5">
           <h1 className="text-xl font-bold text-slate-900">Automated Pipeline</h1>
           <p className="mt-0.5 text-sm text-slate-500">
@@ -1219,7 +1219,7 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
               className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
                 filter === f.key
                   ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {f.label}
@@ -1234,19 +1234,22 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
           ))}
         </div>
 
-        <div className="space-y-3">
+        {/* Card grid — 1 col on mobile, 2 on tablet, 3 on desktop. Loading /
+         * error / empty states span the full row via col-span-full so they
+         * don't try to sit inside a single grid cell. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {loading && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
               Loading leads…
             </div>
           )}
           {!loading && loadError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 py-6 px-5 text-sm text-rose-700">
+            <div className="col-span-full rounded-2xl border border-rose-200 bg-rose-50 py-6 px-5 text-sm text-rose-700">
               <p className="font-medium">Couldn't load leads.</p>
               <p className="mt-1 text-xs text-rose-600">{loadError}</p>
               <button
                 onClick={() => void loadLeads()}
-                className="mt-3 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                className="mt-3 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-white"
               >
                 Try again
               </button>
@@ -1263,7 +1266,7 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
               />
             ))}
           {!loading && !loadError && filtered.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
               No leads match this filter.
             </div>
           )}
