@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated Pipeline — styling cleanup (PR #132)
+
+- **[#132](https://github.com/shauncarldesigns/agency-os-v2/pull/132) Automated Pipeline styling — 3-col grid + drop button borders.** Lays cards out three-across on desktop (`sm:grid-cols-2 lg:grid-cols-3`, `max-w-6xl` container) instead of a single centered column. Secondary buttons across the panel — filter pills, composer Copy buttons, BriefModal Copy + Regenerate, Undo pill, retry buttons — swap the outline-white style for a soft `bg-slate-100` fill so the queue reads cleaner without hard hairline edges. Dashboard.
+
 ### Automated Pipeline — on-demand brief generation (PR #131)
 
 - **[#131](https://github.com/shauncarldesigns/agency-os-v2/pull/131) Automated Pipeline — on-demand brief generation.** Fixes the placeholder text in the Copy Brief modal. `POST /api/pipeline/leads/:id/brief` now calls Claude Haiku 4.5 with a new landingsite-ready prompt (`prompts/pipelineBrief.ts`) that grounds every claim in the enrichment data, applies the shared anti-fluff word list, and emits fixed section headers (BUSINESS OVERVIEW / TARGET AUDIENCE / PAGE PURPOSE / WHAT MUST APPEAR / WHAT TO EMPHASIZE / CONSTRAINTS). Result caches on `leads.pipeline_brief` and writes a `brief_generated` activity row; `{ regenerate: true }` forces a fresh gen. BriefModal auto-fires generation on open (spinner + inline retry on error) and gains a Regenerate icon button next to Copy. Backend + dashboard.
