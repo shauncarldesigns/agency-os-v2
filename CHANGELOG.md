@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated Pipeline — Phase 1 (PR #129)
+
+- **[#129](https://github.com/shauncarldesigns/agency-os-v2/pull/129) Automated Pipeline page (Phase 1) — text + site outreach queue.** Adds a new dashboard tab for the text + site outreach motion (brief → live URL paste → SMS-deep-link intro → engagement-aware follow-up → call prep). Ships against sample data so the whole flow — including `sms:` composer prefill on a real device — can be validated before the backend lands. Existing pipeline renamed to Cold Call Pipeline; the two motions stay separate. Introduces `tailwindcss` (v3, `preflight: false`) and `lucide-react`; the new page renders inside a `.pipeline-scope` wrapper so the existing dark panels stay untouched. Dashboard.
+
 ### Quick-oriented call approach (PR #121)
 
 - **[#121](https://github.com/shauncarldesigns/agency-os-v2/pull/121) Quick-oriented call approach + narrow objection tray.** Adds a third cockpit approach chip (`Quick-oriented`) alongside No-oriented and Question-oriented. The new script follows the fast reputation-gap flow: strong reviews → limited proof beyond reviews → reputation-match check → demo-site reveal → ten-minute ask. While Quick-oriented is active, the objection panel narrows to six purpose-built chips: I'm busy, Too busy, Already have Facebook, Why do I need a website, Word of mouth, and Pushback. Backend + dashboard.

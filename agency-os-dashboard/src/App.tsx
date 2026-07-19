@@ -9,6 +9,7 @@ import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
 import { ReportsPanel } from './components/reports/ReportsPanel';
+import AutomatedPipelinePanel from './components/leadpipeline/AutomatedPipelinePanel';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
@@ -91,44 +92,52 @@ export default function App() {
     <>
       <Header stats={stats} />
       <Nav active={activeTab} onChange={setActiveTab} counts={navCounts} />
-      <main className="main">
-        {activeTab === 'dashboard' && (
-          <DashboardPanel
-            showToast={showToast}
-            onStateChanged={loadStats}
-            onOpenSession={(id) => setOpenSessionId(id)}
-            onSwitchTab={setActiveTab}
-          />
-        )}
-        {activeTab === 'prospect' && (
-          <ProspectPanel
-            showToast={showToast}
-            onLeadAdded={loadStats}
-          />
-        )}
-        {activeTab === 'pipeline' && (
-          <PipelinePanel
-            showToast={showToast}
-            onLeadCountChanged={loadStats}
-            onQualified={(project, tier) => {
-              // T3 → open Brief Studio directly; T1/T2 land on the grid (no
-              // Studio exists for those tiers).
-              if (tier === 3) setPendingOpenProjectId(project.id);
-              setActiveTab('sites');
-              loadStats();
-            }}
-          />
-        )}
-        {activeTab === 'sites' && (
-          <SitesPanel
-            showToast={showToast}
-            onSwitchTab={setActiveTab}
-            initialProjectId={pendingOpenProjectId}
-            onInitialProjectConsumed={() => setPendingOpenProjectId(null)}
-          />
-        )}
-        {activeTab === 'reports' && <ReportsPanel showToast={showToast} />}
-      </main>
+      {activeTab === 'automated-pipeline' ? (
+        // Rendered outside `.main` so the dark theme's padding/max-width don't
+        // clip the full-bleed light-mode design. The panel provides its own
+        // container (`.pipeline-scope`) with local reset. Phase 3 folds this
+        // into the light-mode sidebar shell.
+        <AutomatedPipelinePanel />
+      ) : (
+        <main className="main">
+          {activeTab === 'dashboard' && (
+            <DashboardPanel
+              showToast={showToast}
+              onStateChanged={loadStats}
+              onOpenSession={(id) => setOpenSessionId(id)}
+              onSwitchTab={setActiveTab}
+            />
+          )}
+          {activeTab === 'prospect' && (
+            <ProspectPanel
+              showToast={showToast}
+              onLeadAdded={loadStats}
+            />
+          )}
+          {activeTab === 'pipeline' && (
+            <PipelinePanel
+              showToast={showToast}
+              onLeadCountChanged={loadStats}
+              onQualified={(project, tier) => {
+                // T3 → open Brief Studio directly; T1/T2 land on the grid (no
+                // Studio exists for those tiers).
+                if (tier === 3) setPendingOpenProjectId(project.id);
+                setActiveTab('sites');
+                loadStats();
+              }}
+            />
+          )}
+          {activeTab === 'sites' && (
+            <SitesPanel
+              showToast={showToast}
+              onSwitchTab={setActiveTab}
+              initialProjectId={pendingOpenProjectId}
+              onInitialProjectConsumed={() => setPendingOpenProjectId(null)}
+            />
+          )}
+          {activeTab === 'reports' && <ReportsPanel showToast={showToast} />}
+        </main>
+      )}
       <ToastContainer toasts={toasts} />
     </>
   );
