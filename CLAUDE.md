@@ -73,6 +73,68 @@ npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/YYYY-MM-D
 - Node 22+ required for backend tsc + dashboard vite build. A persistent install
   lives at `~/.local/node22/` with symlinks in `~/.local/bin/{node,npm,npx}`.
 
+## Light theme + sidebar shell (added 2026-07-19)
+
+**The app is light-mode only. There is no dark mode.** PR #134 replaced the
+dark top-nav layout with a sidebar shell (`components/layout/AppShell.tsx`,
+canonical visual spec came from an external mockup package). Slate palette,
+white surfaces, blue→indigo gradient accent, system font stack.
+
+- **Two styling systems coexist during migration.** New pages are plain
+  Tailwind utilities (preflight ON). Legacy panels still use semantic
+  classes from `src/styles/global.css` (~1,080 lines), whose `:root` token
+  block was flipped to light values — so legacy panels render light without
+  JSX changes. End state: migrate panels to Tailwind one PR at a time, then
+  delete `global.css`. Do NOT add new `global.css` classes.
+- `html{font-size:18px}` is retained for legacy-panel rem sizing; revisit
+  when `global.css` dies (Tailwind assumes 16px).
+- Nav structure: Main = Dashboard / Call Sessions / Cold Call Pipeline /
+  Automated Pipeline / Lead Finder; Work = Clients & Sites / Playbook /
+  Reports. "Lead Finder" is the former Prospect tab; `Tab` key is still
+  `'prospect'`.
+- **ExecutionView renders inside the shell's `<main>`** — sidebar stays
+  visible during calls. It no longer takes over the viewport.
+- Call Sessions page = week-paginated session history/forward view
+  (`components/sessions/CallSessionsPage.tsx`); Dashboard remains "today".
+- Playbook page = read-only browser over the playbook markdown
+  (`components/playbook/PlaybookPage.tsx`); editing stays in
+  `agency-os-backend/src/playbook/*.md`.
+
+## Automated Pipeline (added 2026-07-19)
+
+Text + site outreach motion, orthogonal to the cold-call motion. One `leads`
+row serves both flows: cold-call lifecycle lives on `leads.status`, the
+text+site flow on `leads.pipeline_status` (`awaiting_build → ready_to_send →
+sent_no_reply → engaged`, plus reserved `booked`/`archived`). **Never
+repurpose one for the other.**
+
+- **Columns added** (migration `2026-07-19-lead-pipeline.sql`):
+  `pipeline_status`, `site_url` (UTM-tagged, source of truth for texting),
+  `site_url_raw`, `pipeline_brief`, `campaign_slug`, `clarity_tag`,
+  `pipeline_sessions`, `pipeline_last_action_at`. Plus `lead_activity`
+  audit table backing `/undo`.
+- **Queue filter** (`GET /api/pipeline/leads`): `deleted_at IS NULL AND
+  status IN ('cold','contacted') AND has_website=0 AND
+  enrichment_status='enriched'`, ordered `opportunity_score DESC`.
+- **Status transitions are enforced server-side** in `routes/pipeline.ts`
+  (`site-url` only from `awaiting_build`; `intro_sent` only from
+  `ready_to_send`; `followed_up`/`called` never change status).
+- **Click tracker `GET /r/:lead_id`** is PUBLIC — mounted before the
+  `/api/*` auth middleware in `index.ts`. Texted links point at `/r/{id}`,
+  never the raw site URL. First click auto-promotes `sent_no_reply →
+  engaged`. Logs coarse UA class only (privacy).
+- **Brief generation** — `POST /api/pipeline/leads/:id/brief`, Haiku 4.5,
+  prompt in `prompts/pipelineBrief.ts` (fixed section headers because
+  landingsite consumes it as prompt input; same anti-fluff word list as
+  master briefs). Cached on `pipeline_brief`; `{regenerate:true}` forces.
+- **SMS sending is `sms:` deep links only** (`?&body=` variant — most
+  compatible across iOS/Android; body prefill is inconsistent, which is why
+  every composer keeps a Copy fallback). No Twilio/A2P by explicit scope
+  decision.
+- Engagement Layer 2 (Clarity Data Export sync into `pipeline_sessions`)
+  is designed but NOT built; Layer 1 (click tracker) is the trustworthy
+  signal.
+
 ## Calling Dashboard (added 2026-06-14)
 
 The Dashboard tab is the default landing view. Pre-composes calling sessions
