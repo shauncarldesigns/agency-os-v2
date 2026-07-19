@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Phone,
   MapPin,
@@ -18,16 +18,19 @@ import {
   Eye,
   MousePointerClick,
   PhoneCall,
+  RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
+import type { Lead, LeadActivity, ShowToast } from '../../lib/types';
+import { api, API_BASE, ApiError } from '../../lib/api';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
 //
-// Phase 1: renders against the sample data below inside a `.pipeline-scope`
-// wrapper so it stays visually isolated from the dark app theme.
-// Phase 2 swaps sample data for `/api/pipeline/leads` fetches and wires up
-// mutations. Phase 3 folds this page into the new light-mode sidebar shell.
+// Fetches leads from `/api/pipeline/leads`. Server filters to the useful
+// subset (no website, enriched, in cold/contacted); this component just
+// renders + filters by pipeline_status client-side and wires mutations
+// back to the API.
 //
 // Visual spec: mockups/LeadPipelinePage.jsx (canonical). Do NOT restyle.
 // ---------------------------------------------------------------------------
@@ -36,7 +39,9 @@ export type PipelineStatus =
   | 'awaiting_build'
   | 'ready_to_send'
   | 'sent_no_reply'
-  | 'engaged';
+  | 'engaged'
+  | 'booked'
+  | 'archived';
 
 interface StatusConfig {
   label: string;
@@ -85,6 +90,27 @@ const STATUS_CONFIG: Record<PipelineStatus, StatusConfig> = {
     iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500',
     action: 'Call now',
   },
+  // Not surfaced in the current UI (no filter pill, no card action), but
+  // included so the type + STATUS_CONFIG map stays exhaustive if the server
+  // returns them. Phase 3+ will add explicit UI for booked/archived.
+  booked: {
+    label: 'Demo booked',
+    chipBg: 'bg-emerald-50',
+    chipText: 'text-emerald-700',
+    chipBorder: 'border-emerald-100',
+    icon: CheckCircle2,
+    iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+    action: 'View',
+  },
+  archived: {
+    label: 'Archived',
+    chipBg: 'bg-slate-50',
+    chipText: 'text-slate-500',
+    chipBorder: 'border-slate-200',
+    icon: Clock,
+    iconBg: 'bg-gradient-to-br from-slate-400 to-slate-500',
+    action: 'View',
+  },
 };
 
 const AVATAR_COLORS = [
@@ -94,9 +120,9 @@ const AVATAR_COLORS = [
   'from-violet-400 to-purple-500',
 ];
 
-// Local shape kept intentionally decoupled from the D1 `Lead` type — the
-// Phase 2 fetch layer will map D1 rows into this shape so the presentation
-// components stay stable across the schema.
+// Local presentation shape. Kept decoupled from the D1 Lead type so the
+// visual layer stays stable across future schema changes. The mapper
+// (`mapLeadRow` below) does all the field-level derivation.
 export interface PipelineLead {
   id: number;
   name: string;
@@ -109,115 +135,115 @@ export interface PipelineLead {
   status: PipelineStatus;
   sessions: number;
   ownerFirst: string;
-  lastAction: string;
+  lastAction: string;                 // pre-formatted display string
   initials: string;
-  url: string | null;
+  url: string | null;                 // tagged live URL (for preview + View live site)
+  trackerUrl: string;                 // /r/:id link — this is what gets texted
   brief: string | null;
 }
 
-const INITIAL_LEADS: PipelineLead[] = [
-  {
-    id: 1,
-    name: 'Marcy Ave Barber Co.',
-    category: 'Barber Shop',
-    rating: 4.9,
-    reviews: 22,
-    phone: '+1 347-379-6681',
-    address: '828 Marcy Ave, Brooklyn, NY 11216',
-    hours: 'Closed · Opens 10 AM tomorrow',
-    status: 'awaiting_build',
-    sessions: 0,
-    ownerFirst: 'there',
-    lastAction: 'Enriched 2 hrs ago',
-    initials: 'MB',
-    url: null,
-    brief:
-      'MASTER BRIEF — Marcy Ave Barber Co.\n\n' +
-      'Business type: Barber Shop, Brooklyn NY\n' +
-      'Rating: 4.9 stars (22 reviews)\n\n' +
-      'TARGET AUDIENCE\n' +
-      'Local men aged 20-45 looking for a reliable, walk-in-friendly barber ' +
-      'in the Bed-Stuy / Crown Heights area. Price-conscious but loyal once ' +
-      'they find a barber they trust.\n\n' +
-      'PAGE PURPOSE\n' +
-      'Convert a Google search or text-link click into a booked appointment ' +
-      'or phone call. This is a first-impression site — visitor has likely ' +
-      'never seen this business online before.\n\n' +
-      'WHAT MUST APPEAR\n' +
-      '- Business name, phone number (click-to-call), and address above the fold\n' +
-      '- Hours of operation\n' +
-      '- Review highlight (4.9 stars, 22 reviews) near the top\n' +
-      '- Services list: haircuts, fades, beard trim, lineup\n' +
-      '- A clear "Call Now" or "Book" CTA repeated at least twice\n\n' +
-      'WHAT TO EMPHASIZE\n' +
-      'Trust and legitimacy — this business has no site today, so the goal ' +
-      'is to look established and professional immediately, not flashy.\n\n' +
-      'CONSTRAINTS\n' +
-      "No fabricated testimonials beyond what's in the review data. Keep " +
-      'copy tight — this audience does not want to read, they want to call.',
-  },
-  {
-    id: 2,
-    name: 'Harlyn Barber Shop',
-    category: 'Barber Shop',
-    rating: 4.8,
-    reviews: 52,
-    phone: '+1 347-365-5780',
-    address: '742 Washington Ave, Brooklyn, NY 11238',
-    hours: 'Closed · Opens 8:30 AM tomorrow',
-    status: 'ready_to_send',
-    sessions: 0,
-    ownerFirst: 'there',
-    lastAction: 'Built yesterday',
-    initials: 'HB',
-    url: 'https://harlynbarbershop.landingsite.ai?utm_source=sms&utm_medium=text&utm_campaign=harlyn-barber-shop',
-    brief: null,
-  },
-  {
-    id: 3,
-    name: 'Eight Nine Dominican Barbershop',
-    category: 'Barber Shop',
-    rating: 4.7,
-    reviews: 40,
-    phone: '+1 929-234-3141',
-    address: '1043 Nostrand Ave, Brooklyn, NY 11225',
-    hours: 'Closed · Opens 8:30 AM tomorrow',
-    status: 'sent_no_reply',
-    sessions: 0,
-    ownerFirst: 'there',
-    lastAction: 'Sent 3 days ago',
-    initials: 'EN',
-    url: 'https://eightninedominican.landingsite.ai?utm_source=sms&utm_medium=text&utm_campaign=eight-nine-dominican',
-    brief: null,
-  },
-  {
-    id: 4,
-    name: 'Yehuda Barber Shop',
-    category: 'Barber Shop',
-    rating: 4.6,
-    reviews: 109,
-    phone: '+1 718-314-2093',
-    address: '1306 Nostrand Ave, Brooklyn, NY 11225',
-    hours: 'Open now · Closes 8 PM',
-    status: 'engaged',
-    sessions: 4,
-    ownerFirst: 'there',
-    lastAction: 'Visited 6 hrs ago',
-    initials: 'YB',
-    url: 'https://yehudabarbershop.landingsite.ai?utm_source=sms&utm_medium=text&utm_campaign=yehuda-barber-shop',
-    brief: null,
-  },
-];
-
 const PRICING_URL = 'https://shauncarldesigns.com/pricing';
 
-// `sms:` deep link — opens the phone's Messages app with recipient + body
-// prefilled. `?&body=` is the variant most broadly honored across iOS
-// and Android; body prefill is inconsistent across versions so a Copy
-// fallback ships alongside every composer.
+// `sms:` deep link — `?&body=` is the variant most broadly honored across
+// iOS and Android. A Copy fallback ships alongside every composer because
+// body prefill is inconsistent across versions.
 function smsLink(phone: string, body: string): string {
   const num = phone.replace(/[^\d+]/g, '');
   return `sms:${num}?&body=${encodeURIComponent(body)}`;
+}
+
+// Initials from a business name — first letter of the first two words.
+// Falls back to first two characters if there's only one word, or '??'
+// if the name is empty.
+function deriveInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '??';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+// First given name from a comma/semicolon-separated owner_names field.
+// Falls back to 'there' (a friendly, non-personalized greeting) — matches
+// the mockup's copy.
+function deriveOwnerFirst(ownerNames: string | null): string {
+  if (!ownerNames) return 'there';
+  const first = ownerNames.split(/[,;/]/)[0]?.trim();
+  if (!first) return 'there';
+  return first.split(/\s+/)[0] || 'there';
+}
+
+// Human-readable relative time. Server sends ISO; UI shows "Sent 3 days ago".
+// The action prefix comes from the most recent activity type; if we don't
+// know it, we just say "Updated <when>".
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const seconds = Math.max(1, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.floor(days / 30);
+  return `${months} mo${months === 1 ? '' : 's'} ago`;
+}
+
+// Human-readable label for the most recent action. Used to build the
+// footer string on each card (e.g. "Sent 3 days ago").
+function actionLabel(action: string | null, status: PipelineStatus): string {
+  switch (action) {
+    case 'url_saved':
+      return 'Built';
+    case 'intro_sent':
+      return 'Sent';
+    case 'followed_up':
+      return 'Followed up';
+    case 'called':
+      return 'Called';
+    case 'click_tracked':
+      return 'Visited';
+    default:
+      // No activity yet — fall back to something status-appropriate.
+      if (status === 'awaiting_build') return 'Enriched';
+      return 'Updated';
+  }
+}
+
+// Full mapper: D1 row → PipelineLead. Called on every list fetch AND
+// every mutation response so the two paths stay consistent.
+function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLead {
+  const category =
+    l.industry ??
+    (l.gbp_categories?.split(/[,;]/)[0]?.trim() ?? 'Business');
+  const phone = l.phone ?? '';
+  const addressParts = [l.address, l.city, l.state].filter(Boolean);
+  const address = addressParts.join(', ');
+  const rawStatus = l.pipeline_status as PipelineStatus;
+  const status: PipelineStatus =
+    (STATUS_CONFIG[rawStatus] ? rawStatus : 'awaiting_build');
+  const when = l.pipeline_last_action_at ?? l.updated_at ?? l.created_at;
+  const lastAction = when ? `${actionLabel(lastActionAction, status)} ${relativeTime(when)}` : '—';
+
+  return {
+    id: l.id,
+    name: l.company ?? '(unnamed)',
+    category,
+    rating: l.google_rating ?? 0,
+    reviews: l.google_review_count ?? 0,
+    phone,
+    address,
+    hours: l.gbp_hours ?? '',
+    status,
+    sessions: l.pipeline_sessions ?? 0,
+    ownerFirst: deriveOwnerFirst(l.owner_names),
+    lastAction,
+    initials: deriveInitials(l.company ?? ''),
+    url: l.site_url,
+    trackerUrl: `${API_BASE}/r/${l.id}`,
+    brief: l.pipeline_brief,
+  };
 }
 
 // ---------- Shared bits ----------
@@ -325,7 +351,7 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
               <span>{lead.category}</span>
               <span className="text-slate-300">·</span>
               <span className="flex items-center gap-1 text-amber-500 font-medium">
-                ★ {lead.rating}
+                ★ {lead.rating.toFixed(1)}
                 <span className="text-slate-400 font-normal">({lead.reviews})</span>
               </span>
             </div>
@@ -341,15 +367,15 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
       <div className="space-y-2 px-4 pb-3 text-sm text-slate-600">
         <div className="flex items-center gap-2">
           <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          <span>{lead.phone}</span>
+          <span>{lead.phone || '—'}</span>
         </div>
         <div className="flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          <span className="truncate">{lead.address}</span>
+          <span className="truncate">{lead.address || '—'}</span>
         </div>
         <div className="flex items-center gap-2">
           <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          <span>{lead.hours}</span>
+          <span>{lead.hours || '—'}</span>
         </div>
       </div>
 
@@ -376,15 +402,23 @@ function BriefModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onSaveUrl: (leadId: number, url: string) => void;
+  onSaveUrl: (leadId: number, url: string) => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const briefText =
+    lead.brief ??
+    // Fallback preamble when the lead doesn't have a pre-generated brief yet.
+    // Phase 3 will wire this to the brief-generation endpoint on demand.
+    `Brief not yet generated for ${lead.name}. Draft one in landingsite.ai using the enrichment data (rating ${lead.rating.toFixed(1)}, ${lead.reviews} reviews, ${lead.address}), then paste the live URL below.`;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(lead.brief ?? '');
+      await navigator.clipboard.writeText(briefText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -392,11 +426,20 @@ function BriefModal({
     }
   };
 
-  const handleSave = () => {
-    if (!urlInput.trim()) return;
-    onSaveUrl(lead.id, urlInput.trim());
-    setSaved(true);
-    setTimeout(() => onClose(), 700);
+  const handleSave = async () => {
+    const url = urlInput.trim();
+    if (!url || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await onSaveUrl(lead.id, url);
+      setSaved(true);
+      setTimeout(() => onClose(), 700);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Save failed';
+      setErr(msg);
+      setSaving(false);
+    }
   };
 
   return (
@@ -416,12 +459,13 @@ function BriefModal({
             />
             <button
               onClick={handleSave}
-              disabled={!urlInput.trim()}
+              disabled={!urlInput.trim() || saving}
               className="shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 disabled:opacity-40 disabled:shadow-none"
             >
-              {saved ? <Check className="h-4 w-4" /> : 'Save'}
+              {saved ? <Check className="h-4 w-4" /> : saving ? '…' : 'Save'}
             </button>
           </div>
+          {err && <p className="mt-2 text-[11px] text-rose-500">{err}</p>}
           <p className="mt-2 text-[11px] text-slate-400">
             Saving auto-tags the link with UTM + Clarity tracking and moves this lead to "Ready to
             send."
@@ -431,7 +475,7 @@ function BriefModal({
     >
       <div className="px-5 py-4">
         <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] leading-relaxed text-slate-700 font-sans">
-          {lead.brief}
+          {briefText}
         </pre>
         <button
           onClick={handleCopy}
@@ -467,11 +511,15 @@ function TextComposerModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onSent: (leadId: number) => void;
+  onSent: (leadId: number, messageBody: string) => Promise<void>;
 }) {
+  // The message body texts the /r/:lead_id tracker URL, NOT the raw site
+  // URL — so every recipient click hits our redirect and logs an
+  // engagement signal before landing on the site. The preview panel
+  // below shows the tagged destination for operator context.
   const defaultMsg =
     `Hey ${lead.ownerFirst}, this is Shaun — I put together a homepage for ` +
-    `${lead.name}, no charge, just wanted you to see it: ${lead.url}\n\n` +
+    `${lead.name}, no charge, just wanted you to see it: ${lead.trackerUrl}\n\n` +
     `Take a look when you get a sec, curious what you think.`;
 
   const [msg, setMsg] = useState(defaultMsg);
@@ -510,7 +558,11 @@ function TextComposerModal({
           </button>
           <a
             href={smsLink(lead.phone, msg)}
-            onClick={() => onSent(lead.id)}
+            onClick={() => {
+              // Fire the optimistic action + close. The undo toast handles
+              // the "wait, I didn't actually send" case.
+              void onSent(lead.id, msg);
+            }}
             className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
           >
             <Send className="h-4 w-4" />
@@ -536,7 +588,7 @@ function TextComposerModal({
         <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
           <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500">Tracked link included</p>
+            <p className="text-[11px] font-medium text-slate-500">Tracked link — resolves to</p>
             <p className="truncate text-[11px] text-slate-400">{lead.url}</p>
           </div>
         </div>
@@ -559,7 +611,7 @@ function FollowUpModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onSent: (leadId: number) => void;
+  onSent: (leadId: number, messageBody: string) => Promise<void>;
 }) {
   const engaged = lead.sessions > 0;
 
@@ -609,7 +661,9 @@ function FollowUpModal({
           </button>
           <a
             href={smsLink(lead.phone, msg)}
-            onClick={() => onSent(lead.id)}
+            onClick={() => {
+              void onSent(lead.id, msg);
+            }}
             className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
           >
             <Send className="h-4 w-4" />
@@ -681,7 +735,7 @@ function CallPrepModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onLogged: (leadId: number) => void;
+  onLogged: (leadId: number) => Promise<void>;
 }) {
   return (
     <ModalShell
@@ -698,7 +752,9 @@ function CallPrepModal({
             Call {lead.phone}
           </a>
           <button
-            onClick={() => onLogged(lead.id)}
+            onClick={() => {
+              void onLogged(lead.id);
+            }}
             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
           >
             Log call
@@ -749,7 +805,15 @@ function CallPrepModal({
 
 // ---------- Lead detail ----------
 
-function LeadDetailModal({ lead, onClose }: { lead: PipelineLead; onClose: () => void }) {
+function LeadDetailModal({
+  lead,
+  onClose,
+  activity,
+}: {
+  lead: PipelineLead;
+  onClose: () => void;
+  activity: LeadActivity[];
+}) {
   const cfg = STATUS_CONFIG[lead.status];
   return (
     <ModalShell title="Lead details" onClose={onClose}>
@@ -765,7 +829,7 @@ function LeadDetailModal({ lead, onClose }: { lead: PipelineLead; onClose: () =>
               <span className="text-slate-300">·</span>
               <span className="flex items-center gap-1 text-amber-500 font-medium">
                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                {lead.rating}
+                {lead.rating.toFixed(1)}
                 <span className="text-slate-400 font-normal">({lead.reviews})</span>
               </span>
             </div>
@@ -782,16 +846,16 @@ function LeadDetailModal({ lead, onClose }: { lead: PipelineLead; onClose: () =>
           <div className="flex items-center gap-2">
             <Phone className="h-4 w-4 shrink-0 text-slate-400" />
             <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline">
-              {lead.phone}
+              {lead.phone || '—'}
             </a>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
-            <span>{lead.address}</span>
+            <span>{lead.address || '—'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0 text-slate-400" />
-            <span>{lead.hours}</span>
+            <span>{lead.hours || '—'}</span>
           </div>
           {lead.url && (
             <div className="flex items-center gap-2">
@@ -822,6 +886,16 @@ function LeadDetailModal({ lead, onClose }: { lead: PipelineLead; onClose: () =>
               <span>Site sessions</span>
               <span className="font-medium text-slate-700">{lead.sessions}</span>
             </div>
+            {activity.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-[13px] text-slate-500">
+                {activity.slice(0, 8).map((a) => (
+                  <div key={a.id} className="flex items-center justify-between">
+                    <span>{a.action.replace(/_/g, ' ')}</span>
+                    <span className="text-slate-400">{relativeTime(a.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -841,9 +915,46 @@ function LeadDetailModal({ lead, onClose }: { lead: PipelineLead; onClose: () =>
   );
 }
 
+// ---------- Undo toast ----------
+
+// Floating pill anchored to the bottom of the pipeline scope. Visible for
+// ~6 seconds after each optimistic transition. z-[210] beats the modal
+// backdrop (z-[200]) so it stays visible even mid-close animation.
+function UndoBanner({
+  message,
+  onUndo,
+  onDismiss,
+}: {
+  message: string;
+  onUndo: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-6 z-[210] flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm shadow-lg shadow-slate-900/10 border border-slate-200">
+        <span className="text-slate-700">{message}</span>
+        <button
+          onClick={onUndo}
+          className="flex items-center gap-1 text-blue-600 font-medium hover:text-blue-700"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Undo
+        </button>
+        <button
+          onClick={onDismiss}
+          className="text-slate-400 hover:text-slate-600"
+          aria-label="Dismiss"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Page ----------
 
-type FilterKey = 'all' | PipelineStatus;
+type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'engaged';
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
@@ -861,69 +972,135 @@ const STATUS_TO_MODAL: Record<PipelineStatus, ModalType> = {
   ready_to_send: 'text',
   sent_no_reply: 'followup',
   engaged: 'call',
+  booked: 'detail',
+  archived: 'detail',
 };
 
-export default function AutomatedPipelinePanel() {
-  const [leads, setLeads] = useState<PipelineLead[]>(INITIAL_LEADS);
+interface Props {
+  showToast: ShowToast;
+}
+
+export default function AutomatedPipelinePanel({ showToast }: Props) {
+  const [leads, setLeads] = useState<PipelineLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
+  const [detailActivity, setDetailActivity] = useState<LeadActivity[]>([]);
+  const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
+
+  const loadLeads = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const { leads: rows } = await api.pipeline.list();
+      setLeads(rows.map((l) => mapLeadRow(l)));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to load leads';
+      setLoadError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLeads();
+  }, [loadLeads]);
+
+  // Auto-dismiss the undo pill after ~6s. Re-keyed on every new toast so
+  // rapid consecutive actions reset the timer instead of stacking.
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(t);
+  }, [undo]);
 
   const openFor = (lead: PipelineLead) => {
     setModal({ type: STATUS_TO_MODAL[lead.status], lead });
   };
 
-  const handleSaveUrl = (leadId: number, url: string) => {
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === leadId
-          ? {
-              ...l,
-              url: `${url}?utm_source=sms&utm_medium=text&utm_campaign=${encodeURIComponent(
-                l.name.toLowerCase().replace(/\s+/g, '-'),
-              )}`,
-              status: 'ready_to_send',
-              lastAction: 'Built just now',
-              brief: null,
-            }
-          : l,
-      ),
-    );
+  const openDetail = async (lead: PipelineLead) => {
+    // Optimistic open with empty activity; fetch fills it in.
+    setModal({ type: 'detail', lead });
+    setDetailActivity([]);
+    try {
+      const { activity } = await api.pipeline.get(lead.id);
+      setDetailActivity(activity);
+    } catch {
+      // Non-fatal; the modal still shows the derived last-action string.
+    }
   };
 
-  const markSent = (leadId: number) => {
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === leadId ? { ...l, status: 'sent_no_reply', lastAction: 'Sent just now' } : l,
-      ),
-    );
-    setModal(null);
+  const applyMutation = (updated: Lead, lastAction: string | null): PipelineLead => {
+    const mapped = mapLeadRow(updated, lastAction);
+    setLeads((prev) => prev.map((l) => (l.id === mapped.id ? mapped : l)));
+    return mapped;
   };
 
-  const markFollowedUp = (leadId: number) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, lastAction: 'Followed up just now' } : l)),
-    );
-    setModal(null);
+  const handleSaveUrl = async (leadId: number, url: string) => {
+    const { lead } = await api.pipeline.saveSiteUrl(leadId, url);
+    applyMutation(lead, 'url_saved');
+    setUndo({ leadId, message: 'URL saved', key: `save-${leadId}-${Date.now()}` });
   };
 
-  const logCall = (leadId: number) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, lastAction: 'Called just now' } : l)),
-    );
-    setModal(null);
+  const runAction = async (
+    leadId: number,
+    action: 'intro_sent' | 'followed_up' | 'called',
+    toastMessage: string,
+    meta?: unknown,
+  ) => {
+    try {
+      const { lead } = await api.pipeline.action(leadId, { action, meta });
+      applyMutation(lead, action);
+      setModal(null);
+      setUndo({ leadId, message: toastMessage, key: `${action}-${leadId}-${Date.now()}` });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Action failed';
+      showToast(msg, 'error');
+    }
   };
 
-  const filtered = leads.filter((l) => {
-    const matchesFilter = filter === 'all' || l.status === filter;
-    const matchesQuery = l.name.toLowerCase().includes(query.toLowerCase());
-    return matchesFilter && matchesQuery;
-  });
+  const markSent = (leadId: number, messageBody: string) =>
+    runAction(leadId, 'intro_sent', 'Marked sent', { body: messageBody });
 
-  const counts = leads.reduce<Record<string, number>>((acc, l) => {
-    acc[l.status] = (acc[l.status] || 0) + 1;
-    return acc;
-  }, {});
+  const markFollowedUp = (leadId: number, messageBody: string) =>
+    runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
+
+  const logCall = (leadId: number) => runAction(leadId, 'called', 'Call logged');
+
+  const undoLast = async () => {
+    if (!undo) return;
+    const target = undo;
+    setUndo(null);
+    try {
+      const result = await api.pipeline.undo(target.leadId);
+      if (result?.lead) applyMutation(result.lead, null);
+      showToast('Undone', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Undo failed';
+      showToast(msg, 'error');
+    }
+  };
+
+  const filtered = useMemo(
+    () =>
+      leads.filter((l) => {
+        const matchesFilter = filter === 'all' || l.status === filter;
+        const matchesQuery = l.name.toLowerCase().includes(query.toLowerCase());
+        return matchesFilter && matchesQuery;
+      }),
+    [leads, filter, query],
+  );
+
+  const counts = useMemo(
+    () =>
+      leads.reduce<Record<string, number>>((acc, l) => {
+        acc[l.status] = (acc[l.status] || 0) + 1;
+        return acc;
+      }, {}),
+    [leads],
+  );
 
   return (
     <div className="pipeline-scope min-h-screen bg-slate-50">
@@ -969,16 +1146,34 @@ export default function AutomatedPipelinePanel() {
         </div>
 
         <div className="space-y-3">
-          {filtered.map((lead, i) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              index={i}
-              onAction={openFor}
-              onViewLead={(l) => setModal({ type: 'detail', lead: l })}
-            />
-          ))}
-          {filtered.length === 0 && (
+          {loading && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
+              Loading leads…
+            </div>
+          )}
+          {!loading && loadError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 py-6 px-5 text-sm text-rose-700">
+              <p className="font-medium">Couldn't load leads.</p>
+              <p className="mt-1 text-xs text-rose-600">{loadError}</p>
+              <button
+                onClick={() => void loadLeads()}
+                className="mt-3 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          {!loading && !loadError &&
+            filtered.map((lead, i) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                index={i}
+                onAction={openFor}
+                onViewLead={openDetail}
+              />
+            ))}
+          {!loading && !loadError && filtered.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
               No leads match this filter.
             </div>
@@ -1003,7 +1198,20 @@ export default function AutomatedPipelinePanel() {
         <CallPrepModal lead={modal.lead} onClose={() => setModal(null)} onLogged={logCall} />
       )}
       {modal?.type === 'detail' && (
-        <LeadDetailModal lead={modal.lead} onClose={() => setModal(null)} />
+        <LeadDetailModal
+          lead={modal.lead}
+          activity={detailActivity}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {undo && (
+        <UndoBanner
+          key={undo.key}
+          message={undo.message}
+          onUndo={() => void undoLast()}
+          onDismiss={() => setUndo(null)}
+        />
       )}
     </div>
   );

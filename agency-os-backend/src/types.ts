@@ -63,6 +63,16 @@ export interface Lead {
   last_called_at: string | null;
   demo_booked_at: string | null;
   demo_scheduled_for: string | null;
+  // Automated Pipeline — text + site outreach flow (added 2026-07-19).
+  // Orthogonal to `status`. See routes/pipeline.ts for the state machine.
+  pipeline_status: string;
+  site_url: string | null;
+  site_url_raw: string | null;
+  pipeline_brief: string | null;
+  campaign_slug: string | null;
+  clarity_tag: string | null;
+  pipeline_sessions: number;
+  pipeline_last_action_at: string | null;
   created_at: string;
   updated_at: string;
 }

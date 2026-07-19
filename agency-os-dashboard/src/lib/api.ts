@@ -1,5 +1,5 @@
 import type {
-  Lead, CallEntry, ProspectResult, Project, Page, ReportSummary,
+  Lead, LeadActivity, CallEntry, ProspectResult, Project, Page, ReportSummary,
   Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
@@ -433,6 +433,36 @@ export const api = {
         `/api/leads/${leadId}/recordings/attach`,
         { method: 'POST', body: JSON.stringify({ url }) }
       ),
+  },
+  // Automated Pipeline — text + site outreach queue.
+  // Same underlying `leads` table as the cold-call flow, filtered
+  // server-side to leads that actually belong in this motion (no site,
+  // enriched, in cold/contacted). See backend/src/routes/pipeline.ts.
+  pipeline: {
+    list: (filters?: { status?: string; q?: string }) =>
+      apiFetch<{ leads: Lead[] }>(`/api/pipeline/leads${qs(filters)}`),
+    get: (id: number) =>
+      apiFetch<{ lead: Lead; activity: LeadActivity[] }>(`/api/pipeline/leads/${id}`),
+    saveSiteUrl: (id: number, url: string) =>
+      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/site-url`, {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      }),
+    // Fires on operator taps of Open in Messages / Log call. Optimistic:
+    // the server assumes the send happened; the paired undo() reverts if
+    // the operator dismisses the toast in the ~6s window.
+    action: (
+      id: number,
+      body: { action: 'intro_sent' | 'followed_up' | 'called'; meta?: unknown },
+    ) =>
+      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/action`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    undo: (id: number) =>
+      apiFetch<{ lead: Lead } | null>(`/api/pipeline/leads/${id}/undo`, {
+        method: 'POST',
+      }),
   },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
