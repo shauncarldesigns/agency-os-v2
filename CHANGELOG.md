@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Shared lead-detail modal (PR #140)
+
+- **[#140](https://github.com/shauncarldesigns/agency-os-v2/pull/140) One lead-detail modal for both pipelines.** Merges the Cold Call Pipeline's rich LeadModal (Overview / Reviews / Pitch Prep / Call Log tabs, Google Maps card, tier + opportunity-score banner, outcome/stage/tier editors, Book demo) into the Automated Pipeline's Tailwind visual language as `components/shared/LeadDetailModal.tsx`, and uses it from both entry points: Cold Call Pipeline row click, and Automated Pipeline "View lead". The automated context adds an Activity tab (pipeline status, site sessions, live-site link, outreach trail). Old `pipeline/LeadModal.tsx` deleted. Dashboard.
+
 ### Pipeline brief — verbatim reviews appended (PR #139)
 
 - **[#139](https://github.com/shauncarldesigns/agency-os-v2/pull/139) Pipeline brief now carries the full mined review set verbatim.** After Claude authors the brief, the Worker appends a `CUSTOMER REVIEWS (VERBATIM)` block built straight from `leads.google_reviews` (Google's 5 + Outscraper's backfill up to 50) — numbered, with rating, exact unedited text, author, and recency; rating-only reviews skipped. Deliberately not routed through Claude so landingsite gets exact content with zero paraphrase risk. The prompt now instructs the authored sections to point the builder at the appended block instead of quoting piecemeal. Regenerate a lead's brief to pick it up. Backend.

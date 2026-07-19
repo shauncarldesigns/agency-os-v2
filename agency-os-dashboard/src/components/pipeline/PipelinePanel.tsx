@@ -7,7 +7,7 @@ import { StageFunnel, type StageFilter } from './StageFunnel';
 import { TierStats } from './TierStats';
 import { EnrichmentStrip } from './EnrichmentStrip';
 import { LeadsTable } from './LeadsTable';
-import { LeadModal } from './LeadModal';
+import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { AddLeadModal } from './AddLeadModal';
 import { QualifyLeadModal } from './QualifyLeadModal';
@@ -279,14 +279,15 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         />
       )}
 
-      <LeadModal
-        open={openLeadId != null}
-        leadId={openLeadId}
-        onClose={() => setOpenLeadId(null)}
-        showToast={showToast}
-        onLeadUpdated={handleLeadUpdated}
-        onQualify={setQualifyLead}
-      />
+      {openLeadId != null && (
+        <LeadDetailModal
+          leadId={openLeadId}
+          onClose={() => setOpenLeadId(null)}
+          showToast={showToast}
+          onLeadUpdated={handleLeadUpdated}
+          onQualify={setQualifyLead}
+        />
+      )}
 
       <QualifyLeadModal
         open={qualifyLead !== null}

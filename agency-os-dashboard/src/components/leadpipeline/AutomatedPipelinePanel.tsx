@@ -11,9 +11,6 @@ import {
   X,
   Copy,
   Check,
-  ExternalLink,
-  Star,
-  Globe,
   Send,
   Eye,
   MousePointerClick,
@@ -24,8 +21,9 @@ import {
   AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
-import type { Lead, LeadActivity, ShowToast } from '../../lib/types';
+import type { Lead, ShowToast } from '../../lib/types';
 import { api, API_BASE, ApiError } from '../../lib/api';
+import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -926,117 +924,6 @@ function CallPrepModal({
   );
 }
 
-// ---------- Lead detail ----------
-
-function LeadDetailModal({
-  lead,
-  onClose,
-  activity,
-}: {
-  lead: PipelineLead;
-  onClose: () => void;
-  activity: LeadActivity[];
-}) {
-  const cfg = STATUS_CONFIG[lead.status];
-  return (
-    <ModalShell title="Lead details" onClose={onClose}>
-      <div className="px-5 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 text-sm font-semibold text-white">
-            {lead.initials}
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">{lead.name}</h3>
-            <div className="flex items-center gap-1.5 text-sm text-slate-500">
-              <span>{lead.category}</span>
-              <span className="text-slate-300">·</span>
-              <span className="flex items-center gap-1 text-amber-500 font-medium">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                {lead.rating.toFixed(1)}
-                <span className="text-slate-400 font-normal">({lead.reviews})</span>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={`mt-4 rounded-xl border ${cfg.chipBorder} ${cfg.chipBg} px-3 py-2.5 text-sm font-medium ${cfg.chipText}`}
-        >
-          {cfg.label}
-        </div>
-
-        <div className="mt-4 space-y-3 text-sm text-slate-600">
-          <div className="flex items-center gap-2">
-            <Phone className="h-4 w-4 shrink-0 text-slate-400" />
-            <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline">
-              {lead.phone || '—'}
-            </a>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
-            <span>{lead.address || '—'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 shrink-0 text-slate-400" />
-            <span>{lead.hours || '—'}</span>
-          </div>
-          {lead.url && (
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 shrink-0 text-slate-400" />
-              <a
-                href={lead.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-blue-600 hover:underline truncate"
-              >
-                {lead.url.replace('https://', '').split('?')[0]}
-                <ExternalLink className="h-3 w-3 shrink-0" />
-              </a>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50 p-4">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Activity
-          </h4>
-          <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex items-center justify-between">
-              <span>Last action</span>
-              <span className="font-medium text-slate-700">{lead.lastAction}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Site sessions</span>
-              <span className="font-medium text-slate-700">{lead.sessions}</span>
-            </div>
-            {activity.length > 0 && (
-              <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-[13px] text-slate-500">
-                {activity.slice(0, 8).map((a) => (
-                  <div key={a.id} className="flex items-center justify-between">
-                    <span>{a.action.replace(/_/g, ' ')}</span>
-                    <span className="text-slate-400">{relativeTime(a.created_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {lead.url && (
-          <a
-            href={lead.url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-          >
-            View live site
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-      </div>
-    </ModalShell>
-  );
-}
 
 // ---------- Undo toast ----------
 
@@ -1110,7 +997,6 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
-  const [detailActivity, setDetailActivity] = useState<LeadActivity[]>([]);
   const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
 
   const loadLeads = useCallback(async () => {
@@ -1143,17 +1029,9 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
     setModal({ type: STATUS_TO_MODAL[lead.status], lead });
   };
 
-  const openDetail = async (lead: PipelineLead) => {
-    // Optimistic open with empty activity; fetch fills it in.
-    setModal({ type: 'detail', lead });
-    setDetailActivity([]);
-    try {
-      const { activity } = await api.pipeline.get(lead.id);
-      setDetailActivity(activity);
-    } catch {
-      // Non-fatal; the modal still shows the derived last-action string.
-    }
-  };
+  // Opens the shared LeadDetailModal (components/shared/) — it fetches the
+  // full lead + calls + pipeline activity itself.
+  const openDetail = (lead: PipelineLead) => setModal({ type: 'detail', lead });
 
   const applyMutation = (updated: Lead, lastAction: string | null): PipelineLead => {
     const mapped = mapLeadRow(updated, lastAction);
@@ -1329,10 +1207,12 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
         <CallPrepModal lead={modal.lead} onClose={() => setModal(null)} onLogged={logCall} />
       )}
       {modal?.type === 'detail' && (
-        <LeadDetailModal
-          lead={modal.lead}
-          activity={detailActivity}
+        <SharedLeadDetailModal
+          leadId={modal.lead.id}
           onClose={() => setModal(null)}
+          showToast={showToast}
+          onLeadUpdated={() => void loadLeads()}
+          pipelineContext
         />
       )}
 
