@@ -1,52 +1,9 @@
-/* Automated Pipeline light-mode isolation (Phase 1).
- *
- * The rest of the app (Header, Nav, existing panels) still uses the dark
- * theme in global.css. Tailwind utilities are enabled here without the
- * global preflight, so utility classes work but browser defaults aren't
- * reset. The `.pipeline-scope` wrapper below defeats the inherited dark
- * body color/font that would otherwise bleed into the new page.
- *
- * Phase 3 retires this file when the whole app moves to light mode. */
+/* Tailwind entry point. The `.pipeline-scope` isolation era ended with the
+ * Phase 3 light rewrite — preflight is on globally and the whole app shares
+ * the light theme, so no scoped resets are needed anymore. This file keeps
+ * its name only to avoid churning the import in main.tsx; it is now just
+ * the Tailwind directive host. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-.pipeline-scope {
-  /* Override the dark app's inherited body color + DM Sans font. */
-  color: rgb(15 23 42);            /* slate-900 */
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
-  font-weight: 400;
-
-  /* The panel provides its own bg-slate-50; this guarantees no dark edges
-   * peek through if the wrapper's own bg is ever removed. */
-  background: rgb(248 250 252);     /* slate-50 */
-
-  /* Font-smoothing to match the mockup's crisp text rendering. */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Scoped Tailwind-preflight-lite.
- *
- * Preflight is disabled globally (see tailwind.config.js) so the dark app's
- * global.css stays untouched. But without preflight, native <button> keeps
- * its 2px outset browser border and native form controls keep their agent
- * styling. Restore just the parts of preflight that matter for this scope.
- *
- * `:where()` keeps specificity at (0,0,1) so Tailwind's `.border`,
- * `.bg-*`, etc. utilities (specificity ≥ 0,1,0) still win. Only elements
- * INSIDE `.pipeline-scope` are touched — dark panels are unaffected. */
-:where(.pipeline-scope) *,
-:where(.pipeline-scope) ::before,
-:where(.pipeline-scope) ::after {
-  border-width: 0;
-  border-style: solid;
-  border-color: currentColor;
-}
-:where(.pipeline-scope) button {
-  background-color: transparent;
-  background-image: none;
-}
-
