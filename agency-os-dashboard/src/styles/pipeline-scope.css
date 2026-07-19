@@ -27,3 +27,26 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Scoped Tailwind-preflight-lite.
+ *
+ * Preflight is disabled globally (see tailwind.config.js) so the dark app's
+ * global.css stays untouched. But without preflight, native <button> keeps
+ * its 2px outset browser border and native form controls keep their agent
+ * styling. Restore just the parts of preflight that matter for this scope.
+ *
+ * `:where()` keeps specificity at (0,0,1) so Tailwind's `.border`,
+ * `.bg-*`, etc. utilities (specificity ≥ 0,1,0) still win. Only elements
+ * INSIDE `.pipeline-scope` are touched — dark panels are unaffected. */
+:where(.pipeline-scope) *,
+:where(.pipeline-scope) ::before,
+:where(.pipeline-scope) ::after {
+  border-width: 0;
+  border-style: solid;
+  border-color: currentColor;
+}
+:where(.pipeline-scope) button {
+  background-color: transparent;
+  background-image: none;
+}
+
