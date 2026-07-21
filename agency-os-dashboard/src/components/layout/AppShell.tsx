@@ -5,6 +5,7 @@ import {
   PhoneCall,
   Globe,
   BookOpen,
+  Library,
   Settings,
   Search as SearchIcon,
   Menu,
@@ -51,6 +52,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
     section: 'Work',
     items: [
       { key: 'sites', label: 'Clients & Sites', icon: Globe, badgeKey: 'sites' },
+      { key: 'docs', label: 'Docs', icon: Library },
       { key: 'playbook', label: 'Playbook', icon: BookOpen },
       { key: 'reports', label: 'Reports', icon: BarChart3 },
     ],
@@ -64,6 +66,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   'automated-pipeline': { title: 'Automated Pipeline', subtitle: 'Text + site outreach — work your way down the queue' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
+  docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },
   playbook: { title: 'Playbook', subtitle: 'Scripts, objections, and follow-ups' },
   reports: { title: 'Reports', subtitle: 'Monthly client reporting' },
 };
