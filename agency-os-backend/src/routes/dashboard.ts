@@ -27,6 +27,10 @@ function delta(current: number | null, previous: number | null): number | null {
   return Number((current - previous).toFixed(1));
 }
 
+function countDelta(current: number, previous: number): number {
+  return current - previous;
+}
+
 // GET /api/dashboard — the landing call.
 dashboardRouter.get('/', async (c) => {
   const today = chicagoToday();
@@ -311,6 +315,34 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
   previousRef.setDate(previousRef.getDate() - 7);
   const previousWeek = chicagoCallingWeek(previousRef);
 
+  async function activityFor(start: string, end: string) {
+    const row = await c.env.DB.prepare(`
+      SELECT
+        COUNT(DISTINCT CASE WHEN action = 'url_saved' THEN lead_id END) as sites_created,
+        COUNT(CASE WHEN action = 'intro_sent' THEN 1 END) as intro_texts_sent,
+        COUNT(CASE WHEN action = 'followed_up' THEN 1 END) as follow_ups_sent,
+        COUNT(DISTINCT CASE WHEN action = 'click_tracked' THEN lead_id END) as engaged_leads,
+        COUNT(CASE WHEN action = 'click_tracked' THEN 1 END) as total_visits
+      FROM lead_activity
+      WHERE action IN ('url_saved', 'intro_sent', 'followed_up', 'click_tracked')
+        AND date(created_at) BETWEEN ? AND ?
+    `).bind(start, end).first<{
+      sites_created: number | null;
+      intro_texts_sent: number | null;
+      follow_ups_sent: number | null;
+      engaged_leads: number | null;
+      total_visits: number | null;
+    }>();
+
+    return {
+      sitesCreated: row?.sites_created ?? 0,
+      introTextsSent: row?.intro_texts_sent ?? 0,
+      followUpsSent: row?.follow_ups_sent ?? 0,
+      engagedLeads: row?.engaged_leads ?? 0,
+      totalVisits: row?.total_visits ?? 0,
+    };
+  }
+
   async function funnelFor(start: string, end: string) {
     const sentRow = await c.env.DB.prepare(`
       SELECT COUNT(DISTINCT lead_id) as n
@@ -362,9 +394,20 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     };
   }
 
-  const [current, previous, activeLeadsRow, hotLeads, smsCurrent, smsPrevious] = await Promise.all([
+  const [
+    current,
+    previous,
+    currentActivity,
+    previousActivity,
+    activeLeadsRow,
+    hotLeads,
+    smsCurrent,
+    smsPrevious,
+  ] = await Promise.all([
     funnelFor(week.monday, week.friday),
     funnelFor(previousWeek.monday, previousWeek.friday),
+    activityFor(week.monday, week.friday),
+    activityFor(previousWeek.monday, previousWeek.friday),
     c.env.DB.prepare(`
       SELECT COUNT(*) as n
       FROM leads
@@ -444,6 +487,17 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
         engagementRate: delta(current.engagementRate, previous.engagementRate),
         replyPerTap: null,
         bookRate: delta(current.bookRate, previous.bookRate),
+      },
+    },
+    activity: {
+      current: currentActivity,
+      previous: previousActivity,
+      trends: {
+        sitesCreated: countDelta(currentActivity.sitesCreated, previousActivity.sitesCreated),
+        introTextsSent: countDelta(currentActivity.introTextsSent, previousActivity.introTextsSent),
+        followUpsSent: countDelta(currentActivity.followUpsSent, previousActivity.followUpsSent),
+        engagedLeads: countDelta(currentActivity.engagedLeads, previousActivity.engagedLeads),
+        totalVisits: countDelta(currentActivity.totalVisits, previousActivity.totalVisits),
       },
     },
     channels: [

@@ -640,6 +640,14 @@ export interface PipelineChannelMetrics {
   tracked: boolean;
 }
 
+export interface PipelineActivityMetrics {
+  sitesCreated: number;
+  introTextsSent: number;
+  followUpsSent: number;
+  engagedLeads: number;
+  totalVisits: number;
+}
+
 export interface PipelineHotLead {
   id: number;
   company: string;
@@ -671,6 +679,11 @@ export interface PipelineKpisResponse {
       replyPerTap: number | null;
       bookRate: number | null;
     };
+  };
+  activity: {
+    current: PipelineActivityMetrics;
+    previous: PipelineActivityMetrics;
+    trends: PipelineActivityMetrics;
   };
   channels: PipelineChannelMetrics[];
   needsAction: PipelineHotLead[];

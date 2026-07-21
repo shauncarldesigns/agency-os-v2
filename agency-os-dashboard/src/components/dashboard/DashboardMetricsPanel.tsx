@@ -4,10 +4,12 @@ import {
   BarChart3,
   CalendarCheck2,
   Flame,
+  Globe2,
   MessageSquareText,
   MousePointerClick,
   PhoneCall,
   RefreshCw,
+  Repeat2,
   Send,
   Target,
   Users,
@@ -146,6 +148,54 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <h3 className="text-sm font-bold text-slate-900">Automated pipeline activity</h3>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Real activity logged from site builds, SMS sends, follow-ups, and tracked link visits
+            </p>
+          </div>
+          <div className="text-xs text-slate-400">
+            Week of {data.week.monday} vs previous week
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ActivityStat
+            icon={Globe2}
+            label="Sites created"
+            value={data.activity.current.sitesCreated}
+            trend={data.activity.trends.sitesCreated}
+            detail="Saved site URLs"
+            tone="blue"
+          />
+          <ActivityStat
+            icon={Send}
+            label="Intro texts sent"
+            value={data.activity.current.introTextsSent}
+            trend={data.activity.trends.introTextsSent}
+            detail="Text 1 sends"
+            tone="indigo"
+          />
+          <ActivityStat
+            icon={Repeat2}
+            label="Follow-ups sent"
+            value={data.activity.current.followUpsSent}
+            trend={data.activity.trends.followUpsSent}
+            detail="Pricing follow-ups"
+            tone="slate"
+          />
+          <ActivityStat
+            icon={MousePointerClick}
+            label="Engaged leads"
+            value={data.activity.current.engagedLeads}
+            trend={data.activity.trends.engagedLeads}
+            detail={`${data.activity.current.totalVisits} total visit${data.activity.current.totalVisits === 1 ? '' : 's'}`}
+            tone="emerald"
+          />
+        </div>
+      </section>
+
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <h3 className="text-sm font-bold text-slate-900">Funnel strip</h3>
             <p className="mt-0.5 text-xs text-slate-400">
               Week of {data.week.monday} vs previous week
@@ -210,6 +260,47 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function ActivityStat({
+  icon: Icon,
+  label,
+  value,
+  trend,
+  detail,
+  tone,
+}: {
+  icon: typeof Target;
+  label: string;
+  value: number;
+  trend: number;
+  detail: string;
+  tone: 'blue' | 'indigo' | 'emerald' | 'slate';
+}) {
+  const toneCls = {
+    blue: 'bg-blue-50 text-blue-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    slate: 'bg-slate-100 text-slate-600',
+  }[tone].split(' ');
+  const [bg, text] = toneCls;
+  const trendCls = trend === 0 ? 'text-slate-400' : trend > 0 ? 'text-emerald-600' : 'text-rose-500';
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${bg}`}>
+          <Icon className={`h-4 w-4 ${text}`} />
+        </div>
+        <span className={`rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold ${trendCls}`}>
+          {formatCountDelta(trend)}
+        </span>
+      </div>
+      <div className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{detail}</div>
     </div>
   );
 }
@@ -370,4 +461,9 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
 
 function formatNullablePct(value: number | null) {
   return value === null ? 'Not tracked' : `${value.toFixed(1)}%`;
+}
+
+function formatCountDelta(value: number) {
+  if (value === 0) return 'No change';
+  return `${value > 0 ? '+' : ''}${value} vs last week`;
 }
