@@ -328,6 +328,7 @@ export type Tab =
   | 'pipeline'
   | 'automated-pipeline'
   | 'sites'
+  | 'docs'
   | 'playbook'
   | 'reports';
 

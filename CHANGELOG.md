@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Operator docs tab (PR #152)
+
+- **[#152](https://github.com/shauncarldesigns/agency-os-v2/pull/152) Dashboard gains an Operator Docs wiki.** Adds a new Docs tab with searchable checklist pages for after-launch client work, project lifecycle movement, DNS setup, Brief Studio, weekly calling, and monthly client review. Dashboard.
+
 ### Worker API route restore (PR #151)
 
 - **[#151](https://github.com/shauncarldesigns/agency-os-v2/pull/151) Dashboard API hostname restored after clean tracking domain launch.** Keeps `try.shauncarldesigns.com` as the clean tracking custom domain while explicitly leaving the original `workers.dev` API route enabled via `workers_dev = true`, so existing dashboard builds can continue calling the API hostname. Backend.

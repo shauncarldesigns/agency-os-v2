@@ -11,6 +11,7 @@ import { ReportsPanel } from './components/reports/ReportsPanel';
 import AutomatedPipelinePanel from './components/leadpipeline/AutomatedPipelinePanel';
 import { CallSessionsPage } from './components/sessions/CallSessionsPage';
 import { PlaybookPage } from './components/playbook/PlaybookPage';
+import { DocsPage } from './components/docs/DocsPage';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
@@ -179,6 +180,7 @@ export default function App() {
                 />
               </div>
             )}
+            {activeTab === 'docs' && <DocsPage />}
             {activeTab === 'playbook' && <PlaybookPage showToast={showToast} />}
             {activeTab === 'reports' && (
               <div className="main">
