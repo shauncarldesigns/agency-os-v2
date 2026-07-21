@@ -42,6 +42,8 @@ const DOCS: DocPage[] = [
           'Confirm the custom domain resolves at the live site.',
           'Verify SSL on both apex and www.',
           'Check homepage, service pages, contact page, phone links, forms, and mobile layout.',
+          'Run a clean audit and speed test before announcing the site as live.',
+          'Verify title tags, meta descriptions, and schema are present on priority pages.',
           'Record the launch date and move the project to live after the client is signed.',
           'Confirm the client is included in MRR only when status is building or live.',
         ],
@@ -58,6 +60,119 @@ const DOCS: DocPage[] = [
         title: 'First follow-up',
         body: 'Use the first check-in to catch small fixes, reinforce the value of the launch, and set expectations for ongoing page work or reporting.',
         callout: 'A quiet client after launch is not automatically a healthy client. Put a next action on the calendar.',
+      },
+    ],
+  },
+  {
+    id: 'tracking-tech',
+    title: 'Tracking & Tech Setup',
+    eyebrow: 'Post-sale measurement',
+    summary: 'The instrumentation needed to prove value after launch.',
+    icon: CalendarCheck,
+    sections: [
+      {
+        title: 'Core tracking',
+        items: [
+          'Install Google Tag Manager so future tags can be added without rebuilding the site.',
+          'Add the Google Analytics tag to monitor traffic and engagement.',
+          'Add conversion tracking for form submissions, phone taps, primary CTA clicks, and important button clicks.',
+          'Add lead-capture hooks on buttons and forms so monthly reporting can show actual inquiries.',
+          'Add call tracking through CallRail, Google tracking numbers, or the chosen call attribution tool.',
+        ],
+      },
+      {
+        title: 'Search and platform setup',
+        items: [
+          'Verify whether reporting can query Search Console from the stored URL or whether each client URL must be explicitly added.',
+          'Add the site to Google Search Console once the domain is live.',
+          'Use Cloudflare DNS verification or Tag Manager verification when available.',
+          'Submit or refresh the sitemap in Google after launch and after meaningful page batches.',
+        ],
+      },
+      {
+        title: 'Site metadata',
+        items: [
+          'Confirm each priority page has a specific title tag and meta description.',
+          'Generate a schema file or schema-ready block for the business, services, service areas, and FAQs.',
+          'Keep schema consistent with the visible page content and business details.',
+        ],
+      },
+      {
+        title: 'Decision still needed',
+        body: 'Choose the default stack for reporting and call attribution: GA4 + GTM + Search Console are baseline, while call tracking needs a standard provider and per-client setup process.',
+        callout: 'Do not promise monthly lead numbers until calls, forms, and CTA events are actually tracked.',
+      },
+    ],
+  },
+  {
+    id: 'pre-sale-build',
+    title: 'Pre-Sale Site QA',
+    eyebrow: 'Before the client sees it',
+    summary: 'Checks for demo or speculative sites before they are shown to a prospect.',
+    icon: FileText,
+    sections: [
+      {
+        title: 'Demo-site cleanup',
+        items: [
+          'Remove links that send the prospect to unrelated external pages.',
+          'Make sure every visible CTA points somewhere intentional.',
+          'Check that business name, city, phone, service list, and service areas match the prospect.',
+          'Remove placeholder sections, generic copy, and any landingsite defaults that weaken the reveal.',
+        ],
+      },
+      {
+        title: 'Proof and imagery',
+        items: [
+          'Use real review language from enrichment when available.',
+          'Prefer client-owned or job-relevant photos over generic visuals.',
+          'If using Paige or another tool later, verify whether it can pull images from built pages or needs an upload workflow.',
+        ],
+      },
+      {
+        title: 'Technical sanity pass',
+        items: [
+          'Run the site on mobile before sending it.',
+          'Confirm forms and phone links do not break the pitch.',
+          'Check basic speed and layout before the prospect opens it.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'onboarding',
+    title: 'New Client Onboarding',
+    eyebrow: 'Signed client setup',
+    summary: 'The repeatable setup path once a prospect becomes a client.',
+    icon: ArrowRightCircle,
+    sections: [
+      {
+        title: 'Baseline audit',
+        items: [
+          'Capture where the client starts: current rankings, GBP state, website quality, PageSpeed, and obvious technical issues.',
+          'Save the baseline before changes so future reports can show rank and traffic progress.',
+          'Document the client domain, hosting state, DNS access, analytics state, and GBP ownership state.',
+        ],
+      },
+      {
+        title: 'Access and ownership',
+        items: [
+          'Request or claim Google Business Profile manager access using the agency ID.',
+          'Coordinate the GBP access process with Sandy and Craig where needed.',
+          'Get DNS access unless the site can be hosted through landingsite nameservers.',
+          'Confirm what setting up a Paige account entails before making it part of the standard workflow.',
+        ],
+      },
+      {
+        title: 'Client asset request',
+        items: [
+          'Ask the client to upload lots of real images: team, trucks, completed jobs, equipment, shop, before/after, and local work.',
+          'Collect service details, service areas, preferred jobs, disliked jobs, certifications, warranties, and financing info.',
+          'Collect any existing tracking, Search Console, Analytics, GBP, Meta, Yelp, Bing, or directory logins.',
+        ],
+      },
+      {
+        title: 'Per-client setup',
+        body: 'Each client needs a standard setup packet: domain/DNS, GTM, Analytics, Search Console, call tracking, GBP access, sitemap submission, schema, reporting source, and content plan.',
       },
     ],
   },
@@ -120,12 +235,60 @@ const DOCS: DocPage[] = [
           'Use Manage DNS once the project has a Cloudflare zone.',
           'If records are missing, use retry to recreate them.',
           'Pending zones poll hourly in the Worker and the sidebar card self-polls while open.',
+          'If landingsite nameservers are usable, prefer that path; otherwise get DNS access early.',
         ],
       },
       {
         title: 'Known limits',
         body: 'Cloudflare zones must be created for apex domains. Subdomains such as client.agncy.dev need records under the existing apex zone and are not handled by the current setup flow.',
         callout: 'The database name is agency-os-v2. Avoid the old agency-os-v2-db typo when applying migrations.',
+      },
+    ],
+  },
+  {
+    id: 'seo-growth',
+    title: 'SEO Growth Plan',
+    eyebrow: 'Monthly content + authority',
+    summary: 'How to make ongoing SEO pages useful instead of templated filler.',
+    icon: Rocket,
+    sections: [
+      {
+        title: 'Location pages that can rank',
+        items: [
+          'Do not publish the same page with only the city swapped.',
+          'Add local landmarks, neighborhoods, geography, and city-specific references.',
+          'Use location-specific FAQs around housing stock, weather concerns, permit requirements, or common local jobs.',
+          'Include proof from that city when available: testimonials, photos, job examples, or nearby service notes.',
+          'Mention service variations that matter in that specific location.',
+        ],
+      },
+      {
+        title: 'Beyond service-area pages',
+        items: [
+          'Add seasonal pages such as furnace tune-up before winter in Green Bay.',
+          'Add FAQ and how-to pages for long-tail searches.',
+          'Add competitor comparison pages when appropriate and truthful.',
+          'Add neighborhood-specific pages for larger markets.',
+          'Add blog-style posts that can also be amplified through GBP or Paige.',
+        ],
+      },
+      {
+        title: 'Authority and local signals',
+        items: [
+          'Register or clean up Apple, Yelp, Bing, Nextdoor, and trade-specific directory listings.',
+          'Post services as products on Google Business Profile where it fits the business.',
+          'Start or connect social channels that can link back to the site.',
+          'Add a map pack or location map section where it helps users and local relevance.',
+        ],
+      },
+      {
+        title: 'Quality control',
+        items: [
+          'Validate generated SEO pages before publishing.',
+          'Check that prompts produce genuinely local pages with service area, specific keywords, and schema-ready details.',
+          'Update the sitemap after new pages are added.',
+          'Treat 3-5 location pages per month as a quality target, not a template quota.',
+        ],
       },
     ],
   },
@@ -207,6 +370,8 @@ const DOCS: DocPage[] = [
         items: [
           'Check PageSpeed for live Tier 3 sites.',
           'Review reporting snapshots and search movement when available.',
+          'Review GA4, conversion events, call tracking, and CTA activity once installed.',
+          'Compare new leads or calls against the pre-launch baseline.',
           'Look for weak pages, missing service coverage, and service-area expansion opportunities.',
           'Compare client status against MRR rules before reporting revenue.',
         ],
