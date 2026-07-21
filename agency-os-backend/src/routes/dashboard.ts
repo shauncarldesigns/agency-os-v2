@@ -318,16 +318,14 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
   async function activityFor(start: string, end: string) {
     const row = await c.env.DB.prepare(`
       SELECT
-        COUNT(DISTINCT CASE WHEN action = 'url_saved' THEN lead_id END) as sites_created,
         COUNT(CASE WHEN action = 'intro_sent' THEN 1 END) as intro_texts_sent,
         COUNT(CASE WHEN action = 'followed_up' THEN 1 END) as follow_ups_sent,
         COUNT(DISTINCT CASE WHEN action = 'click_tracked' THEN lead_id END) as engaged_leads,
         COUNT(CASE WHEN action = 'click_tracked' THEN 1 END) as total_visits
       FROM lead_activity
-      WHERE action IN ('url_saved', 'intro_sent', 'followed_up', 'click_tracked')
+      WHERE action IN ('intro_sent', 'followed_up', 'click_tracked')
         AND date(created_at) BETWEEN ? AND ?
     `).bind(start, end).first<{
-      sites_created: number | null;
       intro_texts_sent: number | null;
       follow_ups_sent: number | null;
       engaged_leads: number | null;
@@ -335,7 +333,7 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     }>();
 
     return {
-      sitesCreated: row?.sites_created ?? 0,
+      sitesCreated: 0,
       introTextsSent: row?.intro_texts_sent ?? 0,
       followUpsSent: row?.follow_ups_sent ?? 0,
       engagedLeads: row?.engaged_leads ?? 0,
@@ -400,6 +398,7 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     currentActivity,
     previousActivity,
     activeLeadsRow,
+    siteReadyRow,
     hotLeads,
     smsCurrent,
     smsPrevious,
@@ -415,6 +414,16 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
         AND status IN ('cold', 'contacted')
         AND enrichment_status = 'enriched'
         AND has_website = 0
+    `).first<{ n: number }>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as n
+      FROM leads
+      WHERE deleted_at IS NULL
+        AND status IN ('cold', 'contacted')
+        AND enrichment_status = 'enriched'
+        AND has_website = 0
+        AND site_url IS NOT NULL
+        AND pipeline_status NOT IN ('booked', 'archived')
     `).first<{ n: number }>(),
     c.env.DB.prepare(`
       SELECT
@@ -469,6 +478,8 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     funnelFor(week.monday, week.friday),
     funnelFor(previousWeek.monday, previousWeek.friday),
   ]);
+
+  currentActivity.sitesCreated = siteReadyRow?.n ?? 0;
 
   return c.json({
     week,

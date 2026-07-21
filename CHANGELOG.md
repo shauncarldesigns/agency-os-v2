@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Dashboard load + site count fix (PR #153)
+
+- **[#153](https://github.com/shauncarldesigns/agency-os-v2/pull/153) Dashboard redeployed with production API env and site-created count aligned to the send queue.** Fixes a bad dashboard deploy that embedded `localhost:8788` as the API base, and changes the Automated Pipeline "Sites created" KPI to count active built sites (`site_url` present in the live automated queue) instead of only current-week URL-save events. Backend + dashboard.
+
 ### Operator docs tab (PR #152)
 
 - **[#152](https://github.com/shauncarldesigns/agency-os-v2/pull/152) Dashboard gains an Operator Docs wiki.** Adds a new Docs tab with searchable checklist pages for after-launch client work, project lifecycle movement, DNS setup, Brief Studio, weekly calling, and monthly client review. Dashboard.

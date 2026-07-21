@@ -11,16 +11,17 @@ All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
 
-## What shipped recently (PRs #129–#151)
+## What shipped recently (PRs #129–#153)
 
 Two headline features, built from an external design-spec package
 (`agency-os-v2-pipeline/` — README + build brief + two canonical `.jsx`
 visual specs):
 
-### Dashboard KPI view (#147, #149)
+### Dashboard KPI view (#147, #149, #153)
 
 - **[#147](https://github.com/shauncarldesigns/agency-os-v2/pull/147)** The Dashboard tab is no longer an empty placeholder. It now shows a KPI-first view for the Automated Pipeline: hot leads ready to call, this week's reply-rate slot, meetings booked this week, active pipeline size, funnel strip, channel split, and a Needs action list. Backend endpoint: `GET /api/dashboard/pipeline-kpis`.
 - **[#149](https://github.com/shauncarldesigns/agency-os-v2/pull/149)** Added a concrete Automated Pipeline activity row under the headline KPIs: sites created from `url_saved`, intro texts from `intro_sent`, follow-ups from `followed_up`, and engaged leads / total visits from `click_tracked`, all week-scoped with previous-week deltas.
+- **[#153](https://github.com/shauncarldesigns/agency-os-v2/pull/153)** Corrected "Sites created" to count active built sites in the Automated Pipeline (`site_url` present and non-terminal pipeline status), so it matches the Ready to send queue even when sites were saved before the current calling week. Also redeployed the dashboard with production env after a bad bundle embedded `localhost:8788`.
 - Current truth boundary: SMS send/tap/engagement/book metrics are real (`lead_activity`, `pipeline_sessions`, `demos`). Reply rate and Facebook split intentionally render as "not tracked" until the app records reply/channel events explicitly.
 
 ### Automated Pipeline → Sites bridge (#148)
