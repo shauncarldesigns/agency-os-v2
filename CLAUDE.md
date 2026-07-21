@@ -94,8 +94,13 @@ white surfaces, blue→indigo gradient accent, system font stack.
   `'prospect'`.
 - **ExecutionView renders inside the shell's `<main>`** — sidebar stays
   visible during calls. It no longer takes over the viewport.
-- Call Sessions page = week-paginated session history/forward view
-  (`components/sessions/CallSessionsPage.tsx`); Dashboard remains "today".
+- Call Sessions page = the WHOLE calling operation
+  (`components/sessions/CallSessionsPage.tsx`): the former Dashboard
+  operating view (today's sessions, Hot Leads, agency summary, objections
+  overview — still `DashboardPanel` internally) on top, plus the
+  week-paginated Session history browser below. **The Dashboard tab is
+  intentionally empty** — the operator reserved it for a future feature
+  (2026-07-21); don't put content back there without asking.
 - Playbook page = read-only browser over the playbook markdown
   (`components/playbook/PlaybookPage.tsx`); editing stays in
   `agency-os-backend/src/playbook/*.md`.
