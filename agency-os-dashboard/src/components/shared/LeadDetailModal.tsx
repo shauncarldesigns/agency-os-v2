@@ -5,6 +5,7 @@ import {
   Globe,
   Star,
   MapPin,
+  Clock,
   ExternalLink,
   Loader2,
   Map as MapIcon,
@@ -80,6 +81,29 @@ function relativeTime(iso: string): string {
   if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
   const months = Math.floor(days / 30);
   return `${months} mo${months === 1 ? '' : 's'} ago`;
+}
+
+// Verb for the footer Activity card, derived from the most recent outreach
+// activity when available, otherwise from enrichment state.
+function lastActionLabel(lead: Lead, activity: LeadActivity[]): string {
+  switch (activity[0]?.action) {
+    case 'url_saved':
+      return 'Built';
+    case 'intro_sent':
+      return 'Sent';
+    case 'followed_up':
+      return 'Followed up';
+    case 'called':
+      return 'Called';
+    case 'click_tracked':
+      return 'Visited';
+    case 'brief_generated':
+      return 'Brief generated';
+    case 'undo':
+      return 'Undone';
+    default:
+      return lead.enrichment_status === 'enriched' ? 'Enriched' : 'Updated';
+  }
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -272,7 +296,13 @@ export function LeadDetailModal({
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {tab === 'overview' && <OverviewPane lead={lead} onFieldChange={handleFieldChange} />}
+              {tab === 'overview' && (
+                <OverviewPane
+                  lead={lead}
+                  onFieldChange={handleFieldChange}
+                  pipelineContext={pipelineContext}
+                />
+              )}
               {tab === 'reviews' && <ReviewsPane lead={lead} />}
               {tab === 'pitch' && <PitchPrepPane lead={lead} />}
               {tab === 'call' && (
@@ -286,36 +316,66 @@ export function LeadDetailModal({
               {tab === 'activity' && <ActivityPane lead={lead} activity={activity} />}
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-3.5">
-              <button
-                onClick={onClose}
-                className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
-              >
-                Close
-              </button>
-              {onQualify &&
-                lead.enrichment_status === 'enriched' &&
-                !['qualified', 'client', 'not_interested', 'dead'].includes(lead.status) && (
-                  <button
-                    onClick={() => {
-                      onQualify(lead);
-                      onClose();
-                    }}
-                    title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
-                    className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-blue-600/20 hover:shadow-md"
-                  >
-                    → Book demo
-                  </button>
+            {/* Footer.
+                Automated context: the Activity summary card (last action +
+                site sessions) replaces the Close button — the header X
+                closes. Cold-call context keeps Close + Book demo. */}
+            {pipelineContext ? (
+              <div className="border-t border-slate-100 px-5 py-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Activity
+                  </h4>
+                  <div className="space-y-2 text-sm text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span>Last action</span>
+                      <span className="font-medium text-slate-700">
+                        {lastActionLabel(lead, activity)}{' '}
+                        {relativeTime(
+                          lead.pipeline_last_action_at ?? lead.updated_at ?? lead.created_at,
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Site sessions</span>
+                      <span className="font-medium text-slate-700">
+                        {lead.pipeline_sessions ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-3.5">
+                <button
+                  onClick={onClose}
+                  className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Close
+                </button>
+                {onQualify &&
+                  lead.enrichment_status === 'enriched' &&
+                  !['qualified', 'client', 'not_interested', 'dead'].includes(lead.status) && (
+                    <button
+                      onClick={() => {
+                        onQualify(lead);
+                        onClose();
+                      }}
+                      title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
+                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-blue-600/20 hover:shadow-md"
+                    >
+                      → Book demo
+                    </button>
+                  )}
+                {(lead.status === 'qualified' || lead.status === 'client') && lead.project_id && (
+                  <span className="text-xs font-medium text-slate-400">
+                    {lead.status === 'qualified'
+                      ? '✓ Demo booked · open in Sites'
+                      : '✓ Active client · open in Sites'}
+                  </span>
                 )}
-              {(lead.status === 'qualified' || lead.status === 'client') && lead.project_id && (
-                <span className="text-xs font-medium text-slate-400">
-                  {lead.status === 'qualified'
-                    ? '✓ Demo booked · open in Sites'
-                    : '✓ Active client · open in Sites'}
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -328,36 +388,89 @@ export function LeadDetailModal({
 function OverviewPane({
   lead,
   onFieldChange,
+  pipelineContext,
 }: {
   lead: Lead;
   onFieldChange: (
     field: 'status' | 'outcome' | 'recommended_tier',
     value: string | number | null,
   ) => void;
+  pipelineContext?: boolean;
 }) {
   const services = parseList<string>(lead.extracted_services);
   const areas = parseList<string>(lead.extracted_service_areas);
   const ownerNames = parseList<string>(lead.owner_names);
   const mapsUrl = googleMapsUrl(lead);
+  // lead.address usually already carries city/state (Places formats it);
+  // only fall back to city/state when it's missing so we don't render
+  // "…, WI 53946, USA, Markesan, WI" style duplication.
+  const addressLine =
+    lead.address?.trim() || [lead.city, lead.state].filter(Boolean).join(', ');
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Phone</FieldLabel>
+      {/* Automated context: the original pipeline-card icon rows — regular
+          font, address doubles as the Google Maps link. Cold-call context
+          keeps the labeled grid + the standalone Maps card below. */}
+      {pipelineContext && (
+        <div className="space-y-2 text-sm text-slate-600">
           {lead.phone ? (
             <a
               href={`tel:${lead.phone.replace(/\D/g, '')}`}
-              className="flex items-center gap-1.5 font-mono text-sm font-medium text-blue-600 hover:underline"
+              className="flex items-center gap-2 text-blue-600 hover:underline"
               title="Click to call (uses your computer's default phone handler)"
             >
-              <Phone className="h-3.5 w-3.5" />
+              <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               {formatPhone(lead.phone)}
             </a>
           ) : (
-            <span className="text-sm text-slate-400">—</span>
+            <span className="flex items-center gap-2">
+              <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />—
+            </span>
           )}
+          {mapsUrl ? (
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-blue-600 hover:underline"
+              title="Open the Google Maps listing — reviews, hours & photos"
+            >
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span className="truncate">{addressLine || 'View on Google Maps'}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+          ) : (
+            <span className="flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span className="truncate">{addressLine || '—'}</span>
+            </span>
+          )}
+          <span className="flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            {lead.gbp_hours || '—'}
+          </span>
         </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        {!pipelineContext && (
+          <div>
+            <FieldLabel>Phone</FieldLabel>
+            {lead.phone ? (
+              <a
+                href={`tel:${lead.phone.replace(/\D/g, '')}`}
+                className="flex items-center gap-1.5 font-mono text-sm font-medium text-blue-600 hover:underline"
+                title="Click to call (uses your computer's default phone handler)"
+              >
+                <Phone className="h-3.5 w-3.5" />
+                {formatPhone(lead.phone)}
+              </a>
+            ) : (
+              <span className="text-sm text-slate-400">—</span>
+            )}
+          </div>
+        )}
         <div>
           <FieldLabel>Existing Website</FieldLabel>
           {lead.website ? (
@@ -408,7 +521,7 @@ function OverviewPane({
         </div>
       </div>
 
-      {mapsUrl && (
+      {!pipelineContext && mapsUrl && (
         <a
           href={mapsUrl}
           target="_blank"
@@ -458,6 +571,7 @@ function OverviewPane({
         </div>
       )}
 
+      {pipelineContext ? null : (
       <div className="grid grid-cols-3 gap-3">
         <div>
           <FieldLabel>Outcome</FieldLabel>
@@ -518,6 +632,7 @@ function OverviewPane({
           </select>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -668,31 +783,10 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 // ---------- Activity (Automated Pipeline context) ----------
 
 function ActivityPane({ lead, activity }: { lead: Lead; activity: LeadActivity[] }) {
+  // The last-action + sessions summary lives in the modal footer's Activity
+  // card (always visible in pipeline context) — this tab is the trail.
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-        <div className="space-y-2 text-sm text-slate-600">
-          <div className="flex items-center justify-between">
-            <span>Pipeline status</span>
-            <span className="font-medium text-slate-700">
-              {lead.pipeline_status.replace(/_/g, ' ')}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Site sessions</span>
-            <span className="font-medium text-slate-700">{lead.pipeline_sessions ?? 0}</span>
-          </div>
-          {lead.pipeline_last_action_at && (
-            <div className="flex items-center justify-between">
-              <span>Last action</span>
-              <span className="font-medium text-slate-700">
-                {relativeTime(lead.pipeline_last_action_at)}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
       {lead.site_url && (
         <a
           href={lead.site_url}

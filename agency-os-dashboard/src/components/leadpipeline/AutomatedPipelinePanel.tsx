@@ -163,12 +163,23 @@ function deriveInitials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// First given name from a comma/semicolon-separated owner_names field.
-// Falls back to 'there' (a friendly, non-personalized greeting) — matches
-// the mockup's copy.
+// First given name from owner_names. The column usually holds a JSON array
+// string (e.g. `["Chad", "Matt", "Bill"]` from enrichment) but may be a
+// plain comma-separated string on hand-entered leads — parse JSON first,
+// fall back to splitting. A naive split previously leaked `["Chad` into
+// the SMS composer. Falls back to 'there' (friendly, non-personalized).
 function deriveOwnerFirst(ownerNames: string | null): string {
   if (!ownerNames) return 'there';
-  const first = ownerNames.split(/[,;/]/)[0]?.trim();
+  let first: string | undefined;
+  try {
+    const arr = JSON.parse(ownerNames);
+    if (Array.isArray(arr) && arr.length > 0) first = String(arr[0]).trim();
+  } catch {
+    // not JSON — treat as a delimited plain string
+  }
+  if (!first) first = ownerNames.split(/[,;/]/)[0]?.trim();
+  // Belt and braces: strip any stray JSON punctuation that survived.
+  first = first?.replace(/["'[\]]/g, '').trim();
   if (!first) return 'there';
   return first.split(/\s+/)[0] || 'there';
 }
