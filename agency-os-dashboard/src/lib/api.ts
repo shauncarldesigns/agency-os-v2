@@ -10,6 +10,7 @@ import type {
 } from './playbook';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
+const TRACKING_BASE = (import.meta.env.VITE_TRACKING_URL as string | undefined) ?? API_BASE;
 const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
 
 /**
@@ -701,4 +702,4 @@ export interface SessionOutcomeBody {
   recordingCallId?: number | null;
 }
 
-export { API_BASE };
+export { API_BASE, TRACKING_BASE };

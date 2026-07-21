@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[[routes]]
+pattern = "try.shauncarldesigns.com"
+custom_domain = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "agency-os-v2"

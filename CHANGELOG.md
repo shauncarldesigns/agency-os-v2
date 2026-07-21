@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Clean Automated Pipeline tracking URL (PR #150)
+
+- **[#150](https://github.com/shauncarldesigns/agency-os-v2/pull/150) Automated Pipeline texts now use a clean tracking domain.** Adds `try.shauncarldesigns.com` as a Worker custom domain and introduces `VITE_TRACKING_URL` so SMS composers text `https://try.shauncarldesigns.com/r/{leadId}` instead of the long `workers.dev` API hostname. The API URL stays separate. Backend + dashboard.
+
 ### Automated Pipeline activity KPIs (PR #149)
 
 - **[#149](https://github.com/shauncarldesigns/agency-os-v2/pull/149) Dashboard now shows concrete Automated Pipeline activity counts.** Adds a second KPI row under the headline cards with real week-scoped counts for sites created (`url_saved`), intro texts sent (`intro_sent`), follow-ups sent (`followed_up`), and engaged leads / total visits (`click_tracked`), each with previous-week deltas. Backend + dashboard.
