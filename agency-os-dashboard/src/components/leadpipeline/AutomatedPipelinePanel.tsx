@@ -392,10 +392,13 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[15px] font-semibold text-slate-900">{lead.name}</h3>
-            <div className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
-              <span>{lead.category}</span>
+            {/* flex-wrap + nowrap children: on tight cards the rating drops
+                to its own line as a unit instead of splitting "★" from the
+                number mid-span. */}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-slate-500">
+              <span className="truncate">{lead.category}</span>
               <span className="text-slate-300">·</span>
-              <span className="flex items-center gap-1 text-amber-500 font-medium">
+              <span className="flex items-center gap-1 whitespace-nowrap text-amber-500 font-medium">
                 ★ {lead.rating.toFixed(1)}
                 <span className="text-slate-400 font-normal">({lead.reviews})</span>
               </span>
@@ -1151,10 +1154,12 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
           ))}
         </div>
 
-        {/* Card grid — 1 col on mobile, 2 on tablet, 3 on desktop. Loading /
-         * error / empty states span the full row via col-span-full so they
-         * don't try to sit inside a single grid cell. */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Card grid — 1 col on mobile, 2 on tablet, 3 on desktop. The
+         * explicit grid-cols-1 matters: Tailwind's cols classes use
+         * minmax(0,1fr), which stops the implicit track from inheriting the
+         * widest card's min-content and overflowing small screens. Loading /
+         * error / empty states span the full row via col-span-full. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {loading && (
             <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
               Loading leads…

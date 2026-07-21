@@ -359,7 +359,7 @@ function AnalyticsTab({ showToast }: { showToast: ShowToast }) {
           No objection data yet — hits log automatically from the cockpit chips.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {items.map((o) => (
             <SectionCard key={o.objection_id}>
               <div className="flex items-start justify-between gap-2">

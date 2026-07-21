@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Mobile responsiveness (PR #142)
+
+- **[#142](https://github.com/shauncarldesigns/agency-os-v2/pull/142) Fluid cards + no horizontal overflow on any screen.** The Automated Pipeline / Call Sessions / Playbook analytics card grids lacked a base column definition, so the implicit grid track inherited the widest card's min-content and dragged every card past small viewports — fixed with explicit `grid-cols-1` (`minmax(0,1fr)`), letting card labels truncate as designed. Card rating chips now wrap as a unit instead of splitting the star from the number. Legacy panels fixed centrally: lead tables and the stage funnel scroll horizontally inside their own rounded wrapper instead of stretching the page, the Clients & Sites grid collapses its 360px column floor on narrow screens, section-header action rows wrap, stat tiles can shrink, and the Lead Finder search form stacks below 640px. Verified at 375×812: every page reports zero horizontal overflow; desktop layouts unchanged. Dashboard.
+
 ### Automated-context modal polish + SMS name fix (PR #141)
 
 - **[#141](https://github.com/shauncarldesigns/agency-os-v2/pull/141) Lead-detail modal tuned per context + SMS composer name fix.** In the Automated Pipeline context only: the Overview returns to the pipeline card's icon rows (regular-font phone, hours), the address row itself is now the Google Maps link (replacing the big green listing card), the Outcome/Stage/Tier selects are hidden, and the footer's Close button is replaced by the Activity summary card (last action + site sessions — the header ✕ closes). Cold Call Pipeline context is unchanged (selects, Maps card, Close + Book demo). Also fixes the SMS composers greeting leads with `["Chad` — `owner_names` holds a JSON array string and the first-name derivation now parses it properly. Dashboard.
