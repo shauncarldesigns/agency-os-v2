@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
-import { api, API_BASE, ApiError } from '../../lib/api';
+import { api, TRACKING_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 import { StarRating } from '../shared/StarRating';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
@@ -257,7 +257,7 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     lastAction,
     initials: deriveInitials(l.company ?? ''),
     url: l.site_url,
-    trackerUrl: `${API_BASE}/r/${l.id}`,
+    trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
     brief: l.pipeline_brief,
   };
 }

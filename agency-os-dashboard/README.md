@@ -66,13 +66,14 @@ Build output lands in `dist/`.
 
 ```bash
 echo "VITE_API_URL=https://agency-os-v2-api.<subdomain>.workers.dev
+VITE_TRACKING_URL=https://try.shauncarldesigns.com
 VITE_API_KEY=<DASHBOARD_API_KEY value>" > .env.production
 npm run build
 wrangler pages project create agency-os-v2-dashboard
 wrangler pages deploy dist --project-name=agency-os-v2-dashboard
 ```
 
-You can also set `VITE_API_URL` and `VITE_API_KEY` as Pages-project environment variables instead of bundling them at build time.
+You can also set `VITE_API_URL`, `VITE_TRACKING_URL`, and `VITE_API_KEY` as Pages-project environment variables instead of bundling them at build time.
 
 ## Conventions
 

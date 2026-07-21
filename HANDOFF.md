@@ -11,7 +11,7 @@ All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
 
-## What shipped recently (PRs #129–#149)
+## What shipped recently (PRs #129–#150)
 
 Two headline features, built from an external design-spec package
 (`agency-os-v2-pipeline/` — README + build brief + two canonical `.jsx`
@@ -27,6 +27,10 @@ visual specs):
 
 - **[#148](https://github.com/shauncarldesigns/agency-os-v2/pull/148)** Automated Pipeline now has a real demo-booking bridge into Sites. The engaged Call Prep modal replaces `Log call` with `Book demo`; the automated lead-detail header also has a fallback `Book demo` action. Both reuse `POST /api/leads/:id/qualify`, create a Sites prospect project, and route the operator to Sites.
 - `POST /api/leads/:id/qualify` and session booked outcomes now set `leads.pipeline_status='booked'`. `/api/pipeline/leads` excludes `booked` / `archived`, so leads leave the active Automated Pipeline Kanban once they become a prospect or client.
+
+### Clean tracking links (#150)
+
+- **[#150](https://github.com/shauncarldesigns/agency-os-v2/pull/150)** The Automated Pipeline SMS composers now use `VITE_TRACKING_URL` for public `/r/:lead_id` links instead of `VITE_API_URL`. Production is configured for `https://try.shauncarldesigns.com`, attached to the existing Worker as a custom domain, so texted links look like `https://try.shauncarldesigns.com/r/11` while API calls stay on the Worker API hostname.
 
 ### Automated Pipeline (#129, #130, #131, #132, #133)
 
