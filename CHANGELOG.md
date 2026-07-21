@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Worker API route restore (PR #151)
+
+- **[#151](https://github.com/shauncarldesigns/agency-os-v2/pull/151) Dashboard API hostname restored after clean tracking domain launch.** Keeps `try.shauncarldesigns.com` as the clean tracking custom domain while explicitly leaving the original `workers.dev` API route enabled via `workers_dev = true`, so existing dashboard builds can continue calling the API hostname. Backend.
+
 ### Clean Automated Pipeline tracking URL (PR #150)
 
 - **[#150](https://github.com/shauncarldesigns/agency-os-v2/pull/150) Automated Pipeline texts now use a clean tracking domain.** Adds `try.shauncarldesigns.com` as a Worker custom domain and introduces `VITE_TRACKING_URL` so SMS composers text `https://try.shauncarldesigns.com/r/{leadId}` instead of the long `workers.dev` API hostname. The API URL stays separate. Backend + dashboard.
