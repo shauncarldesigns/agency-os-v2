@@ -26,6 +26,7 @@ import {
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, API_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
+import { StarRating } from '../shared/StarRating';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -400,9 +401,10 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
             <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-slate-500">
               <span className="truncate">{lead.category}</span>
               <span className="text-slate-300">·</span>
-              <span className="flex items-center gap-1 whitespace-nowrap text-amber-500 font-medium">
-                ★ {lead.rating.toFixed(1)}
-                <span className="text-slate-400 font-normal">({lead.reviews})</span>
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <StarRating rating={lead.rating} size={3.5} />
+                <span className="font-medium text-amber-500">{lead.rating.toFixed(1)}</span>
+                <span className="text-slate-400">({lead.reviews})</span>
               </span>
             </div>
           </div>
@@ -1030,10 +1032,15 @@ function BoardCard({
         <h4 className="min-w-0 truncate text-sm font-semibold text-slate-900">{lead.name}</h4>
         <EngagementDot sessions={lead.sessions} />
       </div>
-      <p className="mt-0.5 truncate text-xs text-slate-500">
-        {lead.category} · <span className="text-amber-500">★ {lead.rating.toFixed(1)}</span>{' '}
-        ({lead.reviews})
-      </p>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-slate-500">
+        <span className="truncate">{lead.category}</span>
+        <span className="text-slate-300">·</span>
+        <span className="flex items-center gap-1 whitespace-nowrap">
+          <StarRating rating={lead.rating} />
+          <span className="font-medium text-amber-500">{lead.rating.toFixed(1)}</span>
+          <span>({lead.reviews})</span>
+        </span>
+      </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button
           onClick={() => onAction(lead)}
