@@ -163,7 +163,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
             label="Sites created"
             value={data.activity.current.sitesCreated}
             trend={data.activity.trends.sitesCreated}
-            detail="Saved site URLs"
+            detail="Active built sites"
             tone="blue"
           />
           <ActivityStat
