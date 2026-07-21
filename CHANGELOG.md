@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Five-star rating strips (PR #146)
+
+- **[#146](https://github.com/shauncarldesigns/agency-os-v2/pull/146) Real star strips on pipeline cards.** The lone ★ glyph is replaced by a five-star strip with fractional fill (4.6 renders four full stars and a 60%-filled fifth) on the Automated Pipeline's grid cards, board cards, and the shared lead-detail modal header. New `components/shared/StarRating.tsx`. Dashboard.
+
 ### Call Sessions absorbs the Dashboard (PR #145)
 
 - **[#145](https://github.com/shauncarldesigns/agency-os-v2/pull/145) Everything from the Dashboard moved into Call Sessions; Dashboard emptied.** The Call Sessions tab now opens with the full operating view (today's sessions + Generate week, Hot Leads, prospecting block, agency summary, objections overview) and flows into a new "Session history" section with the week-paginated past/present/upcoming browser. The Dashboard tab shows a placeholder — intentionally reserved for a future feature. Dashboard.

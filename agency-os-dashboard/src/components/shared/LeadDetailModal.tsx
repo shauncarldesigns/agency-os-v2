@@ -3,7 +3,6 @@ import {
   X,
   Phone,
   Globe,
-  Star,
   MapPin,
   Clock,
   ExternalLink,
@@ -18,6 +17,7 @@ import {
 import type { Lead, CallEntry, LeadActivity, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { CallLogTab } from '../pipeline/CallLogTab';
+import { StarRating } from './StarRating';
 import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
 import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 
@@ -226,7 +226,7 @@ export function LeadDetailModal({
                     {lead.industry && <Chip>{lead.industry}</Chip>}
                     {lead.google_rating != null && (
                       <span className="flex items-center gap-1 font-medium text-amber-500">
-                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <StarRating rating={lead.google_rating} />
                         {lead.google_rating.toFixed(1)}
                         <span className="font-normal text-slate-400">({reviewCount})</span>
                       </span>
