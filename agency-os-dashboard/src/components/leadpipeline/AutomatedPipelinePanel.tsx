@@ -12,6 +12,8 @@ import {
   Copy,
   Check,
   Send,
+  LayoutGrid,
+  Columns3,
   Eye,
   MousePointerClick,
   PhoneCall,
@@ -991,6 +993,67 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 type ModalType = 'brief' | 'text' | 'followup' | 'call' | 'detail';
 type ModalState = { type: ModalType; lead: PipelineLead } | null;
 
+type ViewMode = 'grid' | 'board';
+const VIEW_KEY = 'agency-os-pipeline-view';
+
+// Kanban columns — the four active stages, in flow order. booked/archived
+// stay off the board until they get real UI.
+const BOARD_COLUMNS: Array<{ status: PipelineStatus; label: string }> = [
+  { status: 'awaiting_build', label: 'Awaiting build' },
+  { status: 'ready_to_send', label: 'Ready to send' },
+  { status: 'sent_no_reply', label: 'Sent — no reply' },
+  { status: 'engaged', label: 'Engaged' },
+];
+
+// Compact card for the board view. Draggable; the stage action + View lead
+// stay one tap away so the board is workable, not just a status readout.
+function BoardCard({
+  lead,
+  onAction,
+  onViewLead,
+}: {
+  lead: PipelineLead;
+  onAction: (l: PipelineLead) => void;
+  onViewLead: (l: PipelineLead) => void;
+}) {
+  const cfg = STATUS_CONFIG[lead.status];
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', String(lead.id));
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      className="cursor-grab rounded-xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60 transition hover:shadow-md active:cursor-grabbing"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="min-w-0 truncate text-sm font-semibold text-slate-900">{lead.name}</h4>
+        <EngagementDot sessions={lead.sessions} />
+      </div>
+      <p className="mt-0.5 truncate text-xs text-slate-500">
+        {lead.category} · <span className="text-amber-500">★ {lead.rating.toFixed(1)}</span>{' '}
+        ({lead.reviews})
+      </p>
+      <div className="mt-2.5 flex items-center justify-between gap-2">
+        <button
+          onClick={() => onAction(lead)}
+          className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
+        >
+          {cfg.action}
+          <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+        </button>
+        <button
+          onClick={() => onViewLead(lead)}
+          className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+        >
+          View lead
+        </button>
+      </div>
+      <p className="mt-1.5 text-[10px] text-slate-400">{lead.lastAction}</p>
+    </div>
+  );
+}
+
 const STATUS_TO_MODAL: Record<PipelineStatus, ModalType> = {
   awaiting_build: 'brief',
   ready_to_send: 'text',
@@ -1012,6 +1075,14 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
+  // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
+  const [view, setView] = useState<ViewMode>(() =>
+    localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
+  );
+  const setViewPersist = (v: ViewMode) => {
+    setView(v);
+    localStorage.setItem(VIEW_KEY, v);
+  };
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -1098,6 +1169,27 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
     }
   };
 
+  // Board drops are REAL status changes routed through the same guarded
+  // transitions as the buttons — see the drop rules below. Invalid moves
+  // explain themselves instead of silently repainting a column.
+  const handleBoardDrop = (leadId: number, to: PipelineStatus) => {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead || lead.status === to) return;
+    if (lead.status === 'awaiting_build' && to === 'ready_to_send') {
+      // The move requires a live URL — the brief modal's Save completes it.
+      setModal({ type: 'brief', lead });
+      showToast('Paste the live site URL to finish moving this lead to Ready to send');
+    } else if (lead.status === 'ready_to_send' && to === 'sent_no_reply') {
+      // "I already texted them" — mark sent optimistically, undo pill covers
+      // mis-drags.
+      void runAction(lead.id, 'intro_sent', 'Marked sent');
+    } else if (to === 'engaged') {
+      showToast('Engaged flips automatically when the prospect clicks your tracked link');
+    } else {
+      showToast("That move isn't part of the flow — use Undo to step a lead back", 'error');
+    }
+  };
+
   const filtered = useMemo(
     () =>
       leads.filter((l) => {
@@ -1121,64 +1213,143 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
     <div className="min-h-full bg-slate-50">
       {/* Page title/subtitle live in the AppShell top bar since Phase 3. */}
       <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="relative mb-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search leads..."
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
-        </div>
-
-        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-          {FILTERS.map((f) => (
+        <div className="mb-4 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search leads..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+          {/* Grid / Board view toggle */}
+          <div className="flex shrink-0 gap-0.5 rounded-xl bg-slate-100 p-0.5">
             <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                filter === f.key
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              onClick={() => setViewPersist('grid')}
+              title="Grid view"
+              className={`rounded-[10px] p-2 transition ${
+                view === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              {f.label}
-              {f.key !== 'all' && counts[f.key] ? (
-                <span
-                  className={`ml-1.5 ${filter === f.key ? 'text-slate-300' : 'text-slate-400'}`}
-                >
-                  {counts[f.key]}
-                </span>
-              ) : null}
+              <LayoutGrid className="h-4 w-4" />
             </button>
-          ))}
+            <button
+              onClick={() => setViewPersist('board')}
+              title="Board view"
+              className={`rounded-[10px] p-2 transition ${
+                view === 'board' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <Columns3 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Card grid — 1 col on mobile, 2 on tablet, 3 on desktop. The
-         * explicit grid-cols-1 matters: Tailwind's cols classes use
-         * minmax(0,1fr), which stops the implicit track from inheriting the
-         * widest card's min-content and overflowing small screens. Loading /
-         * error / empty states span the full row via col-span-full. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {loading && (
-            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
-              Loading leads…
-            </div>
-          )}
-          {!loading && loadError && (
-            <div className="col-span-full rounded-2xl border border-rose-200 bg-rose-50 py-6 px-5 text-sm text-rose-700">
-              <p className="font-medium">Couldn't load leads.</p>
-              <p className="mt-1 text-xs text-rose-600">{loadError}</p>
+        {/* Status filter pills only apply to the grid — the board's columns
+            ARE the statuses. */}
+        {view === 'grid' && (
+          <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+            {FILTERS.map((f) => (
               <button
-                onClick={() => void loadLeads()}
-                className="mt-3 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-white"
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                  filter === f.key
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                Try again
+                {f.label}
+                {f.key !== 'all' && counts[f.key] ? (
+                  <span
+                    className={`ml-1.5 ${filter === f.key ? 'text-slate-300' : 'text-slate-400'}`}
+                  >
+                    {counts[f.key]}
+                  </span>
+                ) : null}
               </button>
-            </div>
-          )}
-          {!loading && !loadError &&
-            filtered.map((lead, i) => (
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
+            Loading leads…
+          </div>
+        ) : loadError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 py-6 px-5 text-sm text-rose-700">
+            <p className="font-medium">Couldn't load leads.</p>
+            <p className="mt-1 text-xs text-rose-600">{loadError}</p>
+            <button
+              onClick={() => void loadLeads()}
+              className="mt-3 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-white"
+            >
+              Try again
+            </button>
+          </div>
+        ) : view === 'board' ? (
+          /* Kanban board — one column per active stage, in flow order.
+             Columns scroll horizontally on narrow screens. Cards are
+             draggable; drops route through handleBoardDrop's guarded
+             transitions. */
+          <div className="flex items-start gap-3 overflow-x-auto pb-4">
+            {BOARD_COLUMNS.map((col) => {
+              const cfg = STATUS_CONFIG[col.status];
+              const ColIcon = cfg.icon;
+              const items = leads.filter(
+                (l) =>
+                  l.status === col.status &&
+                  l.name.toLowerCase().includes(query.toLowerCase()),
+              );
+              return (
+                <div
+                  key={col.status}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    if (!isNaN(id)) handleBoardDrop(id, col.status);
+                  }}
+                  className="w-72 shrink-0 rounded-2xl bg-slate-100/80 p-2.5"
+                >
+                  <div className="mb-2 flex items-center justify-between px-1.5 pt-1">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full ${cfg.iconBg}`}
+                      >
+                        <ColIcon className="h-3 w-3 text-white" strokeWidth={2.5} />
+                      </span>
+                      {col.label}
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">{items.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {items.map((l) => (
+                      <BoardCard
+                        key={l.id}
+                        lead={l}
+                        onAction={openFor}
+                        onViewLead={openDetail}
+                      />
+                    ))}
+                    {items.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400">
+                        No leads
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Card grid — 1 col on mobile, 2 on tablet, 3 on desktop. The
+           * explicit grid-cols-1 matters: Tailwind's cols classes use
+           * minmax(0,1fr), which stops the implicit track from inheriting the
+           * widest card's min-content and overflowing small screens. */
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((lead, i) => (
               <LeadCard
                 key={lead.id}
                 lead={lead}
@@ -1187,12 +1358,13 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
                 onViewLead={openDetail}
               />
             ))}
-          {!loading && !loadError && filtered.length === 0 && (
-            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
-              No leads match this filter.
-            </div>
-          )}
-        </div>
+            {filtered.length === 0 && (
+              <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center text-sm text-slate-400">
+                No leads match this filter.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {modal?.type === 'brief' && (
