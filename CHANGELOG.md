@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated Pipeline demo booking bridge (PR #148)
+
+- **[#148](https://github.com/shauncarldesigns/agency-os-v2/pull/148) Automated Pipeline can book demos into Sites.** Adds a `Book demo` path to the engaged Call Prep modal and a fallback `Book demo` button in the automated lead-detail modal header. Both reuse the existing tier picker / qualify flow to create a Sites prospect project, link `lead.project_id`, navigate to Sites, and mark the automated `pipeline_status` as `booked`. The automated queue now excludes `booked` / `archived`, so prospects and clients leave the active Kanban once they move into Sites. Backend + dashboard.
+
 ### Dashboard KPIs (PR #147)
 
 - **[#147](https://github.com/shauncarldesigns/agency-os-v2/pull/147) Dashboard becomes a KPI-first pipeline view.** Replaces the empty Dashboard placeholder with a real KPI surface for the text + site funnel: Hot leads ready to call, this week's reply-rate slot, meetings booked this week, active leads in pipeline, funnel strip (tap rate / engagement rate / reply per tap / book rate), channel split, and a Needs action list sorted by recent tracked engagement. Adds `/api/dashboard/pipeline-kpis` so the page reads real app data from `lead_activity`, `leads`, and `demos`; reply rate and Facebook channel show as not tracked until the app logs those first-class events. Backend + dashboard.

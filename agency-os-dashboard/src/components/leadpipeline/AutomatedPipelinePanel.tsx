@@ -23,10 +23,11 @@ import {
   AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
-import type { Lead, ShowToast } from '../../lib/types';
+import type { Lead, Project, ShowToast } from '../../lib/types';
 import { api, API_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 import { StarRating } from '../shared/StarRating';
+import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -870,11 +871,11 @@ function FollowUpModal({
 function CallPrepModal({
   lead,
   onClose,
-  onLogged,
+  onBookDemo,
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onLogged: (leadId: number) => Promise<void>;
+  onBookDemo: (lead: PipelineLead) => void;
 }) {
   return (
     <ModalShell
@@ -891,12 +892,10 @@ function CallPrepModal({
             Call {lead.phone}
           </a>
           <button
-            onClick={() => {
-              void onLogged(lead.id);
-            }}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            onClick={() => onBookDemo(lead)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-medium text-white shadow-sm shadow-slate-900/10 hover:bg-slate-800"
           >
-            Log call
+            Book demo
           </button>
         </div>
       }
@@ -1072,15 +1071,17 @@ const STATUS_TO_MODAL: Record<PipelineStatus, ModalType> = {
 
 interface Props {
   showToast: ShowToast;
+  onQualified?: (project: Project, tier: 1 | 2 | 3) => void;
 }
 
-export default function AutomatedPipelinePanel({ showToast }: Props) {
+export default function AutomatedPipelinePanel({ showToast, onQualified }: Props) {
   const [leads, setLeads] = useState<PipelineLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
+  const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
@@ -1160,7 +1161,15 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
   const markFollowedUp = (leadId: number, messageBody: string) =>
     runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
 
-  const logCall = (leadId: number) => runAction(leadId, 'called', 'Call logged');
+  const openBookDemo = async (lead: PipelineLead) => {
+    try {
+      const res = await api.leads.get(lead.id);
+      setQualifyLead(res.lead);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not open booking flow';
+      showToast(msg, 'error');
+    }
+  };
 
   const undoLast = async () => {
     if (!undo) return;
@@ -1399,7 +1408,14 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
         />
       )}
       {modal?.type === 'call' && (
-        <CallPrepModal lead={modal.lead} onClose={() => setModal(null)} onLogged={logCall} />
+        <CallPrepModal
+          lead={modal.lead}
+          onClose={() => setModal(null)}
+          onBookDemo={(lead) => {
+            setModal(null);
+            void openBookDemo(lead);
+          }}
+        />
       )}
       {modal?.type === 'detail' && (
         <SharedLeadDetailModal
@@ -1407,9 +1423,26 @@ export default function AutomatedPipelinePanel({ showToast }: Props) {
           onClose={() => setModal(null)}
           showToast={showToast}
           onLeadUpdated={() => void loadLeads()}
+          onQualify={(lead) => {
+            setModal(null);
+            setQualifyLead(lead);
+          }}
           pipelineContext
         />
       )}
+
+      <QualifyLeadModal
+        open={qualifyLead !== null}
+        lead={qualifyLead}
+        onClose={() => setQualifyLead(null)}
+        showToast={showToast}
+        onQualified={(project, tier) => {
+          setQualifyLead(null);
+          setLeads((prev) => prev.filter((l) => l.id !== project.lead_id));
+          void loadLeads();
+          onQualified?.(project, tier);
+        }}
+      />
 
       {undo && (
         <UndoBanner
