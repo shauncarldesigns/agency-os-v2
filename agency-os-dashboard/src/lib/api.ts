@@ -350,6 +350,7 @@ export const api = {
       apiFetch<AgencySummary>(`/api/dashboard/agency-summary?range=${range}`),
     objectionsOverview: (range: AnalyticsRange = '30d') =>
       apiFetch<ObjectionsOverviewResponse>(`/api/dashboard/objections-overview?range=${range}`),
+    pipelineKpis: () => apiFetch<PipelineKpisResponse>('/api/dashboard/pipeline-kpis'),
   },
   sessions: {
     today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
@@ -618,6 +619,61 @@ export interface ObjectionsOverviewResponse {
   range: AnalyticsRange;
   total_calls: number;
   objections: ObjectionOverviewItem[];
+}
+
+export interface PipelineFunnelMetrics {
+  sent: number;
+  tapped: number;
+  engaged: number;
+  replies: number | null;
+  booked: number;
+  tapRate: number | null;
+  engagementRate: number | null;
+  replyPerTap: number | null;
+  bookRate: number | null;
+}
+
+export interface PipelineChannelMetrics {
+  channel: 'SMS' | 'Facebook' | string;
+  current: PipelineFunnelMetrics | null;
+  previous: PipelineFunnelMetrics | null;
+  tracked: boolean;
+}
+
+export interface PipelineHotLead {
+  id: number;
+  company: string;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  industry: string | null;
+  pipeline_status: string;
+  pipeline_sessions: number;
+  pipeline_last_action_at: string | null;
+  last_engagement_at: string | null;
+}
+
+export interface PipelineKpisResponse {
+  week: WeekDates;
+  previousWeek: WeekDates;
+  hero: {
+    hotLeadsReadyToCall: number;
+    thisWeekReplyRate: number | null;
+    meetingsBookedThisWeek: number;
+    activeLeadsInPipeline: number;
+  };
+  funnel: {
+    current: PipelineFunnelMetrics;
+    previous: PipelineFunnelMetrics;
+    trends: {
+      tapRate: number | null;
+      engagementRate: number | null;
+      replyPerTap: number | null;
+      bookRate: number | null;
+    };
+  };
+  channels: PipelineChannelMetrics[];
+  needsAction: PipelineHotLead[];
 }
 
 export interface SessionOutcomeBody {

@@ -17,6 +17,16 @@ import { badRequest, notFound, serverError } from '../utils/errors';
 
 export const dashboardRouter = new Hono<{ Bindings: Env }>();
 
+function pct(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return Number(((numerator / denominator) * 100).toFixed(1));
+}
+
+function delta(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null) return null;
+  return Number((current - previous).toFixed(1));
+}
+
 // GET /api/dashboard — the landing call.
 dashboardRouter.get('/', async (c) => {
   const today = chicagoToday();
@@ -287,6 +297,170 @@ dashboardRouter.get('/objections-overview', async (c) => {
     range,
     total_calls: totalCalls,
     objections: items,
+  });
+});
+
+// GET /api/dashboard/pipeline-kpis — top-level operating dashboard.
+// KPI-first view over the text+site pipeline. "Replies" are intentionally
+// returned as null until the app logs reply events as a first-class action;
+// taps/engagement/bookings are real counters from lead_activity + sessions.
+dashboardRouter.get('/pipeline-kpis', async (c) => {
+  const week = chicagoCallingWeek();
+  const weekStart = new Date(`${week.monday}T12:00:00-06:00`);
+  const previousRef = new Date(weekStart);
+  previousRef.setDate(previousRef.getDate() - 7);
+  const previousWeek = chicagoCallingWeek(previousRef);
+
+  async function funnelFor(start: string, end: string) {
+    const sentRow = await c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT lead_id) as n
+      FROM lead_activity
+      WHERE action = 'intro_sent'
+        AND date(created_at) BETWEEN ? AND ?
+    `).bind(start, end).first<{ n: number }>();
+
+    const tappedRow = await c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT lead_id) as n
+      FROM lead_activity
+      WHERE action = 'click_tracked'
+        AND date(created_at) BETWEEN ? AND ?
+    `).bind(start, end).first<{ n: number }>();
+
+    const engagedRow = await c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT lead_id) as n
+      FROM lead_activity
+      WHERE action = 'click_tracked'
+        AND to_status = 'engaged'
+        AND date(created_at) BETWEEN ? AND ?
+    `).bind(start, end).first<{ n: number }>();
+
+    const bookedRow = await c.env.DB.prepare(`
+      SELECT COUNT(*) as n
+      FROM demos
+      WHERE date(booked_at) BETWEEN ? AND ?
+    `).bind(start, end).first<{ n: number }>();
+
+    const sent = sentRow?.n ?? 0;
+    const tapped = tappedRow?.n ?? 0;
+    const engaged = engagedRow?.n ?? 0;
+    const booked = bookedRow?.n ?? 0;
+    const tapRate = pct(tapped, sent);
+    const engagementRate = pct(engaged, sent);
+    const replyPerTap = null;
+    const bookRate = pct(booked, sent);
+
+    return {
+      sent,
+      tapped,
+      engaged,
+      replies: null,
+      booked,
+      tapRate,
+      engagementRate,
+      replyPerTap,
+      bookRate,
+    };
+  }
+
+  const [current, previous, activeLeadsRow, hotLeads, smsCurrent, smsPrevious] = await Promise.all([
+    funnelFor(week.monday, week.friday),
+    funnelFor(previousWeek.monday, previousWeek.friday),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as n
+      FROM leads
+      WHERE deleted_at IS NULL
+        AND status IN ('cold', 'contacted')
+        AND enrichment_status = 'enriched'
+        AND has_website = 0
+    `).first<{ n: number }>(),
+    c.env.DB.prepare(`
+      SELECT
+        l.id,
+        l.company,
+        l.phone,
+        l.city,
+        l.state,
+        l.industry,
+        l.pipeline_status,
+        l.pipeline_sessions,
+        l.pipeline_last_action_at,
+        MAX(la.created_at) as last_engagement_at
+      FROM leads l
+      LEFT JOIN lead_activity la
+        ON la.lead_id = l.id
+       AND la.action = 'click_tracked'
+      WHERE l.deleted_at IS NULL
+        AND l.status IN ('cold', 'contacted')
+        AND l.enrichment_status = 'enriched'
+        AND l.has_website = 0
+        AND (l.pipeline_status = 'engaged' OR l.pipeline_sessions > 0)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM lead_activity called
+          WHERE called.lead_id = l.id
+            AND called.action = 'called'
+            AND datetime(called.created_at) >= datetime(COALESCE((
+              SELECT MAX(c2.created_at)
+              FROM lead_activity c2
+              WHERE c2.lead_id = l.id
+                AND c2.action = 'click_tracked'
+            ), '1970-01-01'))
+        )
+      GROUP BY l.id
+      ORDER BY datetime(COALESCE(last_engagement_at, l.pipeline_last_action_at, l.updated_at)) DESC
+      LIMIT 8
+    `).all<{
+      id: number;
+      company: string;
+      phone: string | null;
+      city: string | null;
+      state: string | null;
+      industry: string | null;
+      pipeline_status: string;
+      pipeline_sessions: number;
+      pipeline_last_action_at: string | null;
+      last_engagement_at: string | null;
+    }>(),
+    // The current automated pipeline sends through the SMS composer. Facebook
+    // needs explicit channel logging before it can have real numbers here.
+    funnelFor(week.monday, week.friday),
+    funnelFor(previousWeek.monday, previousWeek.friday),
+  ]);
+
+  return c.json({
+    week,
+    previousWeek,
+    hero: {
+      hotLeadsReadyToCall: (hotLeads.results ?? []).length,
+      thisWeekReplyRate: null,
+      meetingsBookedThisWeek: current.booked,
+      activeLeadsInPipeline: activeLeadsRow?.n ?? 0,
+    },
+    funnel: {
+      current,
+      previous,
+      trends: {
+        tapRate: delta(current.tapRate, previous.tapRate),
+        engagementRate: delta(current.engagementRate, previous.engagementRate),
+        replyPerTap: null,
+        bookRate: delta(current.bookRate, previous.bookRate),
+      },
+    },
+    channels: [
+      {
+        channel: 'SMS',
+        current: smsCurrent,
+        previous: smsPrevious,
+        tracked: true,
+      },
+      {
+        channel: 'Facebook',
+        current: null,
+        previous: null,
+        tracked: false,
+      },
+    ],
+    needsAction: hotLeads.results ?? [],
   });
 });
 
