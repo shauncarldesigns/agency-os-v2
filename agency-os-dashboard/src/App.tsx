@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard } from 'lucide-react';
 import type { Tab, HeaderStats, NavCounts } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
 import { ExecutionView } from './components/dashboard/ExecutionView';
+import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPanel';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
@@ -129,21 +129,7 @@ export default function App() {
         ) : (
           <>
             {activeTab === 'dashboard' && (
-              // Intentionally empty — the operator moved the calling operation
-              // into Call Sessions and is reserving this tab for a future
-              // feature.
-              <div className="flex h-full items-center justify-center px-6 text-center">
-                <div>
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-                    <LayoutDashboard className="h-6 w-6 text-slate-400" />
-                  </div>
-                  <p className="text-sm font-medium text-slate-600">Nothing here yet</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    The calling operation moved to Call Sessions. This space is reserved for
-                    what's next.
-                  </p>
-                </div>
-              </div>
+              <DashboardMetricsPanel showToast={showToast} onSwitchTab={setActiveTab} />
             )}
             {activeTab === 'call-sessions' && (
               <CallSessionsPage

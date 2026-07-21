@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Dashboard KPIs (PR #147)
+
+- **[#147](https://github.com/shauncarldesigns/agency-os-v2/pull/147) Dashboard becomes a KPI-first pipeline view.** Replaces the empty Dashboard placeholder with a real KPI surface for the text + site funnel: Hot leads ready to call, this week's reply-rate slot, meetings booked this week, active leads in pipeline, funnel strip (tap rate / engagement rate / reply per tap / book rate), channel split, and a Needs action list sorted by recent tracked engagement. Adds `/api/dashboard/pipeline-kpis` so the page reads real app data from `lead_activity`, `leads`, and `demos`; reply rate and Facebook channel show as not tracked until the app logs those first-class events. Backend + dashboard.
+
 ### Five-star rating strips (PR #146)
 
 - **[#146](https://github.com/shauncarldesigns/agency-os-v2/pull/146) Real star strips on pipeline cards.** The lone ★ glyph is replaced by a five-star strip with fractional fill (4.6 renders four full stars and a 60%-filled fifth) on the Automated Pipeline's grid cards, board cards, and the shared lead-detail modal header. New `components/shared/StarRating.tsx`. Dashboard.

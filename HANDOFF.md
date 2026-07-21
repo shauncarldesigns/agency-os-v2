@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-19. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-21. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -11,11 +11,16 @@ All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
 
-## What shipped this session (PRs #129–#134)
+## What shipped recently (PRs #129–#147)
 
 Two headline features, built from an external design-spec package
 (`agency-os-v2-pipeline/` — README + build brief + two canonical `.jsx`
 visual specs):
+
+### Dashboard KPI view (#147)
+
+- **[#147](https://github.com/shauncarldesigns/agency-os-v2/pull/147)** The Dashboard tab is no longer an empty placeholder. It now shows a KPI-first view for the Automated Pipeline: hot leads ready to call, this week's reply-rate slot, meetings booked this week, active pipeline size, funnel strip, channel split, and a Needs action list. Backend endpoint: `GET /api/dashboard/pipeline-kpis`.
+- Current truth boundary: SMS send/tap/engagement/book metrics are real (`lead_activity`, `pipeline_sessions`, `demos`). Reply rate and Facebook split intentionally render as "not tracked" until the app records reply/channel events explicitly.
 
 ### Automated Pipeline (#129, #130, #131, #132, #133)
 

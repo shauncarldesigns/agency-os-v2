@@ -58,7 +58,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 ];
 
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
-  dashboard: { title: 'Dashboard', subtitle: 'Reserved for what comes next' },
+  dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
   'call-sessions': { title: 'Call Sessions', subtitle: "Today's calling operation + session history" },
   pipeline: { title: 'Cold Call Pipeline', subtitle: 'Enrich, qualify, and book demos' },
   'automated-pipeline': { title: 'Automated Pipeline', subtitle: 'Text + site outreach — work your way down the queue' },
