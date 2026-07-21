@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
+    "predeploy": "node scripts/check-production-env.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=agency-os-v2-dashboard --branch=production"
   },
   "dependencies": {

@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Dashboard production deploy guard (PR #155)
+
+- **[#155](https://github.com/shauncarldesigns/agency-os-v2/pull/155) Dashboard deploy now blocks missing or localhost production env.** Adds a predeploy check so manual Pages deploys fail before upload if `.env.production` is absent or points the API/tracking URLs at localhost, preventing production bundles from losing live data again. Dashboard.
+
 ### Operator docs workflow expansion (PR #154)
 
 - **[#154](https://github.com/shauncarldesigns/agency-os-v2/pull/154) Operator Docs now cover tracking, onboarding, pre-sale QA, and SEO growth.** Adds wiki pages for GA4/GTM/conversion setup, demo-site cleanup before prospects see a build, new-client onboarding access and baseline audits, and monthly SEO content/authority work. Dashboard.
