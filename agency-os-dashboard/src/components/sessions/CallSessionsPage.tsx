@@ -9,21 +9,27 @@ import {
   Clock,
 } from 'lucide-react';
 import { api, ApiError, industryLabel, type SessionWithProgress, type WeekDates } from '../../lib/api';
-import type { ShowToast } from '../../lib/types';
+import type { ShowToast, Tab } from '../../lib/types';
+import { DashboardPanel } from '../dashboard/DashboardPanel';
 
 // ---------------------------------------------------------------------------
-// Call Sessions — full past/present/upcoming session browser.
+// Call Sessions — the whole calling operation in one tab.
 //
-// The Dashboard remains "today's snapshot"; this page is the history +
-// forward view, paginated by week via the existing /api/sessions/week
-// endpoint. Read-mostly: the only action is opening an active session
-// (execution view), which routes through the same onOpenSession callback
-// the Dashboard uses.
+// Top: the operating view (formerly the Dashboard tab) — today's sessions,
+// Hot Leads, priority strip, agency summary, objections overview.
+// Below: the Session history browser — past/present/upcoming weeks,
+// paginated via /api/sessions/week.
+//
+// The Dashboard tab itself is intentionally empty (operator is reserving
+// it for a future feature).
 // ---------------------------------------------------------------------------
 
 interface Props {
   showToast: ShowToast;
   onOpenSession: (sessionId: number) => void;
+  /** Pass-throughs for the embedded operating view (formerly Dashboard). */
+  onStateChanged?: () => void;
+  onSwitchTab?: (tab: Tab) => void;
 }
 
 // Monday of the week `offset` weeks away from this week, ISO yyyy-mm-dd.
@@ -115,7 +121,7 @@ function SessionCard({
   );
 }
 
-export function CallSessionsPage({ showToast, onOpenSession }: Props) {
+export function CallSessionsPage({ showToast, onOpenSession, onStateChanged, onSwitchTab }: Props) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [week, setWeek] = useState<WeekDates | null>(null);
   const [sessions, setSessions] = useState<SessionWithProgress[]>([]);
@@ -144,7 +150,27 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
     : '…';
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <>
+      {/* Operating view — everything that used to live on the Dashboard tab:
+          today's sessions + WeekPlanner, Hot Leads, priority strip, agency
+          summary, objections overview. */}
+      <div className="main">
+        <DashboardPanel
+          showToast={showToast}
+          onStateChanged={onStateChanged}
+          onOpenSession={onOpenSession}
+          onSwitchTab={onSwitchTab}
+        />
+      </div>
+
+      {/* Session history — week-paginated past/present/upcoming browser. */}
+      <div className="mx-auto max-w-[1440px] px-[22px] pb-10">
+      <div className="mb-4 border-t border-slate-200 pt-6">
+        <h2 className="text-[15px] font-bold text-slate-900">Session history</h2>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Browse past, present, and upcoming calling weeks
+        </p>
+      </div>
       {/* Week pager */}
       <div className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -193,7 +219,7 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
           </div>
           <p className="text-sm font-medium text-slate-600">No sessions this week</p>
           <p className="mt-1 text-xs text-slate-400">
-            Generate a calling week from the Dashboard to fill this view.
+            Hit + Generate week above to auto-compose Mon–Fri.
           </p>
         </div>
       ) : (
@@ -203,6 +229,7 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

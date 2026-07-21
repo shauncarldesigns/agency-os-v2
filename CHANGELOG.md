@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Call Sessions absorbs the Dashboard (PR #145)
+
+- **[#145](https://github.com/shauncarldesigns/agency-os-v2/pull/145) Everything from the Dashboard moved into Call Sessions; Dashboard emptied.** The Call Sessions tab now opens with the full operating view (today's sessions + Generate week, Hot Leads, prospecting block, agency summary, objections overview) and flows into a new "Session history" section with the week-paginated past/present/upcoming browser. The Dashboard tab shows a placeholder — intentionally reserved for a future feature. Dashboard.
+
 ### Automated Pipeline Kanban board (PR #144)
 
 - **[#144](https://github.com/shauncarldesigns/agency-os-v2/pull/144) Kanban board view with guarded drag-and-drop.** A Grid/Board toggle (persisted) next to the search bar switches the Automated Pipeline to a four-column board — Awaiting build / Ready to send / Sent — no reply / Engaged — with stage icons, live counts, and compact draggable cards that keep the stage action + View lead one tap away. Drops are real status changes routed through the same guarded transitions as the buttons: dropping into Ready to send opens the Site brief modal (the move requires a live URL), dropping into Sent marks the intro sent with the 6s Undo pill, Engaged explains it flips automatically on a tracked-link click, and backwards moves point at Undo. Search applies in both views; status filter pills only show in grid (the board's columns are the statuses). Dashboard.
