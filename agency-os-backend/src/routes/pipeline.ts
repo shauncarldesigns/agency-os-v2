@@ -137,6 +137,8 @@ async function writeActivity(
 // leads that actually belong in this flow:
 //   - not soft-deleted
 //   - lifecycle status in ('cold','contacted') — excludes qualified/client/dead
+//   - pipeline_status still active — excludes booked/archived once the lead
+//     has moved into Sites or out of this motion
 //   - enriched (need reviews/hours/etc. to build a brief)
 //   - no existing website (the whole thesis: build them one)
 // Ordered by opportunity_score DESC so the highest-signal leads surface first.
@@ -147,6 +149,7 @@ pipelineRouter.get('/leads', async (c) => {
     const clauses: string[] = [
       'deleted_at IS NULL',
       "status IN ('cold', 'contacted')",
+      "pipeline_status NOT IN ('booked', 'archived')",
       'has_website = 0',
       "enrichment_status = 'enriched'",
     ];

@@ -11,7 +11,7 @@ All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
 
-## What shipped recently (PRs #129–#147)
+## What shipped recently (PRs #129–#148)
 
 Two headline features, built from an external design-spec package
 (`agency-os-v2-pipeline/` — README + build brief + two canonical `.jsx`
@@ -21,6 +21,11 @@ visual specs):
 
 - **[#147](https://github.com/shauncarldesigns/agency-os-v2/pull/147)** The Dashboard tab is no longer an empty placeholder. It now shows a KPI-first view for the Automated Pipeline: hot leads ready to call, this week's reply-rate slot, meetings booked this week, active pipeline size, funnel strip, channel split, and a Needs action list. Backend endpoint: `GET /api/dashboard/pipeline-kpis`.
 - Current truth boundary: SMS send/tap/engagement/book metrics are real (`lead_activity`, `pipeline_sessions`, `demos`). Reply rate and Facebook split intentionally render as "not tracked" until the app records reply/channel events explicitly.
+
+### Automated Pipeline → Sites bridge (#148)
+
+- **[#148](https://github.com/shauncarldesigns/agency-os-v2/pull/148)** Automated Pipeline now has a real demo-booking bridge into Sites. The engaged Call Prep modal replaces `Log call` with `Book demo`; the automated lead-detail header also has a fallback `Book demo` action. Both reuse `POST /api/leads/:id/qualify`, create a Sites prospect project, and route the operator to Sites.
+- `POST /api/leads/:id/qualify` and session booked outcomes now set `leads.pipeline_status='booked'`. `/api/pipeline/leads` excludes `booked` / `archived`, so leads leave the active Automated Pipeline Kanban once they become a prospect or client.
 
 ### Automated Pipeline (#129, #130, #131, #132, #133)
 

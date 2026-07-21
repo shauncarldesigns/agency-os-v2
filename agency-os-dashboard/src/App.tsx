@@ -159,7 +159,16 @@ export default function App() {
                 />
               </div>
             )}
-            {activeTab === 'automated-pipeline' && <AutomatedPipelinePanel showToast={showToast} />}
+            {activeTab === 'automated-pipeline' && (
+              <AutomatedPipelinePanel
+                showToast={showToast}
+                onQualified={(project, tier) => {
+                  if (tier === 3) setPendingOpenProjectId(project.id);
+                  setActiveTab('sites');
+                  loadStats();
+                }}
+              />
+            )}
             {activeTab === 'sites' && (
               <div className="main">
                 <SitesPanel

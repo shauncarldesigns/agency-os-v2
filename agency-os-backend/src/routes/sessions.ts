@@ -703,6 +703,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
         last_called_at = ?,
         status = 'qualified',
         project_id = ?,
+        pipeline_status = 'booked',
         demo_booked_at = ?,
         demo_scheduled_for = ?,
         outcome = ?,

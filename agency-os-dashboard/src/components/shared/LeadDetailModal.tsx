@@ -190,6 +190,11 @@ export function LeadDetailModal({
       ? lead.recommended_tier
       : null;
   const reviewCount = lead?.google_review_count ?? 0;
+  const canQualify =
+    !!lead &&
+    !!onQualify &&
+    lead.enrichment_status === 'enriched' &&
+    !['qualified', 'client', 'not_interested', 'dead'].includes(lead.status);
 
   const tabs: Array<{ key: DetailTab; label: string; badge?: number }> = [
     { key: 'overview', label: 'Overview' },
@@ -239,12 +244,26 @@ export function LeadDetailModal({
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={onClose}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <button
+                    onClick={onClose}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  {pipelineContext && canQualify && (
+                    <button
+                      onClick={() => {
+                        onQualify?.(lead);
+                        onClose();
+                      }}
+                      title="Book a demo — creates a Sites prospect project"
+                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 hover:shadow-md"
+                    >
+                      Book demo
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Tier + opportunity score banner */}
@@ -353,9 +372,7 @@ export function LeadDetailModal({
                 >
                   Close
                 </button>
-                {onQualify &&
-                  lead.enrichment_status === 'enriched' &&
-                  !['qualified', 'client', 'not_interested', 'dead'].includes(lead.status) && (
+                {canQualify && (
                     <button
                       onClick={() => {
                         onQualify(lead);

@@ -231,9 +231,15 @@ leadsRouter.post('/:id/qualify', async (c) => {
       ? [`[${stamp} · Demo booked, Tier ${tier}] ${note}`, lead.notes].filter(Boolean).join('\n\n')
       : lead.notes;
 
-    await c.env.DB.prepare(
-      "UPDATE leads SET status = 'qualified', project_id = ?, notes = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(projectId, newNotes, id).run();
+    await c.env.DB.prepare(`
+      UPDATE leads SET
+        status = 'qualified',
+        project_id = ?,
+        notes = ?,
+        pipeline_status = 'booked',
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(projectId, newNotes, id).run();
 
     const [updatedLead, project] = await Promise.all([
       c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first(),
