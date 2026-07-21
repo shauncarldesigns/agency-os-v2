@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Automated-context modal polish + SMS name fix (PR #141)
+
+- **[#141](https://github.com/shauncarldesigns/agency-os-v2/pull/141) Lead-detail modal tuned per context + SMS composer name fix.** In the Automated Pipeline context only: the Overview returns to the pipeline card's icon rows (regular-font phone, hours), the address row itself is now the Google Maps link (replacing the big green listing card), the Outcome/Stage/Tier selects are hidden, and the footer's Close button is replaced by the Activity summary card (last action + site sessions — the header ✕ closes). Cold Call Pipeline context is unchanged (selects, Maps card, Close + Book demo). Also fixes the SMS composers greeting leads with `["Chad` — `owner_names` holds a JSON array string and the first-name derivation now parses it properly. Dashboard.
+
 ### Shared lead-detail modal (PR #140)
 
 - **[#140](https://github.com/shauncarldesigns/agency-os-v2/pull/140) One lead-detail modal for both pipelines.** Merges the Cold Call Pipeline's rich LeadModal (Overview / Reviews / Pitch Prep / Call Log tabs, Google Maps card, tier + opportunity-score banner, outcome/stage/tier editors, Book demo) into the Automated Pipeline's Tailwind visual language as `components/shared/LeadDetailModal.tsx`, and uses it from both entry points: Cold Call Pipeline row click, and Automated Pipeline "View lead". The automated context adds an Activity tab (pipeline status, site sessions, live-site link, outreach trail). Old `pipeline/LeadModal.tsx` deleted. Dashboard.
