@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Collapsible sidebar (PR #143)
+
+- **[#143](https://github.com/shauncarldesigns/agency-os-v2/pull/143) Sidebar collapses to an icon rail.** A panel toggle in the top bar (desktop only — the mobile drawer is unchanged) animates the sidebar between the full 256px layout and a 68px icon-only rail: centered icons with hover tooltips, count badges pinned to the icon corner, section dividers instead of labels, brand mark only, avatar-only footer. Choice persists in localStorage across reloads. Dashboard.
+
 ### Mobile responsiveness (PR #142)
 
 - **[#142](https://github.com/shauncarldesigns/agency-os-v2/pull/142) Fluid cards + no horizontal overflow on any screen.** The Automated Pipeline / Call Sessions / Playbook analytics card grids lacked a base column definition, so the implicit grid track inherited the widest card's min-content and dragged every card past small viewports — fixed with explicit `grid-cols-1` (`minmax(0,1fr)`), letting card labels truncate as designed. Card rating chips now wrap as a unit instead of splitting the star from the number. Legacy panels fixed centrally: lead tables and the stage funnel scroll horizontally inside their own rounded wrapper instead of stretching the page, the Clients & Sites grid collapses its 360px column floor on narrow screens, section-header action rows wrap, stat tiles can shrink, and the Lead Finder search form stacks below 640px. Verified at 375×812: every page reports zero horizontal overflow; desktop layouts unchanged. Dashboard.

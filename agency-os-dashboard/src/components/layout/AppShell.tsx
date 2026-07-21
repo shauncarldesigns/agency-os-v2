@@ -11,6 +11,8 @@ import {
   X,
   BarChart3,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import type { Tab } from '../../lib/types';
 
@@ -71,38 +73,54 @@ function Sidebar({
   onNavigate,
   badges,
   onClose,
+  collapsed,
 }: {
   active: Tab;
   onNavigate: (t: Tab) => void;
   badges: NavBadges;
   onClose?: () => void;
+  /** Icon-only rail mode (desktop collapse). The mobile drawer always
+   *  renders expanded. */
+  collapsed?: boolean;
 }) {
   return (
-    <div className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
+    <div
+      className={`flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ${
+        collapsed ? 'w-[68px]' : 'w-64'
+      }`}
+    >
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/30">
+      <div className={`flex items-center gap-2.5 py-5 ${collapsed ? 'justify-center px-0' : 'px-5'}`}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-600/30">
           <span className="text-sm font-bold text-white">A</span>
         </div>
-        <div className="leading-tight">
-          <div className="text-[15px] font-semibold text-slate-900">Agency OS</div>
-          <div className="text-[11px] text-slate-400">Shaun Carl Designs</div>
-        </div>
-        <button
-          onClick={onClose}
-          className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 lg:hidden"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {!collapsed && (
+          <div className="leading-tight">
+            <div className="text-[15px] font-semibold text-slate-900">Agency OS</div>
+            <div className="text-[11px] text-slate-400">Shaun Carl Designs</div>
+          </div>
+        )}
+        {!collapsed && (
+          <button
+            onClick={onClose}
+            className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2">
+      <nav className={`flex-1 overflow-y-auto py-2 ${collapsed ? 'px-2.5' : 'px-3'}`}>
         {NAV.map((group) => (
           <div key={group.section} className="mb-5">
-            <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              {group.section}
-            </div>
+            {collapsed ? (
+              <div className="mx-2 mb-2 border-t border-slate-100" />
+            ) : (
+              <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {group.section}
+              </div>
+            )}
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -115,17 +133,29 @@ function Sidebar({
                       onNavigate(item.key);
                       onClose?.();
                     }}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                    title={collapsed ? item.label : undefined}
+                    className={`flex w-full items-center rounded-xl py-2 text-sm font-medium transition ${
+                      collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
+                    } ${
                       isActive
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`}
                   >
-                    <Icon
-                      className={`h-4 w-4 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`}
-                    />
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {badge ? (
+                    <span className="relative flex shrink-0 items-center justify-center">
+                      <Icon
+                        className={`h-4 w-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`}
+                      />
+                      {/* Collapsed rail: badge becomes a mini count pinned to
+                          the icon corner so the number survives the collapse. */}
+                      {collapsed && badge ? (
+                        <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">
+                          {badge}
+                        </span>
+                      ) : null}
+                    </span>
+                    {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+                    {!collapsed && badge ? (
                       <span
                         className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
                           isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'
@@ -143,19 +173,29 @@ function Sidebar({
       </nav>
 
       {/* Footer / user */}
-      <div className="border-t border-slate-100 p-3">
-        <button className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-          <Settings className="h-4 w-4 text-slate-400" />
-          Settings
+      <div className={`border-t border-slate-100 ${collapsed ? 'p-2.5' : 'p-3'}`}>
+        <button
+          title={collapsed ? 'Settings' : undefined}
+          className={`mb-1 flex w-full items-center rounded-xl py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 ${
+            collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
+          }`}
+        >
+          <Settings className="h-4 w-4 shrink-0 text-slate-400" />
+          {!collapsed && 'Settings'}
         </button>
-        <div className="flex items-center gap-2.5 rounded-xl px-3 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-semibold text-white">
+        <div
+          className={`flex items-center rounded-xl py-2 ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'}`}
+          title={collapsed ? 'Shaun Gehrke' : undefined}
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-semibold text-white">
             SG
           </div>
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-medium text-slate-800">Shaun Gehrke</div>
-            <div className="truncate text-[11px] text-slate-400">info@shauncarldesigns.com</div>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-medium text-slate-800">Shaun Gehrke</div>
+              <div className="truncate text-[11px] text-slate-400">info@shauncarldesigns.com</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -172,15 +212,28 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+const COLLAPSE_KEY = 'agency-os-sidebar-collapsed';
+
 export function AppShell({ active, onNavigate, badges, headerExtra, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Desktop rail collapse — persisted so the operator's preference survives
+  // reloads. The mobile drawer ignores it (always expanded).
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(COLLAPSE_KEY) === '1',
+  );
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1');
+      return !c;
+    });
+  };
   const pageMeta = PAGE_TITLES[active];
 
   return (
     <div className="flex h-screen bg-slate-50">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
-        <Sidebar active={active} onNavigate={onNavigate} badges={badges} />
+        <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} />
       </div>
 
       {/* Mobile drawer */}
@@ -210,6 +263,15 @@ export function AppShell({ active, onNavigate, badges, headerExtra, children }: 
             className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
           >
             <Menu className="h-5 w-5" />
+          </button>
+          {/* Desktop-only collapse toggle — same slot the mobile hamburger
+              occupies below lg. */}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:block"
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
           <div className="flex-1">
             <h1 className="text-[17px] font-bold text-slate-900">{pageMeta.title}</h1>
