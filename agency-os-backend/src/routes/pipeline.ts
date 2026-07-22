@@ -91,18 +91,26 @@ function formatVerbatimReviews(googleReviewsJson: string | null): string | null 
   );
   if (withText.length === 0) return null;
 
+  // Block-per-review format, matching the Sites tab's Quick Brief (the
+  // format already proven with landingsite's same-day demos): author line,
+  // "5★ · 3 months ago" meta line, then the full text — instead of a dense
+  // numbered one-line-per-review dump.
   const lines: string[] = [
     'CUSTOMER REVIEWS (VERBATIM)',
     `All ${withText.length} mined reviews with text, unedited. Use these exact quotes on the site — pick the strongest, attribute by first name, do not rewrite or invent.`,
     '',
   ];
-  withText.forEach((r, i) => {
-    const rating = typeof r.rating === 'number' ? `${r.rating}/5` : '—';
-    const author = r.author?.trim() || 'Anonymous';
-    const when = r.relativeTime ? `, ${r.relativeTime}` : '';
-    lines.push(`${i + 1}. [${rating}] "${r.text!.trim()}" — ${author}${when}`);
-  });
-  return lines.join('\n');
+  for (const r of withText) {
+    lines.push('');
+    lines.push(r.author?.trim() || 'Anonymous');
+    const meta: string[] = [];
+    if (typeof r.rating === 'number') meta.push(`${r.rating}★`);
+    if (r.relativeTime) meta.push(r.relativeTime);
+    if (meta.length) lines.push(meta.join(' · '));
+    lines.push(r.text!.trim());
+    lines.push('');
+  }
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 async function writeActivity(

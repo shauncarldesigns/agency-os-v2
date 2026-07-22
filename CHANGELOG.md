@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — Quick Brief review format (PR #158)
+
+- **[#158](https://github.com/shauncarldesigns/agency-os-v2/pull/158) Pipeline brief reviews adopt the Quick Brief block format.** The `CUSTOMER REVIEWS (VERBATIM)` section appended to Automated Pipeline briefs now renders each review as its own block — author line, `5★ · 3 months ago` meta line, full text — matching the Sites tab's Quick Brief (the format already proven with landingsite same-day demos) instead of a dense numbered one-line dump. Both brief flows now feed landingsite identically-shaped review content. Regenerate a lead's brief to pick it up. Backend.
+
 ### Brief modal — actions on top (PR #157)
 
 - **[#157](https://github.com/shauncarldesigns/agency-os-v2/pull/157) Site brief modal: Copy + Regenerate moved above the brief.** The action row now sits directly under the modal header instead of below the (often long) brief text, so no scrolling is needed to copy. Dashboard.
