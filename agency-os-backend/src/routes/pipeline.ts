@@ -532,6 +532,15 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
       return c.json({ error: 'Claude returned an empty brief', code: 'CLAUDE_ERROR' }, 502);
     }
 
+    // Despite the prompt rule, the model sometimes reproduces the review
+    // set itself under its own CUSTOMER REVIEWS header, which would then
+    // duplicate the appended block. Truncate at any model-authored reviews
+    // header — the authored brief legitimately ends at CONSTRAINTS.
+    const strayReviews = briefText.search(/^\s*(#+\s*)?CUSTOMER REVIEWS/m);
+    if (strayReviews !== -1) {
+      briefText = briefText.slice(0, strayReviews).replace(/[\s-]+$/, '');
+    }
+
     // Append verbatim contact details, then the full verbatim review set,
     // below the authored brief so landingsite has exact values to build with.
     briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;

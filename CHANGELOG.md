@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — schema type from company name, stray-review strip (PR #164)
+
+- **[#164](https://github.com/shauncarldesigns/agency-os-v2/pull/164) Two fixes surfaced by live-testing #163.** Schema type inference now also reads the company name — Google categorized Thomson HEATING AND COOLING as `general_contractor`, so industry alone produced `GeneralContractor` where `HVACBusiness` is right. And when the model reproduces the review set under its own `CUSTOMER REVIEWS` header despite the prompt rule, the route now truncates the authored brief at that header before appending the real verbatim blocks, so reviews can't appear twice. Backend.
+
 ### Pipeline brief — SEO specifics + mined service areas (PR #163)
 
 - **[#163](https://github.com/shauncarldesigns/agency-os-v2/pull/163) Pipeline briefs feed landingsite's SEO machinery directly.** New `SEO SPECIFICS (USE VERBATIM)` section: exact title tag, meta description, primary search phrase, Schema.org business type (mapped from the trade in code — Plumber, HVACBusiness, Electrician, RoofingContractor, GeneralContractor), and full area-served list. The review-mined `extracted_service_areas` towns are now passed into the brief (previously withheld entirely — landingsite only ever saw the home city) and feed the service-area section, areaServed schema, and nearby-community references. The verbatim contact block gains the lead's Google Maps listing URL (from `place_id`) as the schema `sameAs` citation link. FAQ guidance upgraded from topic-framing to real Q&A: definitive answers wherever data allows (hours, towns, services, owners), so FAQPage schema isn't thin "contact us" filler. Word cap 560 → 620. Regenerate to pick up. Backend.

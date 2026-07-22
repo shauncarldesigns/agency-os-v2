@@ -158,10 +158,12 @@ function assignHeadlineAngle(leadId: number): string {
 
 // Landingsite's wrapper asks for "the most accurate Schema.org business
 // type available" — we know the trade, so state it instead of leaving it
-// to guesswork. Order matters: check specific trades before the generic
-// contractor match (industry values like 'general_contractor').
-function schemaTypeForIndustry(industry: string | null): string {
-  const s = (industry ?? '').toLowerCase();
+// to guesswork. The company name participates because Google's category
+// is often too generic (Thomson HEATING AND COOLING is categorized
+// 'general_contractor'). Order matters: check specific trades before the
+// generic contractor match.
+function schemaTypeForIndustry(industry: string | null, company: string): string {
+  const s = `${industry ?? ''} ${company}`.toLowerCase();
   if (s.includes('plumb')) return 'Plumber';
   if (s.includes('hvac') || s.includes('heating') || s.includes('cooling')) return 'HVACBusiness';
   if (s.includes('electric')) return 'Electrician';
@@ -201,7 +203,7 @@ function safeParseQuotes(json: string | null): Quote[] {
 export function buildPipelineBriefPrompt(input: PipelineBriefInput): BuiltPipelineBriefPrompt {
   const design = assignDesignDirection(input.lead_id);
   const headlineAngle = assignHeadlineAngle(input.lead_id);
-  const schemaType = schemaTypeForIndustry(input.industry);
+  const schemaType = schemaTypeForIndustry(input.industry, input.company);
   const services = safeParseArray(input.extracted_services);
   const serviceAreas = safeParseArray(input.extracted_service_areas);
   const strengths = safeParseArray(input.extracted_strengths);
@@ -309,7 +311,7 @@ Rules:
 - Contact details (phone, address, hours) must be written VERBATIM wherever you reference them — the exact digits, the exact street address. Never write "phone number" or "address" generically: this brief is landingsite's only data source, so a value you don't transcribe does not exist to the builder. If a detail is marked "(none on file)", do not instruct the page to include it — route contact through the form instead.
 - If the enrichment is sparse, say so honestly ("Reviews do not name specific services; use category-standard defaults for barbershops.") rather than filling gaps with generic marketing copy.
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
-- A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
+- A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself, and never write a "CUSTOMER REVIEWS" header of any kind; your output ends at CONSTRAINTS. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
 - Keep the whole brief under 620 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
