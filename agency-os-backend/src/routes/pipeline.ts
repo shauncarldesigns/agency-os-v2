@@ -425,6 +425,7 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
     }
 
     const prompt = buildPipelineBriefPrompt({
+      lead_id: lead.id,
       company: lead.company,
       industry: lead.industry,
       city: lead.city,

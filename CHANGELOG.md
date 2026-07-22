@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — assigned design directions (PR #161)
+
+- **[#161](https://github.com/shauncarldesigns/agency-os-v2/pull/161) Each pipeline brief now carries a distinct visual direction.** Landingsite's builder, given no branding, converges on the same navy-professional template for every demo site. Briefs now include a `DESIGN DIRECTION` section — palette with exact hex codes, typography pairing, hero layout, and one signature element — assigned deterministically in code (seeded by lead id, from 10 palettes × 6 type pairings × 5 hero layouts × 8 signature elements), so a lead's look is stable across regenerates while neighboring leads look different. The prompt instructs landingsite to treat the direction as binding over its default industry styling and to add business-specific imagery notes. Word cap raised 450 → 520 to make room. Regenerate a lead's brief to pick it up. Backend.
+
 ### Pipeline brief — verbatim contact details (PR #160)
 
 - **[#160](https://github.com/shauncarldesigns/agency-os-v2/pull/160) Pipeline briefs always carry exact contact details.** A generated brief could instruct landingsite to "include the phone number" without ever stating the digits (the model compressed the value it was given) — and since the brief is landingsite's only data source, the number was unusable. Briefs now get a server-side `CONTACT DETAILS (VERBATIM)` block (name, phone, address, parsed hours) appended between the authored brief and the reviews block, and the prompt requires contact details to be transcribed verbatim inline. Leads genuinely missing a value get an explicit "(none on file)" marker plus a rule to route contact through the form instead of demanding data we don't hold. Regenerate a lead's brief to pick it up. Backend.
