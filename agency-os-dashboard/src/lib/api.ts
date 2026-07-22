@@ -622,15 +622,16 @@ export interface ObjectionsOverviewResponse {
   objections: ObjectionOverviewItem[];
 }
 
+// Reply metrics were removed 2026-07-21 by operator decision — the sms:
+// deep-link channel means replies land on the operator's personal phone,
+// and they chose not to log them manually.
 export interface PipelineFunnelMetrics {
   sent: number;
   tapped: number;
   engaged: number;
-  replies: number | null;
   booked: number;
   tapRate: number | null;
   engagementRate: number | null;
-  replyPerTap: number | null;
   bookRate: number | null;
 }
 
@@ -667,7 +668,6 @@ export interface PipelineKpisResponse {
   previousWeek: WeekDates;
   hero: {
     hotLeadsReadyToCall: number;
-    thisWeekReplyRate: number | null;
     meetingsBookedThisWeek: number;
     activeLeadsInPipeline: number;
   };
@@ -677,7 +677,6 @@ export interface PipelineKpisResponse {
     trends: {
       tapRate: number | null;
       engagementRate: number | null;
-      replyPerTap: number | null;
       bookRate: number | null;
     };
   };

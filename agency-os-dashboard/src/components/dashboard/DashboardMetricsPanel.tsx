@@ -5,7 +5,6 @@ import {
   CalendarCheck2,
   Flame,
   Globe2,
-  MessageSquareText,
   MousePointerClick,
   PhoneCall,
   RefreshCw,
@@ -30,14 +29,16 @@ interface DashboardMetricsPanelProps {
   onSwitchTab?: (tab: Tab) => void;
 }
 
+// Reply-per-tap was dropped 2026-07-21: replies happen on the operator's
+// personal phone (sms: deep-link channel) and the operator decided not to
+// track them rather than log them manually.
 const FUNNEL_ITEMS: Array<{
-  key: keyof Pick<PipelineFunnelMetrics, 'tapRate' | 'engagementRate' | 'replyPerTap' | 'bookRate'>;
+  key: keyof Pick<PipelineFunnelMetrics, 'tapRate' | 'engagementRate' | 'bookRate'>;
   label: string;
   detail: (m: PipelineFunnelMetrics) => string;
 }> = [
   { key: 'tapRate', label: 'Tap rate', detail: (m) => `${m.tapped} taps / ${m.sent} sent` },
   { key: 'engagementRate', label: 'Engagement rate', detail: (m) => `${m.engaged} engaged / ${m.sent} sent` },
-  { key: 'replyPerTap', label: 'Reply per tap', detail: () => 'Reply events not tracked yet' },
   { key: 'bookRate', label: 'Book rate', detail: (m) => `${m.booked} booked / ${m.sent} sent` },
 ];
 
@@ -98,7 +99,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         <div>
           <h2 className="text-[18px] font-bold text-slate-900">Pipeline dashboard</h2>
           <p className="mt-1 text-xs text-slate-400">
-            KPI view for the text + site funnel. Sent volume is context; the headline is action, replies, and bookings.
+            KPI view for the text + site funnel. Sent volume is context; the headline is taps, engagement, and bookings.
           </p>
         </div>
         <button
@@ -111,7 +112,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         </button>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <HeroKpi
           icon={Flame}
           label="Hot leads ready to call"
@@ -119,13 +120,6 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
           sub="Tapped or engaged, not called since"
           tone="emerald"
           onClick={() => onSwitchTab?.('automated-pipeline')}
-        />
-        <HeroKpi
-          icon={MessageSquareText}
-          label="This week's reply rate"
-          value={formatNullablePct(data.hero.thisWeekReplyRate)}
-          sub={data.hero.thisWeekReplyRate === null ? 'Reply tracking not wired yet' : 'vs last week'}
-          tone="blue"
         />
         <HeroKpi
           icon={CalendarCheck2}
@@ -205,7 +199,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
             {data.funnel.current.sent} sent · {data.funnel.current.tapped} tapped · {data.funnel.current.booked} booked
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {FUNNEL_ITEMS.map((item) => (
             <FunnelPill
               key={item.key}
@@ -373,7 +367,7 @@ function FunnelPill({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
-          <div className="mt-1 text-xl font-bold text-slate-900">{hasValue ? `${value.toFixed(1)}%` : 'Not tracked'}</div>
+          <div className="mt-1 text-xl font-bold text-slate-900">{hasValue ? `${value.toFixed(1)}%` : 'None sent'}</div>
         </div>
         <span className={`rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold ${trendCls}`}>
           {trendLabel}
@@ -407,10 +401,9 @@ function ChannelCard({ channel }: { channel: PipelineChannelMetrics }) {
           {channel.current.sent} sent
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-center">
+      <div className="grid grid-cols-3 gap-2 text-center">
         <MiniRatio label="Tap" value={channel.current.tapRate} />
         <MiniRatio label="Engage" value={channel.current.engagementRate} />
-        <MiniRatio label="Reply/tap" value={channel.current.replyPerTap} />
         <MiniRatio label="Book" value={channel.current.bookRate} />
       </div>
     </div>
@@ -459,8 +452,10 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
   );
 }
 
+// Null means the denominator was zero this week (no sends yet) — say so
+// instead of the misleading "Not tracked".
 function formatNullablePct(value: number | null) {
-  return value === null ? 'Not tracked' : `${value.toFixed(1)}%`;
+  return value === null ? 'None sent' : `${value.toFixed(1)}%`;
 }
 
 function formatCountDelta(value: number) {

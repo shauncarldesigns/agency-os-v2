@@ -386,7 +386,9 @@ interface LeadCardProps {
 function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60 transition hover:shadow-md hover:shadow-slate-200/80">
+    // flex-col + mt-auto on the footer: grid rows stretch cards to equal
+    // height, so the footer pins to the bottom instead of floating.
+    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60 transition hover:shadow-md hover:shadow-slate-200/80">
       <div className="p-4 pb-3">
         <div className="flex items-start gap-3">
           <div
@@ -432,7 +434,7 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+      <div className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
         <span className="text-xs text-slate-400">{lead.lastAction}</span>
         <button
           onClick={() => onViewLead(lead)}
@@ -663,17 +665,6 @@ function TextComposerModal({
     `Take a look when you get a sec, curious what you think.`;
 
   const [msg, setMsg] = useState(defaultMsg);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(msg);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   return (
     <ModalShell
@@ -681,34 +672,21 @@ function TextComposerModal({
       subtitle={`${lead.name} · ${lead.phone}`}
       onClose={onClose}
       footer={
-        <div className="flex gap-2">
-          <button
-            onClick={handleCopy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-500" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" /> Copy
-              </>
-            )}
-          </button>
-          <a
-            href={smsLink(lead.phone, msg)}
-            onClick={() => {
-              // Fire the optimistic action + close. The undo toast handles
-              // the "wait, I didn't actually send" case.
-              void onSent(lead.id, msg);
-            }}
-            className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-          >
-            <Send className="h-4 w-4" />
-            Open in Messages
-          </a>
-        </div>
+        // Single send path: "Open in Messages" is the only way out, so every
+        // send gets recorded (the old Copy fallback bypassed tracking and
+        // left the funnel blind).
+        <a
+          href={smsLink(lead.phone, msg)}
+          onClick={() => {
+            // Fire the optimistic action + close. The undo toast handles
+            // the "wait, I didn't actually send" case.
+            void onSent(lead.id, msg);
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
+        >
+          <Send className="h-4 w-4" />
+          Open in Messages
+        </a>
       }
     >
       <div className="px-5 py-4">
@@ -766,17 +744,6 @@ function FollowUpModal({
     `just let me know.`;
 
   const [msg, setMsg] = useState(engaged ? variantWarm : variantCold);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(msg);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   return (
     <ModalShell
@@ -784,32 +751,17 @@ function FollowUpModal({
       subtitle={`${lead.name} · ${lead.phone}`}
       onClose={onClose}
       footer={
-        <div className="flex gap-2">
-          <button
-            onClick={handleCopy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-500" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" /> Copy
-              </>
-            )}
-          </button>
-          <a
-            href={smsLink(lead.phone, msg)}
-            onClick={() => {
-              void onSent(lead.id, msg);
-            }}
-            className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-          >
-            <Send className="h-4 w-4" />
-            Open in Messages
-          </a>
-        </div>
+        // Single tracked send path — see TextComposerModal.
+        <a
+          href={smsLink(lead.phone, msg)}
+          onClick={() => {
+            void onSent(lead.id, msg);
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
+        >
+          <Send className="h-4 w-4" />
+          Open in Messages
+        </a>
       }
     >
       <div className="px-5 py-4">
