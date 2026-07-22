@@ -218,7 +218,9 @@ export function buildPipelineBriefPrompt(input: PipelineBriefInput): BuiltPipeli
         ? `${input.google_review_count} Google reviews`
         : 'no public review data available';
 
-  const system = `You are writing a compact brief that will be pasted into landingsite.ai to build a one-page demo homepage for a small local business. The business is being sold on this homepage cold — they did not ask for it, and they have no website today. The homepage's job is to make the operator's follow-up text (from Shaun at Shaun Carl Designs) feel like a gift: something so clearly useful and legitimate that the recipient wants to keep it.
+  const system = `You are writing a compact brief that will be pasted into landingsite.ai to build a one-page homepage for a small local business that has no website today. This is THE BUSINESS'S website — its entire job is to win them customers: rank for the searches their customers actually type, convince a visitor within seconds that this is a real, reputable local company, and convert that visitor into a phone call or a submitted lead form. Write every line of the brief in service of that.
+
+The brief must never mention the agency building the site, any operator or salesperson, outreach texts, demos, or pitches — none of that belongs on the business's website, and the builder consuming this brief must never see it. The page purpose is about the business and its customers, full stop.
 
 Write plainly. Every sentence must be actionable for landingsite. Do not editorialize about the industry, the operator, or the business's future.
 
@@ -233,6 +235,13 @@ Structure the output as exactly these section headers, in this order, and nothin
 - WHAT TO EMPHASIZE
 - DESIGN DIRECTION
 - CONSTRAINTS
+
+PAGE PURPOSE rules: state what the page does for the business — the
+local searches it should rank for, what a first-time visitor needs to
+believe within seconds (real local company, good reputation, does the
+service I need), and the conversion actions that follow (call the
+number, submit the form). Frame it entirely around the business and its
+customers.
 
 HERO COPY rules: write the exact hero copy the page must use — the words
 themselves, not a description of them. Format:
