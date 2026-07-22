@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Brief modal — actions on top (PR #157)
+
+- **[#157](https://github.com/shauncarldesigns/agency-os-v2/pull/157) Site brief modal: Copy + Regenerate moved above the brief.** The action row now sits directly under the modal header instead of below the (often long) brief text, so no scrolling is needed to copy. Dashboard.
+
 ### Funnel strip cleanup (PR #156)
 
 - **[#156](https://github.com/shauncarldesigns/agency-os-v2/pull/156) Funnel strip: single tracked send path, honest zero-state, reply metric dropped.** The SMS composers lose their Copy button — "Open in Messages" is now the only send action, so every send is recorded and the funnel can't go blind to copy-paste sends. Rate tiles that previously said "Not tracked" when nothing was sent now say "None sent" (they were always wired; the denominator was zero). Reply-per-tap is removed everywhere (funnel strip, hero tile, channel cards, backend response, types) by operator decision — replies land on the operator's personal phone via the `sms:` channel and aren't worth logging manually. Also pins the grid-card footer to the card bottom. Backend + dashboard.
