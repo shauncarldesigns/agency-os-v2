@@ -14,6 +14,8 @@ import type { Env, Lead } from '../types';
 import { badRequest, notFound, log, serverError } from '../utils/errors';
 import { buildPipelineBriefPrompt } from '../prompts/pipelineBrief';
 import { callClaude } from '../services/claude';
+import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
+import type { GoogleReview } from '../services/places';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -408,16 +410,72 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
       opportunity_reasoning: lead.opportunity_reasoning,
     });
 
+    // Google Places caps stored reviews at 5 unless Outscraper backfilled
+    // during enrichment. When Google lists more reviews than we hold, pull
+    // the full set now — in PARALLEL with the Claude call, since the
+    // verbatim block is appended server-side and doesn't feed the prompt.
+    // Any failure falls back to whatever is stored; never blocks the brief.
+    const storedReviews = (() => {
+      try {
+        const v = JSON.parse(lead.google_reviews ?? '[]');
+        return Array.isArray(v) ? v.length : 0;
+      } catch {
+        return 0;
+      }
+    })();
+    const listedReviews = lead.google_review_count ?? 0;
+    const reviewRefreshTask: Promise<string | null> =
+      c.env.OUTSCRAPER_API_KEY && lead.place_id && listedReviews > storedReviews
+        ? (async () => {
+            try {
+              const extra = await fetchOutscraperReviews(
+                c.env.OUTSCRAPER_API_KEY!,
+                lead.place_id!,
+                50,
+              );
+              if (extra.length === 0) return null;
+              const existing: GoogleReview[] = (() => {
+                try {
+                  const v = JSON.parse(lead.google_reviews ?? '[]');
+                  return Array.isArray(v) ? v : [];
+                } catch {
+                  return [];
+                }
+              })();
+              const merged = JSON.stringify(mergeReviews(existing, extra));
+              await c.env.DB.prepare(
+                `UPDATE leads
+                   SET google_reviews = ?, reviews_fetched_at = datetime('now')
+                   WHERE id = ?`,
+              )
+                .bind(merged, id)
+                .run();
+              log('info', 'pipeline', `Lead ${id} review backfill for brief`, {
+                before: storedReviews,
+                after: JSON.parse(merged).length,
+              });
+              return merged;
+            } catch (err) {
+              log('warn', 'pipeline', `Review backfill failed for lead ${id}; using stored set`, err);
+              return null;
+            }
+          })()
+        : Promise.resolve(null);
+
     let briefText: string;
+    let refreshedReviews: string | null;
     try {
-      briefText = await callClaude(c.env.CLAUDE_API_KEY, prompt.user, {
-        model: BRIEF_MODEL,
-        systemPrompt: prompt.system,
-        cacheSystem: true, // system prompt is stable; ephemeral cache pays off across leads in one session
-        maxTokens: 1500,
-        temperature: 0.6,
-        timeoutMs: 45_000,
-      });
+      [briefText, refreshedReviews] = await Promise.all([
+        callClaude(c.env.CLAUDE_API_KEY, prompt.user, {
+          model: BRIEF_MODEL,
+          systemPrompt: prompt.system,
+          cacheSystem: true, // system prompt is stable; ephemeral cache pays off across leads in one session
+          maxTokens: 1500,
+          temperature: 0.6,
+          timeoutMs: 45_000,
+        }),
+        reviewRefreshTask,
+      ]);
     } catch (err) {
       log('error', 'pipeline', `Brief generation failed for lead ${id}`, err);
       const message = err instanceof Error ? err.message : 'Brief generation failed';
@@ -434,7 +492,7 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
 
     // Append the full verbatim review set below the authored brief so
     // landingsite has the exact review content to build with.
-    const reviewsBlock = formatVerbatimReviews(lead.google_reviews);
+    const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
     if (reviewsBlock) {
       briefText = `${briefText}\n\n${reviewsBlock}`;
     }

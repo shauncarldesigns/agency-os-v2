@@ -575,7 +575,8 @@ function BriefModal({
             <div>
               <p className="text-sm font-medium text-slate-700">Generating brief…</p>
               <p className="mt-0.5 text-xs text-slate-400">
-                Claude is drafting from the enrichment data. Usually ~10 seconds.
+                Claude is drafting from the enrichment data. Usually ~10 seconds — up to a
+                minute or two if we're also pulling the full review set.
               </p>
             </div>
           </div>
