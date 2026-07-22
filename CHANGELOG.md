@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — full review set on demand (PR #159)
+
+- **[#159](https://github.com/shauncarldesigns/agency-os-v2/pull/159) Brief generation pulls the full review set.** Google Places caps stored reviews at 5; when a lead's Google listing shows more reviews than we hold, brief generation now backfills the full set (up to 50) via Outscraper — in parallel with the Claude call, so typical latency stays ~10s and worst case ~2 min. The refreshed set persists to the lead (`google_reviews` + `reviews_fetched_at`), so the Quick Brief and Reviews tab benefit too. Any Outscraper failure falls back to the stored set without blocking the brief. Modal spinner copy notes the possible longer wait. Backend + dashboard.
+
 ### Pipeline brief — Quick Brief review format (PR #158)
 
 - **[#158](https://github.com/shauncarldesigns/agency-os-v2/pull/158) Pipeline brief reviews adopt the Quick Brief block format.** The `CUSTOMER REVIEWS (VERBATIM)` section appended to Automated Pipeline briefs now renders each review as its own block — author line, `5★ · 3 months ago` meta line, full text — matching the Sites tab's Quick Brief (the format already proven with landingsite same-day demos) instead of a dense numbered one-line dump. Both brief flows now feed landingsite identically-shaped review content. Regenerate a lead's brief to pick it up. Backend.
