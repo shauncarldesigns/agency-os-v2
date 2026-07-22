@@ -136,8 +136,13 @@ repurpose one for the other.**
   `CONTACT DETAILS (VERBATIM)` then `CUSTOMER REVIEWS (VERBATIM)` — the
   brief is landingsite's only data source, so exact values can't be left
   to model transcription (a brief once demanded "the phone number"
-  without stating the digits). Each brief also carries a `HERO COPY
-  (USE VERBATIM)` section — the brief authors the exact H1 + subhead
+  without stating the digits; the block also carries the Google Maps
+  listing URL from `place_id` as the schema `sameAs` link — place_ids
+  are transcription-hostile). Each brief also carries a `SEO SPECIFICS
+  (USE VERBATIM)` section (exact title tag, meta description, primary
+  search phrase, Schema.org type mapped from trade in code, area-served
+  list including the review-mined `extracted_service_areas` towns), a
+  `HERO COPY (USE VERBATIM)` section — the brief authors the exact H1 + subhead
   because landingsite's own hero generation converges on trust-cliché
   formulas ("Honest X You Can Trust") on every site; the operator
   explicitly wants hero copy owned on our side, not landingsite's —
