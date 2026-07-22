@@ -132,6 +132,11 @@ repurpose one for the other.**
   prompt in `prompts/pipelineBrief.ts` (fixed section headers because
   landingsite consumes it as prompt input; same anti-fluff word list as
   master briefs). Cached on `pipeline_brief`; `{regenerate:true}` forces.
+  Two verbatim blocks are appended server-side (never model-authored):
+  `CONTACT DETAILS (VERBATIM)` then `CUSTOMER REVIEWS (VERBATIM)` — the
+  brief is landingsite's only data source, so exact values can't be left
+  to model transcription (a brief once demanded "the phone number"
+  without stating the digits).
 - **SMS sending is `sms:` deep links only** (`?&body=` variant — most
   compatible across iOS/Android; body prefill is inconsistent, which is why
   every composer keeps a Copy fallback). No Twilio/A2P by explicit scope

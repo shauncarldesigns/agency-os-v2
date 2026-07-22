@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — verbatim contact details (PR #160)
+
+- **[#160](https://github.com/shauncarldesigns/agency-os-v2/pull/160) Pipeline briefs always carry exact contact details.** A generated brief could instruct landingsite to "include the phone number" without ever stating the digits (the model compressed the value it was given) — and since the brief is landingsite's only data source, the number was unusable. Briefs now get a server-side `CONTACT DETAILS (VERBATIM)` block (name, phone, address, parsed hours) appended between the authored brief and the reviews block, and the prompt requires contact details to be transcribed verbatim inline. Leads genuinely missing a value get an explicit "(none on file)" marker plus a rule to route contact through the form instead of demanding data we don't hold. Regenerate a lead's brief to pick it up. Backend.
+
 ### Pipeline brief — full review set on demand (PR #159)
 
 - **[#159](https://github.com/shauncarldesigns/agency-os-v2/pull/159) Brief generation pulls the full review set.** Google Places caps stored reviews at 5; when a lead's Google listing shows more reviews than we hold, brief generation now backfills the full set (up to 50) via Outscraper — in parallel with the Claude call, so typical latency stays ~10s and worst case ~2 min. The refreshed set persists to the lead (`google_reviews` + `reviews_fetched_at`), so the Quick Brief and Reviews tab benefit too. Any Outscraper failure falls back to the stored set without blocking the brief. Modal spinner copy notes the possible longer wait. Backend + dashboard.

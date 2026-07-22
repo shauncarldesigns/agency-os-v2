@@ -115,6 +115,38 @@ function formatVerbatimReviews(googleReviewsJson: string | null): string | null 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// Deterministic contact block appended after the Claude-generated brief,
+// same pattern as the verbatim reviews block. The prompt instructs the
+// model to inline contact details verbatim, but a generation that
+// compresses "(920) 829-5232" into "phone number" leaves landingsite with
+// an instruction it can't satisfy — the brief is its only data source.
+// Appending the exact values server-side removes that coin flip.
+function formatVerbatimContact(lead: Lead): string {
+  const lines: string[] = [
+    'CONTACT DETAILS (VERBATIM)',
+    'Use these exact values anywhere the page shows contact info. Do not reformat or invent alternatives; omit anything not listed here.',
+    '',
+    `Business name: ${lead.company}`,
+  ];
+  if (lead.phone) lines.push(`Phone: ${lead.phone}`);
+  if (lead.address) lines.push(`Address: ${lead.address}`);
+  // gbp_hours is a JSON array of "Monday: 8:00 AM – 4:00 PM" strings.
+  if (lead.gbp_hours) {
+    try {
+      const hours = JSON.parse(lead.gbp_hours);
+      if (Array.isArray(hours) && hours.length) {
+        lines.push('Hours:');
+        for (const h of hours) {
+          if (typeof h === 'string') lines.push(`  ${h}`);
+        }
+      }
+    } catch {
+      // Unparseable hours are dropped rather than pasted as raw JSON.
+    }
+  }
+  return lines.join('\n');
+}
+
 async function writeActivity(
   db: D1Database,
   input: {
@@ -490,8 +522,9 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
       return c.json({ error: 'Claude returned an empty brief', code: 'CLAUDE_ERROR' }, 502);
     }
 
-    // Append the full verbatim review set below the authored brief so
-    // landingsite has the exact review content to build with.
+    // Append verbatim contact details, then the full verbatim review set,
+    // below the authored brief so landingsite has exact values to build with.
+    briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;
     const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
     if (reviewsBlock) {
       briefText = `${briefText}\n\n${reviewsBlock}`;
