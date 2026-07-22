@@ -599,10 +599,9 @@ function BriefModal({
           </div>
         ) : (
           <>
-            <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] leading-relaxed text-slate-700 font-sans">
-              {briefText}
-            </pre>
-            <div className="mt-3 flex gap-2">
+            {/* Actions live ABOVE the brief so the operator doesn't have to
+                scroll a long brief to reach Copy / Regenerate. */}
+            <div className="mb-3 flex gap-2">
               <button
                 onClick={handleCopy}
                 disabled={!briefText}
@@ -633,6 +632,9 @@ function BriefModal({
                 )}
               </button>
             </div>
+            <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] leading-relaxed text-slate-700 font-sans">
+              {briefText}
+            </pre>
             <p className="mt-3 text-xs text-slate-400">
               Paste this into landingsite.ai to build the site. Once it's live, drop the URL below —
               this tags it for tracking and unlocks the text to send.
