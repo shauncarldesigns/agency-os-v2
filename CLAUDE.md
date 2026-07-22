@@ -136,13 +136,18 @@ repurpose one for the other.**
   `CONTACT DETAILS (VERBATIM)` then `CUSTOMER REVIEWS (VERBATIM)` — the
   brief is landingsite's only data source, so exact values can't be left
   to model transcription (a brief once demanded "the phone number"
-  without stating the digits). Each brief also carries a `DESIGN
-  DIRECTION` section (palette hex codes, typography, hero layout,
-  signature element) assigned deterministically in code, seeded by lead
-  id — landingsite defaults every unbranded demo to the same navy
-  template, and model-chosen "unique looks" converge the same way, so
-  variance is manufactured upstream (same lesson as angle-led master
-  briefs).
+  without stating the digits). Each brief also carries a `HERO COPY
+  (USE VERBATIM)` section — the brief authors the exact H1 + subhead
+  because landingsite's own hero generation converges on trust-cliché
+  formulas ("Honest X You Can Trust") on every site; the operator
+  explicitly wants hero copy owned on our side, not landingsite's —
+  and a `DESIGN DIRECTION` section (palette hex codes, typography, hero
+  layout, signature element). Both are varied deterministically in
+  code, seeded by lead id (8 headline angles; 10×6×5×8 design combos) —
+  model-chosen "unique" output converges, so variance is manufactured
+  upstream (same lesson as angle-led master briefs). The operator is
+  NOT concerned with demo color fidelity (colors are easily changed
+  inside landingsite); copy sameness is the concern that matters.
 - **SMS sending is `sms:` deep links only** (`?&body=` variant — most
   compatible across iOS/Android; body prefill is inconsistent, which is why
   every composer keeps a Copy fallback). No Twilio/A2P by explicit scope
