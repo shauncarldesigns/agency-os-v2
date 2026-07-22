@@ -136,7 +136,13 @@ repurpose one for the other.**
   `CONTACT DETAILS (VERBATIM)` then `CUSTOMER REVIEWS (VERBATIM)` — the
   brief is landingsite's only data source, so exact values can't be left
   to model transcription (a brief once demanded "the phone number"
-  without stating the digits).
+  without stating the digits). Each brief also carries a `DESIGN
+  DIRECTION` section (palette hex codes, typography, hero layout,
+  signature element) assigned deterministically in code, seeded by lead
+  id — landingsite defaults every unbranded demo to the same navy
+  template, and model-chosen "unique looks" converge the same way, so
+  variance is manufactured upstream (same lesson as angle-led master
+  briefs).
 - **SMS sending is `sms:` deep links only** (`?&body=` variant — most
   compatible across iOS/Android; body prefill is inconsistent, which is why
   every composer keeps a Copy fallback). No Twilio/A2P by explicit scope

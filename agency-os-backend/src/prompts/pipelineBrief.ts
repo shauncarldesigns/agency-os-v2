@@ -15,6 +15,7 @@
 // form is reserved for master/page briefs where prose matters.
 
 export interface PipelineBriefInput {
+  lead_id: number; // seeds the assigned design direction — stable per lead
   company: string;
   industry: string | null;
   city: string | null;
@@ -57,6 +58,79 @@ const BANNED_WORDS = [
   'dedicated',
 ];
 
+// ---------------------------------------------------------------------------
+// Design direction assignment.
+//
+// Landingsite's wrapper prompt tells the builder to "choose a restrained,
+// professional visual direction appropriate for the industry" when no
+// branding is supplied — which converges on the same navy-blue template for
+// every lead. It also says "use the supplied business branding when
+// available": that's the hook. We assign each lead a concrete direction
+// (palette, typography, hero layout, one signature element) IN CODE, seeded
+// by lead id — asking the model to "pick a unique look" converges the same
+// way the pre-angle-led master briefs did (see CLAUDE.md brief evolution).
+// Seeding by id keeps a lead's look stable across regenerates while
+// neighbouring leads land on different combinations.
+
+const PALETTES = [
+  'Deep forest green (#1B4332) with aged-brass accents (#B08D57) on warm off-white (#FAF7F2) — grounded, premium, outdoorsy',
+  'Charcoal (#23262B) with safety orange (#E8590C) on light gray (#F4F5F6) — bold, industrial, job-site energy',
+  'Midnight navy (#14213D) with warm amber (#FCA311) on soft white (#F8F9FA) — classic, established',
+  'Slate blue (#3D5A80) with copper (#C46F33) on cream (#FBF6EF) — steady, craftsman',
+  'Dark teal (#134E4A) with sun yellow (#FACC15) on white — fresh but workmanlike',
+  'Graphite (#2B2D31) with steel blue (#5C8DB8) and a single red accent (#C0392B) — no-nonsense, technical',
+  'Espresso brown (#3E2C23) with burnt orange (#CC5500) on cream (#FFF8F0) — warm, family-business',
+  'Deep burgundy (#5C1A2B) with tan leather tones (#C9A66B) on off-white — heritage, old-school trade pride',
+  'Ink black (#181818) with construction yellow (#F5B301) — heavy-equipment confidence',
+  'Gunmetal (#39424E) with muted aqua (#2A9D8F) and sand (#E9C46A) — modern industrial',
+];
+
+const TYPOGRAPHY = [
+  'Heavy geometric sans headlines with a clean humanist sans body — modern shop-front',
+  'Slab-serif headlines with a neutral sans body — hardworking Americana',
+  'Condensed all-caps sans headlines with a roomy regular-case body — highway-signage clarity',
+  'Classic serif headlines with a plain sans body — established, editorial',
+  'Sturdy rounded sans throughout — approachable, family-run',
+  'High-contrast modern sans with tight headline tracking — crisp, current',
+];
+
+const HERO_LAYOUTS = [
+  'Full-bleed photo with a dark gradient overlay, copy and CTA left-aligned',
+  'Split hero: headline and proof points left, a quote-request card right',
+  'Solid brand-color hero with an oversized centered headline, photo band directly below',
+  'Light hero: copy left, photo right, review stars directly under the CTA',
+  "Dark hero on the palette's darkest tone, oversized headline, phone number as the dominant CTA",
+];
+
+const SIGNATURE_ELEMENTS = [
+  'A stats band with oversized numerals (rating, review count, services offered)',
+  'A review-highlight strip of one-line quotes with first names, distinct from the main reviews section',
+  'A map-first service-area section with the towns called out as chips or pins',
+  "A short owner's-note block styled like a signed letter (only if owner names are on file — otherwise a plain about block)",
+  'Alternating section background tints so the scroll never feels like one long white page',
+  'Badge-style iconography for each service with a consistent stroke weight',
+  'An oversized section-numbering motif (01, 02, 03) running down the page',
+  'A call-to-done process strip: how a job goes from first call to finished work',
+];
+
+interface DesignDirection {
+  palette: string;
+  typography: string;
+  hero: string;
+  signature: string;
+}
+
+// Distinct multipliers/offsets decorrelate the four picks so sequential
+// lead ids don't walk through the lists in lockstep.
+function assignDesignDirection(leadId: number): DesignDirection {
+  return {
+    palette: PALETTES[leadId % PALETTES.length],
+    typography: TYPOGRAPHY[(leadId * 7 + 3) % TYPOGRAPHY.length],
+    hero: HERO_LAYOUTS[(leadId * 13 + 1) % HERO_LAYOUTS.length],
+    signature: SIGNATURE_ELEMENTS[(leadId * 17 + 2) % SIGNATURE_ELEMENTS.length],
+  };
+}
+
 function safeParseArray(json: string | null): string[] {
   if (!json) return [];
   try {
@@ -86,6 +160,7 @@ function safeParseQuotes(json: string | null): Quote[] {
 }
 
 export function buildPipelineBriefPrompt(input: PipelineBriefInput): BuiltPipelineBriefPrompt {
+  const design = assignDesignDirection(input.lead_id);
   const services = safeParseArray(input.extracted_services);
   const strengths = safeParseArray(input.extracted_strengths);
   const landmarks = safeParseArray(input.extracted_local_landmarks);
@@ -110,6 +185,7 @@ Structure the output as exactly these section headers, in this order, and nothin
 - WHAT MUST APPEAR
 - SUGGESTED SECTIONS
 - WHAT TO EMPHASIZE
+- DESIGN DIRECTION
 - CONSTRAINTS
 
 SUGGESTED SECTIONS rules: present this as a suggested page layout the
@@ -131,6 +207,17 @@ present, category-standard defaults if not. Do not invent FAQ answers that
 require facts you don't have — frame FAQ topics instead (hours, service
 area, pricing expectations, how to book).
 
+DESIGN DIRECTION rules: the input assigns this business a specific visual
+direction — palette (with hex codes), typography, hero layout, and one
+signature element. Reproduce all four in this section, hex codes exact,
+and open it with a line telling the builder this direction replaces its
+default industry styling (e.g. "Use this visual direction instead of a
+default 'professional' look:"). Then add one or two imagery notes specific
+to THIS business — its trade, its town, its landmarks, its owners — so the
+photos and texture feel local rather than stock-generic. The assignment is
+binding: do not soften it into a suggestion, swap the palette, or fall
+back to industry-typical colors.
+
 Rules:
 - Ground every claim in the enrichment data provided. Never invent services, awards, staff members, or history.
 - Contact details (phone, address, hours) must be written VERBATIM wherever you reference them — the exact digits, the exact street address. Never write "phone number" or "address" generically: this brief is landingsite's only data source, so a value you don't transcribe does not exist to the builder. If a detail is marked "(none on file)", do not instruct the page to include it — route contact through the form instead.
@@ -138,7 +225,7 @@ Rules:
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
 - A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
-- Keep the whole brief under 450 words. This is a working doc, not marketing copy.
+- Keep the whole brief under 520 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
 
   // Structured data blob for the user turn — Claude parses more reliably
@@ -171,6 +258,13 @@ Rules:
   if (input.opportunity_reasoning) {
     dataLines.push(`Why this lead scored well: ${input.opportunity_reasoning}`);
   }
+
+  dataLines.push('');
+  dataLines.push('Assigned design direction (carry into the DESIGN DIRECTION section):');
+  dataLines.push(`  Palette: ${design.palette}`);
+  dataLines.push(`  Typography: ${design.typography}`);
+  dataLines.push(`  Hero layout: ${design.hero}`);
+  dataLines.push(`  Signature element: ${design.signature}`);
 
   if (quotes.length) {
     dataLines.push('');
