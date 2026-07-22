@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — brief-authored hero copy (PR #162)
+
+- **[#162](https://github.com/shauncarldesigns/agency-os-v2/pull/162) The brief now writes the hero headline itself.** Landingsite, left to generate its own hero, converged on the same trust-cliché formulas every time ("Honest HVAC Services You Can Trust", "Fair Prices, Real People"). Briefs now carry a `HERO COPY (USE VERBATIM)` section — an exact SEO-shaped H1 (primary services + town) and subhead the builder is told not to replace — written through one of 8 headline angles (service-catalog, customer-voice, numbers-led, owner-led, problem-first, area-led, specialty-led, question-led) assigned deterministically by lead id, so headlines vary across leads and stay stable per lead. Hero copy also gets hard phrase bans (honest, trust constructions, fair prices, real people, done right, etc.) plus a portability test: if the headline could sit on a competitor's site unchanged, rewrite it. Word cap 520 → 560. Regenerate a lead's brief to pick it up. Backend.
+
 ### Pipeline brief — assigned design directions (PR #161)
 
 - **[#161](https://github.com/shauncarldesigns/agency-os-v2/pull/161) Each pipeline brief now carries a distinct visual direction.** Landingsite's builder, given no branding, converges on the same navy-professional template for every demo site. Briefs now include a `DESIGN DIRECTION` section — palette with exact hex codes, typography pairing, hero layout, and one signature element — assigned deterministically in code (seeded by lead id, from 10 palettes × 6 type pairings × 5 hero layouts × 8 signature elements), so a lead's look is stable across regenerates while neighboring leads look different. The prompt instructs landingsite to treat the direction as binding over its default industry styling and to add business-specific imagery notes. Word cap raised 450 → 520 to make room. Regenerate a lead's brief to pick it up. Backend.

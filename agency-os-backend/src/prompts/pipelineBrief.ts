@@ -113,6 +113,26 @@ const SIGNATURE_ELEMENTS = [
   'A call-to-done process strip: how a job goes from first call to finished work',
 ];
 
+// Headline angles — the copy-side counterpart to design directions.
+// Landingsite, left to write its own hero, converges on the same
+// trust-cliché formulas ("Honest HVAC Services You Can Trust", "Fair
+// Prices, Real People") for every site. The brief therefore authors the
+// hero copy itself, and variance across leads is manufactured by
+// assigning each lead one of these angles — same reasoning as the
+// angle-led master briefs. Each angle degrades gracefully: if its data
+// isn't on file, the model keeps the angle's spirit and builds from
+// what is.
+const HEADLINE_ANGLES = [
+  'Plain-spoken service catalog: lead with the two or three highest-value services and the town — the headline a customer would literally search for.',
+  'Customer-voice: build the hero around a short verbatim phrase customers actually use in the reviews (quoted or woven in), anchored to service + town.',
+  'Numbers-led: lead with the concrete reputation numbers on file — rating, review count — plus service + town. Never use numbers not in the data.',
+  "Owner-led: H1 stays service + town, but the subhead names the owner(s) so the hero reads like a real person's business, not a franchise. If no owner names are on file, use the business name's personal form instead.",
+  'Problem-first: open on the concrete moment a customer needs this trade (the failed furnace, the burst pipe, the leaking roof), resolving to service + town within the hero.',
+  'Area-led: lead with the service territory — the towns and county from the data — positioning the business as the one that covers it.',
+  'Specialty-led: lead with the single most distinctive service or review-mined strength this business has, plus the town.',
+  "Question-led: the H1 poses the customer's actual search question naturally, and the subhead answers it with specifics from the data.",
+];
+
 interface DesignDirection {
   palette: string;
   typography: string;
@@ -129,6 +149,10 @@ function assignDesignDirection(leadId: number): DesignDirection {
     hero: HERO_LAYOUTS[(leadId * 13 + 1) % HERO_LAYOUTS.length],
     signature: SIGNATURE_ELEMENTS[(leadId * 17 + 2) % SIGNATURE_ELEMENTS.length],
   };
+}
+
+function assignHeadlineAngle(leadId: number): string {
+  return HEADLINE_ANGLES[(leadId * 11 + 5) % HEADLINE_ANGLES.length];
 }
 
 function safeParseArray(json: string | null): string[] {
@@ -161,6 +185,7 @@ function safeParseQuotes(json: string | null): Quote[] {
 
 export function buildPipelineBriefPrompt(input: PipelineBriefInput): BuiltPipelineBriefPrompt {
   const design = assignDesignDirection(input.lead_id);
+  const headlineAngle = assignHeadlineAngle(input.lead_id);
   const services = safeParseArray(input.extracted_services);
   const strengths = safeParseArray(input.extracted_strengths);
   const landmarks = safeParseArray(input.extracted_local_landmarks);
@@ -182,11 +207,35 @@ Structure the output as exactly these section headers, in this order, and nothin
 - BUSINESS OVERVIEW
 - TARGET AUDIENCE
 - PAGE PURPOSE
+- HERO COPY (USE VERBATIM)
 - WHAT MUST APPEAR
 - SUGGESTED SECTIONS
 - WHAT TO EMPHASIZE
 - DESIGN DIRECTION
 - CONSTRAINTS
+
+HERO COPY rules: write the exact hero copy the page must use — the words
+themselves, not a description of them. Format:
+  H1: <the headline, roughly 6–12 words>
+  Subhead: <one or two sentences>
+Open the section with a line telling the builder to use this copy
+verbatim as the page hero and NOT to replace it with a generated
+headline. The H1 must read like something a customer would actually
+search for: it names the primary service(s) and the town. Include the
+business name only when it flows naturally — never force it. Write the
+copy through the assigned headline angle in the input; if the angle
+calls for data that isn't on file, keep its spirit and build from what
+is. The subhead must contain at least one concrete fact from the data
+(a specific service, the rating, the town, hours, an owner's name) and
+zero generic virtues.
+Hard bans for hero copy, beyond the fluff-word list: "honest", any
+"trust"/"you can trust" construction, "fair prices", "real people",
+"quality you can count on", "done right", "your local experts", "peace
+of mind", "no job too big or small", and any headline shaped like
+"[Adjective] [Trade] Services You Can [Verb]". These are the formulas
+every generated site converges on. Test: if the headline could be
+pasted onto a competitor's site unchanged, rewrite it until it
+couldn't.
 
 SUGGESTED SECTIONS rules: present this as a suggested page layout the
 builder may adapt — open the section with a line like "Suggested layout,
@@ -201,7 +250,8 @@ line, not the section, when there's nothing specific to say):
 - Service area with map
 - Contact form
 - FAQs
-For Reviews, reference the actual rating/count. For Service area with map,
+For Hero, point to the HERO COPY section rather than proposing a second
+headline. For Reviews, reference the actual rating/count. For Service area with map,
 anchor on the business's city/area. For Services, use the mined services if
 present, category-standard defaults if not. Do not invent FAQ answers that
 require facts you don't have — frame FAQ topics instead (hours, service
@@ -225,7 +275,7 @@ Rules:
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
 - A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
-- Keep the whole brief under 520 words. This is a working doc, not marketing copy.
+- Keep the whole brief under 560 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
 
   // Structured data blob for the user turn — Claude parses more reliably
@@ -258,6 +308,9 @@ Rules:
   if (input.opportunity_reasoning) {
     dataLines.push(`Why this lead scored well: ${input.opportunity_reasoning}`);
   }
+
+  dataLines.push('');
+  dataLines.push(`Assigned headline angle (write HERO COPY through this lens): ${headlineAngle}`);
 
   dataLines.push('');
   dataLines.push('Assigned design direction (carry into the DESIGN DIRECTION section):');
