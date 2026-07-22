@@ -26,6 +26,7 @@ export interface PipelineBriefInput {
   google_rating: number | null;
   google_review_count: number | null;
   extracted_services: string | null;        // JSON array string; may be null
+  extracted_service_areas: string | null;   // JSON array string — mined towns
   extracted_strengths: string | null;       // JSON array string
   extracted_local_landmarks: string | null; // JSON array string
   pitch_quotes: string | null;              // JSON array of { text, author? }
@@ -155,6 +156,20 @@ function assignHeadlineAngle(leadId: number): string {
   return HEADLINE_ANGLES[(leadId * 11 + 5) % HEADLINE_ANGLES.length];
 }
 
+// Landingsite's wrapper asks for "the most accurate Schema.org business
+// type available" — we know the trade, so state it instead of leaving it
+// to guesswork. Order matters: check specific trades before the generic
+// contractor match (industry values like 'general_contractor').
+function schemaTypeForIndustry(industry: string | null): string {
+  const s = (industry ?? '').toLowerCase();
+  if (s.includes('plumb')) return 'Plumber';
+  if (s.includes('hvac') || s.includes('heating') || s.includes('cooling')) return 'HVACBusiness';
+  if (s.includes('electric')) return 'Electrician';
+  if (s.includes('roof')) return 'RoofingContractor';
+  if (s.includes('contractor') || s.includes('construction') || s.includes('remodel')) return 'GeneralContractor';
+  return 'LocalBusiness';
+}
+
 function safeParseArray(json: string | null): string[] {
   if (!json) return [];
   try {
@@ -186,7 +201,9 @@ function safeParseQuotes(json: string | null): Quote[] {
 export function buildPipelineBriefPrompt(input: PipelineBriefInput): BuiltPipelineBriefPrompt {
   const design = assignDesignDirection(input.lead_id);
   const headlineAngle = assignHeadlineAngle(input.lead_id);
+  const schemaType = schemaTypeForIndustry(input.industry);
   const services = safeParseArray(input.extracted_services);
+  const serviceAreas = safeParseArray(input.extracted_service_areas);
   const strengths = safeParseArray(input.extracted_strengths);
   const landmarks = safeParseArray(input.extracted_local_landmarks);
   const quotes = safeParseQuotes(input.pitch_quotes).slice(0, 4);
@@ -208,6 +225,7 @@ Structure the output as exactly these section headers, in this order, and nothin
 - TARGET AUDIENCE
 - PAGE PURPOSE
 - HERO COPY (USE VERBATIM)
+- SEO SPECIFICS (USE VERBATIM)
 - WHAT MUST APPEAR
 - SUGGESTED SECTIONS
 - WHAT TO EMPHASIZE
@@ -237,6 +255,18 @@ every generated site converges on. Test: if the headline could be
 pasted onto a competitor's site unchanged, rewrite it until it
 couldn't.
 
+SEO SPECIFICS rules: exact strings the builder must use, not
+descriptions. Format:
+  Title tag: <roughly 50–60 chars: primary service in town | business name>
+  Meta description: <roughly 140–160 chars: service, town, one concrete differentiator, call to action>
+  Primary search phrase: <the single query this page should rank for>
+  Schema type: <the Schema.org type given in the input, exactly>
+  Area served: <the business's town plus every mined service area, comma-separated>
+Write the title tag and meta description fresh — do not reuse the H1's
+wording. The meta description's differentiator must be a fact from the
+data (the rating, a named service, the owners), never a generic virtue.
+The hero-copy phrase bans apply here too.
+
 SUGGESTED SECTIONS rules: present this as a suggested page layout the
 builder may adapt — open the section with a line like "Suggested layout,
 adapt as fits the business:" so landingsite treats it as guidance, not a
@@ -251,11 +281,17 @@ line, not the section, when there's nothing specific to say):
 - Contact form
 - FAQs
 For Hero, point to the HERO COPY section rather than proposing a second
-headline. For Reviews, reference the actual rating/count. For Service area with map,
-anchor on the business's city/area. For Services, use the mined services if
-present, category-standard defaults if not. Do not invent FAQ answers that
-require facts you don't have — frame FAQ topics instead (hours, service
-area, pricing expectations, how to book).
+headline. For Reviews, reference the actual rating/count. For Service area
+with map, anchor on the business's city AND name every mined service-area
+town — the builder should reference these nearby communities naturally, not
+just the home city. For Services, use the mined services if present,
+category-standard defaults if not. For FAQs, supply four to six actual
+questions and give definitive answers wherever the data can answer them
+(hours, towns served, services offered, who runs the shop) — real answers
+make the FAQ schema-worthy, while a page of "contact us to learn more"
+answers is thin content. Frame only genuinely unknown items (pricing,
+warranties, emergency availability) as questions answered with a neutral
+contact-for-details line.
 
 DESIGN DIRECTION rules: the input assigns this business a specific visual
 direction — palette (with hex codes), typography, hero layout, and one
@@ -275,7 +311,7 @@ Rules:
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
 - A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
-- Keep the whole brief under 560 words. This is a working doc, not marketing copy.
+- Keep the whole brief under 620 words. This is a working doc, not marketing copy.
 - Write for an operator who will paste this into a landingsite prompt. Direct instructions ("include", "avoid", "position the CTA above the fold") beat descriptive prose.`;
 
   // Structured data blob for the user turn — Claude parses more reliably
@@ -299,6 +335,10 @@ Rules:
   } else {
     dataLines.push('Services mined from reviews: (none extracted)');
   }
+  if (serviceAreas.length) {
+    dataLines.push(`Service-area towns mined from reviews: ${serviceAreas.join(', ')}`);
+  }
+  dataLines.push(`Schema.org business type to specify: ${schemaType}`);
   if (strengths.length) {
     dataLines.push(`Strengths mined from reviews: ${strengths.join('; ')}`);
   }

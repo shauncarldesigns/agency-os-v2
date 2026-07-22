@@ -144,6 +144,14 @@ function formatVerbatimContact(lead: Lead): string {
       // Unparseable hours are dropped rather than pasted as raw JSON.
     }
   }
+  // The Google Maps listing is the one legitimate citation link a
+  // no-website business has. place_ids are long random strings — exactly
+  // the kind of value model transcription mangles, so it lives here.
+  if (lead.place_id) {
+    lines.push(
+      `Google Business Profile listing (use as the sameAs link in the LocalBusiness schema): https://www.google.com/maps/place/?q=place_id:${lead.place_id}`,
+    );
+  }
   return lines.join('\n');
 }
 
@@ -436,6 +444,7 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
       google_rating: lead.google_rating,
       google_review_count: lead.google_review_count,
       extracted_services: lead.extracted_services,
+      extracted_service_areas: lead.extracted_service_areas,
       extracted_strengths: lead.extracted_strengths,
       extracted_local_landmarks: lead.extracted_local_landmarks,
       pitch_quotes: lead.pitch_quotes,
