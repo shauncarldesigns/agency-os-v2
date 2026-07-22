@@ -374,21 +374,18 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     const tapped = tappedRow?.n ?? 0;
     const engaged = engagedRow?.n ?? 0;
     const booked = bookedRow?.n ?? 0;
-    const tapRate = pct(tapped, sent);
-    const engagementRate = pct(engaged, sent);
-    const replyPerTap = null;
-    const bookRate = pct(booked, sent);
 
+    // Reply metrics were removed 2026-07-21 by operator decision: replies
+    // arrive on the operator's personal phone (sms: deep-link channel) and
+    // aren't worth logging manually.
     return {
       sent,
       tapped,
       engaged,
-      replies: null,
       booked,
-      tapRate,
-      engagementRate,
-      replyPerTap,
-      bookRate,
+      tapRate: pct(tapped, sent),
+      engagementRate: pct(engaged, sent),
+      bookRate: pct(booked, sent),
     };
   }
 
@@ -486,7 +483,6 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     previousWeek,
     hero: {
       hotLeadsReadyToCall: (hotLeads.results ?? []).length,
-      thisWeekReplyRate: null,
       meetingsBookedThisWeek: current.booked,
       activeLeadsInPipeline: activeLeadsRow?.n ?? 0,
     },
@@ -496,7 +492,6 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
       trends: {
         tapRate: delta(current.tapRate, previous.tapRate),
         engagementRate: delta(current.engagementRate, previous.engagementRate),
-        replyPerTap: null,
         bookRate: delta(current.bookRate, previous.bookRate),
       },
     },
