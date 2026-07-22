@@ -133,6 +133,7 @@ area, pricing expectations, how to book).
 
 Rules:
 - Ground every claim in the enrichment data provided. Never invent services, awards, staff members, or history.
+- Contact details (phone, address, hours) must be written VERBATIM wherever you reference them — the exact digits, the exact street address. Never write "phone number" or "address" generically: this brief is landingsite's only data source, so a value you don't transcribe does not exist to the builder. If a detail is marked "(none on file)", do not instruct the page to include it — route contact through the form instead.
 - If the enrichment is sparse, say so honestly ("Reviews do not name specific services; use category-standard defaults for barbershops.") rather than filling gaps with generic marketing copy.
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
 - A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
@@ -147,9 +148,12 @@ Rules:
     `Industry: ${input.industry ?? 'unspecified'}`,
     `Location: ${locationLabel}`,
   ];
-  if (input.address) dataLines.push(`Address: ${input.address}`);
-  if (input.phone) dataLines.push(`Phone: ${input.phone}`);
-  if (input.hours) dataLines.push(`Hours: ${input.hours}`);
+  // Absence is data: an explicit "(none on file)" marker lets the system
+  // prompt forbid demanding contact details we don't hold, instead of the
+  // model filling the gap with generic NAP advice.
+  dataLines.push(`Address: ${input.address ?? '(none on file)'}`);
+  dataLines.push(`Phone: ${input.phone ?? '(none on file)'}`);
+  dataLines.push(`Hours: ${input.hours ?? '(none on file)'}`);
   dataLines.push(`Reputation: ${ratingLine}`);
   if (input.owner_names) dataLines.push(`Owner(s): ${input.owner_names}`);
 
