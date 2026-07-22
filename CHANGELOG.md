@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Pipeline brief — page purpose is the business's, not the operator's (PR #165)
+
+- **[#165](https://github.com/shauncarldesigns/agency-os-v2/pull/165) Briefs no longer frame the page around the outreach motion.** The system prompt framed the homepage as a sales artifact ("make the operator's follow-up text from Shaun feel like a gift"), and that leaked straight into generated briefs — Thomson's PAGE PURPOSE told landingsite the page exists to legitimize cold outreach. Reframed business-first: the page's job is to rank for the searches the business's customers type, establish it as a real reputable local company, and convert visitors into calls and form submissions. Explicit rule that the brief never mentions the agency, operator, outreach, demos, or pitches, plus PAGE PURPOSE section rules. Regenerate to pick up. Backend.
+
 ### Pipeline brief — schema type from company name, stray-review strip (PR #164)
 
 - **[#164](https://github.com/shauncarldesigns/agency-os-v2/pull/164) Two fixes surfaced by live-testing #163.** Schema type inference now also reads the company name — Google categorized Thomson HEATING AND COOLING as `general_contractor`, so industry alone produced `GeneralContractor` where `HVACBusiness` is right. And when the model reproduces the review set under its own `CUSTOMER REVIEWS` header despite the prompt rule, the route now truncates the authored brief at that header before appending the real verbatim blocks, so reviews can't appear twice. Backend.
