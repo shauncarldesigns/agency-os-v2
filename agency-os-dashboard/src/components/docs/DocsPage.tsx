@@ -30,6 +30,135 @@ type DocPage = {
 
 const DOCS: DocPage[] = [
   {
+    id: 'offer-overview',
+    title: 'Offer Overview',
+    eyebrow: 'What we actually sell',
+    summary: 'The client-facing promise broken into foundation setup and monthly fulfillment.',
+    icon: BookOpen,
+    sections: [
+      {
+        title: 'The two-part offer',
+        items: [
+          'Foundation month: build the website, GBP, listings, review system, and initial content base at the same time.',
+          'Every month after: keep GBP active, request and manage reviews, build local pages, maintain listings, and report progress.',
+          'The outcome to communicate is local visibility plus proof: more places finding the business, more reasons to trust it, and clearer evidence of activity.',
+        ],
+      },
+      {
+        title: 'Foundation promise',
+        items: [
+          'Complete 8-10 page website that is fast, mobile, and built to convert visitors into calls.',
+          'Google Business Profile claimed, verified, fully optimized, and connected to the website.',
+          'Local listings, review generation, and initial GBP/social content set up before the client is considered launched.',
+        ],
+      },
+      {
+        title: 'Monthly promise',
+        items: [
+          'Regular GBP posts, offers, images, videos, and social publishing so the client does not look inactive.',
+          'Review requests, follow-ups, replies, bad-review flagging, and QR code review flow.',
+          'Three new local pages per month, directory/listing maintenance, town-by-town tuning, and reporting.',
+        ],
+      },
+      {
+        title: 'How to use this doc',
+        body: 'Use this page as the top-level service definition. The Foundation Month and Monthly Fulfillment pages turn the promise into operator checklists.',
+      },
+    ],
+  },
+  {
+    id: 'foundation-month',
+    title: 'Foundation Month',
+    eyebrow: 'First month setup',
+    summary: 'Everything that should be built together before the client moves into ongoing monthly work.',
+    icon: Rocket,
+    sections: [
+      {
+        title: 'Website and GBP foundation',
+        items: [
+          'Build the complete 8-10 page website with mobile-first layout, clear calls, service coverage, and local trust signals.',
+          'Claim, verify, and fully optimize the Google Business Profile.',
+          'Set the business description, services list, service descriptions, attributes, and social links.',
+          'Confirm GBP details match the website and directory data before launch.',
+        ],
+      },
+      {
+        title: 'Local presence setup',
+        items: [
+          'Set up local listing management across 62 directories so the business appears where it needs to be.',
+          'Enable auto-sync and duplicate detection so name, address, phone, and website stay consistent.',
+          'Complete visibility groundwork for Google Maps, Google AI, ChatGPT, Gemini, and Perplexity.',
+        ],
+      },
+      {
+        title: 'Review system setup',
+        items: [
+          'Build and configure the automated review request system.',
+          'Generate the QR code for easy customer reviews.',
+          'Confirm the review request path is simple enough for the client to use immediately.',
+        ],
+      },
+      {
+        title: 'Initial content push',
+        items: [
+          'Publish the first batch of GBP posts, images, and videos to kickstart activity.',
+          'Run the first round of image optimization, including geotagging and metadata for local signals.',
+          'Confirm local search groundwork is complete before the client is moved into monthly fulfillment.',
+        ],
+      },
+      {
+        title: 'Done means',
+        body: 'The client has a live site, optimized GBP, synced local presence, working review system, initial content activity, and baseline reporting inputs ready for ongoing work.',
+        callout: 'Do not treat the site launch alone as the foundation being complete. The offer includes GBP, listings, reviews, and initial content setup.',
+      },
+    ],
+  },
+  {
+    id: 'monthly-fulfillment',
+    title: 'Monthly Fulfillment',
+    eyebrow: 'Every month',
+    summary: 'The recurring work that keeps the client visible, active, and reportable.',
+    icon: CalendarCheck,
+    sections: [
+      {
+        title: 'GBP content and activity',
+        items: [
+          'Publish regular GBP posts, offers, images, and videos to keep the profile active and ranking.',
+          'Create and publish videos to GBP and YouTube when included in the client workflow.',
+          'Optimize images with geotagging and metadata for stronger local signals.',
+          'Publish social posts to Facebook, Instagram, LinkedIn, and YouTube as applicable.',
+        ],
+      },
+      {
+        title: 'Reputation and reviews',
+        items: [
+          'Run automated review requests and follow-ups.',
+          'Reply to reviews or flag bad reviews when appropriate.',
+          'Keep the QR code review flow available and easy for the client to share.',
+          'Display posts and reviews on the website to build trust.',
+        ],
+      },
+      {
+        title: 'Local SEO and visibility',
+        items: [
+          'Build three new local pages every month targeting specific towns and services.',
+          'Maintain local listing management across 62 directories, including auto-sync and duplicate detection.',
+          'Tune content and profile signals for "near me" and town-by-town local search.',
+          'Update the sitemap and search visibility checks after new pages are published.',
+        ],
+      },
+      {
+        title: 'Reporting and support',
+        items: [
+          'Send weekly progress updates and GBP change alerts so the client knows work is happening.',
+          'Send monthly ranking reports with before-and-after heatmaps and up to 10 tracked keywords.',
+          'Send proactive reminders to keep the profile stocked with fresh photos and content.',
+          'Use reports to connect activity to visibility, calls, form fills, reviews, and page growth where tracking is installed.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'after-launch',
     title: 'After Launch',
     eyebrow: 'Live client checklist',
@@ -61,6 +190,14 @@ const DOCS: DocPage[] = [
         body: 'Use the first check-in to catch small fixes, reinforce the value of the launch, and set expectations for ongoing page work or reporting.',
         callout: 'A quiet client after launch is not automatically a healthy client. Put a next action on the calendar.',
       },
+      {
+        title: 'Move into fulfillment',
+        items: [
+          'Confirm the Foundation Month checklist is complete, not just the website launch.',
+          'Schedule the first Monthly Fulfillment cycle: GBP content, review requests, local pages, listing checks, and reporting.',
+          'Tell the client what recurring work starts next so the handoff from launch to monthly value is obvious.',
+        ],
+      },
     ],
   },
   {
@@ -78,6 +215,7 @@ const DOCS: DocPage[] = [
           'Add conversion tracking for form submissions, phone taps, primary CTA clicks, and important button clicks.',
           'Add lead-capture hooks on buttons and forms so monthly reporting can show actual inquiries.',
           'Add call tracking through CallRail, Google tracking numbers, or the chosen call attribution tool.',
+          'Confirm tracking covers the monthly reporting promise: calls, forms, CTA clicks, rankings, reviews, and GBP activity where possible.',
         ],
       },
       {
@@ -173,6 +311,10 @@ const DOCS: DocPage[] = [
       {
         title: 'Per-client setup',
         body: 'Each client needs a standard setup packet: domain/DNS, GTM, Analytics, Search Console, call tracking, GBP access, sitemap submission, schema, reporting source, and content plan.',
+      },
+      {
+        title: 'Offer alignment',
+        body: 'Frame onboarding around the Foundation Month promise: website, GBP, listings, reviews, and initial content all need inputs before launch is truly complete.',
       },
     ],
   },
@@ -288,6 +430,7 @@ const DOCS: DocPage[] = [
           'Check that prompts produce genuinely local pages with service area, specific keywords, and schema-ready details.',
           'Update the sitemap after new pages are added.',
           'Treat 3-5 location pages per month as a quality target, not a template quota.',
+          'Use the public monthly offer as the minimum cadence: three useful local pages per month targeting specific towns and services.',
         ],
       },
     ],
@@ -374,6 +517,16 @@ const DOCS: DocPage[] = [
           'Compare new leads or calls against the pre-launch baseline.',
           'Look for weak pages, missing service coverage, and service-area expansion opportunities.',
           'Compare client status against MRR rules before reporting revenue.',
+        ],
+      },
+      {
+        title: 'Monthly fulfillment review',
+        items: [
+          'Confirm GBP content, offers, images, or videos were published.',
+          'Confirm review requests, follow-ups, replies, and any bad-review flags were handled.',
+          'Confirm the three local pages for the month were built or scheduled.',
+          'Confirm local listings stayed synced and duplicate issues were addressed.',
+          'Confirm the client received progress updates, GBP change alerts, and the monthly ranking report.',
         ],
       },
       {
