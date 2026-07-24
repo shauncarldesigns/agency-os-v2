@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Operator docs — offer foundation and monthly fulfillment (PR #166)
+
+- **[#166](https://github.com/shauncarldesigns/agency-os-v2/pull/166) Operator Docs now reflect the public offer structure.** Adds Offer Overview, Foundation Month, and Monthly Fulfillment docs so the app distinguishes first-month setup (website, GBP, listings, reviews, initial content) from recurring fulfillment (GBP activity, review management, three local pages/month, listing maintenance, ranking reports, and support). Dashboard.
+
 ### Pipeline brief — page purpose is the business's, not the operator's (PR #165)
 
 - **[#165](https://github.com/shauncarldesigns/agency-os-v2/pull/165) Briefs no longer frame the page around the outreach motion.** The system prompt framed the homepage as a sales artifact ("make the operator's follow-up text from Shaun feel like a gift"), and that leaked straight into generated briefs — Thomson's PAGE PURPOSE told landingsite the page exists to legitimize cold outreach. Reframed business-first: the page's job is to rank for the searches the business's customers type, establish it as a real reputable local company, and convert visitors into calls and form submissions. Explicit rule that the brief never mentions the agency, operator, outreach, demos, or pitches, plus PAGE PURPOSE section rules. Regenerate to pick up. Backend.
