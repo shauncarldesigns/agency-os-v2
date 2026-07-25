@@ -356,8 +356,8 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
   async function activityFor(start: string, end: string) {
     const row = await c.env.DB.prepare(`
       SELECT
-        COUNT(CASE WHEN action = 'intro_sent' THEN 1 END) as intro_texts_sent,
-        COUNT(CASE WHEN action = 'followed_up' THEN 1 END) as follow_ups_sent,
+        COUNT(DISTINCT CASE WHEN action = 'intro_sent' THEN lead_id END) as intro_texts_sent,
+        COUNT(DISTINCT CASE WHEN action = 'followed_up' THEN lead_id END) as follow_ups_sent,
         COUNT(DISTINCT CASE WHEN action = 'click_tracked' THEN lead_id END) as engaged_leads,
         COUNT(CASE WHEN action = 'click_tracked' THEN 1 END) as total_visits
       FROM lead_activity

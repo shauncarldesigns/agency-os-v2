@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Dashboard KPI send-count consistency (PR #168)
+
+- **[#168](https://github.com/shauncarldesigns/agency-os-v2/pull/168) Automated Pipeline activity cards count sent leads the same way as the funnel.** Intro text and follow-up activity stats now count distinct leads rather than raw action rows, keeping the activity card aligned with the sent-count math. Backend.
+
 ### Dashboard KPI weekend activity range (PR #167)
 
 - **[#167](https://github.com/shauncarldesigns/agency-os-v2/pull/167) Automated Pipeline KPIs now count weekend sends and engagement.** The dashboard KPI endpoint was reusing the calling-week helper that intentionally snaps Sat/Sun forward, so Saturday intro texts and tracked visits appeared as zero. Text+site KPIs now use the current Monday-Sunday week while the calling dashboard keeps its existing behavior. Backend.
