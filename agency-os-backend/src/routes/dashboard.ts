@@ -17,6 +17,40 @@ import { badRequest, notFound, serverError } from '../utils/errors';
 
 export const dashboardRouter = new Hono<{ Bindings: Env }>();
 
+function addDaysIso(iso: string, days: number): string {
+  const t = new Date(`${iso}T00:00:00Z`).getTime() + days * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function pipelineKpiWeek(d: Date = new Date()): {
+  monday: string; tuesday: string; wednesday: string; thursday: string; friday: string; saturday: string; sunday: string;
+} {
+  const today = chicagoToday(d);
+  const dayName = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'long',
+  }).format(d).toLowerCase();
+  const dayIndex: Record<string, number> = {
+    monday: 0,
+    tuesday: 1,
+    wednesday: 2,
+    thursday: 3,
+    friday: 4,
+    saturday: 5,
+    sunday: 6,
+  };
+  const monday = addDaysIso(today, -(dayIndex[dayName] ?? 0));
+  return {
+    monday,
+    tuesday: addDaysIso(monday, 1),
+    wednesday: addDaysIso(monday, 2),
+    thursday: addDaysIso(monday, 3),
+    friday: addDaysIso(monday, 4),
+    saturday: addDaysIso(monday, 5),
+    sunday: addDaysIso(monday, 6),
+  };
+}
+
 function pct(numerator: number, denominator: number): number | null {
   if (denominator <= 0) return null;
   return Number(((numerator / denominator) * 100).toFixed(1));
@@ -309,11 +343,15 @@ dashboardRouter.get('/objections-overview', async (c) => {
 // returned as null until the app logs reply events as a first-class action;
 // taps/engagement/bookings are real counters from lead_activity + sessions.
 dashboardRouter.get('/pipeline-kpis', async (c) => {
-  const week = chicagoCallingWeek();
+  // The automated text+site funnel is worked outside Tue/Wed/Thu calling
+  // blocks, including weekends. Do not use chicagoCallingWeek() here: it
+  // intentionally snaps Sat/Sun forward for the calling dashboard, which
+  // hides same-week weekend sends/taps from the KPI cards.
+  const week = pipelineKpiWeek();
   const weekStart = new Date(`${week.monday}T12:00:00-06:00`);
   const previousRef = new Date(weekStart);
   previousRef.setDate(previousRef.getDate() - 7);
-  const previousWeek = chicagoCallingWeek(previousRef);
+  const previousWeek = pipelineKpiWeek(previousRef);
 
   async function activityFor(start: string, end: string) {
     const row = await c.env.DB.prepare(`
@@ -400,10 +438,10 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     smsCurrent,
     smsPrevious,
   ] = await Promise.all([
-    funnelFor(week.monday, week.friday),
-    funnelFor(previousWeek.monday, previousWeek.friday),
-    activityFor(week.monday, week.friday),
-    activityFor(previousWeek.monday, previousWeek.friday),
+    funnelFor(week.monday, week.sunday),
+    funnelFor(previousWeek.monday, previousWeek.sunday),
+    activityFor(week.monday, week.sunday),
+    activityFor(previousWeek.monday, previousWeek.sunday),
     c.env.DB.prepare(`
       SELECT COUNT(*) as n
       FROM leads
@@ -472,8 +510,8 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     }>(),
     // The current automated pipeline sends through the SMS composer. Facebook
     // needs explicit channel logging before it can have real numbers here.
-    funnelFor(week.monday, week.friday),
-    funnelFor(previousWeek.monday, previousWeek.friday),
+    funnelFor(week.monday, week.sunday),
+    funnelFor(previousWeek.monday, previousWeek.sunday),
   ]);
 
   currentActivity.sitesCreated = siteReadyRow?.n ?? 0;

@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Dashboard KPI weekend activity range (PR #167)
+
+- **[#167](https://github.com/shauncarldesigns/agency-os-v2/pull/167) Automated Pipeline KPIs now count weekend sends and engagement.** The dashboard KPI endpoint was reusing the calling-week helper that intentionally snaps Sat/Sun forward, so Saturday intro texts and tracked visits appeared as zero. Text+site KPIs now use the current Monday-Sunday week while the calling dashboard keeps its existing behavior. Backend.
+
 ### Operator docs — offer foundation and monthly fulfillment (PR #166)
 
 - **[#166](https://github.com/shauncarldesigns/agency-os-v2/pull/166) Operator Docs now reflect the public offer structure.** Adds Offer Overview, Foundation Month, and Monthly Fulfillment docs so the app distinguishes first-month setup (website, GBP, listings, reviews, initial content) from recurring fulfillment (GBP activity, review management, three local pages/month, listing maintenance, ranking reports, and support). Dashboard.
