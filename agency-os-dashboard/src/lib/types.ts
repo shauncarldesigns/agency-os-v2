@@ -3,6 +3,13 @@ export interface Lead {
   company: string;
   contact: string | null;
   phone: string | null;
+  phone_e164: string | null;
+  phone_valid: number | null;
+  phone_line_type: string | null;
+  phone_carrier: string | null;
+  phone_route: 'text' | 'call' | 'review' | 'unknown' | null;
+  phone_lookup_error: string | null;
+  phone_lookup_at: string | null;
   email: string | null;
   industry: string | null;
   city: string | null;

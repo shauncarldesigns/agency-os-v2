@@ -101,6 +101,13 @@ export const api = {
       apiFetch<{ lead: Lead }>(`/api/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     appendNote: (id: number, note: string) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ note }) }),
+    classifyPhone: (id: number) =>
+      apiFetch<{ lead: Lead; classification: PhoneClassification }>(`/api/leads/${id}/phone-classify`, { method: 'POST' }),
+    classifyPhones: (input: { ids?: number[]; limit?: number; force?: boolean } = {}) =>
+      apiFetch<PhoneClassificationBatchResponse>('/api/leads/phone-classify', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     delete: (id: number) =>
       apiFetch<void>(`/api/leads/${id}`, { method: 'DELETE' }),
     // Permanent delete. Backend rejects with 400 unless the lead is already
@@ -597,6 +604,23 @@ export interface RecordingObject {
 
 export type AnalyticsRange = '30d' | 'all';
 export type TextOutreachActivityRange = '7d' | '30d' | 'all';
+export type PhoneRoute = 'text' | 'call' | 'review' | 'unknown';
+
+export interface PhoneClassification {
+  phone_e164: string | null;
+  phone_valid: number;
+  phone_line_type: string | null;
+  phone_carrier: string | null;
+  phone_route: PhoneRoute;
+  phone_lookup_error: string | null;
+}
+
+export interface PhoneClassificationBatchResponse {
+  total: number;
+  succeeded: number;
+  failed: number;
+  items: Array<{ id: number; ok: boolean; route?: PhoneRoute | string; lineType?: string | null; error?: string }>;
+}
 
 export interface AgencySummary {
   range: AnalyticsRange;

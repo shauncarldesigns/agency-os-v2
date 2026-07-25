@@ -321,6 +321,11 @@ export function LeadDetailModal({
                   lead={lead}
                   onFieldChange={handleFieldChange}
                   pipelineContext={pipelineContext}
+                  showToast={showToast}
+                  onLeadUpdated={(updated) => {
+                    setLead(updated);
+                    onLeadUpdated?.();
+                  }}
                 />
               )}
               {tab === 'notes' && (
@@ -417,6 +422,8 @@ function OverviewPane({
   lead,
   onFieldChange,
   pipelineContext,
+  showToast,
+  onLeadUpdated,
 }: {
   lead: Lead;
   onFieldChange: (
@@ -424,7 +431,10 @@ function OverviewPane({
     value: string | number | null,
   ) => void;
   pipelineContext?: boolean;
+  showToast: ShowToast;
+  onLeadUpdated: (lead: Lead) => void;
 }) {
+  const [classifying, setClassifying] = useState(false);
   const services = parseList<string>(lead.extracted_services);
   const areas = parseList<string>(lead.extracted_service_areas);
   const ownerNames = parseList<string>(lead.owner_names);
@@ -434,6 +444,20 @@ function OverviewPane({
   // "…, WI 53946, USA, Markesan, WI" style duplication.
   const addressLine =
     lead.address?.trim() || [lead.city, lead.state].filter(Boolean).join(', ');
+
+  async function handleClassifyPhone() {
+    setClassifying(true);
+    try {
+      const res = await api.leads.classifyPhone(lead.id);
+      onLeadUpdated(res.lead);
+      showToast(`Phone routed to ${phoneRouteLabel(res.lead.phone_route)}`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Phone lookup failed: ${msg}`, 'error');
+    } finally {
+      setClassifying(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -478,6 +502,7 @@ function OverviewPane({
             <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             {lead.gbp_hours || '—'}
           </span>
+          <PhoneRouteRow lead={lead} classifying={classifying} onClassify={handleClassifyPhone} />
         </div>
       )}
 
@@ -497,6 +522,12 @@ function OverviewPane({
             ) : (
               <span className="text-sm text-slate-400">—</span>
             )}
+          </div>
+        )}
+        {!pipelineContext && (
+          <div>
+            <FieldLabel>Phone Route</FieldLabel>
+            <PhoneRouteRow lead={lead} classifying={classifying} onClassify={handleClassifyPhone} compact />
           </div>
         )}
         <div>
@@ -663,6 +694,62 @@ function OverviewPane({
       )}
     </div>
   );
+}
+
+function PhoneRouteRow({
+  lead,
+  classifying,
+  onClassify,
+  compact = false,
+}: {
+  lead: Lead;
+  classifying: boolean;
+  onClassify: () => void;
+  compact?: boolean;
+}) {
+  const route = lead.phone_route ?? 'unknown';
+  const badgeCls = {
+    text: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    call: 'bg-blue-50 text-blue-700 border-blue-100',
+    review: 'bg-amber-50 text-amber-700 border-amber-100',
+    unknown: 'bg-slate-50 text-slate-500 border-slate-200',
+  }[route] ?? 'bg-slate-50 text-slate-500 border-slate-200';
+  const detail = [
+    lead.phone_line_type ? lineTypeLabel(lead.phone_line_type) : null,
+    lead.phone_carrier,
+    lead.phone_e164,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div className={compact ? 'space-y-1' : 'flex flex-wrap items-center gap-2'}>
+      <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeCls}`}>
+        {phoneRouteLabel(route)}
+      </span>
+      {detail && <span className="text-xs text-slate-500">{detail}</span>}
+      {lead.phone_lookup_error && <span className="text-xs text-amber-600">{lead.phone_lookup_error}</span>}
+      <button
+        type="button"
+        onClick={() => void onClassify()}
+        disabled={classifying || !lead.phone}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-400"
+      >
+        {classifying ? 'Checking...' : lead.phone_lookup_at ? 'Recheck' : 'Classify'}
+      </button>
+    </div>
+  );
+}
+
+function phoneRouteLabel(route: Lead['phone_route']): string {
+  if (route === 'text') return 'Text Outreach';
+  if (route === 'call') return 'Call Outreach';
+  if (route === 'review') return 'Manual review';
+  return 'Unclassified';
+}
+
+function lineTypeLabel(lineType: string): string {
+  return lineType
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 // ---------- Notes ----------

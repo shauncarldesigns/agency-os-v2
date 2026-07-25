@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
+import { classifyPhoneNumber, type PhoneClassification } from '../services/twilioLookup';
 
 export const leadsRouter = new Hono<{ Bindings: Env }>();
 
 const LEAD_FIELDS = [
   'company', 'contact', 'phone', 'email', 'industry', 'city', 'state', 'address',
+  'phone_e164', 'phone_valid', 'phone_line_type', 'phone_carrier', 'phone_route',
+  'phone_lookup_error', 'phone_lookup_at',
   'place_id', 'gbp_claimed', 'gbp_completeness', 'gbp_photos_count', 'gbp_categories',
   'gbp_hours', 'google_rating', 'google_review_count', 'google_reviews', 'reviews_fetched_at',
   'website', 'has_website', 'pagespeed_desktop', 'pagespeed_mobile',
@@ -15,6 +18,35 @@ const LEAD_FIELDS = [
   'enrichment_status', 'enrichment_error', 'status', 'outcome', 'followup',
   'notes', 'source', 'project_id',
 ];
+
+async function savePhoneClassification(
+  db: D1Database,
+  leadId: number,
+  classification: PhoneClassification,
+): Promise<Lead | null> {
+  await db.prepare(`
+    UPDATE leads SET
+      phone_e164 = ?,
+      phone_valid = ?,
+      phone_line_type = ?,
+      phone_carrier = ?,
+      phone_route = ?,
+      phone_lookup_error = ?,
+      phone_lookup_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    classification.phone_e164,
+    classification.phone_valid,
+    classification.phone_line_type,
+    classification.phone_carrier,
+    classification.phone_route,
+    classification.phone_lookup_error,
+    leadId,
+  ).run();
+
+  return db.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
+}
 
 leadsRouter.get('/', async (c) => {
   try {
@@ -85,6 +117,74 @@ leadsRouter.get('/export', async (c) => {
   }
 });
 
+// POST /api/leads/phone-classify — classify a small batch with Twilio Lookup.
+// Body: { ids?: number[], limit?: number, force?: boolean }
+leadsRouter.post('/phone-classify', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as {
+      ids?: number[];
+      limit?: number;
+      force?: boolean;
+    };
+    const limit = Math.min(Math.max(Number(body.limit ?? 25), 1), 50);
+    const force = body.force === true;
+
+    let leads: Array<Pick<Lead, 'id' | 'phone'>>;
+    if (Array.isArray(body.ids) && body.ids.length > 0) {
+      const ids = body.ids
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .slice(0, limit);
+      if (ids.length === 0) return c.json(badRequest('ids must contain at least one valid lead id'), 400);
+      const placeholders = ids.map(() => '?').join(',');
+      const result = await c.env.DB.prepare(`
+        SELECT id, phone FROM leads
+        WHERE id IN (${placeholders}) AND deleted_at IS NULL
+      `).bind(...ids).all<Pick<Lead, 'id' | 'phone'>>();
+      leads = result.results ?? [];
+    } else {
+      const result = await c.env.DB.prepare(`
+        SELECT id, phone FROM leads
+        WHERE deleted_at IS NULL
+          AND phone IS NOT NULL
+          AND TRIM(phone) != ''
+          AND (? = 1 OR phone_lookup_at IS NULL OR COALESCE(phone_route, 'unknown') = 'unknown')
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `).bind(force ? 1 : 0, limit).all<Pick<Lead, 'id' | 'phone'>>();
+      leads = result.results ?? [];
+    }
+
+    const items: Array<{ id: number; ok: boolean; route?: string; lineType?: string | null; error?: string }> = [];
+    for (const lead of leads) {
+      try {
+        const classification = await classifyPhoneNumber(c.env, lead.phone);
+        await savePhoneClassification(c.env.DB, lead.id, classification);
+        items.push({
+          id: lead.id,
+          ok: true,
+          route: classification.phone_route,
+          lineType: classification.phone_line_type,
+        });
+      } catch (err) {
+        const message = (err as Error).message;
+        items.push({ id: lead.id, ok: false, error: message });
+        log('error', 'leads', `Phone classification failed for lead ${lead.id}`, err);
+      }
+    }
+
+    return c.json({
+      total: leads.length,
+      succeeded: items.filter((item) => item.ok).length,
+      failed: items.filter((item) => !item.ok).length,
+      items,
+    });
+  } catch (err) {
+    log('error', 'leads', 'POST /phone-classify failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
 leadsRouter.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
@@ -98,6 +198,25 @@ leadsRouter.get('/:id', async (c) => {
     .all();
 
   return c.json({ lead, calls: calls.results });
+});
+
+// POST /api/leads/:id/phone-classify — classify one lead with Twilio Lookup.
+leadsRouter.post('/:id/phone-classify', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL').bind(id).first<Lead>();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  try {
+    const classification = await classifyPhoneNumber(c.env, lead.phone);
+    const updated = await savePhoneClassification(c.env.DB, id, classification);
+    return c.json({ lead: updated, classification });
+  } catch (err) {
+    const msg = (err as Error).message;
+    log('error', 'leads', `POST /leads/${id}/phone-classify failed`, err);
+    return c.json(serverError(msg), 500);
+  }
 });
 
 leadsRouter.post('/', async (c) => {
