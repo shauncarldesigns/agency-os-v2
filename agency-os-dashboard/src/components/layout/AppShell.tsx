@@ -25,6 +25,7 @@ import type { Tab } from '../../lib/types';
 // ---------------------------------------------------------------------------
 
 export interface NavBadges {
+  callOutreach?: number | null;
   coldCallPipeline?: number | null;
   automatedPipeline?: number | null;
   sites?: number | null;
@@ -42,9 +43,9 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
     section: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { key: 'call-sessions', label: 'Call Sessions', icon: PhoneCall },
-      { key: 'pipeline', label: 'Cold Call Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
-      { key: 'automated-pipeline', label: 'Automated Pipeline', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
+      { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
+      { key: 'call-sessions', label: 'Call Outreach', icon: PhoneCall, badgeKey: 'callOutreach' },
+      { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
       { key: 'prospect', label: 'Lead Finder', icon: SearchIcon },
     ],
   },
@@ -61,9 +62,9 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
-  'call-sessions': { title: 'Call Sessions', subtitle: "Today's calling operation + session history" },
-  pipeline: { title: 'Cold Call Pipeline', subtitle: 'Enrich, qualify, and book demos' },
-  'automated-pipeline': { title: 'Automated Pipeline', subtitle: 'Text + site outreach — work your way down the queue' },
+  'call-sessions': { title: 'Call Outreach', subtitle: 'Active cold-call queue and follow-up board' },
+  pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and book demos' },
+  'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
   docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },

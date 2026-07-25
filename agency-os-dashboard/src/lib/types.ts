@@ -187,6 +187,7 @@ export interface HeaderStats {
 
 export interface NavCounts {
   prospect: number | null;
+  callOutreach: number;
   pipeline: number;
   sites: number;
 }
@@ -341,7 +342,7 @@ export type ShowToast = (message: string, type?: ToastType) => void;
 
 export type SessionBlock = 'morning' | 'evening';
 export type SessionStatus = 'planned' | 'active' | 'complete';
-export type CallOutcome = 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
+export type CallOutcome = 'no_answer' | 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
 export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
 export type CallbackStatus = 'pending' | 'completed' | 'missed';
 

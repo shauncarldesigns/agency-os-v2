@@ -918,11 +918,12 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .cockpit-notes-textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; min-height: 80px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; color: var(--text); line-height: 1.6; resize: vertical; outline: none; }
 .cockpit-notes-textarea:focus { border-color: var(--accent); }
 
-.cockpit-outcome-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+.cockpit-outcome-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 8px; }
 .cockpit-outcome-btn { background: transparent; border-radius: var(--r); padding: 13px 10px; font-size: 0.84rem; font-weight: 600; font-family: inherit; cursor: pointer; border: 1px solid; transition: filter 0.12s; }
 .cockpit-outcome-btn:hover:not(:disabled) { filter: brightness(1.15); }
 .cockpit-outcome-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cockpit-outcome-voicemail { color: var(--text2); border-color: var(--border2); }
+.cockpit-outcome-no-answer { color: var(--text3); border-color: var(--border); }
 .cockpit-outcome-not-interested { color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
 .cockpit-outcome-callback { color: var(--yellow); border-color: rgba(245, 200, 66, 0.4); }
 .cockpit-outcome-booked { color: var(--green); border-color: rgba(62, 207, 142, 0.5); }

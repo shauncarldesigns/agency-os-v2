@@ -65,6 +65,61 @@ function countDelta(current: number, previous: number): number {
   return current - previous;
 }
 
+type TextOutreachRange = '7d' | '30d' | 'all';
+
+function textOutreachSince(range: TextOutreachRange): string {
+  if (range === '7d') return `date('now', '-7 day')`;
+  if (range === '30d') return `date('now', '-30 day')`;
+  return `'1970-01-01'`;
+}
+
+async function textOutreachActivity(
+  db: Env['DB'],
+  since: string,
+): Promise<{
+  sitesCreated: number;
+  introTextsSent: number;
+  followUpsSent: number;
+  engagedLeads: number;
+  totalVisits: number;
+}> {
+  const activityRow = await db.prepare(`
+    SELECT
+      COUNT(DISTINCT CASE WHEN action = 'intro_sent' THEN lead_id END) as intro_texts_sent,
+      COUNT(DISTINCT CASE WHEN action = 'followed_up' THEN lead_id END) as follow_ups_sent,
+      COUNT(DISTINCT CASE WHEN action = 'click_tracked' THEN lead_id END) as engaged_leads,
+      COUNT(CASE WHEN action = 'click_tracked' THEN 1 END) as total_visits
+    FROM lead_activity
+    WHERE action IN ('intro_sent', 'followed_up', 'click_tracked')
+      AND date(created_at) >= ${since}
+  `).first<{
+    intro_texts_sent: number | null;
+    follow_ups_sent: number | null;
+    engaged_leads: number | null;
+    total_visits: number | null;
+  }>();
+
+  const sitesRow = await db.prepare(`
+    SELECT COUNT(*) as n
+    FROM leads
+    WHERE deleted_at IS NULL
+      AND status IN ('cold', 'contacted')
+      AND enrichment_status = 'enriched'
+      AND has_website = 0
+      AND site_url IS NOT NULL
+      AND pipeline_status NOT IN ('booked', 'archived')
+      AND date(COALESCE(pipeline_last_action_at, updated_at, created_at)) >= ${since}
+  `).first<{ n: number }>();
+
+  return {
+    sitesCreated: sitesRow?.n ?? 0,
+    introTextsSent: activityRow?.intro_texts_sent ?? 0,
+    followUpsSent: activityRow?.follow_ups_sent ?? 0,
+    engagedLeads: activityRow?.engaged_leads ?? 0,
+    totalVisits: activityRow?.total_visits ?? 0,
+  };
+}
+
 // GET /api/dashboard — the landing call.
 dashboardRouter.get('/', async (c) => {
   const today = chicagoToday();
@@ -335,6 +390,19 @@ dashboardRouter.get('/objections-overview', async (c) => {
     range,
     total_calls: totalCalls,
     objections: items,
+  });
+});
+
+// GET /api/dashboard/text-outreach-activity?range=7d|30d|all — range-aware
+// activity strip for the text outreach dashboard section.
+dashboardRouter.get('/text-outreach-activity', async (c) => {
+  const q = c.req.query('range');
+  const range: TextOutreachRange = q === '7d' || q === 'all' ? q : '30d';
+  const activity = await textOutreachActivity(c.env.DB, textOutreachSince(range));
+
+  return c.json({
+    range,
+    activity,
   });
 });
 
