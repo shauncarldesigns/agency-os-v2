@@ -103,6 +103,11 @@ export const api = {
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ note }) }),
     classifyPhone: (id: number) =>
       apiFetch<{ lead: Lead; classification: PhoneClassification }>(`/api/leads/${id}/phone-classify`, { method: 'POST' }),
+    updatePhoneRoute: (id: number, route: PhoneRoute) =>
+      apiFetch<{ lead: Lead }>(`/api/leads/${id}/phone-route`, {
+        method: 'PATCH',
+        body: JSON.stringify({ route }),
+      }),
     classifyPhones: (input: { ids?: number[]; limit?: number; force?: boolean } = {}) =>
       apiFetch<PhoneClassificationBatchResponse>('/api/leads/phone-classify', {
         method: 'POST',

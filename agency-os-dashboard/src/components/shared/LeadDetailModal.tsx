@@ -15,7 +15,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import type { Lead, CallEntry, LeadActivity, ShowToast } from '../../lib/types';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, type PhoneRoute } from '../../lib/api';
 import { CallLogTab } from '../pipeline/CallLogTab';
 import { StarRating } from './StarRating';
 import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
@@ -435,6 +435,7 @@ function OverviewPane({
   onLeadUpdated: (lead: Lead) => void;
 }) {
   const [classifying, setClassifying] = useState(false);
+  const [routing, setRouting] = useState<PhoneRoute | null>(null);
   const services = parseList<string>(lead.extracted_services);
   const areas = parseList<string>(lead.extracted_service_areas);
   const ownerNames = parseList<string>(lead.owner_names);
@@ -456,6 +457,21 @@ function OverviewPane({
       showToast(`Phone lookup failed: ${msg}`, 'error');
     } finally {
       setClassifying(false);
+    }
+  }
+
+  async function handlePhoneRouteOverride(route: PhoneRoute) {
+    if (lead.phone_route === route) return;
+    setRouting(route);
+    try {
+      const res = await api.leads.updatePhoneRoute(lead.id, route);
+      onLeadUpdated(res.lead);
+      showToast(`Moved to ${phoneRouteLabel(res.lead.phone_route)}`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Route update failed: ${msg}`, 'error');
+    } finally {
+      setRouting(null);
     }
   }
 
@@ -502,7 +518,13 @@ function OverviewPane({
             <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             {lead.gbp_hours || '—'}
           </span>
-          <PhoneRouteRow lead={lead} classifying={classifying} onClassify={handleClassifyPhone} />
+          <PhoneRouteRow
+            lead={lead}
+            classifying={classifying}
+            routing={routing}
+            onClassify={handleClassifyPhone}
+            onOverride={handlePhoneRouteOverride}
+          />
         </div>
       )}
 
@@ -527,7 +549,14 @@ function OverviewPane({
         {!pipelineContext && (
           <div>
             <FieldLabel>Phone Route</FieldLabel>
-            <PhoneRouteRow lead={lead} classifying={classifying} onClassify={handleClassifyPhone} compact />
+            <PhoneRouteRow
+              lead={lead}
+              classifying={classifying}
+              routing={routing}
+              onClassify={handleClassifyPhone}
+              onOverride={handlePhoneRouteOverride}
+              compact
+            />
           </div>
         )}
         <div>
@@ -699,12 +728,16 @@ function OverviewPane({
 function PhoneRouteRow({
   lead,
   classifying,
+  routing,
   onClassify,
+  onOverride,
   compact = false,
 }: {
   lead: Lead;
   classifying: boolean;
+  routing: PhoneRoute | null;
   onClassify: () => void;
+  onOverride: (route: PhoneRoute) => void;
   compact?: boolean;
 }) {
   const route = lead.phone_route ?? 'unknown';
@@ -719,6 +752,13 @@ function PhoneRouteRow({
     lead.phone_carrier,
     lead.phone_e164,
   ].filter(Boolean).join(' · ');
+  const allRouteActions: Array<{ route: PhoneRoute; label: string }> = [
+    { route: 'call', label: 'Move to Call' },
+    { route: 'text', label: 'Move to Text' },
+    { route: 'review', label: 'Review' },
+  ];
+  const routeActions = allRouteActions.filter((action) => action.route !== route);
+  const disabled = classifying || routing !== null;
 
   return (
     <div className={compact ? 'space-y-1' : 'flex flex-wrap items-center gap-2'}>
@@ -730,11 +770,24 @@ function PhoneRouteRow({
       <button
         type="button"
         onClick={() => void onClassify()}
-        disabled={classifying || !lead.phone}
+        disabled={disabled || !lead.phone}
         className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-400"
       >
         {classifying ? 'Checking...' : lead.phone_lookup_at ? 'Recheck' : 'Classify'}
       </button>
+      <div className={compact ? 'flex flex-wrap gap-1 pt-1' : 'flex flex-wrap gap-1'}>
+        {routeActions.map((action) => (
+          <button
+            key={action.route}
+            type="button"
+            onClick={() => void onOverride(action.route)}
+            disabled={disabled}
+            className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:text-slate-400"
+          >
+            {routing === action.route ? 'Moving...' : action.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

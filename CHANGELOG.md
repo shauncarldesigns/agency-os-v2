@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Manual phone-route override for outreach boards (PR #172)
+
+- **Operators can now override Twilio phone routing from the lead detail modal.** Adds a route override endpoint and lead-level controls to move a number between Text Outreach, Call Outreach, and Manual Review when Messenger or real-world deliverability disagrees with Twilio's line-type signal. Backend + dashboard.
+
 ### Twilio phone routing for outreach boards (PR #171)
 
 - **Text Outreach and Call Outreach can now separate leads by phone type.** Adds Twilio Lookup phone classification, lead-level route fields, one-off and batch classification actions, and board/sidebar filtering so landlines move to Call Outreach while mobile and VoIP numbers stay in Text Outreach. Backend + dashboard.

@@ -219,6 +219,30 @@ leadsRouter.post('/:id/phone-classify', async (c) => {
   }
 });
 
+// PATCH /api/leads/:id/phone-route — operator override when real-world
+// deliverability disagrees with Twilio's line-type signal.
+leadsRouter.patch('/:id/phone-route', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const body = await c.req.json().catch(() => ({})) as { route?: string };
+  const route = body.route;
+  if (!route || !['text', 'call', 'review', 'unknown'].includes(route)) {
+    return c.json(badRequest('route must be text, call, review, or unknown'), 400);
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE leads
+    SET phone_route = ?, updated_at = datetime('now')
+    WHERE id = ? AND deleted_at IS NULL
+  `).bind(route, id).run();
+
+  const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL').bind(id).first<Lead>();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  return c.json({ lead });
+});
+
 leadsRouter.post('/', async (c) => {
   try {
     const body = await c.req.json() as Record<string, unknown>;
