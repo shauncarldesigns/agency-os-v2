@@ -99,6 +99,8 @@ export const api = {
       apiFetch<{ lead: Lead }>('/api/leads', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Lead>) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    appendNote: (id: number, note: string) =>
+      apiFetch<{ lead: Lead }>(`/api/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ note }) }),
     delete: (id: number) =>
       apiFetch<void>(`/api/leads/${id}`, { method: 'DELETE' }),
     // Permanent delete. Backend rejects with 400 unless the lead is already

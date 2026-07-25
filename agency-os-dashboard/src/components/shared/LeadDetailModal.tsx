@@ -33,7 +33,7 @@ import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 // `pipelineContext` adds an Activity tab with the text+site outreach trail.
 // ---------------------------------------------------------------------------
 
-type DetailTab = 'overview' | 'reviews' | 'pitch' | 'call' | 'activity';
+type DetailTab = 'overview' | 'notes' | 'reviews' | 'pitch' | 'call' | 'activity';
 
 interface Props {
   leadId: number;
@@ -198,6 +198,7 @@ export function LeadDetailModal({
 
   const tabs: Array<{ key: DetailTab; label: string; badge?: number }> = [
     { key: 'overview', label: 'Overview' },
+    { key: 'notes', label: 'Notes', badge: lead?.notes ? 1 : undefined },
     { key: 'reviews', label: 'Reviews', badge: reviewCount || undefined },
     { key: 'pitch', label: 'Pitch Prep' },
     { key: 'call', label: 'Call Log', badge: calls.length || undefined },
@@ -320,6 +321,16 @@ export function LeadDetailModal({
                   lead={lead}
                   onFieldChange={handleFieldChange}
                   pipelineContext={pipelineContext}
+                />
+              )}
+              {tab === 'notes' && (
+                <NotesPane
+                  lead={lead}
+                  showToast={showToast}
+                  onSaved={(updated) => {
+                    setLead(updated);
+                    onLeadUpdated?.();
+                  }}
                 />
               )}
               {tab === 'reviews' && <ReviewsPane lead={lead} />}
@@ -650,6 +661,92 @@ function OverviewPane({
         </div>
       </div>
       )}
+    </div>
+  );
+}
+
+// ---------- Notes ----------
+
+function NotesPane({
+  lead,
+  showToast,
+  onSaved,
+}: {
+  lead: Lead;
+  showToast: ShowToast;
+  onSaved: (lead: Lead) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const trimmed = note.trim();
+    if (!trimmed) {
+      showToast('Add a note before saving', 'error');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await api.leads.appendNote(lead.id, trimmed);
+      onSaved(res.lead);
+      setNote('');
+      showToast('Note saved', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not save note: ${msg}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          Add note
+        </div>
+        <textarea
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          rows={4}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="Save context without marking this lead contacted."
+        />
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setNote('')}
+            disabled={saving || !note}
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+          >
+            {saving ? 'Saving...' : 'Save note'}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          Lead notes
+        </div>
+        {lead.notes ? (
+          <div className="whitespace-pre-wrap rounded-2xl border border-slate-100 bg-white p-4 text-sm leading-relaxed text-slate-600">
+            {lead.notes}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+            No lead notes yet.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -189,6 +189,36 @@ leadsRouter.put('/:id', async (c) => {
   }
 });
 
+// POST /api/leads/:id/notes — append operator context to the lead-level notes
+// field without logging outreach or changing lifecycle state.
+leadsRouter.post('/:id/notes', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT id, notes FROM leads WHERE id = ?').bind(id).first<Pick<Lead, 'id' | 'notes'>>();
+  if (!lead) return c.json(notFound('Lead'), 404);
+
+  try {
+    const body = await c.req.json() as Record<string, unknown>;
+    const note = typeof body.note === 'string' ? body.note.trim() : '';
+    if (!note) return c.json(badRequest('note is required'), 400);
+
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const nextNotes = [`[${stamp} · Note] ${note}`, lead.notes].filter(Boolean).join('\n\n');
+
+    await c.env.DB
+      .prepare("UPDATE leads SET notes = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(nextNotes, id)
+      .run();
+
+    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'leads', `POST /leads/${id}/notes failed`, err);
+    return c.json(serverError(), 500);
+  }
+});
+
 // POST /api/leads/:id/qualify
 // The operator-driven qualification step: pick a tier, optionally drop a note,
 // and convert the lead into a Sites project in one round-trip. Replaces the
