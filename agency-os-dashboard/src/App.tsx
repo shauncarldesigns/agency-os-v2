@@ -19,7 +19,7 @@ import { TIER_MRR } from './lib/pricing';
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
-  const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, pipeline: 0, sites: 0 });
+  const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, callOutreach: 0, pipeline: 0, sites: 0 });
   // Count of automated-pipeline leads still awaiting a site build — drives
   // the sidebar badge. Computed from the same leads fetch as the other nav
   // counts (leads.list returns pipeline_status).
@@ -31,7 +31,7 @@ export default function App() {
   // Since the Phase 3 shell migration, an open calling session renders
   // INSIDE the shell's <main> (sidebar stays visible) instead of taking
   // over the whole viewport.
-  const [openSessionId, setOpenSessionId] = useState<number | null>(null);
+  const [openSession, setOpenSession] = useState<{ sessionId: number; leadId?: number } | null>(null);
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadStats(); }, []);
@@ -42,6 +42,7 @@ export default function App() {
         api.leads.list(),
         api.projects.list().catch(() => ({ projects: [], total: 0 })),
       ]);
+      const callbacksRes = await api.callbacks.list({ status: 'pending' }).catch(() => ({ callbacks: [] }));
       // Active = still in the calling pool. Excludes qualified (demo booked,
       // managed from Sites), client (signed), not_interested, and dead.
       const activeLeads = leadsRes.leads.filter(l =>
@@ -57,11 +58,26 @@ export default function App() {
         && (l.status === 'cold' || l.status === 'contacted')
         && l.deleted_at === null
       ).length;
+      const futureCallbackLeadIds = new Set(
+        callbacksRes.callbacks
+          .filter((cb) => cb.status === 'pending' && cb.due_date > todayIso())
+          .map((cb) => cb.lead_id),
+      );
+      const callOutreach = leadsRes.leads.filter(l =>
+        l.deleted_at === null
+        && l.pipeline_status !== 'booked'
+        && l.pipeline_status !== 'archived'
+        && (
+          l.status === 'cold'
+          || (l.status === 'contacted' && !futureCallbackLeadIds.has(l.id))
+        )
+      ).length;
       const clients = projectsRes.projects.filter(p => p.status === 'live' || p.status === 'building');
       const mrr = clients.reduce((sum, p) => sum + (TIER_MRR[p.tier] ?? 0), 0);
       setStats({ totalClients: clients.length, mrrUsd: mrr });
       setNavCounts({
         prospect: null,
+        callOutreach,
         pipeline: activeLeads,
         sites: clients.length,
       });
@@ -76,6 +92,7 @@ export default function App() {
   }
 
   const badges: NavBadges = {
+    callOutreach: navCounts.callOutreach || null,
     coldCallPipeline: navCounts.pipeline || null,
     automatedPipeline: awaitingBuildCount || null,
     sites: navCounts.sites || null,
@@ -96,7 +113,7 @@ export default function App() {
     </div>
   );
 
-  const openSession = (id: number) => setOpenSessionId(id);
+  const openSessionView = (id: number, leadId?: number) => setOpenSession({ sessionId: id, leadId });
 
   return (
     <>
@@ -107,21 +124,22 @@ export default function App() {
           // Navigating away from a live session view closes it — the session
           // itself stays active server-side and can be resumed from
           // Dashboard or Call Sessions.
-          setOpenSessionId(null);
+          setOpenSession(null);
         }}
         badges={badges}
         headerExtra={headerExtra}
       >
-        {openSessionId !== null ? (
+        {openSession !== null ? (
           <ExecutionView
-            sessionId={openSessionId}
+            sessionId={openSession.sessionId}
+            initialLeadId={openSession.leadId}
             showToast={showToast}
-            onClose={() => { setOpenSessionId(null); loadStats(); }}
+            onClose={() => { setOpenSession(null); loadStats(); }}
             onPauseAndBuild={(projectId) => {
               // Pause-and-build flow: close the session, deep-link to the
               // freshly-created prospect project's Brief Studio so Quick Brief
               // is one click away.
-              setOpenSessionId(null);
+              setOpenSession(null);
               setPendingOpenProjectId(projectId);
               setActiveTab('sites');
               loadStats();
@@ -135,7 +153,7 @@ export default function App() {
             {activeTab === 'call-sessions' && (
               <CallSessionsPage
                 showToast={showToast}
-                onOpenSession={openSession}
+                onOpenSession={openSessionView}
                 onStateChanged={loadStats}
                 onSwitchTab={setActiveTab}
               />
@@ -193,4 +211,12 @@ export default function App() {
       <ToastContainer toasts={toasts} />
     </>
   );
+}
+
+function todayIso(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

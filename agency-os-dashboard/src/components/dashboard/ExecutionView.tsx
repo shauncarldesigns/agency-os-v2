@@ -93,6 +93,7 @@ function filterObjectionsToIds(byCategory: ObjectionsByCategory, ids: readonly s
 
 interface ExecutionViewProps {
   sessionId: number;
+  initialLeadId?: number;
   showToast: ShowToast;
   onClose: () => void;
   onPauseAndBuild?: (projectId: number) => void;
@@ -124,7 +125,7 @@ interface GeneratedState {
   forObjectionId: string;
 }
 
-export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }: ExecutionViewProps) {
+export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, onPauseAndBuild }: ExecutionViewProps) {
   const { data: playbook, loading: playbookLoading, error: playbookError } = usePlaybook();
 
   const [session, setSession] = useState<Session | null>(null);
@@ -305,15 +306,16 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
       const res = await api.sessions.get(sessionId);
       setSession(res.session);
       setLeads(res.leads);
+      const requestedLead = initialLeadId ? res.leads.findIndex((l) => l.id === initialLeadId) : -1;
       const firstUncalled = res.leads.findIndex((l) => l.call_outcome == null);
-      setCurrentIndex(firstUncalled === -1 ? 0 : firstUncalled);
+      setCurrentIndex(requestedLead !== -1 ? requestedLead : firstUncalled === -1 ? 0 : firstUncalled);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not load session: ${msg}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [sessionId, showToast]);
+  }, [sessionId, initialLeadId, showToast]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -752,6 +754,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
   // ===========================================================================
 
   const handleVoicemail = useCallback(() => void recordOutcome('voicemail'), [recordOutcome]);
+  const handleNoAnswer = useCallback(() => void recordOutcome('no_answer'), [recordOutcome]);
   const handleNotInterested = useCallback(() => void recordOutcome('not_interested'), [recordOutcome]);
   const handleCallbackToggle = useCallback(() => setCallbackOpen((v) => !v), []);
   const handleCallbackConfirm = useCallback(async () => {
@@ -1057,6 +1060,7 @@ export function ExecutionView({ sessionId, showToast, onClose, onPauseAndBuild }
       )}
 
       <div className="cockpit-outcome-bar">
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-no-answer" onClick={handleNoAnswer} disabled={recording || bookingMode}>○ No answer</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}>📵 Voicemail</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}>✕ Not interested</button>
         <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}>↻ Callback</button>

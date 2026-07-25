@@ -351,6 +351,8 @@ export const api = {
       apiFetch<AgencySummary>(`/api/dashboard/agency-summary?range=${range}`),
     objectionsOverview: (range: AnalyticsRange = '30d') =>
       apiFetch<ObjectionsOverviewResponse>(`/api/dashboard/objections-overview?range=${range}`),
+    textOutreachActivity: (range: TextOutreachActivityRange = '30d') =>
+      apiFetch<TextOutreachActivityResponse>(`/api/dashboard/text-outreach-activity?range=${range}`),
     pipelineKpis: () => apiFetch<PipelineKpisResponse>('/api/dashboard/pipeline-kpis'),
   },
   sessions: {
@@ -592,6 +594,7 @@ export interface RecordingObject {
 }
 
 export type AnalyticsRange = '30d' | 'all';
+export type TextOutreachActivityRange = '7d' | '30d' | 'all';
 
 export interface AgencySummary {
   range: AnalyticsRange;
@@ -648,6 +651,11 @@ export interface PipelineActivityMetrics {
   followUpsSent: number;
   engagedLeads: number;
   totalVisits: number;
+}
+
+export interface TextOutreachActivityResponse {
+  range: TextOutreachActivityRange;
+  activity: PipelineActivityMetrics;
 }
 
 export interface PipelineHotLead {

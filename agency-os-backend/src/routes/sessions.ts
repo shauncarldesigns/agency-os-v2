@@ -555,7 +555,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     return c.json(badRequest('leadId + outcome are required'), 400);
   }
 
-  const VALID: CallOutcome[] = ['voicemail', 'not_interested', 'callback', 'booked', 'skipped'];
+  const VALID: CallOutcome[] = ['no_answer', 'voicemail', 'not_interested', 'callback', 'booked', 'skipped'];
   if (!VALID.includes(body.outcome)) {
     return c.json(badRequest(`Invalid outcome '${body.outcome}'`), 400);
   }
@@ -578,6 +578,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   // capture surfaces. outcomeBadge() in lib/format.ts pattern-matches these
   // strings to badge colors.
   const friendlyOutcome = ({
+    no_answer: 'No Answer',
     voicemail: 'Voicemail Left',
     not_interested: 'Not Interested',
     callback: 'Callback Requested',
@@ -633,7 +634,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
   } else {
-    // voicemail | callback — promote cold → contacted if applicable, and
+    // no_answer | voicemail | callback — promote cold → contacted if applicable, and
     // stamp the friendly outcome on the lead row so the Pipeline list's
     // Outcome column reflects the most recent meaningful interaction.
     await c.env.DB.prepare(`

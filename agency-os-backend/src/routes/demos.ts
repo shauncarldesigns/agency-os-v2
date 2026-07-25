@@ -17,14 +17,14 @@ demosRouter.get('/', async (c) => {
   const date = c.req.query('date') ?? '';
   const clauses: string[] = ['1 = 1'];
   const params: unknown[] = [];
-  if (status) { clauses.push('status = ?'); params.push(status); }
-  if (date) { clauses.push("date(scheduled_for) = ?"); params.push(date); }
+  if (status) { clauses.push('d.status = ?'); params.push(status); }
+  if (date) { clauses.push("date(d.scheduled_for) = ?"); params.push(date); }
   const sql = `
     SELECT d.*, l.company, l.phone, l.city, l.state, l.contact
     FROM demos d
     INNER JOIN leads l ON l.id = d.lead_id
     WHERE ${clauses.join(' AND ')}
-    ORDER BY scheduled_for ASC
+    ORDER BY d.scheduled_for ASC
   `;
   const result = await c.env.DB.prepare(sql).bind(...params).all();
   return c.json({ demos: result.results ?? [] });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ArrowUpRight,
   BarChart3,
@@ -16,10 +16,14 @@ import {
 import {
   api,
   ApiError,
+  type AgencySummary,
+  type AnalyticsRange,
   type PipelineChannelMetrics,
   type PipelineFunnelMetrics,
   type PipelineHotLead,
   type PipelineKpisResponse,
+  type TextOutreachActivityRange,
+  type TextOutreachActivityResponse,
 } from '../../lib/api';
 import type { ShowToast, Tab } from '../../lib/types';
 import { Spinner } from '../shared/Spinner';
@@ -139,53 +143,9 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         />
       </section>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Automated pipeline activity</h3>
-            <p className="mt-0.5 text-xs text-slate-400">
-              Real activity logged from site builds, SMS sends, follow-ups, and tracked link visits
-            </p>
-          </div>
-          <div className="text-xs text-slate-400">
-            Week of {data.week.monday} vs previous week
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ActivityStat
-            icon={Globe2}
-            label="Sites created"
-            value={data.activity.current.sitesCreated}
-            trend={data.activity.trends.sitesCreated}
-            detail="Active built sites"
-            tone="blue"
-          />
-          <ActivityStat
-            icon={Send}
-            label="Intro texts sent"
-            value={data.activity.current.introTextsSent}
-            trend={data.activity.trends.introTextsSent}
-            detail="Text 1 sends"
-            tone="indigo"
-          />
-          <ActivityStat
-            icon={Repeat2}
-            label="Follow-ups sent"
-            value={data.activity.current.followUpsSent}
-            trend={data.activity.trends.followUpsSent}
-            detail="Pricing follow-ups"
-            tone="slate"
-          />
-          <ActivityStat
-            icon={MousePointerClick}
-            label="Engaged leads"
-            value={data.activity.current.engagedLeads}
-            trend={data.activity.trends.engagedLeads}
-            detail={`${data.activity.current.totalVisits} total visit${data.activity.current.totalVisits === 1 ? '' : 's'}`}
-            tone="emerald"
-          />
-        </div>
-      </section>
+      <AgencySummarySection showToast={showToast} />
+
+      <TextOutreachActivitySection showToast={showToast} fallback={data.activity.current} />
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -258,6 +218,204 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
   );
 }
 
+function TextOutreachActivitySection({
+  showToast,
+  fallback,
+}: {
+  showToast: ShowToast;
+  fallback: TextOutreachActivityResponse['activity'];
+}) {
+  const [range, setRange] = useState<TextOutreachActivityRange>('30d');
+  const [activity, setActivity] = useState<TextOutreachActivityResponse['activity']>(fallback);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.dashboard.textOutreachActivity(range)
+      .then((res) => {
+        if (!cancelled) setActivity(res.activity);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof ApiError ? err.message : (err as Error).message;
+        showToast(`Could not load text outreach activity: ${msg}`, 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range, showToast, fallback]);
+
+  const rangeDetail = activityRangeLabel(range);
+
+  return (
+    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Text Outreach Activity</h3>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Real activity logged from site builds, SMS sends, follow-ups, and tracked link visits
+          </p>
+        </div>
+        <div className="inline-flex rounded-lg bg-slate-100 p-1">
+          <RangeButton active={range === '7d'} onClick={() => setRange('7d')}>Last 7 days</RangeButton>
+          <RangeButton active={range === '30d'} onClick={() => setRange('30d')}>Last 30 days</RangeButton>
+          <RangeButton active={range === 'all'} onClick={() => setRange('all')}>All time</RangeButton>
+        </div>
+      </div>
+      <div className={`grid grid-cols-1 gap-3 transition-opacity sm:grid-cols-2 xl:grid-cols-4 ${loading ? 'opacity-60' : 'opacity-100'}`}>
+        <ActivityStat
+          icon={Globe2}
+          label="Sites created"
+          value={activity.sitesCreated}
+          detail={`Active built sites · ${rangeDetail}`}
+          tone="blue"
+        />
+        <ActivityStat
+          icon={Send}
+          label="Intro texts sent"
+          value={activity.introTextsSent}
+          detail={`Text 1 sends · ${rangeDetail}`}
+          tone="indigo"
+        />
+        <ActivityStat
+          icon={Repeat2}
+          label="Follow-ups sent"
+          value={activity.followUpsSent}
+          detail={`Pricing follow-ups · ${rangeDetail}`}
+          tone="slate"
+        />
+        <ActivityStat
+          icon={MousePointerClick}
+          label="Engaged leads"
+          value={activity.engagedLeads}
+          detail={`${activity.totalVisits} total visit${activity.totalVisits === 1 ? '' : 's'} · ${rangeDetail}`}
+          tone="emerald"
+        />
+      </div>
+    </section>
+  );
+}
+
+function AgencySummarySection({ showToast }: { showToast: ShowToast }) {
+  const [range, setRange] = useState<AnalyticsRange>('30d');
+  const [summary, setSummary] = useState<AgencySummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.dashboard.agencySummary(range)
+      .then((res) => {
+        if (!cancelled) setSummary(res);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof ApiError ? err.message : (err as Error).message;
+        showToast(`Could not load agency summary: ${msg}`, 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range, showToast]);
+
+  return (
+    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Agency summary</h3>
+          <p className="mt-0.5 text-xs text-slate-400">Call output, demo conversion, and new project movement</p>
+        </div>
+        <div className="inline-flex rounded-lg bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setRange('30d')}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${range === '30d' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Last 30 days
+          </button>
+          <button
+            type="button"
+            onClick={() => setRange('all')}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${range === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            All time
+          </button>
+        </div>
+      </div>
+
+      {loading && !summary ? (
+        <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+          <Spinner /> Loading agency summary...
+        </div>
+      ) : summary ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryStat label="Calls / day" value={summary.calls_per_day.toString()} detail={`${summary.total_calls} calls · ${summary.call_days} days`} />
+          <SummaryStat label="Dial to set" value={`${summary.dial_to_set_rate_pct}%`} detail={`${summary.demos_booked} demos booked`} tone="emerald" />
+          <SummaryStat label="Demos held" value={summary.demos_held.toString()} detail={`${summary.demos_no_show} no-show${summary.demos_no_show === 1 ? '' : 's'}`} tone="indigo" />
+          <SummaryStat label="New projects" value={summary.new_projects.toString()} detail={range === '30d' ? 'Last 30 days' : 'All time'} tone="blue" />
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+          Agency summary unavailable.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RangeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-2.5 py-1 text-xs font-semibold ${active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  detail,
+  tone = 'slate',
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: 'blue' | 'indigo' | 'emerald' | 'slate';
+}) {
+  const valueCls = {
+    blue: 'text-blue-600',
+    indigo: 'text-indigo-600',
+    emerald: 'text-emerald-600',
+    slate: 'text-slate-900',
+  }[tone];
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className={`mt-1 text-2xl font-bold tracking-tight ${valueCls}`}>{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{detail}</div>
+    </div>
+  );
+}
+
 function ActivityStat({
   icon: Icon,
   label,
@@ -269,7 +427,7 @@ function ActivityStat({
   icon: typeof Target;
   label: string;
   value: number;
-  trend: number;
+  trend?: number;
   detail: string;
   tone: 'blue' | 'indigo' | 'emerald' | 'slate';
 }) {
@@ -280,7 +438,13 @@ function ActivityStat({
     slate: 'bg-slate-100 text-slate-600',
   }[tone].split(' ');
   const [bg, text] = toneCls;
-  const trendCls = trend === 0 ? 'text-slate-400' : trend > 0 ? 'text-emerald-600' : 'text-rose-500';
+  const trendCls = trend === undefined
+    ? 'text-slate-400'
+    : trend === 0
+      ? 'text-slate-400'
+      : trend > 0
+        ? 'text-emerald-600'
+        : 'text-rose-500';
 
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -289,7 +453,7 @@ function ActivityStat({
           <Icon className={`h-4 w-4 ${text}`} />
         </div>
         <span className={`rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold ${trendCls}`}>
-          {formatCountDelta(trend)}
+          {trend === undefined ? 'Live' : formatCountDelta(trend)}
         </span>
       </div>
       <div className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
@@ -297,6 +461,12 @@ function ActivityStat({
       <div className="mt-1 text-xs text-slate-500">{detail}</div>
     </div>
   );
+}
+
+function activityRangeLabel(range: TextOutreachActivityRange): string {
+  if (range === '7d') return 'last 7 days';
+  if (range === '30d') return 'last 30 days';
+  return 'all time';
 }
 
 function HeroKpi({

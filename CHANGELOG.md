@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Call outreach board + Text Outreach dashboard filters (PR #169)
+
+- **Call Outreach now works as a lead Kanban board and the dashboard activity strip is range-filterable.** Replaces the old sessions-first call page with To Call / Retry / Waiting / Follow-Up Due columns, card actions that open the call execution center, a No Answer outcome, sidebar count and naming cleanup, plus a Text Outreach Activity strip with Last 7 days / Last 30 days / All time filters. Backend + dashboard.
+
 ### Dashboard KPI send-count consistency (PR #168)
 
 - **[#168](https://github.com/shauncarldesigns/agency-os-v2/pull/168) Automated Pipeline activity cards count sent leads the same way as the funnel.** Intro text and follow-up activity stats now count distinct leads rather than raw action rows, keeping the activity card aligned with the sent-count math. Backend.
