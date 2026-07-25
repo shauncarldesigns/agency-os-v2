@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
 import { api, ApiError, industryLabel, type DemoWithLead } from '../../lib/api';
 import type { Callback, Lead } from '../../lib/types';
 import type { ShowToast, Tab } from '../../lib/types';
+import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { Spinner } from '../shared/Spinner';
 
 interface Props {
@@ -41,8 +42,6 @@ type BoardItem = {
   activityLabel: string;
   outcomeLabel: string | null;
   tone: CardTone;
-  footer?: ReactNode;
-  canMarkNotInterested?: boolean;
   sortAt?: string | null;
 };
 
@@ -65,8 +64,8 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
   const [cityFilter, setCityFilter] = useState(ALL);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [openingLeadId, setOpeningLeadId] = useState<number | null>(null);
+  const [viewLeadId, setViewLeadId] = useState<number | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -129,8 +128,7 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
     callbacksByLead,
     demosByLead,
     todayIso,
-    busyKey,
-  }), [leads, callbacksByLead, demosByLead, todayIso, busyKey]);
+  }), [leads, callbacksByLead, demosByLead, todayIso]);
 
   const filterOptions = useMemo(() => {
     const allItems = columns.flatMap((column) => column.items);
@@ -164,25 +162,6 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
       showToast(`Could not open call execution center: ${msg}`, 'error');
     } finally {
       setOpeningLeadId(null);
-    }
-  }
-
-  async function markLeadNotInterested(leadId: number) {
-    const key = `not-interested-${leadId}`;
-    setBusyKey(key);
-    try {
-      await api.leads.update(leadId, {
-        status: 'not_interested',
-        outcome: 'Not Interested',
-        followup: null,
-      });
-      showToast('Lead marked not interested', 'success');
-      await load(true);
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not mark not interested: ${msg}`, 'error');
-    } finally {
-      setBusyKey(null);
     }
   }
 
@@ -248,10 +227,9 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
           <KanbanColumn
             key={column.id}
             column={column}
-            busyKey={busyKey}
             openingLeadId={openingLeadId}
             onOpenLead={openLeadInExecutionCenter}
-            onMarkNotInterested={markLeadNotInterested}
+            onViewLead={setViewLeadId}
           />
         ))}
       </section>
@@ -265,6 +243,15 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
           <p className="mt-1 text-xs text-slate-400">Clear the filters or refresh the board.</p>
         </div>
       )}
+
+      {viewLeadId !== null && (
+        <LeadDetailModal
+          leadId={viewLeadId}
+          onClose={() => setViewLeadId(null)}
+          showToast={showToast}
+          onLeadUpdated={() => void load(true)}
+        />
+      )}
     </div>
   );
 }
@@ -274,7 +261,6 @@ function buildColumns(input: {
   callbacksByLead: Map<number, Callback[]>;
   demosByLead: Map<number, DemoWithLead[]>;
   todayIso: string;
-  busyKey: string | null;
 }): BoardColumn[] {
   const columns: BoardColumn[] = [
     { id: 'to-call', title: 'To Call', description: 'Never contacted, fresh queue', icon: CalendarClock, tone: 'blue', items: [] },
@@ -383,8 +369,6 @@ function buildColumns(input: {
 function leadItem(
   lead: Lead,
   overrides: Pick<BoardItem, 'eyebrow' | 'detail' | 'note' | 'tone' | 'sortAt'> & {
-    footer?: ReactNode;
-    canMarkNotInterested?: boolean;
     activityLabel?: string;
   }
 ): BoardItem {
@@ -407,16 +391,14 @@ function leadItem(
 
 function KanbanColumn({
   column,
-  busyKey,
   openingLeadId,
   onOpenLead,
-  onMarkNotInterested,
+  onViewLead,
 }: {
   column: BoardColumn;
-  busyKey: string | null;
   openingLeadId: number | null;
   onOpenLead: (leadId: number) => void;
-  onMarkNotInterested: (leadId: number) => void;
+  onViewLead: (leadId: number) => void;
 }) {
   const cls = toneClasses(column.tone);
   return (
@@ -445,10 +427,9 @@ function KanbanColumn({
             <BoardCard
               key={item.id}
               item={item}
-              busyKey={busyKey}
               opening={openingLeadId === item.leadId}
               onOpen={() => onOpenLead(item.leadId)}
-              onMarkNotInterested={() => onMarkNotInterested(item.leadId)}
+              onViewLead={() => onViewLead(item.leadId)}
             />
           ))
         )}
@@ -459,21 +440,17 @@ function KanbanColumn({
 
 function BoardCard({
   item,
-  busyKey,
   opening,
   onOpen,
-  onMarkNotInterested,
+  onViewLead,
 }: {
   item: BoardItem;
-  busyKey: string | null;
   opening: boolean;
   onOpen: () => void;
-  onMarkNotInterested: () => void;
+  onViewLead: () => void;
 }) {
   const place = formatPlace(item.city, item.state);
   const tone = toneClasses(item.tone);
-  const canMarkNotInterested = item.canMarkNotInterested !== false;
-  const markingNotInterested = busyKey === `not-interested-${item.leadId}`;
   return (
     <article
       role="button"
@@ -528,20 +505,16 @@ function BoardCard({
         >
           Open call <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
-
-        <span className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          {item.footer}
-          {canMarkNotInterested && (
-            <button
-              type="button"
-              disabled={markingNotInterested}
-              onClick={onMarkNotInterested}
-              className="text-[11px] font-semibold text-blue-600 hover:text-rose-700 disabled:opacity-60"
-            >
-              {markingNotInterested ? 'Saving' : 'Not interested'}
-            </button>
-          )}
-        </span>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onViewLead();
+          }}
+          className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+        >
+          View lead
+        </button>
       </div>
 
       <p className="mt-2 text-[11px] text-slate-400">{item.ageLabel}</p>

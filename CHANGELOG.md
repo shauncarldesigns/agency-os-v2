@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Lead notes separated from call logs (PR #170)
+
+- **Lead detail now has real notes that do not mark a prospect contacted.** Adds a Notes tab and note-only save endpoint, plus Call Outreach cards now use the same `View lead` footer pattern as Text Outreach and no longer show an inline Not interested action. Backend + dashboard.
+
 ### Call outreach board + Text Outreach dashboard filters (PR #169)
 
 - **Call Outreach now works as a lead Kanban board and the dashboard activity strip is range-filterable.** Replaces the old sessions-first call page with To Call / Retry / Waiting / Follow-Up Due columns, card actions that open the call execution center, a No Answer outcome, sidebar count and naming cleanup, plus a Text Outreach Activity strip with Last 7 days / Last 30 days / All time filters. Backend + dashboard.
