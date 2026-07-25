@@ -11,6 +11,13 @@ CREATE TABLE IF NOT EXISTS leads (
   company         TEXT NOT NULL,
   contact         TEXT,
   phone           TEXT,
+  phone_e164      TEXT,                          -- Twilio-normalized E.164 number
+  phone_valid     INTEGER,                       -- 1 valid, 0 invalid, NULL not checked
+  phone_line_type TEXT,                          -- mobile / landline / fixedVoip / nonFixedVoip / unknown / etc.
+  phone_carrier   TEXT,
+  phone_route     TEXT DEFAULT 'unknown',         -- text / call / review / unknown
+  phone_lookup_error TEXT,
+  phone_lookup_at TEXT,
   email           TEXT,
   industry        TEXT,
   city            TEXT,
@@ -72,6 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_place ON leads(place_id);
 CREATE INDEX IF NOT EXISTS idx_lead_enrich ON leads(enrichment_status);
 CREATE INDEX IF NOT EXISTS idx_lead_active ON leads(deleted_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_last_called ON leads(last_called_at);
+CREATE INDEX IF NOT EXISTS idx_leads_phone_route ON leads(phone_route);
 
 -- ==================================================
 -- CALL_LOG — Per-lead call history

@@ -283,6 +283,10 @@ function buildColumns(input: {
       return;
     }
 
+    if (lead.phone_route === 'text' || lead.phone_route === 'review') {
+      return;
+    }
+
     if (lead.status === 'client' || lead.status === 'qualified' || lead.pipeline_status === 'booked' || bookedDemo) {
       return;
     }

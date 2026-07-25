@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Twilio phone routing for outreach boards (PR #171)
+
+- **Text Outreach and Call Outreach can now separate leads by phone type.** Adds Twilio Lookup phone classification, lead-level route fields, one-off and batch classification actions, and board/sidebar filtering so landlines move to Call Outreach while mobile and VoIP numbers stay in Text Outreach. Backend + dashboard.
+
 ### Lead notes separated from call logs (PR #170)
 
 - **Lead detail now has real notes that do not mark a prospect contacted.** Adds a Notes tab and note-only save endpoint, plus Call Outreach cards now use the same `View lead` footer pattern as Text Outreach and no longer show an inline Not interested action. Backend + dashboard.

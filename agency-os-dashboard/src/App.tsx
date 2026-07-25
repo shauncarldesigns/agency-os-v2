@@ -53,6 +53,7 @@ export default function App() {
       ).length;
       const awaitingBuild = leadsRes.leads.filter(l =>
         l.pipeline_status === 'awaiting_build'
+        && (l.phone_route === null || l.phone_route === 'unknown' || l.phone_route === 'text')
         && l.has_website === 0
         && l.enrichment_status === 'enriched'
         && (l.status === 'cold' || l.status === 'contacted')
@@ -67,6 +68,8 @@ export default function App() {
         l.deleted_at === null
         && l.pipeline_status !== 'booked'
         && l.pipeline_status !== 'archived'
+        && l.phone_route !== 'text'
+        && l.phone_route !== 'review'
         && (
           l.status === 'cold'
           || (l.status === 'contacted' && !futureCallbackLeadIds.has(l.id))

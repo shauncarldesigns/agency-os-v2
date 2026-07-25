@@ -13,6 +13,8 @@ export interface Env {
   DASHBOARD_API_KEY: string;
   RESEND_API_KEY: string;
   OUTSCRAPER_API_KEY?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
 }
 
 export interface Lead {
@@ -20,6 +22,13 @@ export interface Lead {
   company: string;
   contact: string | null;
   phone: string | null;
+  phone_e164: string | null;
+  phone_valid: number | null;
+  phone_line_type: string | null;
+  phone_carrier: string | null;
+  phone_route: string | null;
+  phone_lookup_error: string | null;
+  phone_lookup_at: string | null;
   email: string | null;
   industry: string | null;
   city: string | null;
