@@ -1095,6 +1095,14 @@ function ActivityPane({
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
   const reasons = parseList<string>(lead.engagement_reasons);
+  const lastVisitAt = activity.find((item) => item.action === 'click_tracked')?.created_at
+    ?? lead.pipeline_last_action_at;
+  const recommendation = activityRecommendation({
+    status: lead.pipeline_status,
+    sessions: lead.pipeline_sessions ?? 0,
+    score: lead.engagement_score ?? 0,
+    lastVisitAt,
+  });
   const [resetting, setResetting] = useState(false);
 
   const handleReset = async () => {
@@ -1117,18 +1125,6 @@ function ActivityPane({
 
   return (
     <div className="space-y-4">
-      {lead.site_url && (
-        <a
-          href={lead.site_url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-        >
-          View live site
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      )}
-
       <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1171,14 +1167,11 @@ function ActivityPane({
         <div>
           <FieldLabel>Outreach trail</FieldLabel>
           <div className="space-y-1.5">
+            {recommendation && (
+              <ActivityRecommendationTimeline recommendation={recommendation} createdAt={lastVisitAt} />
+            )}
             {activity.slice(0, 15).map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-[13px]"
-              >
-                <span className="text-slate-600">{a.action.replace(/_/g, ' ')}</span>
-                <span className="text-slate-400">{relativeTime(a.created_at)}</span>
-              </div>
+              <ActivityHistoryItem key={a.id} activity={a} />
             ))}
           </div>
         </div>
@@ -1187,4 +1180,170 @@ function ActivityPane({
       )}
     </div>
   );
+}
+
+interface ActivityRecommendation {
+  action: 'call' | 'text';
+  label: string;
+  detail: string;
+  tone: string;
+}
+
+function activityRecommendation(input: {
+  status: string | null | undefined;
+  sessions: number;
+  score: number;
+  lastVisitAt: string | null | undefined;
+}): ActivityRecommendation | null {
+  if (input.status !== 'engaged') return null;
+  const stale = input.lastVisitAt ? (Date.now() - new Date(input.lastVisitAt).getTime()) / 86400000 >= 3 : false;
+  if (input.score >= 70 && input.sessions >= 2 && !stale) {
+    return {
+      action: 'call',
+      label: 'CALL NOW',
+      detail: 'High score, multiple sessions, and recent activity.',
+      tone: 'border-rose-100 bg-rose-50 text-rose-700',
+    };
+  }
+  if (input.score >= 70 && stale) {
+    return {
+      action: 'text',
+      label: 'Send follow-up, then call',
+      detail: 'High intent, but the last visit is 3+ days old.',
+      tone: 'border-amber-100 bg-amber-50 text-amber-700',
+    };
+  }
+  if (input.sessions > 1 || input.score >= 40) {
+    return {
+      action: 'text',
+      label: 'Send follow-up text',
+      detail: 'Moderate intent. Ask what stood out.',
+      tone: 'border-amber-100 bg-amber-50 text-amber-700',
+    };
+  }
+  return {
+    action: 'text',
+    label: 'Send follow-up text',
+    detail: 'Low-intent visit. Keep the message light.',
+    tone: 'border-slate-200 bg-slate-50 text-slate-600',
+  };
+}
+
+function ActivityRecommendationTimeline({
+  recommendation,
+  createdAt,
+}: {
+  recommendation: ActivityRecommendation;
+  createdAt: string | null | undefined;
+}) {
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 text-[13px] ${recommendation.tone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Recommended: {recommendation.label}</div>
+          <div className="mt-0.5 text-xs opacity-80">{recommendation.detail}</div>
+        </div>
+        {createdAt && (
+          <div className="shrink-0 text-right text-[11px] opacity-70">
+            <div>{formatActivityTime(createdAt)}</div>
+            <div>{relativeTime(createdAt)}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActivityHistoryItem({ activity }: { activity: LeadActivity }) {
+  const meta = parseActivityMeta(activity.meta);
+  const url = typeof meta.url === 'string' ? meta.url : typeof meta.raw_url === 'string' ? meta.raw_url : null;
+  const body = typeof meta.body === 'string' ? meta.body : null;
+  const detail = activityDetail(activity, meta);
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-[13px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-700">{activityTitle(activity.action)}</div>
+          {detail && <div className="mt-0.5 text-xs text-slate-500">{detail}</div>}
+        </div>
+        <div className="shrink-0 text-right text-[11px] text-slate-400">
+          <div>{formatActivityTime(activity.created_at)}</div>
+          <div>{relativeTime(activity.created_at)}</div>
+        </div>
+      </div>
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block truncate rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          {url}
+        </a>
+      )}
+      {body && (
+        <blockquote className="mt-2 whitespace-pre-wrap rounded-lg bg-white px-2.5 py-2 text-xs leading-relaxed text-slate-600">
+          {body}
+        </blockquote>
+      )}
+    </div>
+  );
+}
+
+function parseActivityMeta(meta: string | null): Record<string, unknown> {
+  if (!meta) return {};
+  try {
+    const parsed = JSON.parse(meta) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function activityTitle(action: string): string {
+  switch (action) {
+    case 'url_saved': return 'Site URL saved';
+    case 'brief_generated': return 'Brief generated';
+    case 'intro_sent': return 'Intro text sent';
+    case 'followed_up': return 'Follow-up text sent';
+    case 'called': return 'Call action logged';
+    case 'click_tracked': return 'Tracked site visit';
+    case 'clarity_synced': return 'Clarity synced';
+    case 'engagement_reset': return 'Engagement reset';
+    case 'undo': return 'Undo';
+    default: return action.replace(/_/g, ' ');
+  }
+}
+
+function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): string | null {
+  if (activity.action === 'brief_generated') {
+    const model = typeof meta.model === 'string' ? meta.model : null;
+    return model ? `Generated with ${model}` : 'Generated and saved to this lead';
+  }
+  if (activity.action === 'url_saved') return 'This is the demo-site URL saved for outreach.';
+  if (activity.action === 'intro_sent') return 'First text opened in Messages.';
+  if (activity.action === 'followed_up') return 'Follow-up text opened in Messages.';
+  if (activity.action === 'click_tracked') return 'Prospect opened the tracked link.';
+  if (activity.action === 'clarity_synced') {
+    const score = typeof meta.score === 'number' ? meta.score : null;
+    return score !== null ? `Engagement score updated to ${score}.` : 'Clarity data checked for this lead.';
+  }
+  if (activity.action === 'engagement_reset') {
+    const priorScore = typeof meta.prior_score === 'number' ? meta.prior_score : null;
+    return priorScore !== null ? `Previous score was ${priorScore}.` : 'Test engagement data was cleared.';
+  }
+  return null;
+}
+
+function formatActivityTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }

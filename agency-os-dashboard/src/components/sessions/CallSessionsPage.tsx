@@ -41,6 +41,9 @@ type BoardItem = {
   ageLabel: string;
   activityLabel: string;
   outcomeLabel: string | null;
+  siteUrl: string | null;
+  clarityTag: string | null;
+  sessions: number;
   tone: CardTone;
   sortAt?: string | null;
 };
@@ -250,6 +253,7 @@ export function CallSessionsPage({ showToast, onOpenSession }: Props) {
           onClose={() => setViewLeadId(null)}
           showToast={showToast}
           onLeadUpdated={() => void load(true)}
+          pipelineContext
         />
       )}
     </div>
@@ -389,6 +393,9 @@ function leadItem(
     ageLabel: formatAgeLabel(lead),
     activityLabel: overrides.activityLabel ?? 'Ready',
     outcomeLabel: callOutcomeLabel(lead),
+    siteUrl: lead.site_url,
+    clarityTag: lead.clarity_tag,
+    sessions: lead.pipeline_sessions ?? 0,
     ...overrides,
   };
 }
@@ -485,6 +492,14 @@ function BoardCard({
         <div className="mt-2">
           <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
             {item.outcomeLabel}
+          </span>
+        </div>
+      )}
+
+      {item.siteUrl && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+            Site built
           </span>
         </div>
       )}

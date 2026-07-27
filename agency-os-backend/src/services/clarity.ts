@@ -233,7 +233,7 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
 
     matched++;
     const score = scoreLead(matching, lead);
-    const shouldPromote = score.score >= 40 && lead.pipeline_status === 'sent_no_reply';
+    const shouldPromote = score.visits > 0 && lead.pipeline_status === 'sent_no_reply';
     await env.DB.prepare(`
       UPDATE leads
       SET pipeline_sessions = MAX(pipeline_sessions, ?),

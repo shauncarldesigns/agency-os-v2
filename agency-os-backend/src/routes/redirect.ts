@@ -36,12 +36,10 @@ redirectRouter.get('/r/:lead_id', async (c) => {
 
     if (!lead || !lead.site_url) return c.text('Link expired or not found', 404);
 
-    // Bump the click counter. If this was the lead's first click and they
-    // were still 'sent_no_reply', promote them to 'engaged' so the operator
-    // sees the amber card + warm follow-up variant without waiting on
-    // Clarity's async sync.
-    const shouldPromote =
-      lead.pipeline_status === 'sent_no_reply' && lead.pipeline_sessions === 0;
+    // Bump the click counter. Any tracked click from Sent — No Reply makes
+    // the lead Engaged; old/imported rows may already have a session count
+    // without the status having been promoted.
+    const shouldPromote = lead.pipeline_status === 'sent_no_reply';
     const nextStatus = shouldPromote ? 'engaged' : lead.pipeline_status;
 
     // Coarse UA only — privacy note in the brief: no personal data in logs.

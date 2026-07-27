@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Outreach history details and site signals (PR #176)
+
+- **Lead Activity now reads like a real history instead of a raw event list.** Outreach trail rows show exact timestamps, saved demo URLs, generated brief context, and the message body for intro/follow-up texts when captured. Text Outreach and Call Outreach cards show a compact site-built signal, and Engaged cards compute the next-best action from sessions, recency, and Clarity score. Dashboard + local seed data.
+
 ### Engagement test reset for demo-site validation (PR #175)
 
 - **Lead Detail now has a reset engagement control for safe Clarity testing.** The Activity tab can clear a lead's demo-site visit count, engagement score, reasons, and Clarity sync state without touching notes, call logs, the generated brief, or the site URL. Backend + dashboard.

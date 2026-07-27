@@ -216,6 +216,17 @@ async function writeActivity(
 pipelineRouter.get('/leads', async (c) => {
   try {
     const { status, q } = c.req.query();
+    // v1 invariant: Sent — No Reply means no tracked session yet. Clean up
+    // older/local rows that already have sessions but were not promoted.
+    await c.env.DB.prepare(`
+      UPDATE leads
+         SET pipeline_status = 'engaged',
+             updated_at = datetime('now')
+       WHERE deleted_at IS NULL
+         AND pipeline_status = 'sent_no_reply'
+         AND pipeline_sessions > 0
+    `).run();
+
     const clauses: string[] = [
       'deleted_at IS NULL',
       "status IN ('cold', 'contacted')",
