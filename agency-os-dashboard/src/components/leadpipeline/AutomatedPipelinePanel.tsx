@@ -21,7 +21,6 @@ import {
   Loader2,
   RefreshCw,
   AlertCircle,
-  Route,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
@@ -1039,7 +1038,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [modal, setModal] = useState<ModalState>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
-  const [classifyingPhones, setClassifyingPhones] = useState(false);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
@@ -1142,22 +1140,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     }
   };
 
-  const classifyVisiblePhones = async () => {
-    const ids = leads.map((lead) => lead.id);
-    if (ids.length === 0) return;
-    setClassifyingPhones(true);
-    try {
-      const res = await api.leads.classifyPhones({ ids, limit: 50 });
-      showToast(`Phone routing updated: ${res.succeeded} classified${res.failed ? `, ${res.failed} failed` : ''}`, res.failed ? 'default' : 'success');
-      await loadLeads();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not classify phones';
-      showToast(msg, 'error');
-    } finally {
-      setClassifyingPhones(false);
-    }
-  };
-
   // Board drops are REAL status changes routed through the same guarded
   // transitions as the buttons — see the drop rules below. Invalid moves
   // explain themselves instead of silently repainting a column.
@@ -1212,16 +1194,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
               className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => void classifyVisiblePhones()}
-            disabled={classifyingPhones || leads.length === 0}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-200/60 hover:bg-slate-50 disabled:opacity-60"
-            title="Classify visible leads with Twilio Lookup and route landlines out of Text Outreach"
-          >
-            {classifyingPhones ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Route className="h-3.5 w-3.5" />}
-            Classify phones
-          </button>
           {/* Grid / Board view toggle */}
           <div className="flex shrink-0 gap-0.5 rounded-xl bg-slate-100 p-0.5">
             <button

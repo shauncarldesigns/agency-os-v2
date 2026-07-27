@@ -6,6 +6,7 @@ import { getPageSpeedReport } from '../services/pagespeed';
 import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import { mineReviews } from '../services/reviewMiner';
 import { calculateOpportunityScore, recentReviewActivity } from '../services/scoring';
+import { classifyPhoneNumber, savePhoneClassification } from '../services/twilioLookup';
 
 export const enrichRouter = new Hono<{ Bindings: Env }>();
 
@@ -328,8 +329,32 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
     leadId,
   ).run();
 
-  const updated = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
-  if (!updated) throw new Error('Lead disappeared after update');
+  const saved = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
+  if (!saved) throw new Error('Lead disappeared after update');
+
+  const phoneForLookup = saved.phone ?? null;
+  const phoneChangedDuringEnrich = !!placeData?.phone && placeData.phone !== lead.phone;
+  const needsPhoneClassification =
+    phoneChangedDuringEnrich ||
+    !saved.phone_lookup_at ||
+    !saved.phone_route ||
+    saved.phone_route === 'unknown';
+
+  let updated = saved;
+  if (needsPhoneClassification) {
+    try {
+      const classification = await classifyPhoneNumber(env, phoneForLookup);
+      await savePhoneClassification(env.DB, leadId, classification);
+      updated = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>() ?? saved;
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes('Too many subrequests')) {
+        throw err;
+      }
+      log('warn', 'enrich', `Phone classification failed for lead ${leadId}`, err);
+    }
+  }
+
   log('info', 'enrich', `Lead ${leadId} enriched`, { score: score.score, tier: score.tier });
   return updated;
 }

@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Phone routing automation and Lead Pipeline review queue (PR #173)
+
+- **Phone routing now runs during enrichment and review numbers have a Lead Pipeline home.** Twilio classification is folded into enrichment without overwriting unchanged manual route overrides, Text Outreach loses the maintenance-style Classify phones button, Lead Pipeline gets a Phone Review toggle, and lead/table phone-route UI is more compact with hover details, refresh-icon recheck, condensed website badges, and smaller enrichment status icons. Backend + dashboard.
+
 ### Manual phone-route override for outreach boards (PR #172)
 
 - **Operators can now override Twilio phone routing from the lead detail modal.** Adds a route override endpoint and lead-level controls to move a number between Text Outreach, Call Outreach, and Manual Review when Messenger or real-world deliverability disagrees with Twilio's line-type signal. Backend + dashboard.

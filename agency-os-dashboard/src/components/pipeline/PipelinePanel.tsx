@@ -23,6 +23,7 @@ interface PipelinePanelProps {
 
 type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
+type PhoneFilter = 'all' | 'review';
 // Enrichment status filter. Mirrors lead.enrichment_status's four values so
 // the operator can quickly slice to "leads still pending enrichment" or
 // "leads that failed and need a retry" without scrolling.
@@ -39,6 +40,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [stage, setStage] = useState<StageFilter>('all');
   const [tier, setTier] = useState<TierFilter>('all');
   const [website, setWebsite] = useState<WebsiteFilter>('all');
+  const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>('all');
   const [enrichment, setEnrichment] = useState<EnrichmentFilter>('all');
   const [sort, setSort] = useState<SortMode>('default');
   const [industry, setIndustry] = useState<string>('');
@@ -87,7 +89,15 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   // Drop selections on view switch (active ↔ trash) so the operator doesn't
   // accidentally re-enrich something they can no longer see. Filter changes
   // keep selection intentionally — the operator may pick across filters.
-  useEffect(() => { setSelectedIds(new Set()); }, [view]);
+  useEffect(() => {
+    setSelectedIds(new Set());
+    if (view === 'trash') setPhoneFilter('all');
+  }, [view]);
+
+  const phoneReviewCount = useMemo(
+    () => leads.filter((l) => !l.deleted_at && l.phone_route === 'review').length,
+    [leads],
+  );
 
   const toggleSelected = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -114,6 +124,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
     let list = leads;
     if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
+    if (view === 'active' && phoneFilter === 'review') list = list.filter(l => l.phone_route === 'review');
     if (enrichment !== 'all') list = list.filter(l => l.enrichment_status === enrichment);
     // Website presence is only known after enrichment, so both filters scope to
     // enriched leads — this keeps the filtered set in sync with what the
@@ -147,7 +158,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       });
     }
     return list;
-  }, [leads, stage, tier, enrichment, website, search, sort]);
+  }, [leads, view, stage, tier, phoneFilter, enrichment, website, search, sort]);
 
   return (
     <>
@@ -163,6 +174,14 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         <div style={{ display: 'flex', gap: 7 }}>
           {view === 'active' ? (
             <>
+              <Button
+                variant={phoneFilter === 'review' ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => setPhoneFilter((current) => current === 'review' ? 'all' : 'review')}
+                title="Show leads whose phone route needs manual review"
+              >
+                Phone Review {phoneReviewCount > 0 ? `(${phoneReviewCount})` : ''}
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => setView('trash')}>
                 🗑 Trash {trashCount > 0 ? `(${trashCount})` : ''}
               </Button>
