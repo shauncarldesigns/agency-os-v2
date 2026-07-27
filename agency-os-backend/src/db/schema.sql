@@ -68,6 +68,20 @@ CREATE TABLE IF NOT EXISTS leads (
   last_called_at  TEXT,                       -- Drives 14-day exclusion in session composer
   demo_booked_at  TEXT,                       -- Quick-reference pointer to latest demo
   demo_scheduled_for TEXT,                    -- Quick-reference pointer to latest demo
+  -- Automated Pipeline — text + site outreach flow
+  pipeline_status TEXT NOT NULL DEFAULT 'awaiting_build',
+  site_url        TEXT,
+  site_url_raw    TEXT,
+  pipeline_brief  TEXT,
+  campaign_slug   TEXT,
+  clarity_tag     TEXT,
+  pipeline_sessions INTEGER NOT NULL DEFAULT 0,
+  pipeline_last_action_at TEXT,
+  engagement_score INTEGER NOT NULL DEFAULT 0,
+  engagement_grade TEXT NOT NULL DEFAULT 'nurture',
+  engagement_reasons TEXT,
+  clarity_last_sync_at TEXT,
+  clarity_last_error TEXT,
   -- Timestamps
   created_at      TEXT DEFAULT (datetime('now')),
   updated_at      TEXT DEFAULT (datetime('now'))
@@ -80,6 +94,12 @@ CREATE INDEX IF NOT EXISTS idx_lead_enrich ON leads(enrichment_status);
 CREATE INDEX IF NOT EXISTS idx_lead_active ON leads(deleted_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_last_called ON leads(last_called_at);
 CREATE INDEX IF NOT EXISTS idx_leads_phone_route ON leads(phone_route);
+CREATE INDEX IF NOT EXISTS idx_leads_pipeline_status
+  ON leads(pipeline_status)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_engagement_score
+  ON leads(engagement_score)
+  WHERE deleted_at IS NULL;
 
 -- ==================================================
 -- CALL_LOG — Per-lead call history

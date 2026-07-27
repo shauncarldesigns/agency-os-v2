@@ -378,6 +378,12 @@ export function LeadDetailModal({
                         {lead.pipeline_sessions ?? 0}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span>Engagement score</span>
+                      <span className="font-medium text-slate-700">
+                        {lead.engagement_score ?? 0}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -826,6 +832,13 @@ function lineTypeLabel(lineType: string): string {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
+function engagementGradeLabel(grade: string | null | undefined): string {
+  if (grade === 'hot') return 'Call immediately';
+  if (grade === 'walkthrough') return 'Schedule walkthrough';
+  if (grade === 'follow_up') return 'Send follow-up';
+  return 'Nurture';
+}
+
 // ---------- Notes ----------
 
 function NotesPane({
@@ -1060,6 +1073,7 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 function ActivityPane({ lead, activity }: { lead: Lead; activity: LeadActivity[] }) {
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
+  const reasons = parseList<string>(lead.engagement_reasons);
   return (
     <div className="space-y-4">
       {lead.site_url && (
@@ -1073,6 +1087,30 @@ function ActivityPane({ lead, activity }: { lead: Lead; activity: LeadActivity[]
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       )}
+
+      <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <FieldLabel>Engagement score</FieldLabel>
+            <div className="text-2xl font-bold text-slate-900">{lead.engagement_score ?? 0}</div>
+          </div>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {engagementGradeLabel(lead.engagement_grade)}
+          </span>
+        </div>
+        {reasons.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {reasons.map((reason) => (
+              <span key={reason} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                {reason}
+              </span>
+            ))}
+          </div>
+        )}
+        {lead.clarity_last_error && (
+          <p className="mt-2 text-xs text-amber-600">{lead.clarity_last_error}</p>
+        )}
+      </div>
 
       {activity.length > 0 ? (
         <div>

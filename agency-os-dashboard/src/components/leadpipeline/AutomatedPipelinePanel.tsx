@@ -139,6 +139,8 @@ export interface PipelineLead {
   hours: string;
   status: PipelineStatus;
   sessions: number;
+  engagementScore: number;
+  engagementGrade: string;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
@@ -253,6 +255,8 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     hours: l.gbp_hours ?? '',
     status,
     sessions: l.pipeline_sessions ?? 0,
+    engagementScore: l.engagement_score ?? 0,
+    engagementGrade: l.engagement_grade ?? 'nurture',
     ownerFirst: deriveOwnerFirst(l.owner_names),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
@@ -278,6 +282,25 @@ function EngagementDot({ sessions }: { sessions: number }) {
     <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
       {sessions} session{sessions === 1 ? '' : 's'}
+    </span>
+  );
+}
+
+function EngagementScoreBadge({ score, grade }: { score: number; grade: string }) {
+  const tone =
+    score >= 90 ? 'bg-rose-50 text-rose-700 border-rose-100'
+    : score >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    : score >= 40 ? 'bg-amber-50 text-amber-700 border-amber-100'
+    : 'bg-slate-50 text-slate-500 border-slate-200';
+  const label =
+    grade === 'hot' ? 'Call'
+    : grade === 'walkthrough' ? 'Walkthrough'
+    : grade === 'follow_up' ? 'Follow up'
+    : 'Nurture';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${tone}`}>
+      {score}
+      <span className="font-semibold">{label}</span>
     </span>
   );
 }
@@ -411,7 +434,10 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
               </span>
             </div>
           </div>
-          <EngagementDot sessions={lead.sessions} />
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <EngagementScoreBadge score={lead.engagementScore} grade={lead.engagementGrade} />
+            <EngagementDot sessions={lead.sessions} />
+          </div>
         </div>
       </div>
 

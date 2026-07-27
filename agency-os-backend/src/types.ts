@@ -15,6 +15,8 @@ export interface Env {
   OUTSCRAPER_API_KEY?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
+  CLARITY_API_TOKEN?: string;
+  CLARITY_PROJECT_ID?: string;
 }
 
 export interface Lead {
@@ -82,6 +84,11 @@ export interface Lead {
   clarity_tag: string | null;
   pipeline_sessions: number;
   pipeline_last_action_at: string | null;
+  engagement_score: number;
+  engagement_grade: string;
+  engagement_reasons: string | null;
+  clarity_last_sync_at: string | null;
+  clarity_last_error: string | null;
   created_at: string;
   updated_at: string;
 }
