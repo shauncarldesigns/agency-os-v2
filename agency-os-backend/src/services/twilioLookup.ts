@@ -11,6 +11,33 @@ export interface PhoneClassification {
   phone_lookup_error: string | null;
 }
 
+export async function savePhoneClassification(
+  db: D1Database,
+  leadId: number,
+  classification: PhoneClassification,
+): Promise<void> {
+  await db.prepare(`
+    UPDATE leads SET
+      phone_e164 = ?,
+      phone_valid = ?,
+      phone_line_type = ?,
+      phone_carrier = ?,
+      phone_route = ?,
+      phone_lookup_error = ?,
+      phone_lookup_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    classification.phone_e164,
+    classification.phone_valid,
+    classification.phone_line_type,
+    classification.phone_carrier,
+    classification.phone_route,
+    classification.phone_lookup_error,
+    leadId,
+  ).run();
+}
+
 interface TwilioLookupResponse {
   phone_number?: string | null;
   national_format?: string | null;

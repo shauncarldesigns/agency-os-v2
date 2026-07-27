@@ -53,7 +53,7 @@ export function LeadsTable({
               />
             </th>
             <th>Company</th>
-            <th>Status</th>
+            <th>Enriched</th>
             <th>Tier</th>
             <th>Score</th>
             <th>Reviews</th>
@@ -217,8 +217,15 @@ function LeadRow({
 
       <td>{lead.city ?? <span style={{ color: 'var(--text3)' }}>—</span>}</td>
       <td onClick={stop}>{renderWebsiteCell(lead)}</td>
-      <td className="td-mono" style={lead.enrichment_status === 'enriching' ? { opacity: 0.7 } : lead.enrichment_status === 'failed' ? { color: 'var(--text3)' } : undefined}>
-        {formatPhone(lead.phone)}
+      <td
+        className="td-mono"
+        style={{
+          whiteSpace: 'nowrap',
+          ...(lead.enrichment_status === 'enriching' ? { opacity: 0.7 } : lead.enrichment_status === 'failed' ? { color: 'var(--text3)' } : undefined),
+        }}
+      >
+        <div>{formatPhone(lead.phone)}</div>
+        {renderPhoneRouteMini(lead)}
       </td>
       <td><Badge color={outcome.color}>{outcome.label}</Badge></td>
       <td><Badge color={stage.color}>{stage.label}</Badge></td>
@@ -272,6 +279,24 @@ function LeadRow({
   );
 }
 
+function renderPhoneRouteMini(lead: Lead): React.ReactNode {
+  if (!lead.phone_route || lead.phone_route === 'unknown') return null;
+  const label =
+    lead.phone_route === 'text' ? 'Text'
+    : lead.phone_route === 'call' ? 'Call'
+    : 'Review';
+  const color =
+    lead.phone_route === 'text' ? 'var(--green)'
+    : lead.phone_route === 'call' ? 'var(--blue)'
+    : '#d97706';
+  return (
+    <div style={{ marginTop: 3, fontFamily: 'var(--font)', fontSize: '0.62rem', fontWeight: 700, color }}>
+      {label}
+      {lead.phone_line_type ? ` · ${lead.phone_line_type}` : ''}
+    </div>
+  );
+}
+
 // Reviews cell. Shows Google review count + average rating — a quick signal
 // for "is this lead worth calling." A high count with a strong rating means
 // a real, established business with an online footprint; a low count or no
@@ -296,7 +321,7 @@ function renderReviewsCell(lead: Lead): React.ReactNode {
 }
 
 // Website cell. No-website leads are the priority targets, so they get a
-// prominent "No site" badge; leads with a site show a muted clickable domain.
+// prominent "No site" badge; leads with a site get a compact outbound badge.
 // Only enriched leads have a reliable website signal — for everything else we
 // don't yet know, so show a neutral dash rather than a misleading "No site".
 function renderWebsiteCell(lead: Lead): React.ReactNode {
@@ -310,37 +335,40 @@ function renderWebsiteCell(lead: Lead): React.ReactNode {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="td-mono"
-        style={{ color: 'var(--text3)', textDecoration: 'none' }}
+        className="badge badge-gray"
+        style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
         title={lead.website}
       >
-        {cleanDomain(lead.website)} ↗
+        Has website ↗
       </a>
     );
   }
   return <Badge color="blue">No site</Badge>;
 }
 
-// Strip protocol, www., and trailing path so the column stays scannable.
-function cleanDomain(url: string): string {
-  return url
-    .replace(/^https?:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/.*$/, '');
-}
-
 function renderEnrichmentBadge(lead: Lead): React.ReactNode {
+  const baseStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    fontSize: '0.72rem',
+    fontWeight: 800,
+    lineHeight: 1,
+  };
   switch (lead.enrichment_status) {
     case 'enriched':
-      return <span className="enrich-badge enriched">✓ Enriched</span>;
+      return <span style={{ ...baseStyle, background: 'var(--green-bg)', color: 'var(--green)' }} title="Enriched">✓</span>;
     case 'enriching':
-      return <span className="enrich-badge enriching"><span className="enrich-spin">⚙</span> Enriching…</span>;
+      return <span style={{ ...baseStyle, background: 'rgba(245, 158, 11, 0.12)', color: '#d97706' }} title="Enriching">…</span>;
     case 'pending':
-      return <span className="enrich-badge pending">⏳ Pending</span>;
+      return <span style={{ ...baseStyle, background: 'rgba(248, 113, 113, 0.1)', color: 'var(--red)' }} title="Not enriched">×</span>;
     case 'failed':
-      return <span className="enrich-badge failed">⚠ Failed</span>;
+      return <span style={{ ...baseStyle, background: 'rgba(248, 113, 113, 0.1)', color: 'var(--red)' }} title={lead.enrichment_error || 'Enrichment failed'}>×</span>;
     default:
-      return <span className="enrich-badge pending">{lead.enrichment_status}</span>;
+      return <span style={{ ...baseStyle, background: 'rgba(248, 113, 113, 0.1)', color: 'var(--red)' }} title={lead.enrichment_status}>×</span>;
   }
 }
 

@@ -13,6 +13,7 @@ import {
   Gem,
   AlertTriangle,
   DollarSign,
+  RefreshCw,
 } from 'lucide-react';
 import type { Lead, CallEntry, LeadActivity, ShowToast } from '../../lib/types';
 import { api, ApiError, type PhoneRoute } from '../../lib/api';
@@ -747,11 +748,18 @@ function PhoneRouteRow({
     review: 'bg-amber-50 text-amber-700 border-amber-100',
     unknown: 'bg-slate-50 text-slate-500 border-slate-200',
   }[route] ?? 'bg-slate-50 text-slate-500 border-slate-200';
-  const detail = [
+  const routeSummary = [
     lead.phone_line_type ? lineTypeLabel(lead.phone_line_type) : null,
     lead.phone_carrier,
-    lead.phone_e164,
   ].filter(Boolean).join(' · ');
+  const tooltipRows = [
+    ['Route', phoneRouteLabel(route)],
+    ['Line type', lead.phone_line_type ? lineTypeLabel(lead.phone_line_type) : 'Unknown'],
+    ['Carrier', lead.phone_carrier || 'Unknown'],
+    ['Normalized', lead.phone_e164 || 'Not available'],
+    ['Last checked', lead.phone_lookup_at ? relativeTime(lead.phone_lookup_at) : 'Not checked'],
+    ...(lead.phone_lookup_error ? [['Lookup note', lead.phone_lookup_error]] : []),
+  ];
   const allRouteActions: Array<{ route: PhoneRoute; label: string }> = [
     { route: 'call', label: 'Move to Call' },
     { route: 'text', label: 'Move to Text' },
@@ -762,18 +770,31 @@ function PhoneRouteRow({
 
   return (
     <div className={compact ? 'space-y-1' : 'flex flex-wrap items-center gap-2'}>
-      <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeCls}`}>
-        {phoneRouteLabel(route)}
-      </span>
-      {detail && <span className="text-xs text-slate-500">{detail}</span>}
-      {lead.phone_lookup_error && <span className="text-xs text-amber-600">{lead.phone_lookup_error}</span>}
+      <div className="group relative inline-flex w-fit items-center gap-1.5">
+        <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeCls}`}>
+          {phoneRouteLabel(route)}
+        </span>
+        {routeSummary && <span className="text-xs text-slate-500">{routeSummary}</span>}
+        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg group-hover:block">
+          <div className="mb-2 font-semibold text-slate-800">Phone routing</div>
+          <div className="space-y-1">
+            {tooltipRows.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[78px_1fr] gap-2">
+                <span className="text-slate-400">{label}</span>
+                <span className="min-w-0 break-words text-slate-700">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       <button
         type="button"
         onClick={() => void onClassify()}
         disabled={disabled || !lead.phone}
-        className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-400"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:text-slate-300"
+        title={lead.phone_lookup_at ? 'Recheck phone route' : 'Classify phone route'}
       >
-        {classifying ? 'Checking...' : lead.phone_lookup_at ? 'Recheck' : 'Classify'}
+        <RefreshCw className={`h-3.5 w-3.5 ${classifying ? 'animate-spin' : ''}`} />
       </button>
       <div className={compact ? 'flex flex-wrap gap-1 pt-1' : 'flex flex-wrap gap-1'}>
         {routeActions.map((action) => (

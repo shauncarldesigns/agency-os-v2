@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
-import { classifyPhoneNumber, type PhoneClassification } from '../services/twilioLookup';
+import { classifyPhoneNumber, savePhoneClassification } from '../services/twilioLookup';
 
 export const leadsRouter = new Hono<{ Bindings: Env }>();
 
@@ -18,35 +18,6 @@ const LEAD_FIELDS = [
   'enrichment_status', 'enrichment_error', 'status', 'outcome', 'followup',
   'notes', 'source', 'project_id',
 ];
-
-async function savePhoneClassification(
-  db: D1Database,
-  leadId: number,
-  classification: PhoneClassification,
-): Promise<Lead | null> {
-  await db.prepare(`
-    UPDATE leads SET
-      phone_e164 = ?,
-      phone_valid = ?,
-      phone_line_type = ?,
-      phone_carrier = ?,
-      phone_route = ?,
-      phone_lookup_error = ?,
-      phone_lookup_at = datetime('now'),
-      updated_at = datetime('now')
-    WHERE id = ?
-  `).bind(
-    classification.phone_e164,
-    classification.phone_valid,
-    classification.phone_line_type,
-    classification.phone_carrier,
-    classification.phone_route,
-    classification.phone_lookup_error,
-    leadId,
-  ).run();
-
-  return db.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
-}
 
 leadsRouter.get('/', async (c) => {
   try {
@@ -210,7 +181,8 @@ leadsRouter.post('/:id/phone-classify', async (c) => {
 
   try {
     const classification = await classifyPhoneNumber(c.env, lead.phone);
-    const updated = await savePhoneClassification(c.env.DB, id, classification);
+    await savePhoneClassification(c.env.DB, id, classification);
+    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
     return c.json({ lead: updated, classification });
   } catch (err) {
     const msg = (err as Error).message;
