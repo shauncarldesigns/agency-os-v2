@@ -16,6 +16,7 @@ import { buildPipelineBriefPrompt } from '../prompts/pipelineBrief';
 import { callClaude } from '../services/claude';
 import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
+import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -155,6 +156,23 @@ function formatVerbatimContact(lead: Lead): string {
   return lines.join('\n');
 }
 
+function formatClarityInstallBlock(env: Env, lead: Lead): string {
+  const campaign = lead.campaign_slug || slugify(lead.company || `lead-${lead.id}`);
+  const clarityTag = lead.clarity_tag || `lead-${lead.id}`;
+  const snippet = buildClaritySnippet(env, {
+    id: lead.id,
+    company: lead.company,
+    campaign_slug: campaign,
+    clarity_tag: clarityTag,
+  });
+  return [
+    'CLARITY TRACKING INSTALL BLOCK',
+    'Paste this into the global header/custom-code area for this demo site so every page inherits it. Do not create a new Clarity project for this lead.',
+    '',
+    snippet,
+  ].join('\n');
+}
+
 async function writeActivity(
   db: D1Database,
   input: {
@@ -247,6 +265,40 @@ pipelineRouter.get('/leads/:id', async (c) => {
   } catch (err) {
     log('error', 'pipeline', 'GET /leads/:id failed', err);
     return c.json(serverError(), 500);
+  }
+});
+
+// GET /api/pipeline/leads/:id/clarity-snippet — exact install block for
+// the lead's demo site. Useful if the operator needs it outside the brief.
+pipelineRouter.get('/leads/:id/clarity-snippet', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+    const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL')
+      .bind(id)
+      .first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+    return c.json({
+      project_id: c.env.CLARITY_PROJECT_ID || 'xt0tg8n14n',
+      clarity_tag: lead.clarity_tag || `lead-${lead.id}`,
+      campaign_slug: lead.campaign_slug || slugify(lead.company || `lead-${lead.id}`),
+      snippet: formatClarityInstallBlock(c.env, lead),
+    });
+  } catch (err) {
+    log('error', 'pipeline', 'GET /leads/:id/clarity-snippet failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// POST /api/pipeline/clarity-sync — manual sync trigger while validating
+// Clarity's export data. The hourly cron also calls the same service.
+pipelineRouter.post('/clarity-sync', async (c) => {
+  try {
+    const result = await syncClarityEngagement(c.env);
+    return c.json(result);
+  } catch (err) {
+    log('error', 'pipeline', 'POST /clarity-sync failed', err);
+    return c.json(serverError((err as Error).message), 500);
   }
 });
 
@@ -547,6 +599,7 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
     // Append verbatim contact details, then the full verbatim review set,
     // below the authored brief so landingsite has exact values to build with.
     briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;
+    briefText = `${briefText}\n\n${formatClarityInstallBlock(c.env, lead)}`;
     const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
     if (reviewsBlock) {
       briefText = `${briefText}\n\n${reviewsBlock}`;

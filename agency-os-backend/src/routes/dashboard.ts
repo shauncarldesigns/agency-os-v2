@@ -538,6 +538,9 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
         l.industry,
         l.pipeline_status,
         l.pipeline_sessions,
+        l.engagement_score,
+        l.engagement_grade,
+        l.engagement_reasons,
         l.pipeline_last_action_at,
         MAX(la.created_at) as last_engagement_at
       FROM leads l
@@ -562,7 +565,7 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
             ), '1970-01-01'))
         )
       GROUP BY l.id
-      ORDER BY datetime(COALESCE(last_engagement_at, l.pipeline_last_action_at, l.updated_at)) DESC
+      ORDER BY l.engagement_score DESC, datetime(COALESCE(last_engagement_at, l.pipeline_last_action_at, l.updated_at)) DESC
       LIMIT 8
     `).all<{
       id: number;
@@ -573,6 +576,9 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
       industry: string | null;
       pipeline_status: string;
       pipeline_sessions: number;
+      engagement_score: number;
+      engagement_grade: string;
+      engagement_reasons: string | null;
       pipeline_last_action_at: string | null;
       last_engagement_at: string | null;
     }>(),

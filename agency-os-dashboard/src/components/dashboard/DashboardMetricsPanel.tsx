@@ -590,11 +590,23 @@ function MiniRatio({ label, value }: { label: string; value: number | null }) {
 }
 
 function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
-  const tone = lead.pipeline_status === 'engaged' || lead.pipeline_sessions > 1
-    ? 'border-emerald-200 bg-emerald-50/60'
-    : lead.pipeline_sessions > 0
-      ? 'border-amber-200 bg-amber-50/60'
-      : 'border-orange-200 bg-orange-50/60';
+  const score = lead.engagement_score ?? 0;
+  const tone = score >= 90
+    ? 'border-rose-200 bg-rose-50/70'
+    : score >= 70
+      ? 'border-emerald-200 bg-emerald-50/60'
+      : score >= 40
+        ? 'border-amber-200 bg-amber-50/60'
+        : lead.pipeline_sessions > 0
+          ? 'border-orange-200 bg-orange-50/60'
+          : 'border-slate-200 bg-slate-50';
+  const actionLabel = score >= 90
+    ? 'Call now'
+    : score >= 70
+      ? 'Walkthrough'
+      : score >= 40
+        ? 'Follow up'
+        : 'Nurture';
   const place = [lead.city, lead.state].filter(Boolean).join(', ') || 'No location';
   return (
     <div className={`rounded-xl border px-3 py-3 ${tone}`}>
@@ -607,9 +619,9 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
             <span>{lead.pipeline_sessions} visit{lead.pipeline_sessions === 1 ? '' : 's'}</span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-600">
+        <div className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
           <MousePointerClick className="h-3 w-3" />
-          {lead.pipeline_status === 'engaged' ? 'Engaged' : 'Tapped'}
+          {score} · {actionLabel}
         </div>
       </div>
       {lead.phone && (

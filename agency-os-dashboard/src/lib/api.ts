@@ -461,6 +461,10 @@ export const api = {
       apiFetch<{ leads: Lead[] }>(`/api/pipeline/leads${qs(filters)}`),
     get: (id: number) =>
       apiFetch<{ lead: Lead; activity: LeadActivity[] }>(`/api/pipeline/leads/${id}`),
+    claritySnippet: (id: number) =>
+      apiFetch<{ project_id: string; clarity_tag: string; campaign_slug: string; snippet: string }>(`/api/pipeline/leads/${id}/clarity-snippet`),
+    syncClarity: () =>
+      apiFetch<{ checked: number; matched: number; updated: number; skipped: number; error?: string }>('/api/pipeline/clarity-sync', { method: 'POST' }),
     saveSiteUrl: (id: number, url: string) =>
       apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/site-url`, {
         method: 'POST',
@@ -698,6 +702,9 @@ export interface PipelineHotLead {
   industry: string | null;
   pipeline_status: string;
   pipeline_sessions: number;
+  engagement_score: number;
+  engagement_grade: string;
+  engagement_reasons: string | null;
   pipeline_last_action_at: string | null;
   last_engagement_at: string | null;
 }

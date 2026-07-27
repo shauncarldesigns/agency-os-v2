@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Clarity engagement scoring for demo sites (PR #174)
+
+- **Clarity is now wired as the Text Outreach engagement intelligence layer.** Adds Clarity project config, per-lead install snippets in the demo-site brief, D1 engagement score fields, a manual/hourly Clarity sync service, dashboard hot-lead scoring, Text Outreach score badges, and Lead Detail Activity score reasons. Backend + dashboard + migration (`2026-07-27-clarity-engagement.sql`, apply before deploy).
+
 ### Phone routing automation and Lead Pipeline review queue (PR #173)
 
 - **Phone routing now runs during enrichment and review numbers have a Lead Pipeline home.** Twilio classification is folded into enrichment without overwriting unchanged manual route overrides, Text Outreach loses the maintenance-style Classify phones button, Lead Pipeline gets a Phone Review toggle, and lead/table phone-route UI is more compact with hover details, refresh-icon recheck, condensed website badges, and smaller enrichment status icons. Backend + dashboard.

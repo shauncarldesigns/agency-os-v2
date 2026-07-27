@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_pipeline_status
 CREATE TABLE IF NOT EXISTS lead_activity (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   lead_id       INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  action        TEXT NOT NULL,       -- brief_generated | url_saved | intro_sent | followed_up | called | status_changed | click_tracked | undo
+  action        TEXT NOT NULL,       -- brief_generated | url_saved | intro_sent | followed_up | called | status_changed | click_tracked | clarity_synced | undo
   from_status   TEXT,                -- pipeline_status before this action (nullable)
   to_status     TEXT,                -- pipeline_status after this action (nullable)
   meta          TEXT,                -- JSON blob (message body, url, ua, undo target, etc.)

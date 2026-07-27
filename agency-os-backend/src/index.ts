@@ -22,6 +22,7 @@ import { playbookRouter } from './routes/playbook';
 import { recordingsRouter } from './routes/recordings';
 import { pipelineRouter } from './routes/pipeline';
 import { redirectRouter } from './routes/redirect';
+import { syncClarityEngagement } from './services/clarity';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -96,6 +97,7 @@ export default {
       // reports the zone is active. Partial index makes this cheap when
       // there are zero pending projects.
       ctx.waitUntil(pollPendingDnsZones(env).then(out => log('info', 'cron', `DNS poll run`, { count: out.length })));
+      ctx.waitUntil(syncClarityEngagement(env).then(out => log('info', 'cron', 'Clarity engagement sync run', out)));
     }
   },
 };
