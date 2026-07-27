@@ -93,6 +93,7 @@ export interface LeadActivity {
     | 'status_changed'
     | 'click_tracked'
     | 'clarity_synced'
+    | 'engagement_reset'
     | 'undo';
   from_status: string | null;
   to_status: string | null;
