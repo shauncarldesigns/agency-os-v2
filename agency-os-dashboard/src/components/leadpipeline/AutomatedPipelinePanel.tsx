@@ -14,7 +14,6 @@ import {
   Send,
   LayoutGrid,
   Columns3,
-  Eye,
   MousePointerClick,
   PhoneCall,
   RotateCcw,
@@ -141,15 +140,15 @@ export interface PipelineLead {
   sessions: number;
   engagementScore: number;
   engagementGrade: string;
+  pipelineLastActionAt: string | null;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
   url: string | null;                 // tagged live URL (for preview + View live site)
+  clarityTag: string | null;
   trackerUrl: string;                 // /r/:id link — this is what gets texted
   brief: string | null;
 }
-
-const PRICING_URL = 'https://shauncarldesigns.com/pricing';
 
 // `sms:` deep link — `?&body=` is the variant most broadly honored across
 // iOS and Android. A Copy fallback ships alongside every composer because
@@ -257,10 +256,12 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     sessions: l.pipeline_sessions ?? 0,
     engagementScore: l.engagement_score ?? 0,
     engagementGrade: l.engagement_grade ?? 'nurture',
+    pipelineLastActionAt: l.pipeline_last_action_at,
     ownerFirst: deriveOwnerFirst(l.owner_names),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
     url: l.site_url,
+    clarityTag: l.clarity_tag,
     trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
     brief: l.pipeline_brief,
   };
@@ -302,6 +303,95 @@ function EngagementScoreBadge({ score, grade }: { score: number; grade: string }
       {score}
       <span className="font-semibold">{label}</span>
     </span>
+  );
+}
+
+function SiteSignalBadges({ url }: { url: string | null }) {
+  if (!url) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+        Site built
+      </span>
+    </div>
+  );
+}
+
+type RecommendationAction = 'call' | 'text';
+
+interface OutreachRecommendation {
+  action: RecommendationAction;
+  label: string;
+  detail: string;
+  tone: string;
+  textVariant: 'low' | 'medium' | 'stale' | 'none';
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  return Math.max(0, (Date.now() - then) / 86400000);
+}
+
+function getOutreachRecommendation(input: {
+  status: PipelineStatus;
+  sessions: number;
+  engagementScore: number;
+  lastVisitAt?: string | null;
+}): OutreachRecommendation | null {
+  if (input.status !== 'engaged') return null;
+  const stale = (daysSince(input.lastVisitAt ?? null) ?? 0) >= 3;
+  if (input.engagementScore >= 70 && input.sessions >= 2 && !stale) {
+    return {
+      action: 'call',
+      label: 'CALL NOW',
+      detail: 'High score, multiple sessions, and recent activity.',
+      tone: 'bg-rose-50 text-rose-700 border-rose-100',
+      textVariant: 'none',
+    };
+  }
+  if (input.engagementScore >= 70 && stale) {
+    return {
+      action: 'text',
+      label: 'Send follow-up, then call',
+      detail: 'High intent, but the last visit is stale.',
+      tone: 'bg-amber-50 text-amber-700 border-amber-100',
+      textVariant: 'stale',
+    };
+  }
+  if (input.sessions > 1 || input.engagementScore >= 40) {
+    return {
+      action: 'text',
+      label: 'Send follow-up text',
+      detail: 'Moderate intent. Ask what stood out.',
+      tone: 'bg-amber-50 text-amber-700 border-amber-100',
+      textVariant: 'medium',
+    };
+  }
+  return {
+    action: 'text',
+    label: 'Send follow-up text',
+    detail: 'Low-intent visit. Keep it light.',
+    tone: 'bg-slate-50 text-slate-600 border-slate-200',
+    textVariant: 'low',
+  };
+}
+
+function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
+  const rec = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
+  if (!rec) return null;
+  return (
+    <div className={`rounded-xl border ${rec.tone} ${compact ? 'mt-2 px-2 py-1.5' : 'px-3 py-2.5'}`}>
+      <div className={compact ? 'text-[10px]' : 'text-[11px]'}>
+        <span>Recommended: <strong>{rec.label}</strong></span>
+      </div>
+    </div>
   );
 }
 
@@ -375,6 +465,13 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }
 
 function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: PipelineLead) => void }) {
   const cfg = STATUS_CONFIG[lead.status];
+  const rec = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
+  const actionLabel = rec ? (rec.action === 'call' ? 'Call now' : 'Follow up') : cfg.action;
   const Icon = cfg.icon;
   return (
     <div
@@ -392,7 +489,7 @@ function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: Pipe
         onClick={() => onAction(lead)}
         className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.98]"
       >
-        {cfg.action}
+        {actionLabel}
         <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
     </div>
@@ -408,6 +505,12 @@ interface LeadCardProps {
 
 function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
+  const recommendation = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
   return (
     // flex-col + mt-auto on the footer: grid rows stretch cards to equal
     // height, so the footer pins to the bottom instead of floating.
@@ -444,6 +547,13 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
       <div className="px-4 pb-3">
         <StatusChip lead={lead} onAction={onAction} />
       </div>
+
+      <SiteSignalBadges url={lead.url} />
+      {recommendation && (
+        <div className="px-4 pb-3">
+          <EngagedRecommendationPanel lead={lead} />
+        </div>
+      )}
 
       <div className="space-y-2 px-4 pb-3 text-sm text-slate-600">
         <div className="flex items-center gap-2">
@@ -689,8 +799,8 @@ function TextComposerModal({
   // engagement signal before landing on the site. The preview panel
   // below shows the tagged destination for operator context.
   const defaultMsg =
-    `Hey ${lead.ownerFirst}, this is Shaun — I put together a homepage for ` +
-    `${lead.name}, no charge, just wanted you to see it: ${lead.trackerUrl}\n\n` +
+    `Hey ${lead.ownerFirst}, this is Shaun — I put together a homepage for ${lead.name}, no charge, just wanted you to see it:\n\n` +
+    `${lead.trackerUrl}\n\n` +
     `Take a look when you get a sec, curious what you think.`;
 
   const [msg, setMsg] = useState(defaultMsg);
@@ -761,18 +871,37 @@ function FollowUpModal({
   onSent: (leadId: number, messageBody: string) => Promise<void>;
 }) {
   const engaged = lead.sessions > 0;
+  const rec = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
 
-  const variantWarm =
-    `Hey ${lead.ownerFirst}, saw you had a chance to check out the site — ` +
-    `if you like the direction, here's what it'd cost to make it live and ` +
-    `keep it maintained: ${PRICING_URL}\n\nNo pressure either way.`;
-  const variantCold =
-    `Hey ${lead.ownerFirst}, following up on that homepage I sent for ` +
-    `${lead.name}. If you like it, here's what it'd cost to make it live: ` +
-    `${PRICING_URL}\n\nAnd if it's not the right time, no worries at all — ` +
-    `just let me know.`;
+  const sentNoReplyText =
+    `Hey ${lead.ownerFirst}, just wanted to bump this back up in case it got buried.\n\n` +
+    `I put together that homepage specifically for ${lead.name}:\n\n` +
+    `${lead.trackerUrl}\n\n` +
+    `Curious what you think whenever you get a chance.`;
+  const lowIntentText =
+    `Hey ${lead.ownerFirst}, wanted to follow up on the homepage I put together for ${lead.name}.\n\n` +
+    `I'd be curious to hear your honest thoughts whenever you get a chance.`;
+  const mediumIntentText =
+    `Hey ${lead.ownerFirst}, just checking in to see what stood out to you after looking through the homepage.\n\n` +
+    `I'd love to hear your thoughts.`;
+  const staleIntentText =
+    `Hey ${lead.ownerFirst}, wanted to bump this back up since you had a chance to look through the homepage for ${lead.name}.\n\n` +
+    `I'd love to hear what stood out, and if it still feels useful I can walk you through it.`;
 
-  const [msg, setMsg] = useState(engaged ? variantWarm : variantCold);
+  const [msg, setMsg] = useState(
+    !engaged
+      ? sentNoReplyText
+      : rec?.textVariant === 'medium'
+        ? mediumIntentText
+        : rec?.textVariant === 'stale'
+          ? staleIntentText
+          : lowIntentText,
+  );
 
   return (
     <ModalShell
@@ -794,37 +923,33 @@ function FollowUpModal({
       }
     >
       <div className="px-5 py-4">
-        <div
-          className={`mb-3 flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs ${
-            engaged
-              ? 'border-amber-100 bg-amber-50 text-amber-700'
-              : 'border-slate-200 bg-slate-50 text-slate-600'
-          }`}
-        >
+        <div className={`mb-3 rounded-xl border px-3 py-2.5 text-xs ${
+          engaged
+            ? rec?.tone ?? 'border-amber-100 bg-amber-50 text-amber-700'
+            : 'border-slate-200 bg-slate-50 text-slate-600'
+        }`}>
           {engaged ? (
             <>
-              <Eye className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                <span className="font-semibold">
-                  {lead.sessions} site visit{lead.sessions === 1 ? '' : 's'}
-                </span>{' '}
-                — this is a warm lead. Lead with the pricing, they've already seen the work.
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">Recommended: {rec?.label ?? 'Send follow-up text'}</span>
+                <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
+              </div>
+              <p className="mt-1 opacity-80">{rec?.detail ?? 'They interacted with the demo. Keep the follow-up focused on feedback.'}</p>
             </>
           ) : (
-            <>
+            <div className="flex items-center gap-2">
               <MousePointerClick className="h-3.5 w-3.5 shrink-0" />
               <span>
                 <span className="font-semibold">No visits yet.</span> Softer re-touch — remind them
                 the site exists before pushing price.
               </span>
-            </>
+            </div>
           )}
         </div>
 
         <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
-          <span className="font-semibold">Text 2 — the pricing.</span> This is where the pricing
-          link goes. Keep the "not-right-now" door open.
+          <span className="font-semibold">Follow-up text.</span> Use this when the recommendation
+          says to text instead of call.
         </div>
 
         <label className="mb-1.5 block text-xs font-medium text-slate-500">Message</label>
@@ -838,8 +963,8 @@ function FollowUpModal({
         <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
           <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500">Pricing link</p>
-            <p className="truncate text-[11px] text-slate-400">{PRICING_URL}</p>
+            <p className="text-[11px] font-medium text-slate-500">Tracked demo link</p>
+            <p className="truncate text-[11px] text-slate-400">{lead.trackerUrl}</p>
           </div>
         </div>
       </div>
@@ -858,6 +983,12 @@ function CallPrepModal({
   onClose: () => void;
   onBookDemo: (lead: PipelineLead) => void;
 }) {
+  const rec = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
   return (
     <ModalShell
       title="Call prep"
@@ -882,23 +1013,20 @@ function CallPrepModal({
       }
     >
       <div className="px-5 py-4">
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-          <Eye className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            Warm lead — visited the site{' '}
-            <span className="font-semibold">
-              {lead.sessions} time{lead.sessions === 1 ? '' : 's'}
-            </span>
-            . Open on that.
-          </span>
+        <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs text-rose-700">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold">Recommended: {rec?.label ?? 'CALL NOW'}</span>
+            <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
+          </div>
+          <p className="mt-1 opacity-80">{rec?.detail ?? 'They interacted with the demo. Call while the site is fresh.'}</p>
         </div>
 
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Suggested opener
         </h4>
         <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm leading-relaxed text-slate-700">
-          "Hey, is this the owner of {lead.name}? This is Shaun — I actually built you a homepage
-          and texted it over, and I saw you took a look at it. Wanted to see what you thought?"
+          "Hey {lead.ownerFirst}, it's Shaun. I wanted to follow up on the homepage I put together
+          for {lead.name} and hear what you thought. Did I catch you at a bad time?"
         </div>
 
         <h4 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -906,15 +1034,16 @@ function CallPrepModal({
         </h4>
         <ul className="space-y-1.5 text-sm text-slate-600">
           <li className="flex gap-2">
-            <span className="text-slate-300">·</span>They've seen it — skip the pitch, ask what
-            they'd change
+            <span className="text-slate-300">·</span>If yes, book another time.
           </li>
           <li className="flex gap-2">
-            <span className="text-slate-300">·</span>Walk them to pricing: build vs. build +
-            maintain
+            <span className="text-slate-300">·</span>If no, ask: what stood out?
           </li>
           <li className="flex gap-2">
-            <span className="text-slate-300">·</span>Assumed close — "want me to make it live?"
+            <span className="text-slate-300">·</span>Then: what did you like, and what would you change?
+          </li>
+          <li className="flex gap-2">
+            <span className="text-slate-300">·</span>Move through discovery, pricing, and close.
           </li>
         </ul>
       </div>
@@ -999,6 +1128,13 @@ function BoardCard({
   onViewLead: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
+  const rec = getOutreachRecommendation({
+    status: lead.status,
+    sessions: lead.sessions,
+    engagementScore: lead.engagementScore,
+    lastVisitAt: lead.pipelineLastActionAt,
+  });
+  const actionLabel = rec ? (rec.action === 'call' ? 'Call now' : 'Follow up') : cfg.action;
   return (
     <div
       draggable
@@ -1021,12 +1157,20 @@ function BoardCard({
           <span>({lead.reviews})</span>
         </span>
       </div>
+      {lead.url && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+            Site built
+          </span>
+        </div>
+      )}
+      {rec && <EngagedRecommendationPanel lead={lead} compact />}
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button
           onClick={() => onAction(lead)}
           className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
         >
-          {cfg.action}
+          {actionLabel}
           <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
         </button>
         <button
@@ -1100,6 +1244,16 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   }, [undo]);
 
   const openFor = (lead: PipelineLead) => {
+    if (lead.status === 'engaged') {
+      const rec = getOutreachRecommendation({
+        status: lead.status,
+        sessions: lead.sessions,
+        engagementScore: lead.engagementScore,
+        lastVisitAt: lead.pipelineLastActionAt,
+      });
+      setModal({ type: rec?.action === 'text' ? 'followup' : 'call', lead });
+      return;
+    }
     setModal({ type: STATUS_TO_MODAL[lead.status], lead });
   };
 
