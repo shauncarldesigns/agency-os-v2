@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Full Text Outreach test reset
+
+- **Reset test activity now restores a built lead to its true pre-send baseline.** The control keeps the generated brief and saved site URL, clears Clarity scores, visits, sync history, and test outreach events, then moves the card back to Ready to Send. Backend + dashboard.
+
 ### Outreach history details and site signals (PR #176)
 
 - **Lead Activity now reads like a real history instead of a raw event list.** Outreach trail rows show exact timestamps, saved demo URLs, generated brief context, and the message body for intro/follow-up texts when captured. Text Outreach and Call Outreach cards show a compact site-built signal, and Engaged cards compute the next-best action from sessions, recency, and Clarity score. Dashboard + local seed data.

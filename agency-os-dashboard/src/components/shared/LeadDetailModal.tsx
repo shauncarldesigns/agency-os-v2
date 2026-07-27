@@ -1107,14 +1107,14 @@ function ActivityPane({
 
   const handleReset = async () => {
     const ok = window.confirm(
-      `Reset demo engagement for ${lead.company}?\n\nThis clears the score, visit count, Clarity reasons, and Clarity sync error. It does not delete notes, call logs, the brief, or the site URL.`,
+      `Reset test activity for ${lead.company}?\n\nThis returns the card to Ready to Send and clears Clarity visits, scores, sync history, and test outreach after the site URL was saved. It keeps notes, call logs, the generated brief, and the site URL.`,
     );
     if (!ok) return;
     setResetting(true);
     try {
       const res = await api.pipeline.resetEngagement(lead.id);
       onReset(res.lead);
-      showToast('Engagement score reset', 'success');
+      showToast('Test activity cleared — ready to send', 'success');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not reset engagement';
       showToast(msg, 'error');
@@ -1152,14 +1152,14 @@ function ActivityPane({
           onClick={handleReset}
           disabled={resetting}
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-          title="Clear this lead's test engagement score and visit count"
+          title="Clear test engagement and return this lead to Ready to Send"
         >
           {resetting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />
           )}
-          Reset engagement
+          Reset test activity
         </button>
       </div>
 

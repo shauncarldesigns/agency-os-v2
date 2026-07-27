@@ -314,8 +314,9 @@ pipelineRouter.post('/clarity-sync', async (c) => {
 });
 
 // POST /api/pipeline/leads/:id/reset-engagement — operator test helper.
-// Clears Clarity/demo-site engagement counters without changing outreach
-// status, notes, call logs, or the generated brief/site URL.
+// Restores a built demo lead to the post-URL-save baseline: preserve the
+// generated brief + site URL, clear Clarity/test-outreach history, and put
+// the card back in ready_to_send.
 pipelineRouter.post('/leads/:id/reset-engagement', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
@@ -327,36 +328,58 @@ pipelineRouter.post('/leads/:id/reset-engagement', async (c) => {
       .first<Lead>();
     if (!lead) return c.json(notFound('Lead'), 404);
 
-    await c.env.DB.prepare(
-      `UPDATE leads
-         SET pipeline_sessions = 0,
-             engagement_score = 0,
-             engagement_grade = 'nurture',
-             engagement_reasons = NULL,
-             clarity_last_sync_at = NULL,
-             clarity_last_error = NULL,
-             updated_at = datetime('now')
-       WHERE id = ?`,
+    const urlSaved = await c.env.DB.prepare(
+      `SELECT created_at
+         FROM lead_activity
+        WHERE lead_id = ? AND action = 'url_saved'
+        ORDER BY id DESC
+        LIMIT 1`,
     )
       .bind(id)
-      .run();
+      .first<{ created_at: string }>();
+    const resetStatus: PipelineStatus = lead.site_url
+      ? 'ready_to_send'
+      : (lead.pipeline_status as PipelineStatus);
 
-    await writeActivity(c.env.DB, {
-      leadId: id,
-      action: 'engagement_reset',
-      fromStatus: lead.pipeline_status,
-      toStatus: lead.pipeline_status,
-      meta: {
-        prior_sessions: lead.pipeline_sessions ?? 0,
-        prior_score: lead.engagement_score ?? 0,
-        prior_grade: lead.engagement_grade ?? 'nurture',
-      },
-    });
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `UPDATE leads
+            SET pipeline_status = ?,
+                pipeline_sessions = 0,
+                engagement_score = 0,
+                engagement_grade = 'nurture',
+                engagement_reasons = NULL,
+                clarity_last_sync_at = NULL,
+                clarity_last_error = NULL,
+                pipeline_last_action_at = ?,
+                updated_at = datetime('now')
+          WHERE id = ?`,
+      ).bind(resetStatus, urlSaved?.created_at ?? null, id),
+      c.env.DB.prepare(
+        `DELETE FROM lead_activity
+          WHERE lead_id = ?
+            AND (
+              action IN ('click_tracked', 'clarity_synced', 'engagement_reset')
+              OR (
+                id > COALESCE(
+                  (SELECT MAX(id)
+                     FROM lead_activity
+                    WHERE lead_id = ? AND action = 'url_saved'),
+                  0
+                )
+                AND action IN ('intro_sent', 'followed_up', 'called', 'undo')
+              )
+            )`,
+      ).bind(id, id),
+    ]);
 
     const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
       .bind(id)
       .first<Lead>();
-    log('info', 'pipeline', `Lead ${id} engagement reset`);
+    log('info', 'pipeline', `Lead ${id} test engagement reset`, {
+      fromStatus: lead.pipeline_status,
+      toStatus: resetStatus,
+    });
     return c.json({ lead: updated });
   } catch (err) {
     log('error', 'pipeline', 'POST /leads/:id/reset-engagement failed', err);
