@@ -9,7 +9,7 @@ when a manual deploy was needed.
 
 ## 2026-07
 
-### Full Text Outreach test reset
+### Full Text Outreach test reset (PR #177)
 
 - **Reset test activity now restores a built lead to its true pre-send baseline.** The control keeps the generated brief and saved site URL, clears Clarity scores, visits, sync history, and test outreach events, then moves the card back to Ready to Send. Backend + dashboard.
 
