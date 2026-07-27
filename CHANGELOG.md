@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Engagement test reset for demo-site validation (PR #175)
+
+- **Lead Detail now has a reset engagement control for safe Clarity testing.** The Activity tab can clear a lead's demo-site visit count, engagement score, reasons, and Clarity sync state without touching notes, call logs, the generated brief, or the site URL. Backend + dashboard.
+
 ### Clarity engagement scoring for demo sites (PR #174)
 
 - **Clarity is now wired as the Text Outreach engagement intelligence layer.** Adds Clarity project config, per-lead install snippets in the demo-site brief, D1 engagement score fields, a manual/hourly Clarity sync service, dashboard hot-lead scoring, Text Outreach score badges, and Lead Detail Activity score reasons. Backend + dashboard + migration (`2026-07-27-clarity-engagement.sql`, apply before deploy).

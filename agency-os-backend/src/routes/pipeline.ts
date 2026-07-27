@@ -302,6 +302,57 @@ pipelineRouter.post('/clarity-sync', async (c) => {
   }
 });
 
+// POST /api/pipeline/leads/:id/reset-engagement — operator test helper.
+// Clears Clarity/demo-site engagement counters without changing outreach
+// status, notes, call logs, or the generated brief/site URL.
+pipelineRouter.post('/leads/:id/reset-engagement', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+    const lead = await c.env.DB.prepare(
+      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+    )
+      .bind(id)
+      .first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+
+    await c.env.DB.prepare(
+      `UPDATE leads
+         SET pipeline_sessions = 0,
+             engagement_score = 0,
+             engagement_grade = 'nurture',
+             engagement_reasons = NULL,
+             clarity_last_sync_at = NULL,
+             clarity_last_error = NULL,
+             updated_at = datetime('now')
+       WHERE id = ?`,
+    )
+      .bind(id)
+      .run();
+
+    await writeActivity(c.env.DB, {
+      leadId: id,
+      action: 'engagement_reset',
+      fromStatus: lead.pipeline_status,
+      toStatus: lead.pipeline_status,
+      meta: {
+        prior_sessions: lead.pipeline_sessions ?? 0,
+        prior_score: lead.engagement_score ?? 0,
+        prior_grade: lead.engagement_grade ?? 'nurture',
+      },
+    });
+
+    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+      .bind(id)
+      .first<Lead>();
+    log('info', 'pipeline', `Lead ${id} engagement reset`);
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'pipeline', 'POST /leads/:id/reset-engagement failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/site-url
 // ---------------------------------------------------------------------------

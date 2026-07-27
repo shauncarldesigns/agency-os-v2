@@ -349,7 +349,18 @@ export function LeadDetailModal({
                   onCallsChanged={() => void load()}
                 />
               )}
-              {tab === 'activity' && <ActivityPane lead={lead} activity={activity} />}
+              {tab === 'activity' && (
+                <ActivityPane
+                  lead={lead}
+                  activity={activity}
+                  showToast={showToast}
+                  onReset={(updated) => {
+                    setLead(updated);
+                    onLeadUpdated?.();
+                    void load();
+                  }}
+                />
+              )}
             </div>
 
             {/* Footer.
@@ -1070,10 +1081,40 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 
 // ---------- Activity (Automated Pipeline context) ----------
 
-function ActivityPane({ lead, activity }: { lead: Lead; activity: LeadActivity[] }) {
+function ActivityPane({
+  lead,
+  activity,
+  showToast,
+  onReset,
+}: {
+  lead: Lead;
+  activity: LeadActivity[];
+  showToast: ShowToast;
+  onReset: (lead: Lead) => void;
+}) {
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
   const reasons = parseList<string>(lead.engagement_reasons);
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = async () => {
+    const ok = window.confirm(
+      `Reset demo engagement for ${lead.company}?\n\nThis clears the score, visit count, Clarity reasons, and Clarity sync error. It does not delete notes, call logs, the brief, or the site URL.`,
+    );
+    if (!ok) return;
+    setResetting(true);
+    try {
+      const res = await api.pipeline.resetEngagement(lead.id);
+      onReset(res.lead);
+      showToast('Engagement score reset', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not reset engagement';
+      showToast(msg, 'error');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {lead.site_url && (
@@ -1110,6 +1151,20 @@ function ActivityPane({ lead, activity }: { lead: Lead; activity: LeadActivity[]
         {lead.clarity_last_error && (
           <p className="mt-2 text-xs text-amber-600">{lead.clarity_last_error}</p>
         )}
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={resetting}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+          title="Clear this lead's test engagement score and visit count"
+        >
+          {resetting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          Reset engagement
+        </button>
       </div>
 
       {activity.length > 0 ? (
