@@ -190,6 +190,21 @@ CREATE INDEX IF NOT EXISTS idx_proj_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_dns_pending ON projects(dns_status) WHERE dns_status = 'pending';
 
 -- ==================================================
+-- PROJECT DISCOVERY — client-supplied planning answers
+-- ==================================================
+CREATE TABLE IF NOT EXISTS project_discovery (
+  project_id      INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'complete')),
+  is_test_mode    INTEGER NOT NULL DEFAULT 0,
+  answers_json    TEXT NOT NULL DEFAULT '{}',
+  completed_at    TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_project_discovery_status
+  ON project_discovery(status, updated_at);
+
+-- ==================================================
 -- PAGES — Each page built in landingsite.ai
 -- ==================================================
 CREATE TABLE IF NOT EXISTS pages (

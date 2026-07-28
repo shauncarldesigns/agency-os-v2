@@ -1,5 +1,5 @@
 import type {
-  Lead, LeadActivity, CallEntry, ProspectResult, Project, Page, ReportSummary,
+  Lead, LeadActivity, CallEntry, ProspectResult, Project, ProjectDiscovery, DiscoveryAnswers, Page, ReportSummary,
   Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
@@ -190,6 +190,20 @@ export const api = {
       apiFetch<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: ProjectUpdate) =>
       apiFetch<{ project: Project }>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    discovery: {
+      get: (id: number) =>
+        apiFetch<{ discovery: ProjectDiscovery | null; eligible: boolean }>(`/api/projects/${id}/discovery`),
+      save: (
+        id: number,
+        body: { answers: DiscoveryAnswers; status?: 'draft' | 'complete'; testMode?: boolean },
+      ) =>
+        apiFetch<{ discovery: ProjectDiscovery }>(`/api/projects/${id}/discovery`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
+      clear: (id: number) =>
+        apiFetch<void>(`/api/projects/${id}/discovery`, { method: 'DELETE' }),
+    },
     // Hard-delete a project. Cascades to its pages/briefs/etc; the linked lead
     // is reverted to status='contacted' with project_id cleared.
     delete: (id: number) =>

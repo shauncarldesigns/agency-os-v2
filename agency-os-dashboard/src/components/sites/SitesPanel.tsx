@@ -54,6 +54,7 @@ export function SitesPanel({
   // lazily so we can show the freshest reviews after any re-enrichment.
   const [quickBriefCtx, setQuickBriefCtx] = useState<{ project: Project; lead: Lead | null } | null>(null);
   const [quickBriefLoading, setQuickBriefLoading] = useState(false);
+  const [briefRefreshToken, setBriefRefreshToken] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,7 +182,10 @@ export function SitesPanel({
       lead={editorCtx.lead}
       hasMaster={editorCtx.hasMaster}
       showToast={showToast}
-      onBriefGenerated={() => { void load(); }}
+      onBriefGenerated={() => {
+        setBriefRefreshToken((value) => value + 1);
+        void load();
+      }}
       onProjectSaved={() => { void load(); }}
       onDeleted={() => {
         setDetailProjectId(null);
@@ -209,6 +213,7 @@ export function SitesPanel({
       <>
         <SiteDetailPanel
           project={detailProject}
+          briefRefreshToken={briefRefreshToken}
           showToast={showToast}
           onSwitchTab={onSwitchTab}
           onBack={() => setDetailProjectId(null)}

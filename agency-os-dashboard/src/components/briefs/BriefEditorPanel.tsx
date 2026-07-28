@@ -49,6 +49,18 @@ export function BriefEditorPanel({
     setDraft(brief?.content_markdown ?? '');
   }, [brief?.id, brief?.version]);
 
+  // The editor is a fixed drawer over Brief Studio. Lock the document while
+  // it is open so wheel/touch scroll cannot leak through to the page behind
+  // the drawer when the inner scroller reaches either edge.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open || !current) return null;
 
   async function handleSaveEdits() {

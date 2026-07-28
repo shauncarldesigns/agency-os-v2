@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Client Discovery workspace
+
+- **Projects now have a dedicated Website Planning discovery workspace before Brief Studio.** Signed clients get the full autosaving 15–20 minute questionnaire; prospect projects can explicitly open the same workflow in test mode without changing lifecycle or MRR. Completing Discovery syncs durable facts into Project Info, closes the workspace, and refreshes Brief Studio; strategic answers and general notes remain Discovery context and feed Master Brief generation ahead of mined data. Later Discovery edits flag the current brief as stale. Backend + dashboard + migration (`2026-07-27-project-discovery.sql`, apply before deploy).
+
 ### Full Text Outreach test reset (PR #177)
 
 - **Reset test activity now restores a built lead to its true pre-send baseline.** The control keeps the generated brief and saved site URL, clears Clarity scores, visits, sync history, and test outreach events, then moves the card back to Ready to Send. Backend + dashboard.
