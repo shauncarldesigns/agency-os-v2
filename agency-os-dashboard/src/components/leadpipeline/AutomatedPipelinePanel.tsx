@@ -20,6 +20,8 @@ import {
   Loader2,
   RefreshCw,
   AlertCircle,
+  Archive,
+  Eye,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
@@ -141,10 +143,12 @@ export interface PipelineLead {
   engagementScore: number;
   engagementGrade: string;
   pipelineLastActionAt: string | null;
+  followupStep: number;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
   url: string | null;                 // tagged live URL (for preview + View live site)
+  rawUrl: string | null;              // clean destination for operator preview links
   clarityTag: string | null;
   trackerUrl: string;                 // /r/:id link — this is what gets texted
   brief: string | null;
@@ -257,10 +261,12 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     engagementScore: l.engagement_score ?? 0,
     engagementGrade: l.engagement_grade ?? 'nurture',
     pipelineLastActionAt: l.pipeline_last_action_at,
+    followupStep: l.pipeline_followup_step ?? 0,
     ownerFirst: deriveOwnerFirst(l.owner_names),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
     url: l.site_url,
+    rawUrl: l.site_url_raw,
     clarityTag: l.clarity_tag,
     trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
     brief: l.pipeline_brief,
@@ -305,13 +311,34 @@ function EngagementScoreBadge({ score, grade }: { score: number; grade: string }
   );
 }
 
-function SiteSignalBadges({ url }: { url: string | null }) {
+function cleanSiteUrl(rawUrl: string | null, taggedUrl: string | null): string | null {
+  if (rawUrl) return rawUrl;
+  if (!taggedUrl) return null;
+  try {
+    const url = new URL(taggedUrl);
+    url.searchParams.delete('utm_source');
+    url.searchParams.delete('utm_medium');
+    url.searchParams.delete('utm_campaign');
+    return url.toString();
+  } catch {
+    return taggedUrl.split('?')[0] || taggedUrl;
+  }
+}
+
+function SiteSignalBadges({ url, rawUrl }: { url: string | null; rawUrl: string | null }) {
   if (!url) return null;
+  const cleanUrl = cleanSiteUrl(rawUrl, url);
   return (
     <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+      <a
+        href={cleanUrl ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        title="Open the site without outreach tracking"
+        className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+      >
         Site built
-      </span>
+      </a>
     </div>
   );
 }
@@ -333,16 +360,17 @@ function getOutreachRecommendation(input: {
   lastVisitAt?: string | null;
 }): OutreachRecommendation | null {
   if (input.status !== 'engaged') return null;
-  if (input.engagementScore >= 90) {
+  const score = Math.max(40, input.engagementScore);
+  if (score >= 90) {
     return {
       action: 'call',
-      label: '📞 Call Now',
+      label: 'Call Now',
       detail: 'Hot intent. Call instead of sending another text.',
       tone: 'bg-rose-50 text-rose-700 border-rose-100',
       textVariant: 'none',
     };
   }
-  if (input.engagementScore >= 70) {
+  if (score >= 70) {
     return {
       action: 'text',
       label: 'Offer a walkthrough',
@@ -351,25 +379,43 @@ function getOutreachRecommendation(input: {
       textVariant: 'walkthrough',
     };
   }
-  if (input.engagementScore >= 40) {
+  return {
+    action: 'text',
+    label: 'Ask for feedback',
+    detail: 'They looked at the site. Ask for a response without asking for a meeting.',
+    tone: 'bg-amber-50 text-amber-700 border-amber-100',
+    textVariant: 'follow_up',
+  };
+}
+
+function getEngagedProgress(lead: PipelineLead): {
+  stateLabel: string;
+  detail: string;
+  actionLabel: string;
+  action: 'text' | 'call';
+  tone: string;
+} | null {
+  if (lead.status !== 'engaged' || lead.followupStep === 0) return null;
+  if (lead.followupStep >= 2) {
     return {
-      action: 'text',
-      label: 'Ask for feedback',
-      detail: 'They looked at the site. Ask for a response without asking for a meeting.',
-      tone: 'bg-amber-50 text-amber-700 border-amber-100',
-      textVariant: 'follow_up',
+      stateLabel: 'Final follow-up sent',
+      detail: 'The text sequence is complete. A quick call is the final chance to confirm whether they are interested.',
+      actionLabel: 'Call — last chance',
+      action: 'call',
+      tone: 'border-rose-200 bg-rose-50 text-rose-700',
     };
   }
   return {
+    stateLabel: 'Waiting for reply',
+    detail: 'The first follow-up was sent. You can wait for them or close the loop whenever it feels right.',
+    actionLabel: 'Send final follow-up',
     action: 'text',
-    label: 'Nurture',
-    detail: 'No meaningful engagement yet. Bring them back to the demo.',
-    tone: 'bg-slate-50 text-slate-600 border-slate-200',
-    textVariant: 'nurture',
+    tone: 'border-amber-200 bg-amber-50 text-amber-700',
   };
 }
 
 function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
+  const progress = getEngagedProgress(lead);
   const rec = getOutreachRecommendation({
     status: lead.status,
     sessions: lead.sessions,
@@ -377,10 +423,24 @@ function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineL
     lastVisitAt: lead.pipelineLastActionAt,
   });
   if (!rec) return null;
+  if (progress) {
+    return (
+      <div className={`rounded-xl border ${progress.tone} ${compact ? 'mt-2 px-2 py-1.5' : 'px-3 py-2.5'}`}>
+        <div className={compact ? 'text-[10px]' : 'text-[11px]'}>
+          <strong>{progress.stateLabel}</strong>
+          {!compact && <p className="mt-1 font-normal opacity-80">{progress.detail}</p>}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`rounded-xl border ${rec.tone} ${compact ? 'mt-2 px-2 py-1.5' : 'px-3 py-2.5'}`}>
       <div className={compact ? 'text-[10px]' : 'text-[11px]'}>
-        <span>Recommended: <strong>{rec.label}</strong></span>
+        <span className="inline-flex items-center gap-1">
+          Recommended:
+          {rec.action === 'call' && <PhoneCall className="h-3 w-3" strokeWidth={2.25} />}
+          <strong>{rec.label}</strong>
+        </span>
       </div>
     </div>
   );
@@ -454,7 +514,20 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }
 
 // ---------- Card ----------
 
-function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: PipelineLead) => void }) {
+function isStaleLead(lead: PipelineLead): boolean {
+  if (lead.status !== 'engaged' || !lead.pipelineLastActionAt) return false;
+  return Date.now() - new Date(lead.pipelineLastActionAt).getTime() >= 30 * 24 * 60 * 60 * 1000;
+}
+
+function StatusChip({
+  lead,
+  onAction,
+  onArchive,
+}: {
+  lead: PipelineLead;
+  onAction: (l: PipelineLead) => void;
+  onArchive: (l: PipelineLead) => void;
+}) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
     status: lead.status,
@@ -462,7 +535,9 @@ function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: Pipe
     engagementScore: lead.engagementScore,
     lastVisitAt: lead.pipelineLastActionAt,
   });
-  const actionLabel = rec?.label ?? cfg.action;
+  const progress = getEngagedProgress(lead);
+  const actionLabel = progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const isCallAction = progress?.action === 'call' || (!progress && rec?.action === 'call');
   const Icon = cfg.icon;
   return (
     <div
@@ -480,9 +555,20 @@ function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: Pipe
         onClick={() => onAction(lead)}
         className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.98]"
       >
+        {isCallAction && <PhoneCall className="h-3.5 w-3.5" strokeWidth={2.25} />}
         {actionLabel}
         <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
+      {isStaleLead(lead) && (
+        <button
+          onClick={() => onArchive(lead)}
+          title="Archive stale lead"
+          aria-label={`Archive ${lead.name}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+        >
+          <Archive className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -492,9 +578,10 @@ interface LeadCardProps {
   index: number;
   onAction: (l: PipelineLead) => void;
   onViewLead: (l: PipelineLead) => void;
+  onArchive: (l: PipelineLead) => void;
 }
 
-function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
+function LeadCard({ lead, index, onAction, onViewLead, onArchive }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const recommendation = getOutreachRecommendation({
     status: lead.status,
@@ -536,10 +623,17 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
       </div>
 
       <div className="px-4 pb-3">
-        <StatusChip lead={lead} onAction={onAction} />
+        <StatusChip lead={lead} onAction={onAction} onArchive={onArchive} />
       </div>
 
-      <SiteSignalBadges url={lead.url} />
+      {isStaleLead(lead) && (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <strong>Stale lead — 30+ days.</strong> Send one last text or call, then archive it if
+          there is still no response.
+        </div>
+      )}
+
+      <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} />
       {recommendation && (
         <div className="px-4 pb-3">
           <EngagedRecommendationPanel lead={lead} />
@@ -565,10 +659,11 @@ function LeadCard({ lead, index, onAction, onViewLead }: LeadCardProps) {
         <span className="text-xs text-slate-400">{lead.lastAction}</span>
         <button
           onClick={() => onViewLead(lead)}
-          className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+          title="View lead"
+          aria-label={`View ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
         >
-          View lead
-          <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+          <Eye className="h-4 w-4" strokeWidth={2.25} />
         </button>
       </div>
     </div>
@@ -880,10 +975,16 @@ function FollowUpModal({
   const walkthroughText =
     `Hey ${lead.ownerFirst}, thanks for taking the time to look through the homepage. I'd love to walk through it with you and hear what you'd want to change if it became your actual website.\n\n` +
     `Is there a day this week when you have 10–15 minutes?`;
+  const finalFollowUpText =
+    `Hey ${lead.ownerFirst}, quick follow-up on the homepage I made for ${lead.name}. ` +
+    `Worth a quick conversation, or should I close this out?`;
+  const isFinalFollowUp = engaged && lead.followupStep >= 1;
 
   const [msg, setMsg] = useState(
     !engaged
       ? nurtureText
+      : isFinalFollowUp
+        ? finalFollowUpText
       : rec?.textVariant === 'walkthrough'
         ? walkthroughText
         : rec?.textVariant === 'follow_up'
@@ -894,7 +995,7 @@ function FollowUpModal({
 
   return (
     <ModalShell
-      title="Follow-up text"
+      title={isFinalFollowUp ? 'Final follow-up text' : 'Follow-up text'}
       subtitle={`${lead.name} · ${lead.phone}`}
       onClose={onClose}
       footer={
@@ -937,8 +1038,12 @@ function FollowUpModal({
         </div>
 
         <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
-          <span className="font-semibold">Follow-up text.</span> Use this when the recommendation
-          says to text instead of call.
+          <span className="font-semibold">
+            {isFinalFollowUp ? 'Final follow-up.' : 'Follow-up text.'}
+          </span>{' '}
+          {isFinalFollowUp
+            ? 'This closes the text sequence without pressure. After sending it, the next action becomes a last-chance call.'
+            : 'Use this when the recommendation says to text instead of call.'}
         </div>
 
         <label className="mb-1.5 block text-xs font-medium text-slate-500">Message</label>
@@ -978,6 +1083,8 @@ function CallPrepModal({
   onClose: () => void;
   onBookDemo: (lead: PipelineLead) => void;
 }) {
+  const progress = getEngagedProgress(lead);
+  const isLastChanceCall = progress?.action === 'call';
   const rec = getOutreachRecommendation({
     status: lead.status,
     sessions: lead.sessions,
@@ -1010,10 +1117,16 @@ function CallPrepModal({
       <div className="px-5 py-4">
         <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs text-rose-700">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">Recommended: {rec?.label ?? '📞 Call Now'}</span>
+            <span className="font-semibold">
+              Recommended: {isLastChanceCall ? 'Call — last chance' : rec?.label ?? 'Call Now'}
+            </span>
             <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
           </div>
-          <p className="mt-1 opacity-80">{rec?.detail ?? 'They interacted with the demo. Call while the site is fresh.'}</p>
+          <p className="mt-1 opacity-80">
+            {isLastChanceCall
+              ? 'The text sequence is complete. Call once to confirm whether they are interested before letting the lead age into archive.'
+              : rec?.detail ?? 'They interacted with the demo. Call while the site is fresh.'}
+          </p>
         </div>
 
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1113,10 +1226,12 @@ function BoardCard({
   lead,
   onAction,
   onViewLead,
+  onArchive,
 }: {
   lead: PipelineLead;
   onAction: (l: PipelineLead) => void;
   onViewLead: (l: PipelineLead) => void;
+  onArchive: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
@@ -1125,7 +1240,9 @@ function BoardCard({
     engagementScore: lead.engagementScore,
     lastVisitAt: lead.pipelineLastActionAt,
   });
-  const actionLabel = rec?.label ?? cfg.action;
+  const progress = getEngagedProgress(lead);
+  const actionLabel = progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const isCallAction = progress?.action === 'call' || (!progress && rec?.action === 'call');
   return (
     <div
       draggable
@@ -1150,25 +1267,49 @@ function BoardCard({
       </div>
       {lead.url && (
         <div className="mt-2 flex flex-wrap gap-1">
-          <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+          <a
+            href={cleanSiteUrl(lead.rawUrl, lead.url) ?? undefined}
+            target="_blank"
+            rel="noreferrer"
+            title="Open the site without outreach tracking"
+            className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+          >
             Site built
-          </span>
+          </a>
         </div>
       )}
       {rec && <EngagedRecommendationPanel lead={lead} compact />}
+      {isStaleLead(lead) && (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
+          <strong>Stale 30+ days.</strong> Make one last attempt or archive.
+        </div>
+      )}
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button
           onClick={() => onAction(lead)}
           className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
         >
+          {isCallAction && <PhoneCall className="h-3 w-3" strokeWidth={2.25} />}
           {actionLabel}
           <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
         </button>
+        {isStaleLead(lead) && (
+          <button
+            onClick={() => onArchive(lead)}
+            title="Archive stale lead"
+            aria-label={`Archive ${lead.name}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+          >
+            <Archive className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           onClick={() => onViewLead(lead)}
-          className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+          title="View lead"
+          aria-label={`View ${lead.name}`}
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
         >
-          View lead
+          <Eye className="h-3.5 w-3.5" strokeWidth={2.25} />
         </button>
       </div>
       <p className="mt-1.5 text-[10px] text-slate-400">{lead.lastAction}</p>
@@ -1236,6 +1377,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const openFor = (lead: PipelineLead) => {
     if (lead.status === 'engaged') {
+      const progress = getEngagedProgress(lead);
+      if (progress) {
+        setModal({ type: progress.action === 'call' ? 'call' : 'followup', lead });
+        return;
+      }
       const rec = getOutreachRecommendation({
         status: lead.status,
         sessions: lead.sessions,
@@ -1254,7 +1400,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const applyMutation = (updated: Lead, lastAction: string | null): PipelineLead => {
     const mapped = mapLeadRow(updated, lastAction);
-    setLeads((prev) => prev.map((l) => (l.id === mapped.id ? mapped : l)));
+    setLeads((prev) =>
+      mapped.status === 'archived'
+        ? prev.filter((l) => l.id !== mapped.id)
+        : prev.map((l) => (l.id === mapped.id ? mapped : l)),
+    );
     return mapped;
   };
 
@@ -1266,7 +1416,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const runAction = async (
     leadId: number,
-    action: 'intro_sent' | 'followed_up' | 'called',
+    action: 'intro_sent' | 'followed_up' | 'called' | 'archived',
     toastMessage: string,
     meta?: unknown,
   ) => {
@@ -1286,6 +1436,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const markFollowedUp = (leadId: number, messageBody: string) =>
     runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
+
+  const archiveLead = (lead: PipelineLead) => {
+    if (!window.confirm(`Archive ${lead.name}? It will leave the active Text Outreach board.`)) return;
+    void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
+  };
 
   const openBookDemo = async (lead: PipelineLead) => {
     try {
@@ -1473,6 +1628,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                         lead={l}
                         onAction={openFor}
                         onViewLead={openDetail}
+                        onArchive={archiveLead}
                       />
                     ))}
                     {items.length === 0 && (
@@ -1498,6 +1654,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                 index={i}
                 onAction={openFor}
                 onViewLead={openDetail}
+                onArchive={archiveLead}
               />
             ))}
             {filtered.length === 0 && (

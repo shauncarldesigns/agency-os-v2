@@ -70,6 +70,7 @@ export interface Lead {
   clarity_tag: string | null;                  // Clarity custom-tag id
   pipeline_sessions: number;                   // engagement counter (click-tracker + Clarity)
   pipeline_last_action_at: string | null;      // ISO timestamp — display string derived client-side
+  pipeline_followup_step?: number;             // derived from Engaged follow-up activity
   engagement_score: number;
   engagement_grade: 'hot' | 'walkthrough' | 'follow_up' | 'nurture' | string;
   engagement_reasons: string | null;

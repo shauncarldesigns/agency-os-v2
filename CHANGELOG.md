@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Engaged outreach sequence
+
+- **Engaged leads now progress through a tracked follow-up sequence without creating more Kanban columns.** The card action starts from score-based Ask for Feedback / Offer a Walkthrough / Call Now, advances from recorded text activity to Waiting for Reply → Send Final Follow-up → Call — Last Chance, becomes stale after 30 inactive days, and can then be archived with Undo restoring the original stale timestamp. Engaged can never show Nurture, card controls use compact icons, and the Site built chip opens the clean raw URL without outreach tracking. Backend + dashboard.
+
 ### Intent-based text outreach
 
 - **Engaged follow-up now changes by the lead’s score instead of using one generic message.** Nurture (0–39) resurfaces the tracked demo link, Follow Up (40–69) asks what they liked or would change without repeating the link, Walkthrough (70–89) asks for a 10–15 minute conversation, and Hot (90–100) becomes a call-only action with the no-oriented opener and busy/free branches. Recommendations in Text Outreach and Lead Activity use the same four bands. Dashboard.
