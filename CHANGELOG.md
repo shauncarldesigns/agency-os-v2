@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### DNS launch wiki
+
+- **The Agency Wiki now documents the complete Cloudflare-to-landingsite domain launch.** The DNS page covers client-owned domain rules, information to collect, preserving MX/SPF/DKIM before delegation, the Agency OS setup flow, nameserver handoff, propagation and SSL verification, special cases, reusable registrar Looms, and a copy-ready client email template. Dashboard.
+
 ### Client Discovery workspace
 
 - **Projects now have a dedicated Website Planning discovery workspace before Brief Studio.** Signed clients get the full autosaving 15–20 minute questionnaire; prospect projects can explicitly open the same workflow in test mode without changing lifecycle or MRR. Completing Discovery syncs durable facts into Project Info, closes the workspace, and refreshes Brief Studio; strategic answers and general notes remain Discovery context and feed Master Brief generation ahead of mined data. Later Discovery edits flag the current brief as stale. Backend + dashboard + migration (`2026-07-27-project-discovery.sql`, apply before deploy).
