@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Intent-based text outreach
+
+- **Engaged follow-up now changes by the lead’s score instead of using one generic message.** Nurture (0–39) resurfaces the tracked demo link, Follow Up (40–69) asks what they liked or would change without repeating the link, Walkthrough (70–89) asks for a 10–15 minute conversation, and Hot (90–100) becomes a call-only action with the no-oriented opener and busy/free branches. Recommendations in Text Outreach and Lead Activity use the same four bands. Dashboard.
+
 ### Clarity export quota handling
 
 - **Clarity exports no longer exhaust the project’s daily API quota or leave stale 429 warnings on individual leads.** Clarity enrichment now runs every four hours instead of piggybacking on the hourly DNS poll, leaving manual-sync headroom under the ten-call daily quota. Rate limits stay in Worker logs rather than being assigned to every lead, any successful export clears earlier project-wide errors even for leads without a current matching URL row, and a temporary per-lead suppression window keeps deleted operator test traffic from being re-imported while it ages out of Clarity’s rolling three-day export. Backend + migration (`2026-07-28-clarity-ignore-window.sql`, apply before deploy).

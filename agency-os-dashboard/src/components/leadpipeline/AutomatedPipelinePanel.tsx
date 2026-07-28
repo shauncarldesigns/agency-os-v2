@@ -323,14 +323,7 @@ interface OutreachRecommendation {
   label: string;
   detail: string;
   tone: string;
-  textVariant: 'low' | 'medium' | 'stale' | 'none';
-}
-
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  return Math.max(0, (Date.now() - then) / 86400000);
+  textVariant: 'nurture' | 'follow_up' | 'walkthrough' | 'none';
 }
 
 function getOutreachRecommendation(input: {
@@ -340,40 +333,39 @@ function getOutreachRecommendation(input: {
   lastVisitAt?: string | null;
 }): OutreachRecommendation | null {
   if (input.status !== 'engaged') return null;
-  const stale = (daysSince(input.lastVisitAt ?? null) ?? 0) >= 3;
-  if (input.engagementScore >= 70 && input.sessions >= 2 && !stale) {
+  if (input.engagementScore >= 90) {
     return {
       action: 'call',
-      label: 'CALL NOW',
-      detail: 'High score, multiple sessions, and recent activity.',
+      label: '📞 Call Now',
+      detail: 'Hot intent. Call instead of sending another text.',
       tone: 'bg-rose-50 text-rose-700 border-rose-100',
       textVariant: 'none',
     };
   }
-  if (input.engagementScore >= 70 && stale) {
+  if (input.engagementScore >= 70) {
     return {
       action: 'text',
-      label: 'Send follow-up, then call',
-      detail: 'High intent, but the last visit is stale.',
-      tone: 'bg-amber-50 text-amber-700 border-amber-100',
-      textVariant: 'stale',
+      label: 'Offer a walkthrough',
+      detail: 'They invested meaningful time. Move from texting to a 10–15 minute conversation.',
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      textVariant: 'walkthrough',
     };
   }
-  if (input.sessions > 1 || input.engagementScore >= 40) {
+  if (input.engagementScore >= 40) {
     return {
       action: 'text',
-      label: 'Send follow-up text',
-      detail: 'Moderate intent. Ask what stood out.',
+      label: 'Ask for feedback',
+      detail: 'They looked at the site. Ask for a response without asking for a meeting.',
       tone: 'bg-amber-50 text-amber-700 border-amber-100',
-      textVariant: 'medium',
+      textVariant: 'follow_up',
     };
   }
   return {
     action: 'text',
-    label: 'Send follow-up text',
-    detail: 'Low-intent visit. Keep it light.',
+    label: 'Nurture',
+    detail: 'No meaningful engagement yet. Bring them back to the demo.',
     tone: 'bg-slate-50 text-slate-600 border-slate-200',
-    textVariant: 'low',
+    textVariant: 'nurture',
   };
 }
 
@@ -470,7 +462,7 @@ function StatusChip({ lead, onAction }: { lead: PipelineLead; onAction: (l: Pipe
     engagementScore: lead.engagementScore,
     lastVisitAt: lead.pipelineLastActionAt,
   });
-  const actionLabel = rec ? (rec.action === 'call' ? 'Call now' : 'Follow up') : cfg.action;
+  const actionLabel = rec?.label ?? cfg.action;
   const Icon = cfg.icon;
   return (
     <div
@@ -877,30 +869,28 @@ function FollowUpModal({
     lastVisitAt: lead.pipelineLastActionAt,
   });
 
-  const sentNoReplyText =
-    `Hey ${lead.ownerFirst}, just wanted to bump this back up in case it got buried.\n\n` +
-    `I put together that homepage specifically for ${lead.name}:\n\n` +
+  const nurtureText =
+    `Hey ${lead.ownerFirst}, just wanted to bump this back up in case it got buried.\n` +
+    `I put together that homepage specifically for ${lead.name}:\n` +
     `${lead.trackerUrl}\n\n` +
     `Curious what you think whenever you get a chance.`;
-  const lowIntentText =
-    `Hey ${lead.ownerFirst}, wanted to follow up on the homepage I put together for ${lead.name}.\n\n` +
-    `I'd be curious to hear your honest thoughts whenever you get a chance.`;
-  const mediumIntentText =
-    `Hey ${lead.ownerFirst}, just checking in to see what stood out to you after looking through the homepage.\n\n` +
-    `I'd love to hear your thoughts.`;
-  const staleIntentText =
-    `Hey ${lead.ownerFirst}, wanted to bump this back up since you had a chance to look through the homepage for ${lead.name}.\n\n` +
-    `I'd love to hear what stood out, and if it still feels useful I can walk you through it.`;
+  const followUpText =
+    `Hey ${lead.ownerFirst}, thanks for taking a look at the homepage I put together for ${lead.name}.\n` +
+    `I'd genuinely love to hear your thoughts. Was there anything you liked or would change?`;
+  const walkthroughText =
+    `Hey ${lead.ownerFirst}, thanks for taking the time to look through the homepage. I'd love to walk through it with you and hear what you'd want to change if it became your actual website.\n\n` +
+    `Is there a day this week when you have 10–15 minutes?`;
 
   const [msg, setMsg] = useState(
     !engaged
-      ? sentNoReplyText
-      : rec?.textVariant === 'medium'
-        ? mediumIntentText
-        : rec?.textVariant === 'stale'
-          ? staleIntentText
-          : lowIntentText,
+      ? nurtureText
+      : rec?.textVariant === 'walkthrough'
+        ? walkthroughText
+        : rec?.textVariant === 'follow_up'
+          ? followUpText
+          : nurtureText,
   );
+  const includesDemoLink = msg.includes(lead.trackerUrl);
 
   return (
     <ModalShell
@@ -959,13 +949,19 @@ function FollowUpModal({
           className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
 
-        <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
-          <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500">Tracked demo link</p>
-            <p className="truncate text-[11px] text-slate-400">{lead.trackerUrl}</p>
+        {includesDemoLink ? (
+          <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5">
+            <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-slate-500">Tracked demo link included</p>
+              <p className="truncate text-[11px] text-slate-400">{lead.trackerUrl}</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="mt-3 text-[11px] text-slate-400">
+            The demo link is intentionally omitted—they already clicked it, so this message moves the conversation forward.
+          </p>
+        )}
       </div>
     </ModalShell>
   );
@@ -1014,7 +1010,7 @@ function CallPrepModal({
       <div className="px-5 py-4">
         <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs text-rose-700">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">Recommended: {rec?.label ?? 'CALL NOW'}</span>
+            <span className="font-semibold">Recommended: {rec?.label ?? '📞 Call Now'}</span>
             <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
           </div>
           <p className="mt-1 opacity-80">{rec?.detail ?? 'They interacted with the demo. Call while the site is fresh.'}</p>
@@ -1024,8 +1020,8 @@ function CallPrepModal({
           Suggested opener
         </h4>
         <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm leading-relaxed text-slate-700">
-          "Hey {lead.ownerFirst}, it's Shaun. I wanted to follow up on the homepage I put together
-          for {lead.name} and hear what you thought. Did I catch you at a bad time?"
+          Hey {lead.ownerFirst}, it's Shaun. I wanted to follow up on the homepage I put together
+          for {lead.name} and hear what you thought. Did I catch you at a bad time?
         </div>
 
         <h4 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1033,16 +1029,12 @@ function CallPrepModal({
         </h4>
         <ul className="space-y-1.5 text-sm text-slate-600">
           <li className="flex gap-2">
-            <span className="text-slate-300">·</span>If yes, book another time.
+            <span className="text-slate-300">·</span>
+            If they're busy: “No problem at all. When would be a better time for me to give you a quick call?”
           </li>
           <li className="flex gap-2">
-            <span className="text-slate-300">·</span>If no, ask: what stood out?
-          </li>
-          <li className="flex gap-2">
-            <span className="text-slate-300">·</span>Then: what did you like, and what would you change?
-          </li>
-          <li className="flex gap-2">
-            <span className="text-slate-300">·</span>Move through discovery, pricing, and close.
+            <span className="text-slate-300">·</span>
+            If they're free: “What stood out to you?”
           </li>
         </ul>
       </div>
@@ -1133,7 +1125,7 @@ function BoardCard({
     engagementScore: lead.engagementScore,
     lastVisitAt: lead.pipelineLastActionAt,
   });
-  const actionLabel = rec ? (rec.action === 'call' ? 'Call now' : 'Follow up') : cfg.action;
+  const actionLabel = rec?.label ?? cfg.action;
   return (
     <div
       draggable
