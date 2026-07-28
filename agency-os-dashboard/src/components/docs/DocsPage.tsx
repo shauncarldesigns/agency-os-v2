@@ -17,6 +17,7 @@ type DocSection = {
   body?: string;
   items?: string[];
   callout?: string;
+  template?: string;
 };
 
 type DocPage = {
@@ -356,34 +357,82 @@ const DOCS: DocPage[] = [
   },
   {
     id: 'dns',
-    title: 'DNS Setup',
+    title: 'DNS Setup & Launch',
     eyebrow: 'Cloudflare + landingsite',
-    summary: 'The exact domain rules that keep launch from getting sideways.',
+    summary: 'Onboard a client-owned domain, preserve email, delegate Cloudflare nameservers, and verify the landingsite launch.',
     icon: Globe2,
     sections: [
       {
-        title: 'Records to create',
+        title: 'What Agency OS creates',
+        body: 'Clicking Add Domain & DNS creates a Cloudflare zone, adds the three required landingsite records, and returns two Cloudflare nameservers to give the client.',
         items: [
-          'A @ -> 75.2.29.147',
-          'A @ -> 166.117.246.71',
-          'CNAME www -> proxy-ssl.getlandingsite.com',
-          'Cloudflare proxy must stay off for every record.',
+          'A record: @ → 75.2.29.147 — DNS only.',
+          'A record: @ → 166.117.246.71 — DNS only.',
+          'CNAME record: www → proxy-ssl.getlandingsite.com — DNS only.',
+        ],
+        callout: 'Keep every landingsite record DNS only (gray cloud). Cloudflare’s orange-cloud proxy intercepts TLS and breaks landingsite SSL.',
+      },
+      {
+        title: 'Collect before setup',
+        items: [
+          'Domain name, such as tomsplumbing.com.',
+          'Registrar, such as Squarespace, GoDaddy, or Namecheap.',
+          'Domain owner email for the project record.',
+          'Whether the client uses email on this domain. If yes, preserve MX, SPF, and DKIM records before changing nameservers.',
+        ],
+        callout: 'If the client does not own a domain, they buy it in their own name with their own email and card. Never register a client domain in your name.',
+      },
+      {
+        title: 'Launch workflow',
+        items: [
+          'Wait until the landingsite build is client-approved. A nameserver change is the go-live event when replacing another host.',
+          'In Agency OS, open the project and click Add Domain & DNS. Enter the domain, registrar, and owner email; the app creates the Cloudflare zone and required records.',
+          'Copy the two Cloudflare nameservers returned by the app.',
+          'If the domain already has email or verification records, open the new Cloudflare zone and confirm its imported MX and TXT records. Add any missing MX, SPF, DKIM, or verification records before the switch.',
+          'Send the client both nameservers and registrar-specific instructions. Reuse a recorded Loom walkthrough for that registrar.',
+          'Wait for propagation. It is often about 30 minutes but can take up to 48 hours. Agency OS polls hourly and changes DNS status from pending to active.',
+          'Open Manage DNS in Agency OS and confirm the zone is active and all three landingsite records are found. Use Retry DNS setup if a required record is missing.',
+          'In landingsite, confirm Connection Status shows Connected with all records found.',
+          'Allow landingsite up to 24 hours after propagation to issue SSL, then verify HTTPS on both the apex domain and www.',
         ],
       },
       {
-        title: 'Using the app',
+        title: 'Client nameserver email',
+        body: 'Replace the bracketed values, add the matching registrar Loom, and send after the site is approved.',
+        template: `Subject: Quick DNS step to launch [domain]
+
+Hi [name],
+
+Your website is ready — I need one quick action from you to make it live. About 5 minutes.
+
+Log into [registrar] and update your “nameservers” to these two values:
+- [nameserver 1]
+- [nameserver 2]
+
+Walkthrough video: [Loom link]
+
+Reply once done and I’ll confirm everything on my end.
+
+— Shaun`,
+      },
+      {
+        title: 'Special cases',
         items: [
-          'Use Add domain & DNS the first time a project needs a zone.',
-          'Use Manage DNS once the project has a Cloudflare zone.',
-          'If records are missing, use retry to recreate them.',
-          'Pending zones poll hourly in the Worker and the sidebar card self-polls while open.',
-          'If landingsite nameservers are usable, prefer that path; otherwise get DNS access early.',
+          'Replacing another host: do not change nameservers before the client approves the landingsite build. The switch publishes the new site.',
+          'Domain email: verify MX, SPF, and DKIM in Cloudflare before the switch or the client’s email can stop working.',
+          'Registrar already uses Cloudflare: the app-created zone may not automatically be authoritative. Check which Cloudflare account currently owns the active zone before changing anything; avoid creating a duplicate zone blindly.',
+          'Client leaves the agency: they can change nameservers at their registrar. After confirming their new DNS is working, optionally remove the old zone from the agency Cloudflare account.',
         ],
       },
       {
-        title: 'Known limits',
-        body: 'Cloudflare zones must be created for apex domains. Subdomains such as client.agncy.dev need records under the existing apex zone and are not handled by the current setup flow.',
-        callout: 'The database name is agency-os-v2. Avoid the old agency-os-v2-db typo when applying migrations.',
+        title: 'Limits and operating rules',
+        items: [
+          'Cloudflare zones are created for apex domains. A subdomain such as client.agncy.dev must be added under the existing agncy.dev zone and is not handled by the current setup flow.',
+          'Use Add Domain & DNS only for first-time setup. Use Manage DNS for status checks, nameserver copying, and missing-record retries.',
+          'Record one Loom walkthrough per registrar and reuse it.',
+          'Never register client domains in your name.',
+          'Never enable the Cloudflare proxy on landingsite records.',
+        ],
       },
     ],
   },
@@ -564,6 +613,11 @@ function SectionBlock({ section }: { section: DocSection }) {
       <h3 className="mb-2 text-sm font-semibold text-slate-900">{section.title}</h3>
       {section.body && <p className="text-sm leading-relaxed text-slate-600">{section.body}</p>}
       {section.items && <Checklist items={section.items} />}
+      {section.template && (
+        <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-700">
+          {section.template}
+        </pre>
+      )}
       {section.callout && (
         <div className="mt-3 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -590,6 +644,7 @@ export function DocsPage() {
           section.title,
           section.body ?? '',
           section.callout ?? '',
+          section.template ?? '',
           ...(section.items ?? []),
         ]),
       ].join(' ').toLowerCase();
