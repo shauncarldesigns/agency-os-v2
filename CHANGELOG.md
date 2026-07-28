@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Clarity export quota handling
+
+- **Clarity exports no longer exhaust the project’s daily API quota or leave stale 429 warnings on individual leads.** Clarity enrichment now runs every four hours instead of piggybacking on the hourly DNS poll, leaving manual-sync headroom under the ten-call daily quota. Rate limits stay in Worker logs rather than being assigned to every lead, any successful export clears earlier project-wide errors even for leads without a current matching URL row, and a temporary per-lead suppression window keeps deleted operator test traffic from being re-imported while it ages out of Clarity’s rolling three-day export. Backend + migration (`2026-07-28-clarity-ignore-window.sql`, apply before deploy).
+
 ### Reliable outreach engagement scoring
 
 - **Text Outreach sessions now come only from the app-owned tracked link instead of shared-project Clarity aggregates.** Fixes cross-client URL-metric leakage that could show impossible counts such as 100 sessions, gives the first verified text-link click a 40-point floor and immediate Engaged promotion, limits Clarity scoring to the matching URL row after that click, keeps every positive session dot green, and removes the retired Reset test activity UI and API. Backend + dashboard.

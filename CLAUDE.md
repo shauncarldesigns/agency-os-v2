@@ -157,9 +157,15 @@ repurpose one for the other.**
   compatible across iOS/Android; body prefill is inconsistent, which is why
   every composer keeps a Copy fallback). No Twilio/A2P by explicit scope
   decision.
-- Engagement Layer 2 (Clarity Data Export sync into `pipeline_sessions`)
-  is designed but NOT built; Layer 1 (click tracker) is the trustworthy
-  signal.
+- Engagement Layer 1 is the app-owned `/r/:lead_id` redirect. Its
+  `click_tracked` rows are the authoritative session count, immediately move
+  Sent — No Reply leads into Engaged, and establish a 40-point score floor.
+  Layer 2 is the shared-project Clarity Data Export sync: it enriches that
+  verified click with matching-URL behavior but never owns the displayed
+  session count. Clarity runs every four hours (six calls/day) to stay under
+  the ten-call daily project quota and preserve manual-sync headroom.
+  `leads.clarity_ignore_until` can temporarily suppress enrichment while
+  known operator test traffic ages out of the rolling three-day export.
 
 ## Calling Dashboard (added 2026-06-14)
 
@@ -449,12 +455,13 @@ created by the app, not by hand. Quick Action button in the project sidebar:
 
 ## Cron triggers (wrangler.toml)
 
-Four crons currently scheduled in `[triggers]`:
+Five crons currently scheduled in `[triggers]`:
 
 - `0 6 * * *` — daily 6am — refresh PageSpeed for live Tier 3 sites
 - `0 7 1 * *` — monthly 1st 7am — finalize prior-month snapshots + exec summaries
 - `0 8 * * 1` — weekly Monday 8am — intermediate GSC refresh
 - `0 * * * *` — hourly — DNS poll for projects awaiting nameserver delegation
+- `15 */4 * * *` — every four hours — Clarity engagement enrichment
 
 Dispatched via the `scheduled` handler in `src/index.ts`. Each branch matches
 on `event.cron` exactly. Adding a new cron requires both a `wrangler.toml`

@@ -18,6 +18,8 @@ interface LeadForClarity extends Pick<
 > {
   /** Authoritative app-owned opens recorded by /r/:lead_id. */
   tracked_clicks: number;
+  /** 1 while known test traffic is still inside Clarity's rolling window. */
+  clarity_suppressed: number;
 }
 
 interface EngagementScore {
@@ -265,7 +267,12 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
         FROM lead_activity
         WHERE lead_activity.lead_id = leads.id
           AND lead_activity.action = 'click_tracked'
-      ) AS tracked_clicks
+      ) AS tracked_clicks,
+      CASE
+        WHEN clarity_ignore_until IS NOT NULL
+          AND clarity_ignore_until > datetime('now') THEN 1
+        ELSE 0
+      END AS clarity_suppressed
     FROM leads
     WHERE deleted_at IS NULL
       AND site_url IS NOT NULL
@@ -323,19 +330,39 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
     records = await fetchClarityLiveInsights(env);
   } catch (err) {
     const message = (err as Error).message;
-    await env.DB.prepare(`
-      UPDATE leads
-      SET clarity_last_error = ?, clarity_last_sync_at = datetime('now')
-      WHERE deleted_at IS NULL AND site_url IS NOT NULL
-    `).bind(message.slice(0, 500)).run();
+    // A 429 is a project-wide temporary quota condition, not a problem with
+    // every individual lead. Keep it in Worker logs instead of pinning the
+    // same stale warning to every lead card.
+    if (!/\b429\b/.test(message)) {
+      await env.DB.prepare(`
+        UPDATE leads
+        SET clarity_last_error = ?, clarity_last_sync_at = datetime('now')
+        WHERE deleted_at IS NULL AND site_url IS NOT NULL
+      `).bind(message.slice(0, 500)).run();
+    }
     throw err;
   }
+
+  // The export itself succeeded, so any project-wide error is resolved even
+  // for leads that have no matching URL row in this three-day window.
+  await env.DB.prepare(`
+    UPDATE leads
+    SET clarity_last_error = NULL,
+        clarity_last_sync_at = datetime('now')
+    WHERE deleted_at IS NULL
+      AND site_url IS NOT NULL
+      AND pipeline_status NOT IN ('booked', 'archived')
+  `).run();
 
   let matched = 0;
   let updated = 0;
   let skipped = 0;
 
   for (const lead of leads) {
+    if (lead.clarity_suppressed === 1) {
+      skipped++;
+      continue;
+    }
     const matching = matchingRecordsForLead(records, lead);
     if (matching.length === 0) {
       skipped++;
