@@ -278,10 +278,9 @@ function EngagementDot({ sessions }: { sessions: number }) {
       </span>
     );
   }
-  const color = sessions >= 3 ? 'bg-amber-400' : 'bg-emerald-400';
   return (
     <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
       {sessions} session{sessions === 1 ? '' : 's'}
     </span>
   );

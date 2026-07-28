@@ -353,12 +353,6 @@ export function LeadDetailModal({
                 <ActivityPane
                   lead={lead}
                   activity={activity}
-                  showToast={showToast}
-                  onReset={(updated) => {
-                    setLead(updated);
-                    onLeadUpdated?.();
-                    void load();
-                  }}
                 />
               )}
             </div>
@@ -1084,13 +1078,9 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 function ActivityPane({
   lead,
   activity,
-  showToast,
-  onReset,
 }: {
   lead: Lead;
   activity: LeadActivity[];
-  showToast: ShowToast;
-  onReset: (lead: Lead) => void;
 }) {
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
@@ -1103,26 +1093,6 @@ function ActivityPane({
     score: lead.engagement_score ?? 0,
     lastVisitAt,
   });
-  const [resetting, setResetting] = useState(false);
-
-  const handleReset = async () => {
-    const ok = window.confirm(
-      `Reset test activity for ${lead.company}?\n\nThis returns the card to Ready to Send and clears Clarity visits, scores, sync history, and test outreach after the site URL was saved. It keeps notes, call logs, the generated brief, and the site URL.`,
-    );
-    if (!ok) return;
-    setResetting(true);
-    try {
-      const res = await api.pipeline.resetEngagement(lead.id);
-      onReset(res.lead);
-      showToast('Test activity cleared — ready to send', 'success');
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not reset engagement';
-      showToast(msg, 'error');
-    } finally {
-      setResetting(false);
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -1147,20 +1117,6 @@ function ActivityPane({
         {lead.clarity_last_error && (
           <p className="mt-2 text-xs text-amber-600">{lead.clarity_last_error}</p>
         )}
-        <button
-          type="button"
-          onClick={handleReset}
-          disabled={resetting}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-          title="Clear test engagement and return this lead to Ready to Send"
-        >
-          {resetting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          Reset test activity
-        </button>
       </div>
 
       {activity.length > 0 ? (

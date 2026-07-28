@@ -479,8 +479,6 @@ export const api = {
       apiFetch<{ project_id: string; clarity_tag: string; campaign_slug: string; snippet: string }>(`/api/pipeline/leads/${id}/clarity-snippet`),
     syncClarity: () =>
       apiFetch<{ checked: number; matched: number; updated: number; skipped: number; error?: string }>('/api/pipeline/clarity-sync', { method: 'POST' }),
-    resetEngagement: (id: number) =>
-      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/reset-engagement`, { method: 'POST' }),
     saveSiteUrl: (id: number, url: string) =>
       apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/site-url`, {
         method: 'POST',
