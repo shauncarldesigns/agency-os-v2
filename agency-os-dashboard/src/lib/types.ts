@@ -75,6 +75,7 @@ export interface Lead {
   engagement_reasons: string | null;
   clarity_last_sync_at: string | null;
   clarity_last_error: string | null;
+  clarity_ignore_until: string | null;
   created_at: string;
   updated_at: string;
 }

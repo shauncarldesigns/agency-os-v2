@@ -97,6 +97,10 @@ export default {
       // reports the zone is active. Partial index makes this cheap when
       // there are zero pending projects.
       ctx.waitUntil(pollPendingDnsZones(env).then(out => log('info', 'cron', `DNS poll run`, { count: out.length })));
+    } else if (event.cron === '15 */4 * * *') {
+      // Six scheduled exports/day leaves headroom under Clarity's 10/day
+      // project quota for manual validation without sacrificing the
+      // immediate app-owned /r/:lead_id click signal.
       ctx.waitUntil(syncClarityEngagement(env).then(out => log('info', 'cron', 'Clarity engagement sync run', out)));
     }
   },

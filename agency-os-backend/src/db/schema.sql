@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS leads (
   engagement_reasons TEXT,
   clarity_last_sync_at TEXT,
   clarity_last_error TEXT,
+  clarity_ignore_until TEXT,                  -- temporary per-lead suppression for known test traffic
   -- Timestamps
   created_at      TEXT DEFAULT (datetime('now')),
   updated_at      TEXT DEFAULT (datetime('now'))
