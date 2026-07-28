@@ -56,22 +56,25 @@ redirectRouter.get('/r/:lead_id', async (c) => {
       `UPDATE leads
          SET pipeline_sessions = pipeline_sessions + 1,
              pipeline_status = ?,
-             engagement_score = MAX(engagement_score, 5),
+             engagement_score = MAX(engagement_score, 40),
              engagement_grade = CASE
-               WHEN MAX(engagement_score, 5) >= 90 THEN 'hot'
-               WHEN MAX(engagement_score, 5) >= 70 THEN 'walkthrough'
-               WHEN MAX(engagement_score, 5) >= 40 THEN 'follow_up'
+               WHEN MAX(engagement_score, 40) >= 90 THEN 'hot'
+               WHEN MAX(engagement_score, 40) >= 70 THEN 'walkthrough'
+               WHEN MAX(engagement_score, 40) >= 40 THEN 'follow_up'
                ELSE 'nurture'
              END,
              engagement_reasons = CASE
-               WHEN engagement_reasons IS NULL OR engagement_reasons = '' THEN ?
-               ELSE engagement_reasons
+               WHEN COALESCE(engagement_reasons, '') LIKE '%clicked tracked text link%'
+                 THEN engagement_reasons
+               WHEN json_valid(engagement_reasons)
+                 THEN json_insert(engagement_reasons, '$[#]', ?)
+               ELSE json_array(?)
              END,
              pipeline_last_action_at = datetime('now'),
              updated_at = datetime('now')
          WHERE id = ?`,
     )
-      .bind(nextStatus, JSON.stringify(['+5 opened demo']), id)
+      .bind(nextStatus, '+40 clicked tracked text link', '+40 clicked tracked text link', id)
       .run();
 
     await c.env.DB.prepare(

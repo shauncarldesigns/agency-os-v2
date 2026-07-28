@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Reliable outreach engagement scoring
+
+- **Text Outreach sessions now come only from the app-owned tracked link instead of shared-project Clarity aggregates.** Fixes cross-client URL-metric leakage that could show impossible counts such as 100 sessions, gives the first verified text-link click a 40-point floor and immediate Engaged promotion, limits Clarity scoring to the matching URL row after that click, keeps every positive session dot green, and removes the retired Reset test activity UI and API. Backend + dashboard.
+
 ### DNS launch wiki
 
 - **The Agency Wiki now documents the complete Cloudflare-to-landingsite domain launch.** The DNS page covers client-owned domain rules, information to collect, preserving MX/SPF/DKIM before delegation, the Agency OS setup flow, nameserver handoff, propagation and SSL verification, special cases, reusable registrar Looms, and a copy-ready client email template. Dashboard.
