@@ -1152,35 +1152,34 @@ function activityRecommendation(input: {
   lastVisitAt: string | null | undefined;
 }): ActivityRecommendation | null {
   if (input.status !== 'engaged') return null;
-  const stale = input.lastVisitAt ? (Date.now() - new Date(input.lastVisitAt).getTime()) / 86400000 >= 3 : false;
-  if (input.score >= 70 && input.sessions >= 2 && !stale) {
+  if (input.score >= 90) {
     return {
       action: 'call',
-      label: 'CALL NOW',
-      detail: 'High score, multiple sessions, and recent activity.',
+      label: '📞 Call Now',
+      detail: 'Hot intent. Call instead of sending another text.',
       tone: 'border-rose-100 bg-rose-50 text-rose-700',
     };
   }
-  if (input.score >= 70 && stale) {
+  if (input.score >= 70) {
     return {
       action: 'text',
-      label: 'Send follow-up, then call',
-      detail: 'High intent, but the last visit is 3+ days old.',
-      tone: 'border-amber-100 bg-amber-50 text-amber-700',
+      label: 'Offer a walkthrough',
+      detail: 'Ask for a 10–15 minute walkthrough this week.',
+      tone: 'border-emerald-100 bg-emerald-50 text-emerald-700',
     };
   }
-  if (input.sessions > 1 || input.score >= 40) {
+  if (input.score >= 40) {
     return {
       action: 'text',
-      label: 'Send follow-up text',
-      detail: 'Moderate intent. Ask what stood out.',
+      label: 'Ask for feedback',
+      detail: 'They looked. Ask what they liked or would change without asking for a meeting.',
       tone: 'border-amber-100 bg-amber-50 text-amber-700',
     };
   }
   return {
     action: 'text',
-    label: 'Send follow-up text',
-    detail: 'Low-intent visit. Keep the message light.',
+    label: 'Nurture',
+    detail: 'No meaningful engagement yet. Bring them back to the demo.',
     tone: 'border-slate-200 bg-slate-50 text-slate-600',
   };
 }
