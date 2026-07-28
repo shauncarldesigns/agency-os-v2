@@ -30,7 +30,12 @@ VALUES
   ('Seed Call Board - Pulaski Plumbing', '(920) 555-0111', 'call-board-seed'),
   ('Seed Call Board - Allouez HVAC', '(920) 555-0112', 'call-board-seed'),
   ('Seed Call Board - Janky Plumbing', '(920) 555-0113', 'call-board-seed'),
-  ('Prime Plumbing Engaged', '(920) 555-0114', 'call-board-seed');
+  ('Prime Plumbing Engaged', '(920) 555-0114', 'call-board-seed'),
+  ('Button Preview - Ask for Feedback', '(920) 555-0121', 'call-board-seed'),
+  ('Button Preview - Offer Walkthrough', '(920) 555-0122', 'call-board-seed'),
+  ('Button Preview - Call Now', '(920) 555-0123', 'call-board-seed'),
+  ('Button Preview - Send Final Follow-up', '(920) 555-0124', 'call-board-seed'),
+  ('Button Preview - Call Last Chance', '(920) 555-0125', 'call-board-seed');
 
 UPDATE leads SET
   contact = 'Morgan',
@@ -225,9 +230,7 @@ UPDATE leads SET
   gbp_claimed = 1,
   google_rating = 4.3,
   google_review_count = 31,
-  has_website = 0,
-  phone_route = 'text',
-  phone_line_type = 'mobile',
+  has_website = 1,
   phone_carrier = 'Seed Wireless',
   opportunity_score = 77,
   opportunity_reasoning = 'Future callback after owner returns from vacation.',
@@ -247,7 +250,7 @@ UPDATE leads SET
   engagement_score = 40,
   engagement_grade = 'follow_up',
   engagement_reasons = '["+5 opened demo","+5 stayed 30 sec","+10 viewed Services","+20 returned later"]',
-  pipeline_last_action_at = datetime('now', '-1 hour'),
+  pipeline_last_action_at = datetime('now', '-1 day'),
   pitch_card_text = 'Keep it light: they asked for next week, so preserve trust and resume with the same hook.',
   pitch_card_generated_at = datetime('now'),
   last_called_at = datetime('now', '-1 day'),
@@ -267,7 +270,9 @@ UPDATE leads SET
   gbp_claimed = 1,
   google_rating = 4.9,
   google_review_count = 64,
-  has_website = 1,
+  has_website = 0,
+  phone_route = 'text',
+  phone_line_type = 'mobile',
   opportunity_score = 93,
   opportunity_reasoning = 'Clicked the custom site twice and spent time on the estimate CTA.',
   recommended_tier = 3,
@@ -525,7 +530,13 @@ FROM leads WHERE company = 'Seed Call Board - Suamico Mechanical';
 INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
 SELECT id, 'click_tracked', 'sent_no_reply', 'engaged',
        '{"ip":"127.0.0.1","ua":"Local seed browser","to":"https://suamico-mechanical-demo.agcy.dev/"}',
-       datetime('now', '-1 hour')
+       datetime('now', '-2 days')
+FROM leads WHERE company = 'Seed Call Board - Suamico Mechanical';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'engaged', 'engaged',
+       '{"body":"Hey Jordan, thanks for taking a look at the homepage. I''d genuinely love to hear what you liked or would change."}',
+       datetime('now', '-1 day')
 FROM leads WHERE company = 'Seed Call Board - Suamico Mechanical';
 
 INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
@@ -581,6 +592,98 @@ SELECT id, 'click_tracked', 'engaged', 'engaged',
        '{"ip":"127.0.0.1","ua":"Local seed browser","to":"https://prime-plumbing-demo.agcy.dev/contact","count":2}',
        datetime('now', '-35 minutes')
 FROM leads WHERE company = 'Prime Plumbing Engaged';
+
+-- A stale Engaged example for testing the 30-day last-chance affordance.
+UPDATE leads SET
+  pipeline_status = 'engaged',
+  pipeline_last_action_at = datetime('now', '-31 days'),
+  notes = 'Seed card: engaged, but no activity for 31 days. Last chance or archive.',
+  updated_at = datetime('now')
+WHERE company = 'Prime Plumbing Engaged';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'engaged', 'engaged',
+       '{"body":"Last outreach attempt before the lead became stale."}',
+       datetime('now', '-31 days')
+FROM leads WHERE company = 'Prime Plumbing Engaged';
+
+-- One visible Engaged card per possible primary action. These are intentionally
+-- named after the button they preview so the complete sequence can be compared
+-- side by side without manually advancing each card first.
+UPDATE leads SET
+  contact = 'Taylor',
+  email = 'preview@example.com',
+  industry = 'plumber',
+  city = 'Green Bay',
+  state = 'WI',
+  address = '200 Preview Lane',
+  gbp_claimed = 1,
+  google_rating = 4.7,
+  google_review_count = 48,
+  has_website = 0,
+  phone_route = 'text',
+  phone_line_type = 'mobile',
+  opportunity_score = 90,
+  opportunity_reasoning = 'Local-only seed card for previewing the Engaged outreach sequence.',
+  recommended_tier = 3,
+  enrichment_status = 'enriched',
+  status = 'contacted',
+  outcome = 'engaged',
+  followup = NULL,
+  notes = 'Button preview seed data.',
+  pipeline_status = 'engaged',
+  site_url = 'https://button-preview-demo.agcy.dev/?utm_source=sms&utm_medium=text&utm_campaign=button-preview',
+  site_url_raw = 'https://button-preview-demo.agcy.dev/',
+  campaign_slug = 'button-preview',
+  clarity_tag = 'lead-button-preview',
+  pipeline_brief = 'Local seed brief used only to preview Text Outreach actions.',
+  pipeline_sessions = 1,
+  engagement_score = CASE company
+    WHEN 'Button Preview - Ask for Feedback' THEN 40
+    WHEN 'Button Preview - Offer Walkthrough' THEN 75
+    WHEN 'Button Preview - Call Now' THEN 95
+    WHEN 'Button Preview - Send Final Follow-up' THEN 55
+    WHEN 'Button Preview - Call Last Chance' THEN 55
+  END,
+  engagement_grade = CASE company
+    WHEN 'Button Preview - Ask for Feedback' THEN 'follow_up'
+    WHEN 'Button Preview - Offer Walkthrough' THEN 'walkthrough'
+    WHEN 'Button Preview - Call Now' THEN 'hot'
+    ELSE 'follow_up'
+  END,
+  engagement_reasons = '["+40 clicked tracked text link"]',
+  pipeline_last_action_at = CASE company
+    WHEN 'Button Preview - Send Final Follow-up' THEN datetime('now', '-1 day')
+    WHEN 'Button Preview - Call Last Chance' THEN datetime('now', '-2 days')
+    ELSE datetime('now', '-2 hours')
+  END,
+  deleted_at = NULL,
+  updated_at = datetime('now')
+WHERE company IN (
+  'Button Preview - Ask for Feedback',
+  'Button Preview - Offer Walkthrough',
+  'Button Preview - Call Now',
+  'Button Preview - Send Final Follow-up',
+  'Button Preview - Call Last Chance'
+);
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'engaged', 'engaged',
+       '{"body":"First engagement follow-up preview."}',
+       datetime('now', '-1 day')
+FROM leads WHERE company = 'Button Preview - Send Final Follow-up';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'engaged', 'engaged',
+       '{"body":"First engagement follow-up preview."}',
+       datetime('now', '-3 days')
+FROM leads WHERE company = 'Button Preview - Call Last Chance';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'engaged', 'engaged',
+       '{"body":"Final closing-loop follow-up preview."}',
+       datetime('now', '-2 days')
+FROM leads WHERE company = 'Button Preview - Call Last Chance';
 
 INSERT INTO callbacks (lead_id, due_date, block_hint, notes, status)
 SELECT id, date('now'), 'morning', 'Reconnect today after owner review.', 'pending'

@@ -38,6 +38,7 @@ const REVERSIBLE_ACTIONS = new Set([
   'intro_sent',
   'followed_up',
   'called',
+  'archived',
 ]);
 
 interface LeadActivityRow {
@@ -51,6 +52,26 @@ interface LeadActivityRow {
 }
 
 export const pipelineRouter = new Hono<{ Bindings: Env }>();
+
+const PIPELINE_LEAD_SELECT = `
+  SELECT leads.*,
+         CASE
+           WHEN leads.pipeline_status = 'engaged' THEN (
+             SELECT COUNT(*)
+               FROM lead_activity
+              WHERE lead_activity.lead_id = leads.id
+                AND lead_activity.action = 'followed_up'
+                AND lead_activity.from_status = 'engaged'
+                AND NOT EXISTS (
+                  SELECT 1
+                    FROM lead_activity AS undo_activity
+                   WHERE undo_activity.action = 'undo'
+                     AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
+                )
+           )
+           ELSE 0
+         END AS pipeline_followup_step
+    FROM leads`;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -244,7 +265,7 @@ pipelineRouter.get('/leads', async (c) => {
       clauses.push('company LIKE ?');
       params.push(`%${q}%`);
     }
-    const sql = `SELECT * FROM leads
+    const sql = `${PIPELINE_LEAD_SELECT}
                  WHERE ${clauses.join(' AND ')}
                  ORDER BY opportunity_score DESC NULLS LAST, id ASC
                  LIMIT 500`;
@@ -377,7 +398,7 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
       meta: { url: tagged, raw_url: rawUrl },
     });
 
-    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
       .bind(id)
       .first<Lead>();
     log('info', 'pipeline', `Lead ${id} URL saved`, { slug });
@@ -391,12 +412,12 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 // ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/action
 // ---------------------------------------------------------------------------
-// Body: { action: 'intro_sent' | 'followed_up' | 'called', meta?: unknown }
+// Body: { action: 'intro_sent' | 'followed_up' | 'called' | 'archived', meta?: unknown }
 // Applies the (optional) status transition, updates the last-action pointer,
 // writes an activity row. Optimistic: the client fires this on tap of
 // "Open in Messages" even though we can't confirm the operator actually
 // sent — /undo lets them recover.
-type OutreachAction = 'intro_sent' | 'followed_up' | 'called';
+type OutreachAction = 'intro_sent' | 'followed_up' | 'called' | 'archived';
 
 const ACTION_TRANSITIONS: Record<
   OutreachAction,
@@ -405,6 +426,7 @@ const ACTION_TRANSITIONS: Record<
   intro_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
   followed_up: {}, // no status change — stays in sent_no_reply or engaged
   called: {}, // no status change — display-only
+  archived: { from: ['sent_no_reply', 'engaged'], to: 'archived' },
 };
 
 pipelineRouter.post('/leads/:id/action', async (c) => {
@@ -442,9 +464,9 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     const toStatus = rules.to ?? fromStatus;
     const sets = ["pipeline_last_action_at = datetime('now')", "updated_at = datetime('now')"];
     const params: unknown[] = [];
-    if (rules.to) {
+    if (toStatus !== fromStatus) {
       sets.push('pipeline_status = ?');
-      params.push(rules.to);
+      params.push(toStatus);
     }
     params.push(id);
     await c.env.DB.prepare(`UPDATE leads SET ${sets.join(', ')} WHERE id = ?`)
@@ -456,10 +478,16 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       action,
       fromStatus,
       toStatus,
-      meta: body.meta,
+      meta:
+        action === 'archived'
+          ? {
+              ...(body.meta && typeof body.meta === 'object' ? body.meta : {}),
+              previous_pipeline_last_action_at: lead.pipeline_last_action_at,
+            }
+          : body.meta,
     });
 
-    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
       .bind(id)
       .first<Lead>();
     log('info', 'pipeline', `Lead ${id} action ${action}`, { fromStatus, toStatus });
@@ -631,7 +659,7 @@ pipelineRouter.post('/leads/:id/brief', async (c) => {
       meta: { model: BRIEF_MODEL, regenerated: !!body.regenerate },
     });
 
-    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
       .bind(id)
       .first<Lead>();
     log('info', 'pipeline', `Lead ${id} brief generated`, {
@@ -693,6 +721,35 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
         'clarity_tag = NULL',
       );
     }
+    if (target.action === 'archived') {
+      let previousLastAction: string | null = null;
+      try {
+        const parsed = target.meta ? JSON.parse(target.meta) as {
+          previous_pipeline_last_action_at?: unknown;
+        } : null;
+        if (typeof parsed?.previous_pipeline_last_action_at === 'string') {
+          previousLastAction = parsed.previous_pipeline_last_action_at;
+        }
+      } catch {
+        // Older archive rows may not contain the timestamp snapshot.
+      }
+      if (!previousLastAction) {
+        const previous = await c.env.DB.prepare(
+          `SELECT created_at
+             FROM lead_activity
+            WHERE lead_id = ?
+              AND id < ?
+              AND action <> 'undo'
+            ORDER BY id DESC
+            LIMIT 1`,
+        )
+          .bind(id, target.id)
+          .first<{ created_at: string }>();
+        previousLastAction = previous?.created_at ?? null;
+      }
+      sets.push('pipeline_last_action_at = ?');
+      params.push(previousLastAction);
+    }
     // pipeline_last_action_at is intentionally NOT rolled back to the prior
     // action's timestamp — showing "just now" is misleading, and showing the
     // previous action's time would require another lookup. The next real
@@ -711,7 +768,7 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
       meta: { undid_activity_id: target.id, undid_action: target.action },
     });
 
-    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?')
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
       .bind(id)
       .first<Lead>();
     log('info', 'pipeline', `Lead ${id} undo`, {

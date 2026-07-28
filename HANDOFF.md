@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-21. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-28. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -10,6 +10,24 @@ reference docs live in `docs/`._
 All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
+
+## Text Outreach engagement sequence (PR pending at snapshot)
+
+- Engaged remains one Kanban column. The card-level sequence is derived from
+  `lead_activity` rather than a new status column: score-based first action
+  (Ask for Feedback / Offer a Walkthrough / Call Now), Waiting for Reply,
+  Send Final Follow-up, then Call — Last Chance.
+- Engaged recommendations clamp to the 40-point floor, so Nurture cannot
+  appear after a tracked click even if an older malformed row has a lower
+  stored score.
+- After 30 days without activity, an Engaged card becomes stale and exposes
+  a compact archive control. Archive is reversible; Undo restores both the
+  Engaged status and the pre-archive last-action timestamp.
+- The Site built chip links to `site_url_raw` in a new tab. Older rows fall
+  back to the tagged URL with outreach UTM parameters removed; the operator
+  preview never uses the `/r/:lead_id` tracker.
+- Local seed data includes one Engaged card for every possible primary
+  action plus a stale/archive example.
 
 ## What shipped recently (PRs #129–#153)
 
