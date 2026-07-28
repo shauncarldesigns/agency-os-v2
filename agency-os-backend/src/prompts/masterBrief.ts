@@ -57,6 +57,8 @@ export interface MasterBriefInput {
   brand_attributes: BrandAttribute[];
   testimonials: Testimonial[];
   scrape_data: string | null;
+  /** Client-supplied discovery answers. These outrank mined/scraped signals. */
+  discovery: Record<string, unknown> | null;
 }
 
 export interface BuiltMasterBriefPrompt {
@@ -71,7 +73,7 @@ const APEX_FORMAT_EXAMPLE = `# Site Brief: {Business Name}
 **Location:** {city, state}
 **Phone:** ...
 **Email:** ...
-**Years in Business:** ... ({founded year})
+**Established:** {founded year}
 **Description:** {2-3 sentence summary}
 **Owner:** {name, credentials}
 
@@ -146,7 +148,7 @@ Reference template (structure to mirror; placeholders in {curly braces} show wha
 ${APEX_FORMAT_EXAMPLE}
 
 HARD RULES:
-1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. Where a specific field is missing, emit a labelled TBD token so the operator can fill it inline later — use \`[TBD: <field name>]\`. Examples: \`[TBD: founded year]\`, \`[TBD: owner credentials]\`, \`[TBD: tagline]\`, \`[TBD: email]\`, \`[TBD: primary color]\`, \`[TBD: accent color]\`. One TBD token per missing field, kept short and lowercase. Never fabricate.
+1. Use ONLY the data provided in the user message. Do not invent founded years, certifications, owner names, hex colors, or any other specific fact. Where a required specific field is missing, emit a labelled TBD token so the operator can fill it inline later — use \`[TBD: <field name>]\`. Examples: \`[TBD: founded year]\`, \`[TBD: owner credentials]\`, \`[TBD: email]\`, \`[TBD: primary color]\`, \`[TBD: accent color]\`. One TBD token per missing required field, kept short and lowercase. Never fabricate.
 2. Synthesize brand voice from review themes — voice descriptors should come from the actual language customers use about this business, not generic adjectives.
 3. Reading level for the resulting site copy must be 6th-8th grade. State this in the Brand Voice section.
 4. Customer reviews must be quoted verbatim. Do not paraphrase or "improve" them. Cite author name and location exactly as given.
@@ -156,6 +158,29 @@ HARD RULES:
 8. Do not include any preamble, commentary, or closing remarks outside the brief itself. Start with the H1 \`# Site Brief: {Business Name}\` and end with the last bullet of Build Instructions.
 9. Do not wrap the output in a markdown code fence. Output raw markdown.
 10. Active voice. Zero fluff. No filler adjectives like "premier," "world-class," "leading."
+11. Client discovery answers are verified first-party truth. They override mined reviews,
+Google data, scrape data, and model inference wherever those sources conflict. Never expose
+internal agency notes as client quotes or attribute them to the client.
+12. A tagline is optional. If no tagline was supplied, omit it entirely. Do not mention that
+it is missing and never emit \`[TBD: tagline]\`.
+13. Never request, recommend, or create a placeholder for a team photo. The agency does not
+use team photos on client sites. Use available work, truck, equipment, shop, or logo assets.
+14. Perform a discovery coverage check before producing the final answer. Every non-empty
+client discovery answer must either appear as a factual detail in the appropriate section or
+materially influence the brief's positioning, copy direction, SEO plan, conversion plan, asset
+direction, or technical build instructions. Integrate answers naturally rather than dumping
+the questionnaire into the brief. Negative answers, "unsure" answers, and internal operational
+details must not be turned into unsupported public-facing claims.
+15. A founded year is not an anniversary date. When a founded year is supplied, write
+"Established in {year}" (or the equivalent **Established:** field). Never calculate or state a
+number of years in business from the year alone.
+16. Discovery target cities are future SEO opportunities, not verified current service areas.
+Include non-empty target cities in SEO Requirements as clearly labelled expansion targets, but
+do not add them to the current Service Areas list or current service-area page matrix unless
+they are also present in the operator-curated Service areas to render.
+17. When discovery names software the client wants connected, include it in Important Build
+Instructions as a specific integration requirement. Do not silently reduce a named integration
+to a generic contact-form instruction.
 
 QUALITY BAR:
 - Target Audience must be synthesized from the reviews, services performed, and strengths — the actual people hiring this business, not a generic "homeowners and businesses." Name 1-2 real segments, the problem that brings them, and what they worry about, using the language customers use in the reviews. If a brand attribute explicitly names the audience (operator-supplied), prefer it over inference. Do not invent demographics the data doesn't support.
@@ -184,7 +209,7 @@ function buildUserPrompt(input: MasterBriefInput): string {
   lines.push(`- Founded year: ${p.founded_year ?? '[missing]'}`);
   lines.push(`- Owner name: ${p.owner_name ?? '[missing]'}`);
   lines.push(`- Owner credentials: ${p.owner_credentials ?? '[missing]'}`);
-  lines.push(`- Tagline: ${p.tagline ?? '[missing]'}`);
+  lines.push(`- Tagline: ${p.tagline ?? '(not provided — omit entirely; no TBD)'}`);
   lines.push(`- Primary color: ${p.primary_color ?? '[missing]'}`);
   lines.push(`- Accent color: ${p.accent_color ?? '[missing]'}`);
   if (p.tier) lines.push(`- Tier: ${p.tier}`);
@@ -198,6 +223,18 @@ function buildUserPrompt(input: MasterBriefInput): string {
   lines.push('## Project services & service areas (operator-curated — AUTHORITATIVE)');
   lines.push(`- Services to render (in this exact order): ${listOrEmpty(p.services)}`);
   lines.push(`- Service areas to render (first entry is HQ, in this exact order): ${listOrEmpty(p.service_areas)}`);
+  lines.push('');
+
+  lines.push('## Client discovery (VERIFIED FIRST-PARTY SOURCE — highest priority)');
+  if (input.discovery && Object.keys(input.discovery).length > 0) {
+    lines.push('Use these answers as the source of truth. Respect unwanted-work and negative-direction fields.');
+    lines.push('Coverage requirement: every non-empty answer must appear or materially influence an appropriate part of the brief.');
+    lines.push('```json');
+    lines.push(JSON.stringify(input.discovery, null, 2));
+    lines.push('```');
+  } else {
+    lines.push('(none — rely on project facts and verified signals; do not invent)');
+  }
   lines.push('');
 
   lines.push('## Mined review data (signal only — NOT the source-of-truth list)');

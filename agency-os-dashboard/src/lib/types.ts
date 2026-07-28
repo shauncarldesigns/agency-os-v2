@@ -194,6 +194,18 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectDiscovery {
+  project_id: number;
+  status: 'draft' | 'complete';
+  is_test_mode: number;
+  answers_json: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DiscoveryAnswers = Record<string, string | boolean>;
+
 export interface HeaderStats {
   totalClients: number;
   mrrUsd: number;

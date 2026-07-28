@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Project, Brief, BriefKind, ShowToast, Tab, Lead, Page } from '../../lib/types';
+import type { Project, ProjectDiscovery, Brief, BriefKind, ShowToast, Tab, Lead, Page } from '../../lib/types';
 import { api, ApiError, type DnsStatusResponse } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { InlineEditField } from '../shared/InlineEditField';
 import { BriefEditorPanel } from '../briefs/BriefEditorPanel';
 import { BriefStudioMatrix } from './BriefStudioMatrix';
+import { DiscoveryPanel } from './DiscoveryPanel';
 import { DnsSetupModal } from './DnsSetupModal';
 import { DnsManagePanel } from './DnsManagePanel';
 import {
@@ -29,6 +30,9 @@ interface SiteDetailPanelProps {
   /** Open the Quick Brief modal — business name + reviews verbatim, for the
    *  pre-call landingsite paste. Sidebar Quick Actions. */
   onQuickBrief: () => void;
+  /** Changes after a sibling modal generates a brief, forcing this mounted
+   *  detail view to reload its master brief immediately. */
+  briefRefreshToken?: number;
 }
 
 // Short uppercase form used as a card header — distinct from pricing.ts's
@@ -51,10 +55,13 @@ const KIND_LABEL: Record<BriefKind, string> = {
  */
 export function SiteDetailPanel({
   project, showToast, onSwitchTab, onBack, onProjectChanged, onEditProject, onQuickBrief,
+  briefRefreshToken = 0,
 }: SiteDetailPanelProps) {
   const [master, setMaster] = useState<Brief | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
+  const [discovery, setDiscovery] = useState<ProjectDiscovery | null>(null);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewerBriefId, setViewerBriefId] = useState<number | null>(null);
   // DNS modals — driven by the dynamic Quick Action button below. State stays
@@ -68,7 +75,7 @@ export function SiteDetailPanel({
       // Page rows from /api/projects/:id drive the stats — a brief row stays
       // status='briefed' even after its page is marked complete, so counting
       // briefs over-counts. Page rows carry the authoritative status.
-      const [masterRes, leadRes, projectRes] = await Promise.all([
+      const [masterRes, leadRes, projectRes, discoveryRes] = await Promise.all([
         api.briefs.getMaster(project.id).catch((err) => {
           if (err instanceof ApiError && err.status === 404) return null;
           throw err;
@@ -77,17 +84,19 @@ export function SiteDetailPanel({
           ? api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
           : Promise.resolve(null),
         api.projects.get(project.id).then((r) => r.pages).catch(() => [] as Page[]),
+        api.projects.discovery.get(project.id).then((r) => r.discovery).catch(() => null),
       ]);
       setMaster(masterRes);
       setLead(leadRes);
       setPages(projectRes);
+      setDiscovery(discoveryRes);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not load Brief Studio: ${msg}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [project.id, project.lead_id, showToast]);
+  }, [project.id, project.lead_id, project.updated_at, briefRefreshToken, showToast]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -134,11 +143,14 @@ export function SiteDetailPanel({
   const matrixIsStale = useMemo(() => {
     if (!master) return false;
     const masterTs = Date.parse(master.updated_at ?? master.generated_at ?? '');
-    const projectTs = Date.parse(project.updated_at ?? '');
+    const projectTs = Math.max(
+      Date.parse(project.updated_at ?? ''),
+      Date.parse(discovery?.updated_at ?? ''),
+    );
     if (!Number.isFinite(masterTs) || !Number.isFinite(projectTs)) return false;
     // Small fudge so trivial near-simultaneous timestamps don't flag.
     return projectTs - masterTs > 2_000;
-  }, [master, project.updated_at]);
+  }, [master, project.updated_at, discovery?.updated_at]);
 
   // Persist an inline edit on the Client card (owner_name / email / phone).
   // PUTs the partial and triggers the parent's refetch so the displayed
@@ -287,6 +299,8 @@ export function SiteDetailPanel({
             onAddDns={() => setDnsSetupOpen(true)}
             onManageDns={() => setDnsManageOpen(true)}
             onClientFieldUpdate={handleClientFieldUpdate}
+            discovery={discovery}
+            onOpenDiscovery={() => setDiscoveryOpen(true)}
           />
         </aside>
       </div>
@@ -313,6 +327,17 @@ export function SiteDetailPanel({
         onClose={() => setDnsManageOpen(false)}
         showToast={showToast}
         onProjectChanged={onProjectChanged}
+      />
+
+      <DiscoveryPanel
+        project={project}
+        open={discoveryOpen}
+        onClose={() => setDiscoveryOpen(false)}
+        showToast={showToast}
+        onChanged={(next) => {
+          setDiscovery(next);
+          onProjectChanged();
+        }}
       />
     </>
   );
@@ -577,6 +602,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 function Sidebar({
   project, lead, hasMaster, onSwitchTab, onEditProject, onQuickBrief, onAddDns, onManageDns, onClientFieldUpdate,
+  discovery, onOpenDiscovery,
 }: {
   project: Project;
   lead: Lead | null;
@@ -590,14 +616,65 @@ function Sidebar({
   onAddDns: () => void;
   /** Open the Manage DNS panel — shown when project already has a CF zone. */
   onManageDns: () => void;
+  discovery: ProjectDiscovery | null;
+  onOpenDiscovery: () => void;
 }) {
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
   const pagespeed = lead?.pagespeed_desktop;
   const scrapeDone = !!project.scrape_completed_at;
+  const discoveryAnswers = safeJsonObject(discovery?.answers_json);
+  const logoStatus = assetStatus(
+    discoveryAnswers.logo_available,
+    discoveryAnswers.logo_delivery_status,
+    'No logo',
+  );
+  const photosStatus = assetStatus(
+    discoveryAnswers.photos_available,
+    discoveryAnswers.photos_delivery_status,
+    'No photos',
+  );
 
   return (
     <>
+      <div className="bs-side-card">
+        <div className="bs-side-title">Discovery</div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Planning session</span>
+          <span className={discovery?.status === 'complete' ? 'bs-side-status-ok' : 'bs-side-status-na'}>
+            {discovery?.status === 'complete' ? '✓ Complete' : discovery ? 'Draft' : 'Not started'}
+          </span>
+        </div>
+        {project.status === 'prospect' && (
+          <div style={{ margin: '8px 0', fontSize: '0.65rem', color: 'var(--yellow)' }}>
+            🧪 Prospect project · opens in test mode
+          </div>
+        )}
+        <Button variant={discovery ? 'ghost' : 'primary'} size="sm" onClick={onOpenDiscovery}>
+          {discovery ? 'Continue discovery' : project.status === 'prospect' ? 'Open test discovery' : 'Start discovery'}
+        </Button>
+        {discovery?.updated_at && (
+          <div style={{ marginTop: 7, fontSize: '0.6rem', color: 'var(--text3)' }}>
+            Updated {formatRelative(discovery.updated_at)}
+          </div>
+        )}
+      </div>
+
+      <div className="bs-side-card">
+        <div className="bs-side-title">Assets</div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Logo</span>
+          <span className={logoStatus.tone}>{logoStatus.label}</span>
+        </div>
+        <div className="bs-side-row bs-side-row-status">
+          <span>Work photos</span>
+          <span className={photosStatus.tone}>{photosStatus.label}</span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: '0.62rem', lineHeight: 1.45, color: 'var(--text3)' }}>
+          Delivery tracking only. Files continue to arrive by text or email for now.
+        </div>
+      </div>
+
       {/* Client contact info — replaces the old Status Legend (the matrix
           shows its own dot/label legend inline, so a sidebar duplicate was
           dead weight). Lets the operator reach the client quickly during
@@ -928,6 +1005,30 @@ function safeJsonArray(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function safeJsonObject(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function assetStatus(
+  available: unknown,
+  delivery: unknown,
+  unavailableLabel: string,
+): { label: string; tone: string } {
+  if (available === false) return { label: unavailableLabel, tone: 'bs-side-status-na' };
+  if (available !== true) return { label: '— not answered', tone: 'bs-side-status-na' };
+  if (delivery === 'Delivered') return { label: '✓ Delivered', tone: 'bs-side-status-ok' };
+  if (delivery === 'Still waiting') return { label: '◷ Still waiting', tone: 'bs-side-status-na' };
+  return { label: 'Delivery unknown', tone: 'bs-side-status-na' };
 }
 
 function formatRelative(ts: string | null | undefined): string {

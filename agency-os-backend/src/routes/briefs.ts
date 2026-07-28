@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, Project, Lead, Brief, BrandAttribute, Testimonial } from '../types';
+import type { Env, Project, Lead, Brief, BrandAttribute, Testimonial, ProjectDiscovery } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
 import { callClaude } from '../services/claude';
 import {
@@ -464,6 +464,7 @@ interface ProjectContext {
   lead: Lead | null;
   brandAttributes: BrandAttribute[];
   testimonials: Testimonial[];
+  discovery: ProjectDiscovery | null;
 }
 
 async function loadProjectContext(env: Env, projectId: number): Promise<ProjectContext | null> {
@@ -483,19 +484,30 @@ async function loadProjectContext(env: Env, projectId: number): Promise<ProjectC
     .prepare('SELECT * FROM testimonials WHERE project_id = ? ORDER BY is_featured DESC, id ASC')
     .bind(projectId)
     .all<Testimonial>();
+  const discovery = await env.DB
+    .prepare('SELECT * FROM project_discovery WHERE project_id = ?')
+    .bind(projectId)
+    .first<ProjectDiscovery>();
 
   return {
     project,
     lead,
     brandAttributes: ba.results ?? [],
     testimonials: ts.results ?? [],
+    discovery,
   };
 }
 
 function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
-  const { project, lead, brandAttributes, testimonials } = ctx;
+  const { project, lead, brandAttributes, testimonials, discovery } = ctx;
   const reviews = collectReviews(project, lead);
   const mined = collectMinedData(lead);
+  const discoveryAnswers = safeObject(discovery?.answers_json);
+  const discoveryServices = uniqueStrings([
+    ...parseDiscoveryList(discoveryAnswers?.priority_services),
+    ...parseDiscoveryList(discoveryAnswers?.missing_services),
+  ]);
+  const discoveryAreas = uniqueStrings(parseDiscoveryList(discoveryAnswers?.current_service_cities));
 
   return {
     project: {
@@ -514,8 +526,8 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
       // Authoritative axes — the prompt enforces these as the source of
       // truth for Services Offered, Service Areas, and Site Structure.
       // The review-mined arrays go in the `mined` section as signal only.
-      services: safeArr<string>(project.services),
-      service_areas: safeArr<string>(project.service_areas),
+      services: discoveryServices.length > 0 ? discoveryServices : safeArr<string>(project.services),
+      service_areas: discoveryAreas.length > 0 ? discoveryAreas : safeArr<string>(project.service_areas),
       monthly_pages_target: project.monthly_pages_target ?? 0,
       tier: project.tier != null ? `tier_${project.tier}` : null,
     },
@@ -535,6 +547,7 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
       is_featured: t.is_featured === 1,
     })),
     scrape_data: project.scrape_data ?? null,
+    discovery: discoveryAnswers,
   };
 }
 
@@ -602,6 +615,34 @@ function safeArr<T = unknown>(raw: string | null | undefined): T[] {
   }
 }
 
+function safeObject(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseDiscoveryList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (typeof value !== 'string') return [];
+  return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueStrings(items: string[]): string[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function generateMasterBrief(
   env: Env,
   projectId: number,
@@ -614,7 +655,7 @@ async function generateMasterBrief(
     ? `${baseUser}\n\n## Operator feedback on the previous draft\n${feedback}\n\nIncorporate the feedback above when producing this revised draft.`
     : baseUser;
 
-  const markdown = await callClaude(env.CLAUDE_API_KEY, user, {
+  const generatedMarkdown = await callClaude(env.CLAUDE_API_KEY, user, {
     model: BRIEF_MODEL,
     systemPrompt: system,
     cacheSystem: true,
@@ -622,6 +663,7 @@ async function generateMasterBrief(
     temperature: 0.4,
     timeoutMs: 90_000,
   });
+  const markdown = sanitizeMasterBrief(generatedMarkdown, input);
 
   const tbds = countTbds(markdown);
 
@@ -639,4 +681,36 @@ async function generateMasterBrief(
   const brief = await env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
   if (!brief) throw new Error('Brief insert succeeded but row not found');
   return brief;
+}
+
+function sanitizeMasterBrief(markdown: string, input: MasterBriefInput): string {
+  let cleaned = markdown
+    .split('\n')
+    .map((line) => {
+      // Replace the whole instruction instead of deleting two words from it.
+      // The old phrase-level sanitizer could turn "Do not use team photos
+      // anywhere..." into the broken sentence "Do not use anywhere...".
+      if (/\bteam photo(?:s)?\b/i.test(line) || /\[TBD:\s*team photo\]/i.test(line)) {
+        const numberedPrefix = line.match(/^\s*\d+\.\s*/)?.[0] ?? '';
+        return `${numberedPrefix}Use approved work, truck, equipment, shop, or logo imagery. If client photos are pending, use restrained iconography and typography instead of unrelated stock photography.`;
+      }
+      return line;
+    })
+    .join('\n');
+
+  if (!input.project.tagline) {
+    cleaned = cleaned
+      .split('\n')
+      .filter((line) => !/\btagline\b/i.test(line) && !/\[TBD:\s*tagline\]/i.test(line))
+      .join('\n');
+  }
+
+  if (input.project.founded_year) {
+    cleaned = cleaned.replace(
+      /^\*\*Years in Business:\*\*.*$/gim,
+      `**Established:** ${input.project.founded_year}`,
+    );
+  }
+
+  return cleaned;
 }

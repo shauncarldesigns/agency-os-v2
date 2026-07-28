@@ -154,6 +154,16 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectDiscovery {
+  project_id: number;
+  status: 'draft' | 'complete';
+  is_test_mode: number;
+  answers_json: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ============================================================================
 // v2.1 entities
 // ============================================================================

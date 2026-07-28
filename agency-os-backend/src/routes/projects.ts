@@ -53,6 +53,119 @@ projectsRouter.get('/:id', async (c) => {
   return c.json({ project, pages: pages.results });
 });
 
+// GET /api/projects/:id/discovery
+projectsRouter.get('/:id/discovery', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+  const project = await c.env.DB.prepare('SELECT id, status FROM projects WHERE id = ?')
+    .bind(id).first<{ id: number; status: string }>();
+  if (!project) return c.json(notFound('Project'), 404);
+  const discovery = await c.env.DB.prepare('SELECT * FROM project_discovery WHERE project_id = ?')
+    .bind(id).first();
+  return c.json({ discovery: discovery ?? null, eligible: project.status !== 'prospect' });
+});
+
+// PUT /api/projects/:id/discovery
+// Prospect projects require explicit test mode; signed clients save normally.
+projectsRouter.put('/:id/discovery', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+  try {
+    const project = await c.env.DB.prepare('SELECT id, status, business_name FROM projects WHERE id = ?')
+      .bind(id).first<{ id: number; status: string; business_name: string }>();
+    if (!project) return c.json(notFound('Project'), 404);
+    const body = await c.req.json() as {
+      answers?: Record<string, unknown>;
+      status?: 'draft' | 'complete';
+      testMode?: boolean;
+    };
+    const testMode = project.status === 'prospect' ? body.testMode === true : false;
+    if (project.status === 'prospect' && !testMode) {
+      return c.json(badRequest('Prospect discovery requires test mode.'), 400);
+    }
+    const status = body.status === 'complete' ? 'complete' : 'draft';
+    const answers = body.answers && typeof body.answers === 'object' ? body.answers : {};
+    const statements = [
+      c.env.DB.prepare(
+        `INSERT INTO project_discovery
+         (project_id, status, is_test_mode, answers_json, completed_at, updated_at)
+       VALUES (?, ?, ?, ?, CASE WHEN ? = 'complete' THEN datetime('now') ELSE NULL END, datetime('now'))
+       ON CONFLICT(project_id) DO UPDATE SET
+         status = excluded.status,
+         is_test_mode = excluded.is_test_mode,
+         answers_json = excluded.answers_json,
+         completed_at = CASE
+           WHEN excluded.status = 'complete' THEN COALESCE(project_discovery.completed_at, datetime('now'))
+           ELSE NULL
+         END,
+         updated_at = datetime('now')`
+      ).bind(id, status, testMode ? 1 : 0, JSON.stringify(answers), status),
+    ];
+
+    // Project Info is the structured source of truth. Completing Discovery
+    // promotes overlapping durable facts so Edit Project Info, Brief Studio,
+    // and the Page Matrix all read the same values. Domain itself stays out:
+    // changing it must go through /dns/setup to preserve Cloudflare state.
+    if (status === 'complete') {
+      const services = uniqueStrings([
+        ...answerList(answers.priority_services),
+        ...answerList(answers.missing_services),
+      ]);
+      const serviceAreas = uniqueStrings(answerList(answers.current_service_cities));
+      statements.push(
+        c.env.DB.prepare(
+          `UPDATE projects
+              SET business_name = ?,
+                  owner_name = ?,
+                  founded_year = ?,
+                  phone = ?,
+                  email = ?,
+                  owner_credentials = ?,
+                  tagline = ?,
+                  services = ?,
+                  service_areas = ?,
+                  registrar = ?,
+                  domain_owner_email = ?,
+                  updated_at = datetime('now')
+            WHERE id = ?`
+        ).bind(
+          answerText(answers.business_name) ?? project.business_name,
+          answerText(answers.owner_name),
+          answerInteger(answers.founded_year),
+          answerText(answers.phone),
+          answerText(answers.email),
+          answerText(answers.owner_credentials),
+          answerText(answers.tagline),
+          JSON.stringify(services),
+          JSON.stringify(serviceAreas),
+          answerText(answers.registrar),
+          answerText(answers.domain_owner_email),
+          id,
+        ),
+      );
+    }
+
+    await c.env.DB.batch(statements);
+    const discovery = await c.env.DB.prepare('SELECT * FROM project_discovery WHERE project_id = ?')
+      .bind(id).first();
+    const updatedProject = status === 'complete'
+      ? await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first()
+      : null;
+    return c.json({ discovery, project: updatedProject });
+  } catch (err) {
+    log('error', 'projects', `PUT /projects/${id}/discovery failed`, err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// DELETE /api/projects/:id/discovery — clears a test/draft and restores blank state.
+projectsRouter.delete('/:id/discovery', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+  await c.env.DB.prepare('DELETE FROM project_discovery WHERE project_id = ?').bind(id).run();
+  return c.body(null, 204);
+});
+
 // Convert a lead → project (signing flow). Body: { leadId, tier? (override), name?, services?, service_areas? }
 projectsRouter.post('/', async (c) => {
   try {
@@ -242,6 +355,13 @@ projectsRouter.put('/:id', async (c) => {
     const values = [...updates.map(u => u.value), id];
 
     await c.env.DB.prepare(`UPDATE projects SET ${setClause} WHERE id = ?`).bind(...values).run();
+    if (updates.some((update) => update.key === 'status' && ['building', 'live', 'paused'].includes(String(update.value)))) {
+      await c.env.DB.prepare(
+        `UPDATE project_discovery
+            SET is_test_mode = 0, updated_at = datetime('now')
+          WHERE project_id = ?`
+      ).bind(id).run();
+    }
     const updated = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(id).first();
     return c.json({ project: updated });
   } catch (err) {
@@ -310,4 +430,36 @@ function safeParseArray(raw: string | null | undefined): string[] {
     const v = JSON.parse(raw);
     return Array.isArray(v) ? v as string[] : [];
   } catch { return []; }
+}
+
+function answerText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function answerInteger(value: unknown): number | null {
+  const text = answerText(value);
+  if (!text) return null;
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function answerList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim()).filter(Boolean);
+  }
+  if (typeof value !== 'string') return [];
+  return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueStrings(items: string[]): string[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
