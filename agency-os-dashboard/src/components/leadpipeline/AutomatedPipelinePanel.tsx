@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Archive,
   Eye,
+  MessageCircleReply,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
@@ -144,6 +145,7 @@ export interface PipelineLead {
   engagementGrade: string;
   pipelineLastActionAt: string | null;
   followupStep: number;
+  noReplyStep: number;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
@@ -262,6 +264,7 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     engagementGrade: l.engagement_grade ?? 'nurture',
     pipelineLastActionAt: l.pipeline_last_action_at,
     followupStep: l.pipeline_followup_step ?? 0,
+    noReplyStep: l.pipeline_no_reply_step ?? 0,
     ownerFirst: deriveOwnerFirst(l.owner_names),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
@@ -350,7 +353,7 @@ interface OutreachRecommendation {
   label: string;
   detail: string;
   tone: string;
-  textVariant: 'nurture' | 'follow_up' | 'walkthrough' | 'none';
+  textVariant: 'nurture' | 'reply_link' | 'follow_up' | 'walkthrough' | 'none';
 }
 
 function getOutreachRecommendation(input: {
@@ -360,6 +363,15 @@ function getOutreachRecommendation(input: {
   lastVisitAt?: string | null;
 }): OutreachRecommendation | null {
   if (input.status !== 'engaged') return null;
+  if (input.sessions === 0) {
+    return {
+      action: 'text',
+      label: 'Send homepage link',
+      detail: 'They replied, but have not opened the homepage yet. Keep the tracked link in this message.',
+      tone: 'bg-blue-50 text-blue-700 border-blue-100',
+      textVariant: 'reply_link',
+    };
+  }
   const score = Math.max(40, input.engagementScore);
   if (score >= 90) {
     return {
@@ -412,6 +424,54 @@ function getEngagedProgress(lead: PipelineLead): {
     action: 'text',
     tone: 'border-amber-200 bg-amber-50 text-amber-700',
   };
+}
+
+function getNoReplyProgress(lead: PipelineLead): {
+  stateLabel: string;
+  detail: string;
+  actionLabel: string;
+  action: 'text' | 'call';
+  tone: string;
+} | null {
+  if (lead.status !== 'sent_no_reply') return null;
+  if (lead.noReplyStep >= 2) {
+    return {
+      stateLabel: 'Final nudge sent',
+      detail: 'The no-reply text sequence is complete. One call is the final attempt.',
+      actionLabel: 'Call — last chance',
+      action: 'call',
+      tone: 'border-rose-200 bg-rose-50 text-rose-700',
+    };
+  }
+  if (lead.noReplyStep === 1) {
+    return {
+      stateLabel: 'Reminder sent',
+      detail: 'They still have not visited or replied. Send one final, easy-to-answer nudge.',
+      actionLabel: 'Send final nudge',
+      action: 'text',
+      tone: 'border-amber-200 bg-amber-50 text-amber-700',
+    };
+  }
+  return {
+    stateLabel: 'Waiting for first look',
+    detail: 'The intro was sent, but the tracked homepage has not been opened yet.',
+    actionLabel: 'Send reminder',
+    action: 'text',
+    tone: 'border-blue-200 bg-blue-50 text-blue-700',
+  };
+}
+
+function NoReplyProgressPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
+  const progress = getNoReplyProgress(lead);
+  if (!progress) return null;
+  return (
+    <div className={`rounded-xl border ${progress.tone} ${compact ? 'mt-2 px-2 py-1.5' : 'px-3 py-2.5'}`}>
+      <div className={compact ? 'text-[10px]' : 'text-[11px]'}>
+        <strong>{progress.stateLabel}</strong>
+        {!compact && <p className="mt-1 font-normal opacity-80">{progress.detail}</p>}
+      </div>
+    </div>
+  );
 }
 
 function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
@@ -515,8 +575,12 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }
 // ---------- Card ----------
 
 function isStaleLead(lead: PipelineLead): boolean {
-  if (lead.status !== 'engaged' || !lead.pipelineLastActionAt) return false;
-  return Date.now() - new Date(lead.pipelineLastActionAt).getTime() >= 30 * 24 * 60 * 60 * 1000;
+  if (!lead.pipelineLastActionAt) return false;
+  const age = Date.now() - new Date(lead.pipelineLastActionAt).getTime();
+  if (lead.status === 'engaged') return age >= 30 * 24 * 60 * 60 * 1000;
+  return lead.status === 'sent_no_reply'
+    && lead.noReplyStep >= 2
+    && age >= 14 * 24 * 60 * 60 * 1000;
 }
 
 function StatusChip({
@@ -536,8 +600,12 @@ function StatusChip({
     lastVisitAt: lead.pipelineLastActionAt,
   });
   const progress = getEngagedProgress(lead);
-  const actionLabel = progress?.actionLabel ?? rec?.label ?? cfg.action;
-  const isCallAction = progress?.action === 'call' || (!progress && rec?.action === 'call');
+  const noReplyProgress = getNoReplyProgress(lead);
+  const actionLabel = noReplyProgress?.actionLabel ?? progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const isCallAction =
+    noReplyProgress?.action === 'call'
+    || progress?.action === 'call'
+    || (!progress && !noReplyProgress && rec?.action === 'call');
   const Icon = cfg.icon;
   return (
     <div
@@ -579,9 +647,10 @@ interface LeadCardProps {
   onAction: (l: PipelineLead) => void;
   onViewLead: (l: PipelineLead) => void;
   onArchive: (l: PipelineLead) => void;
+  onReply: (l: PipelineLead) => void;
 }
 
-function LeadCard({ lead, index, onAction, onViewLead, onArchive }: LeadCardProps) {
+function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const recommendation = getOutreachRecommendation({
     status: lead.status,
@@ -628,8 +697,10 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive }: LeadCardProp
 
       {isStaleLead(lead) && (
         <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <strong>Stale lead — 30+ days.</strong> Send one last text or call, then archive it if
-          there is still no response.
+          <strong>
+            Stale lead — {lead.status === 'sent_no_reply' ? '14+ days after the final nudge.' : '30+ days.'}
+          </strong>{' '}
+          Make one last call, then archive it if there is still no response.
         </div>
       )}
 
@@ -637,6 +708,11 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive }: LeadCardProp
       {recommendation && (
         <div className="px-4 pb-3">
           <EngagedRecommendationPanel lead={lead} />
+        </div>
+      )}
+      {lead.status === 'sent_no_reply' && (
+        <div className="px-4 pb-3">
+          <NoReplyProgressPanel lead={lead} />
         </div>
       )}
 
@@ -657,6 +733,16 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive }: LeadCardProp
 
       <div className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
         <span className="text-xs text-slate-400">{lead.lastAction}</span>
+        {lead.status === 'sent_no_reply' && (
+          <button
+            onClick={() => onReply(lead)}
+            title="They replied"
+            aria-label={`Mark ${lead.name} as replied`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <MessageCircleReply className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        )}
         <button
           onClick={() => onViewLead(lead)}
           title="View lead"
@@ -969,6 +1055,10 @@ function FollowUpModal({
     `I put together that homepage specifically for ${lead.name}:\n` +
     `${lead.trackerUrl}\n\n` +
     `Curious what you think whenever you get a chance.`;
+  const replyLinkText =
+    `Hey ${lead.ownerFirst}, thanks for getting back to me. Here's the homepage I put together for ${lead.name}:\n` +
+    `${lead.trackerUrl}\n\n` +
+    `Curious what you think when you get a chance.`;
   const followUpText =
     `Hey ${lead.ownerFirst}, thanks for taking a look at the homepage I put together for ${lead.name}.\n` +
     `I'd genuinely love to hear your thoughts. Was there anything you liked or would change?`;
@@ -978,11 +1068,22 @@ function FollowUpModal({
   const finalFollowUpText =
     `Hey ${lead.ownerFirst}, quick follow-up on the homepage I made for ${lead.name}. ` +
     `Worth a quick conversation, or should I close this out?`;
-  const isFinalFollowUp = engaged && lead.followupStep >= 1;
+  const finalNoReplyText =
+    `Hey ${lead.ownerFirst}, quick question—did you get a chance to look at the homepage I made for ${lead.name}?\n` +
+    `${lead.trackerUrl}\n\n` +
+    `Even a quick yes or no would be helpful.`;
+  const isFinalFollowUp = lead.status === 'engaged' && lead.followupStep >= 1;
+  const isFinalNoReply = lead.status === 'sent_no_reply' && lead.noReplyStep >= 1;
+  const isUnvisitedEngagedFinal =
+    lead.status === 'engaged' && lead.sessions === 0 && lead.followupStep >= 1;
 
   const [msg, setMsg] = useState(
-    !engaged
-      ? nurtureText
+    isFinalNoReply || isUnvisitedEngagedFinal
+      ? finalNoReplyText
+      : !engaged
+        ? lead.status === 'engaged' && rec?.textVariant === 'reply_link'
+          ? replyLinkText
+          : nurtureText
       : isFinalFollowUp
         ? finalFollowUpText
       : rec?.textVariant === 'walkthrough'
@@ -995,7 +1096,7 @@ function FollowUpModal({
 
   return (
     <ModalShell
-      title={isFinalFollowUp ? 'Final follow-up text' : 'Follow-up text'}
+      title={isFinalFollowUp || isFinalNoReply || isUnvisitedEngagedFinal ? 'Final follow-up text' : 'Follow-up text'}
       subtitle={`${lead.name} · ${lead.phone}`}
       onClose={onClose}
       footer={
@@ -1014,17 +1115,19 @@ function FollowUpModal({
     >
       <div className="px-5 py-4">
         <div className={`mb-3 rounded-xl border px-3 py-2.5 text-xs ${
-          engaged
+          lead.status === 'engaged'
             ? rec?.tone ?? 'border-amber-100 bg-amber-50 text-amber-700'
             : 'border-slate-200 bg-slate-50 text-slate-600'
         }`}>
-          {engaged ? (
+          {lead.status === 'engaged' ? (
             <>
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold">Recommended: {rec?.label ?? 'Send follow-up text'}</span>
                 <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
               </div>
-              <p className="mt-1 opacity-80">{rec?.detail ?? 'They interacted with the demo. Keep the follow-up focused on feedback.'}</p>
+              <p className="mt-1 opacity-80">
+                {rec?.detail ?? 'They interacted with the demo. Keep the follow-up focused on feedback.'}
+              </p>
             </>
           ) : (
             <div className="flex items-center gap-2">
@@ -1039,9 +1142,11 @@ function FollowUpModal({
 
         <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
           <span className="font-semibold">
-            {isFinalFollowUp ? 'Final follow-up.' : 'Follow-up text.'}
+            {isFinalFollowUp || isFinalNoReply || isUnvisitedEngagedFinal ? 'Final follow-up.' : 'Follow-up text.'}
           </span>{' '}
-          {isFinalFollowUp
+          {isFinalNoReply || isUnvisitedEngagedFinal
+            ? 'This is the final text in the no-reply sequence. It keeps the tracked homepage link and asks for an easy yes-or-no response.'
+            : isFinalFollowUp
             ? 'This closes the text sequence without pressure. After sending it, the next action becomes a last-chance call.'
             : 'Use this when the recommendation says to text instead of call.'}
         </div>
@@ -1084,7 +1189,8 @@ function CallPrepModal({
   onBookDemo: (lead: PipelineLead) => void;
 }) {
   const progress = getEngagedProgress(lead);
-  const isLastChanceCall = progress?.action === 'call';
+  const noReplyProgress = getNoReplyProgress(lead);
+  const isLastChanceCall = progress?.action === 'call' || noReplyProgress?.action === 'call';
   const rec = getOutreachRecommendation({
     status: lead.status,
     sessions: lead.sessions,
@@ -1227,11 +1333,13 @@ function BoardCard({
   onAction,
   onViewLead,
   onArchive,
+  onReply,
 }: {
   lead: PipelineLead;
   onAction: (l: PipelineLead) => void;
   onViewLead: (l: PipelineLead) => void;
   onArchive: (l: PipelineLead) => void;
+  onReply: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
@@ -1241,8 +1349,12 @@ function BoardCard({
     lastVisitAt: lead.pipelineLastActionAt,
   });
   const progress = getEngagedProgress(lead);
-  const actionLabel = progress?.actionLabel ?? rec?.label ?? cfg.action;
-  const isCallAction = progress?.action === 'call' || (!progress && rec?.action === 'call');
+  const noReplyProgress = getNoReplyProgress(lead);
+  const actionLabel = noReplyProgress?.actionLabel ?? progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const isCallAction =
+    noReplyProgress?.action === 'call'
+    || progress?.action === 'call'
+    || (!progress && !noReplyProgress && rec?.action === 'call');
   return (
     <div
       draggable
@@ -1279,15 +1391,16 @@ function BoardCard({
         </div>
       )}
       {rec && <EngagedRecommendationPanel lead={lead} compact />}
+      {lead.status === 'sent_no_reply' && <NoReplyProgressPanel lead={lead} compact />}
       {isStaleLead(lead) && (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
-          <strong>Stale 30+ days.</strong> Make one last attempt or archive.
+          <strong>Stale {lead.status === 'sent_no_reply' ? '14+' : '30+'} days.</strong> Make one last attempt or archive.
         </div>
       )}
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button
           onClick={() => onAction(lead)}
-          className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
+          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
         >
           {isCallAction && <PhoneCall className="h-3 w-3" strokeWidth={2.25} />}
           {actionLabel}
@@ -1298,9 +1411,19 @@ function BoardCard({
             onClick={() => onArchive(lead)}
             title="Archive stale lead"
             aria-label={`Archive ${lead.name}`}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            className="flex h-7 w-4 shrink-0 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
           >
             <Archive className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {lead.status === 'sent_no_reply' && (
+          <button
+            onClick={() => onReply(lead)}
+            title="They replied"
+            aria-label={`Mark ${lead.name} as replied`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <MessageCircleReply className="h-3.5 w-3.5" strokeWidth={2.25} />
           </button>
         )}
         <button
@@ -1376,6 +1499,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   }, [undo]);
 
   const openFor = (lead: PipelineLead) => {
+    if (lead.status === 'sent_no_reply') {
+      const progress = getNoReplyProgress(lead);
+      setModal({ type: progress?.action === 'call' ? 'call' : 'followup', lead });
+      return;
+    }
     if (lead.status === 'engaged') {
       const progress = getEngagedProgress(lead);
       if (progress) {
@@ -1416,7 +1544,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const runAction = async (
     leadId: number,
-    action: 'intro_sent' | 'followed_up' | 'called' | 'archived',
+    action: 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived',
     toastMessage: string,
     meta?: unknown,
   ) => {
@@ -1440,6 +1568,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const archiveLead = (lead: PipelineLead) => {
     if (!window.confirm(`Archive ${lead.name}? It will leave the active Text Outreach board.`)) return;
     void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
+  };
+
+  const markReplied = (lead: PipelineLead) => {
+    if (!window.confirm(`Mark ${lead.name} as replied and move it to Engaged?`)) return;
+    void runAction(lead.id, 'reply_received', 'Moved to Engaged', { reason: 'replied_by_text' });
   };
 
   const openBookDemo = async (lead: PipelineLead) => {
@@ -1629,6 +1762,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                         onAction={openFor}
                         onViewLead={openDetail}
                         onArchive={archiveLead}
+                        onReply={markReplied}
                       />
                     ))}
                     {items.length === 0 && (
@@ -1655,6 +1789,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                 onAction={openFor}
                 onViewLead={openDetail}
                 onArchive={archiveLead}
+                onReply={markReplied}
               />
             ))}
             {filtered.length === 0 && (

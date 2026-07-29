@@ -35,7 +35,12 @@ VALUES
   ('Button Preview - Offer Walkthrough', '(920) 555-0122', 'call-board-seed'),
   ('Button Preview - Call Now', '(920) 555-0123', 'call-board-seed'),
   ('Button Preview - Send Final Follow-up', '(920) 555-0124', 'call-board-seed'),
-  ('Button Preview - Call Last Chance', '(920) 555-0125', 'call-board-seed');
+  ('Button Preview - Call Last Chance', '(920) 555-0125', 'call-board-seed'),
+  ('No Reply Preview - Send Reminder', '(920) 555-0131', 'call-board-seed'),
+  ('No Reply Preview - Send Final Nudge', '(920) 555-0132', 'call-board-seed'),
+  ('No Reply Preview - Call Last Chance', '(920) 555-0133', 'call-board-seed'),
+  ('No Reply Preview - Stale Archive', '(920) 555-0134', 'call-board-seed'),
+  ('No Reply Preview - They Replied', '(920) 555-0135', 'call-board-seed');
 
 UPDATE leads SET
   contact = 'Morgan',
@@ -684,6 +689,83 @@ SELECT id, 'followed_up', 'engaged', 'engaged',
        '{"body":"Final closing-loop follow-up preview."}',
        datetime('now', '-2 days')
 FROM leads WHERE company = 'Button Preview - Call Last Chance';
+
+-- One visible Sent — No Reply card per possible action/state. Ready to Send
+-- is intentionally untouched; these all represent leads after the intro text.
+UPDATE leads SET
+  contact = 'Chad',
+  owner_names = '["Chad"]',
+  email = 'no-reply-preview@example.com',
+  industry = 'roofer',
+  city = 'Green Bay',
+  state = 'WI',
+  address = '300 No Reply Road',
+  gbp_claimed = 1,
+  google_rating = 4.6,
+  google_review_count = 36,
+  has_website = 0,
+  phone_route = 'text',
+  phone_line_type = 'mobile',
+  opportunity_score = 88,
+  opportunity_reasoning = 'Local-only seed card for previewing the Sent — No Reply sequence.',
+  recommended_tier = 3,
+  enrichment_status = 'enriched',
+  status = 'contacted',
+  outcome = NULL,
+  followup = NULL,
+  notes = 'Sent — No Reply button preview seed data.',
+  pipeline_status = 'sent_no_reply',
+  site_url = 'https://no-reply-preview.agcy.dev/?utm_source=sms&utm_medium=text&utm_campaign=no-reply-preview',
+  site_url_raw = 'https://no-reply-preview.agcy.dev/',
+  campaign_slug = 'no-reply-preview',
+  clarity_tag = 'lead-no-reply-preview',
+  pipeline_brief = 'Local seed brief used only to preview Sent — No Reply actions.',
+  pipeline_sessions = 0,
+  engagement_score = 0,
+  engagement_grade = 'nurture',
+  engagement_reasons = NULL,
+  pipeline_last_action_at = CASE company
+    WHEN 'No Reply Preview - Send Final Nudge' THEN datetime('now', '-1 day')
+    WHEN 'No Reply Preview - Call Last Chance' THEN datetime('now', '-2 days')
+    WHEN 'No Reply Preview - Stale Archive' THEN datetime('now', '-15 days')
+    ELSE datetime('now', '-2 hours')
+  END,
+  deleted_at = NULL,
+  updated_at = datetime('now')
+WHERE company IN (
+  'No Reply Preview - Send Reminder',
+  'No Reply Preview - Send Final Nudge',
+  'No Reply Preview - Call Last Chance',
+  'No Reply Preview - Stale Archive',
+  'No Reply Preview - They Replied'
+);
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'sent_no_reply', 'sent_no_reply',
+       '{"body":"First reminder preview with tracked homepage link."}',
+       datetime('now', '-1 day')
+FROM leads WHERE company = 'No Reply Preview - Send Final Nudge';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'sent_no_reply', 'sent_no_reply',
+       '{"body":"First reminder preview with tracked homepage link."}',
+       datetime('now', '-3 days')
+FROM leads WHERE company IN (
+  'No Reply Preview - Call Last Chance',
+  'No Reply Preview - Stale Archive'
+);
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'followed_up', 'sent_no_reply', 'sent_no_reply',
+       '{"body":"Final yes-or-no nudge preview with tracked homepage link."}',
+       CASE company
+         WHEN 'No Reply Preview - Stale Archive' THEN datetime('now', '-15 days')
+         ELSE datetime('now', '-2 days')
+       END
+FROM leads WHERE company IN (
+  'No Reply Preview - Call Last Chance',
+  'No Reply Preview - Stale Archive'
+);
 
 INSERT INTO callbacks (lead_id, due_date, block_hint, notes, status)
 SELECT id, date('now'), 'morning', 'Reconnect today after owner review.', 'pending'

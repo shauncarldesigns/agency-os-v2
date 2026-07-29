@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Sent — No Reply outreach sequence
+
+- **Sent — No Reply now advances through a complete, activity-backed outreach sequence inside one column.** Cards progress from Send Reminder to Send Final Nudge to Call — Last Chance, become archive-eligible 14 days after the completed text sequence, and expose a compact “They replied” action that promotes the lead to Engaged with a reversible 40-point floor. Every text retains the tracked homepage link until the lead records a real visit, including leads promoted by a reply before clicking. Ready to Send remains unchanged. Backend + dashboard.
+
 ### Engaged outreach sequence
 
 - **Engaged leads now progress through a tracked follow-up sequence without creating more Kanban columns.** The card action starts from score-based Ask for Feedback / Offer a Walkthrough / Call Now, advances from recorded text activity to Waiting for Reply → Send Final Follow-up → Call — Last Chance, becomes stale after 30 inactive days, and can then be archived with Undo restoring the original stale timestamp. Engaged can never show Nurture, card controls use compact icons, and the Site built chip opens the clean raw URL without outreach tracking. Backend + dashboard.

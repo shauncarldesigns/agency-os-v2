@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-28. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-29. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -11,7 +11,7 @@ All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
 on each merge. Dashboard manually deployed after each PR. All D1 migrations
 applied to remote.
 
-## Text Outreach engagement sequence (PR pending at snapshot)
+## Text Outreach engagement sequence (PR #183)
 
 - Engaged remains one Kanban column. The card-level sequence is derived from
   `lead_activity` rather than a new status column: score-based first action
@@ -28,6 +28,23 @@ applied to remote.
   preview never uses the `/r/:lead_id` tracker.
 - Local seed data includes one Engaged card for every possible primary
   action plus a stale/archive example.
+
+## Sent — No Reply sequence (PR pending at snapshot)
+
+- Ready to Send is unchanged. After the intro moves a lead into Sent — No
+  Reply, recorded `followed_up` activity drives Send Reminder → Send Final
+  Nudge → Call — Last Chance inside the same column.
+- The reminder keeps the existing “bump this back up” tracked-link copy.
+  The final nudge also includes the tracked homepage link and asks for an
+  easy yes/no response.
+- A manual “They replied” icon promotes a non-clicking lead to Engaged with
+  a 40-point floor. Undo restores the previous status, score, grade, and
+  reasons.
+- Replying is not treated as visiting: Engaged leads with zero tracked
+  sessions continue receiving the homepage link until
+  `pipeline_sessions > 0`.
+- Completed no-reply sequences become stale after 14 inactive days and can
+  be archived. Local seed data covers every action/state.
 
 ## What shipped recently (PRs #129–#153)
 
