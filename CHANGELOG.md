@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Outreach last-touch timers
+
+- **Text Outreach cards now show the latest real action, its age, and follow-up count at a glance.** A four-stage color-decay indicator makes fresh, cooling, due, and overdue touches visually distinct in both grid and board views; vague “Updated” labels are replaced with activity-backed names such as “Follow-up #2 sent,” “Calendar opened,” or “Engagement recorded.” Backend + dashboard.
+
 ### Tracked scheduling follow-up
 
 - **Text Outreach now turns unsuccessful calls and calendar interest into a visible scheduling workflow.** Call outcomes prepare tailored texts containing a tracked HoneyBook link; replies and site clicks combine into a 55-point intent baseline regardless of order, while opening the calendar creates a separate 80-point scheduling signal without pretending a demo was booked. Calendar-opened leads can text or call about scheduling, explicitly record a booking, or archive the lead, and sending the scheduling follow-up advances the card to a call recommendation. Backend + dashboard.

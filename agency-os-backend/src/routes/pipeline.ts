@@ -129,7 +129,21 @@ const PIPELINE_LEAD_SELECT = `
                 WHERE undo_activity.action = 'undo'
                   AND json_extract(undo_activity.meta, '$.undid_activity_id') = scheduling_followup_activity.id
              )
-         ) AS pipeline_scheduling_followup_sent
+         ) AS pipeline_scheduling_followup_sent,
+         (
+           SELECT latest_activity.action
+             FROM lead_activity AS latest_activity
+            WHERE latest_activity.lead_id = leads.id
+              AND latest_activity.action != 'undo'
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM lead_activity AS undo_activity
+                 WHERE undo_activity.action = 'undo'
+                   AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
+              )
+            ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
+            LIMIT 1
+         ) AS pipeline_last_action
     FROM leads`;
 
 // ---------------------------------------------------------------------------
