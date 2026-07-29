@@ -9,6 +9,13 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Tracked scheduling follow-up
+
+- **Text Outreach now turns unsuccessful calls and calendar interest into a visible scheduling workflow.** Call outcomes prepare tailored texts containing a tracked HoneyBook link; replies and site clicks combine into a 55-point intent baseline regardless of order, while opening the calendar creates a separate 80-point scheduling signal without pretending a demo was booked. Calendar-opened leads can text or call about scheduling, explicitly record a booking, or archive the lead, and sending the scheduling follow-up advances the card to a call recommendation. Backend + dashboard.
+- **Generated briefs now require every page H1 to name both the service and its target location.** Creative supporting language remains allowed, but the trade/service and city or service area must stay in the literal H1 and headline direction for reliable local SEO targeting. Backend.
+- **Pipeline briefs no longer prescribe a hero layout.** They still provide exact hero copy, typography, proof, CTA requirements, and a distinguishing visual element, but landingsite.ai now chooses the hero composition, image placement, columns, and rating/CTA arrangement for more varied designs. Backend.
+- **Pipeline briefs no longer assign invented color palettes or hex codes.** When no verified branding is available, landingsite.ai now chooses colors from the business’s trade, imagery, personality, and positioning without representing them as established brand colors. Backend.
+
 ### Sent — No Reply outreach sequence
 
 - **Sent — No Reply now advances through a complete, activity-backed outreach sequence inside one column.** Cards progress from Send Reminder to Send Final Nudge to Call — Last Chance, become archive-eligible 14 days after the completed text sequence, and expose a compact “They replied” action that promotes the lead to Engaged with a reversible 40-point floor. Every text retains the tracked homepage link until the lead records a real visit, including leads promoted by a reply before clicking. Ready to Send remains unchanged. Backend + dashboard.

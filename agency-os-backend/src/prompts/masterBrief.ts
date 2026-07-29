@@ -181,6 +181,10 @@ they are also present in the operator-curated Service areas to render.
 17. When discovery names software the client wants connected, include it in Important Build
 Instructions as a specific integration requirement. Do not silently reduce a named integration
 to a generic contact-form instruction.
+18. Every website-page H1 generated from this brief must explicitly state what the business
+does and where it does it. Require the primary service or trade plus the target city or service
+area in the H1. Other natural supporting text is allowed, but service + location must remain
+present for SEO. This applies to every page, including Homepage, About, FAQ, and Contact.
 
 QUALITY BAR:
 - Target Audience must be synthesized from the reviews, services performed, and strengths — the actual people hiring this business, not a generic "homeowners and businesses." Name 1-2 real segments, the problem that brings them, and what they worry about, using the language customers use in the reviews. If a brand attribute explicitly names the audience (operator-supplied), prefer it over inference. Do not invent demographics the data doesn't support.

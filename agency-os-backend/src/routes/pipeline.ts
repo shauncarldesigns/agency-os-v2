@@ -38,6 +38,9 @@ const REVERSIBLE_ACTIONS = new Set([
   'intro_sent',
   'followed_up',
   'reply_received',
+  'call_outcome',
+  'calendar_sent',
+  'scheduling_followup',
   'called',
   'archived',
 ]);
@@ -87,7 +90,46 @@ const PIPELINE_LEAD_SELECT = `
                 )
            )
            ELSE 0
-         END AS pipeline_no_reply_step
+         END AS pipeline_no_reply_step,
+         EXISTS (
+           SELECT 1
+             FROM lead_activity AS reply_activity
+            WHERE reply_activity.lead_id = leads.id
+              AND reply_activity.action = 'reply_received'
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM lead_activity AS undo_activity
+                 WHERE undo_activity.action = 'undo'
+                   AND json_extract(undo_activity.meta, '$.undid_activity_id') = reply_activity.id
+              )
+         ) AS pipeline_replied,
+         EXISTS (
+           SELECT 1 FROM lead_activity AS calendar_sent_activity
+           WHERE calendar_sent_activity.lead_id = leads.id
+             AND calendar_sent_activity.action = 'calendar_sent'
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM lead_activity AS undo_activity
+                WHERE undo_activity.action = 'undo'
+                  AND json_extract(undo_activity.meta, '$.undid_activity_id') = calendar_sent_activity.id
+             )
+         ) AS pipeline_calendar_sent,
+         EXISTS (
+           SELECT 1 FROM lead_activity AS calendar_click_activity
+           WHERE calendar_click_activity.lead_id = leads.id
+             AND calendar_click_activity.action = 'calendar_clicked'
+         ) AS pipeline_calendar_clicked,
+         EXISTS (
+           SELECT 1 FROM lead_activity AS scheduling_followup_activity
+           WHERE scheduling_followup_activity.lead_id = leads.id
+             AND scheduling_followup_activity.action = 'scheduling_followup'
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM lead_activity AS undo_activity
+                WHERE undo_activity.action = 'undo'
+                  AND json_extract(undo_activity.meta, '$.undid_activity_id') = scheduling_followup_activity.id
+             )
+         ) AS pipeline_scheduling_followup_sent
     FROM leads`;
 
 // ---------------------------------------------------------------------------
@@ -429,12 +471,22 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 // ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/action
 // ---------------------------------------------------------------------------
-// Body: { action: 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived', meta?: unknown }
+// Body: { action: 'intro_sent' | 'followed_up' | 'reply_received' |
+//         'call_outcome' | 'calendar_sent' | 'scheduling_followup' |
+//         'called' | 'archived', meta?: unknown }
 // Applies the (optional) status transition, updates the last-action pointer,
 // writes an activity row. Optimistic: the client fires this on tap of
 // "Open in Messages" even though we can't confirm the operator actually
 // sent — /undo lets them recover.
-type OutreachAction = 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived';
+type OutreachAction =
+  | 'intro_sent'
+  | 'followed_up'
+  | 'reply_received'
+  | 'call_outcome'
+  | 'calendar_sent'
+  | 'scheduling_followup'
+  | 'called'
+  | 'archived';
 
 const ACTION_TRANSITIONS: Record<
   OutreachAction,
@@ -442,7 +494,10 @@ const ACTION_TRANSITIONS: Record<
 > = {
   intro_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
   followed_up: {}, // no status change — stays in sent_no_reply or engaged
-  reply_received: { from: ['sent_no_reply'], to: 'engaged' },
+  reply_received: { from: ['sent_no_reply', 'engaged'], to: 'engaged' },
+  call_outcome: { from: ['sent_no_reply', 'engaged'] },
+  calendar_sent: { from: ['sent_no_reply', 'engaged'] },
+  scheduling_followup: { from: ['engaged'] },
   called: {}, // no status change — display-only
   archived: { from: ['sent_no_reply', 'engaged'], to: 'archived' },
 };
@@ -487,12 +542,29 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       params.push(toStatus);
     }
     if (action === 'reply_received') {
+      const trackedClick = await c.env.DB.prepare(
+        `SELECT 1 AS found
+           FROM lead_activity
+          WHERE lead_id = ? AND action = 'click_tracked'
+          LIMIT 1`,
+      ).bind(id).first<{ found: number }>();
+      const replyFloor = trackedClick ? 55 : 40;
+      const replyReason = trackedClick
+        ? '+15 replied after opening site'
+        : '+40 replied by text';
       sets.push(
-        'engagement_score = MAX(engagement_score, 40)',
-        "engagement_grade = CASE WHEN engagement_score < 40 THEN 'follow_up' ELSE engagement_grade END",
+        `engagement_score = MAX(engagement_score, ${replyFloor})`,
+        `engagement_grade = CASE
+           WHEN MAX(engagement_score, ${replyFloor}) >= 90 THEN 'hot'
+           WHEN MAX(engagement_score, ${replyFloor}) >= 70 THEN 'walkthrough'
+           ELSE 'follow_up'
+         END`,
         `engagement_reasons = CASE
-           WHEN engagement_score < 40 THEN '["+40 replied by text"]'
-           ELSE engagement_reasons
+           WHEN COALESCE(engagement_reasons, '') LIKE '%replied%'
+             THEN engagement_reasons
+           WHEN json_valid(engagement_reasons)
+             THEN json_insert(engagement_reasons, '$[#]', '${replyReason}')
+           ELSE json_array('${replyReason}')
          END`,
       );
     }

@@ -36,6 +36,7 @@ VALUES
   ('Button Preview - Call Now', '(920) 555-0123', 'call-board-seed'),
   ('Button Preview - Send Final Follow-up', '(920) 555-0124', 'call-board-seed'),
   ('Button Preview - Call Last Chance', '(920) 555-0125', 'call-board-seed'),
+  ('Calendar Preview - Awaiting Booking', '(920) 555-0126', 'call-board-seed'),
   ('No Reply Preview - Send Reminder', '(920) 555-0131', 'call-board-seed'),
   ('No Reply Preview - Send Final Nudge', '(920) 555-0132', 'call-board-seed'),
   ('No Reply Preview - Call Last Chance', '(920) 555-0133', 'call-board-seed'),
@@ -689,6 +690,51 @@ SELECT id, 'followed_up', 'engaged', 'engaged',
        '{"body":"Final closing-loop follow-up preview."}',
        datetime('now', '-2 days')
 FROM leads WHERE company = 'Button Preview - Call Last Chance';
+
+-- Calendar-opened state: clicking this card should open the scheduling
+-- follow-up modal, not assume a demo was booked.
+UPDATE leads SET
+  contact = 'Taylor',
+  owner_names = '["Taylor"]',
+  email = 'calendar-preview@example.com',
+  industry = 'plumber',
+  city = 'Green Bay',
+  state = 'WI',
+  google_rating = 4.8,
+  google_review_count = 52,
+  phone_route = 'text',
+  phone_line_type = 'mobile',
+  opportunity_score = 92,
+  recommended_tier = 3,
+  enrichment_status = 'enriched',
+  status = 'contacted',
+  outcome = 'engaged',
+  notes = 'Local-only seed for testing the calendar-opened workflow.',
+  pipeline_status = 'engaged',
+  site_url = 'https://calendar-preview-demo.agcy.dev/',
+  site_url_raw = 'https://calendar-preview-demo.agcy.dev/',
+  campaign_slug = 'calendar-preview',
+  clarity_tag = 'lead-calendar-preview',
+  pipeline_sessions = 1,
+  engagement_score = 80,
+  engagement_grade = 'walkthrough',
+  engagement_reasons = '["+40 clicked tracked text link","+80 opened scheduling calendar"]',
+  pipeline_last_action_at = datetime('now', '-30 minutes'),
+  deleted_at = NULL,
+  updated_at = datetime('now')
+WHERE company = 'Calendar Preview - Awaiting Booking';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'calendar_sent', 'engaged', 'engaged',
+       '{"call_outcome":"voicemail","calendar_url":"http://127.0.0.1:8788/book/seed"}',
+       datetime('now', '-1 hour')
+FROM leads WHERE company = 'Calendar Preview - Awaiting Booking';
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'calendar_clicked', 'engaged', NULL,
+       '{"destination":"honeybook"}',
+       datetime('now', '-30 minutes')
+FROM leads WHERE company = 'Calendar Preview - Awaiting Booking';
 
 -- One visible Sent — No Reply card per possible action/state. Ready to Send
 -- is intentionally untouched; these all represent leads after the intro text.

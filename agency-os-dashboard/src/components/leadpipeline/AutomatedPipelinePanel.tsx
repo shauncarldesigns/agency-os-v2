@@ -23,6 +23,7 @@ import {
   Archive,
   Eye,
   MessageCircleReply,
+  CalendarDays,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
@@ -146,6 +147,10 @@ export interface PipelineLead {
   pipelineLastActionAt: string | null;
   followupStep: number;
   noReplyStep: number;
+  replied: boolean;
+  calendarSent: boolean;
+  calendarClicked: boolean;
+  schedulingFollowupSent: boolean;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
@@ -153,6 +158,7 @@ export interface PipelineLead {
   rawUrl: string | null;              // clean destination for operator preview links
   clarityTag: string | null;
   trackerUrl: string;                 // /r/:id link — this is what gets texted
+  calendarUrl: string;                // /book/:id tracked HoneyBook redirect
   brief: string | null;
 }
 
@@ -225,6 +231,12 @@ function actionLabel(action: string | null, status: PipelineStatus): string {
       return 'Followed up';
     case 'called':
       return 'Called';
+    case 'call_outcome':
+      return 'Call logged';
+    case 'calendar_sent':
+      return 'Calendar sent';
+    case 'scheduling_followup':
+      return 'Scheduling follow-up sent';
     case 'click_tracked':
       return 'Visited';
     default:
@@ -265,6 +277,10 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     pipelineLastActionAt: l.pipeline_last_action_at,
     followupStep: l.pipeline_followup_step ?? 0,
     noReplyStep: l.pipeline_no_reply_step ?? 0,
+    replied: (l.pipeline_replied ?? 0) === 1,
+    calendarSent: (l.pipeline_calendar_sent ?? 0) === 1,
+    calendarClicked: (l.pipeline_calendar_clicked ?? 0) === 1,
+    schedulingFollowupSent: (l.pipeline_scheduling_followup_sent ?? 0) === 1,
     ownerFirst: deriveOwnerFirst(l.owner_names),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
@@ -272,6 +288,7 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     rawUrl: l.site_url_raw,
     clarityTag: l.clarity_tag,
     trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
+    calendarUrl: `${TRACKING_BASE}/book/${l.id}`,
     brief: l.pipeline_brief,
   };
 }
@@ -474,7 +491,58 @@ function NoReplyProgressPanel({ lead, compact = false }: { lead: PipelineLead; c
   );
 }
 
+function getSchedulingProgress(lead: PipelineLead): {
+  stateLabel: string;
+  detail: string;
+  actionLabel: string;
+  action: 'call' | 'book';
+  tone: string;
+} | null {
+  if (lead.calendarClicked) {
+    if (lead.schedulingFollowupSent) {
+      return {
+        stateLabel: 'Scheduling follow-up sent',
+        detail: 'They opened the calendar but have not booked. Call to close the loop or record the booking.',
+        actionLabel: 'Call about scheduling',
+        action: 'call',
+        tone: 'border-amber-200 bg-amber-50 text-amber-700',
+      };
+    }
+    return {
+      stateLabel: 'Calendar opened — awaiting booking',
+      detail: 'They showed scheduling intent, but the app does not assume they booked.',
+      actionLabel: 'Follow up on scheduling',
+      action: 'book',
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    };
+  }
+  if (lead.calendarSent) {
+    return {
+      stateLabel: 'Calendar link sent',
+      detail: 'Waiting for them to choose a convenient time.',
+      actionLabel: 'Call / follow up',
+      action: 'call',
+      tone: 'border-blue-200 bg-blue-50 text-blue-700',
+    };
+  }
+  return null;
+}
+
+function SchedulingProgressPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
+  const progress = getSchedulingProgress(lead);
+  if (!progress) return null;
+  return (
+    <div className={`rounded-xl border ${progress.tone} ${compact ? 'mt-2 px-2 py-1.5' : 'px-3 py-2.5'}`}>
+      <div className={compact ? 'text-[10px]' : 'text-[11px]'}>
+        <strong>{progress.stateLabel}</strong>
+        {!compact && <p className="mt-1 font-normal opacity-80">{progress.detail}</p>}
+      </div>
+    </div>
+  );
+}
+
 function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
+  if (getSchedulingProgress(lead)) return <SchedulingProgressPanel lead={lead} compact={compact} />;
   const progress = getEngagedProgress(lead);
   const rec = getOutreachRecommendation({
     status: lead.status,
@@ -601,9 +669,16 @@ function StatusChip({
   });
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
-  const actionLabel = noReplyProgress?.actionLabel ?? progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const schedulingProgress = getSchedulingProgress(lead);
+  const actionLabel =
+    schedulingProgress?.actionLabel
+    ?? noReplyProgress?.actionLabel
+    ?? progress?.actionLabel
+    ?? rec?.label
+    ?? cfg.action;
   const isCallAction =
-    noReplyProgress?.action === 'call'
+    schedulingProgress?.action === 'call'
+    || noReplyProgress?.action === 'call'
     || progress?.action === 'call'
     || (!progress && !noReplyProgress && rec?.action === 'call');
   const Icon = cfg.icon;
@@ -712,7 +787,9 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
       )}
       {lead.status === 'sent_no_reply' && (
         <div className="px-4 pb-3">
-          <NoReplyProgressPanel lead={lead} />
+          {getSchedulingProgress(lead)
+            ? <SchedulingProgressPanel lead={lead} />
+            : <NoReplyProgressPanel lead={lead} />}
         </div>
       )}
 
@@ -733,7 +810,7 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
 
       <div className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
         <span className="text-xs text-slate-400">{lead.lastAction}</span>
-        {lead.status === 'sent_no_reply' && (
+        {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && !lead.replied && (
           <button
             onClick={() => onReply(lead)}
             title="They replied"
@@ -1179,15 +1256,35 @@ function FollowUpModal({
 
 // ---------- Call prep (engaged) ----------
 
+type CallOutcome =
+  | 'no_answer'
+  | 'voicemail'
+  | 'busy'
+  | 'talk_later'
+  | 'interested';
+
 function CallPrepModal({
   lead,
   onClose,
   onBookDemo,
+  onCallOutcome,
+  onCalendarSent,
+  onNotInterested,
 }: {
   lead: PipelineLead;
   onClose: () => void;
   onBookDemo: (lead: PipelineLead) => void;
+  onCallOutcome: (lead: PipelineLead, outcome: CallOutcome) => Promise<boolean>;
+  onCalendarSent: (
+    lead: PipelineLead,
+    outcome: CallOutcome,
+    message: string,
+  ) => Promise<void>;
+  onNotInterested: (lead: PipelineLead) => void;
 }) {
+  const [selectedOutcome, setSelectedOutcome] = useState<CallOutcome | null>(null);
+  const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
+  const [calendarMessage, setCalendarMessage] = useState('');
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
   const isLastChanceCall = progress?.action === 'call' || noReplyProgress?.action === 'call';
@@ -1197,6 +1294,79 @@ function CallPrepModal({
     engagementScore: lead.engagementScore,
     lastVisitAt: lead.pipelineLastActionAt,
   });
+
+  const calendarMessages: Record<CallOutcome, string> = {
+    no_answer:
+      `Hey ${lead.ownerFirst}, I just tried giving you a quick call about the homepage I made for ${lead.name}. ` +
+      `If it's easier, you can grab a time that works here:\n${lead.calendarUrl}`,
+    voicemail:
+      `Hey ${lead.ownerFirst}, I just left you a voicemail about the homepage I made for ${lead.name}. ` +
+      `If you'd rather pick a convenient time, here's my calendar:\n${lead.calendarUrl}`,
+    busy:
+      `No problem, ${lead.ownerFirst}—here's my calendar if you'd like to pick a time that works better:\n${lead.calendarUrl}`,
+    talk_later:
+      `Hey ${lead.ownerFirst}, here's my calendar so you can grab a convenient time for us to talk through the homepage for ${lead.name}:\n${lead.calendarUrl}`,
+    interested:
+      `Great talking with you, ${lead.ownerFirst}. Here's my calendar so you can choose a time to walk through the homepage for ${lead.name}:\n${lead.calendarUrl}`,
+  };
+  const outcomeLabels: Record<CallOutcome, string> = {
+    no_answer: 'No answer',
+    voicemail: 'Left voicemail',
+    busy: 'They were busy',
+    talk_later: 'Asked to talk later',
+    interested: 'Interested — send calendar',
+  };
+
+  if (selectedOutcome) {
+    return (
+      <ModalShell
+        title="Send calendar link"
+        subtitle={`${lead.name} · ${outcomeLabels[selectedOutcome]}`}
+        onClose={onClose}
+        footer={
+          <a
+            href={smsLink(lead.phone, calendarMessage)}
+            onClick={() => void onCalendarSent(lead, selectedOutcome, calendarMessage)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
+          >
+            <Send className="h-4 w-4" />
+            Open in Messages
+          </a>
+        }
+      >
+        <div className="px-5 py-4">
+          <button
+            onClick={() => setSelectedOutcome(null)}
+            className="mb-3 text-xs font-medium text-blue-600 hover:text-blue-700"
+          >
+            ← Change call outcome
+          </button>
+          <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
+            <strong>Tracked calendar link included.</strong> The lead will reach HoneyBook normally;
+            the app records the click as scheduling intent.
+          </div>
+          <label className="mb-1.5 block text-xs font-medium text-slate-500">Message</label>
+          <textarea
+            value={calendarMessage}
+            onChange={(event) => setCalendarMessage(event.target.value)}
+            rows={6}
+            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700"
+          />
+        </div>
+      </ModalShell>
+    );
+  }
+
+  const chooseOutcome = async (outcome: CallOutcome) => {
+    setLoggingOutcome(outcome);
+    const recorded = await onCallOutcome(lead, outcome);
+    setLoggingOutcome(null);
+    if (recorded) {
+      setCalendarMessage(calendarMessages[outcome]);
+      setSelectedOutcome(outcome);
+    }
+  };
+
   return (
     <ModalShell
       title="Call prep"
@@ -1235,6 +1405,41 @@ function CallPrepModal({
           </p>
         </div>
 
+        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+            <PhoneCall className="h-3.5 w-3.5" />
+            After the call, what happened?
+          </div>
+          <p className="mt-1 text-[11px] text-blue-600">
+            Pick the outcome and the app will prepare the appropriate text with your tracked calendar link.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(Object.keys(outcomeLabels) as CallOutcome[]).map((outcome) => (
+              <button
+                key={outcome}
+                onClick={() => void chooseOutcome(outcome)}
+                disabled={loggingOutcome !== null}
+                className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition disabled:opacity-50 ${
+                  outcome === 'interested'
+                    ? 'col-span-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {outcome === 'interested' && <CalendarDays className="h-3.5 w-3.5" />}
+                  {loggingOutcome === outcome ? 'Recording…' : outcomeLabels[outcome]}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={() => onNotInterested(lead)}
+              className="col-span-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Not interested — archive
+            </button>
+          </div>
+        </div>
+
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Suggested opener
         </h4>
@@ -1256,6 +1461,87 @@ function CallPrepModal({
             If they're free: “What stood out to you?”
           </li>
         </ul>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ---------- Scheduling follow-up ----------
+
+function SchedulingFollowupModal({
+  lead,
+  onClose,
+  onSent,
+  onBookDemo,
+  onNotInterested,
+}: {
+  lead: PipelineLead;
+  onClose: () => void;
+  onSent: (lead: PipelineLead, message: string) => void;
+  onBookDemo: (lead: PipelineLead) => void;
+  onNotInterested: (lead: PipelineLead) => void;
+}) {
+  const [message, setMessage] = useState(
+    `Hey ${lead.ownerFirst}, just wanted to make sure the calendar worked for you. ` +
+    `If none of those times fit, let me know what works better and I'll make it happen.`,
+  );
+
+  return (
+    <ModalShell
+      title="Follow up on scheduling"
+      subtitle={lead.name}
+      onClose={onClose}
+      footer={
+        <div className="grid grid-cols-2 gap-2">
+          <a
+            href={smsLink(lead.phone, message)}
+            onClick={() => onSent(lead, message)}
+            className="col-span-2 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
+          >
+            <Send className="h-4 w-4" />
+            Open in Messages
+          </a>
+          <a
+            href={`tel:${lead.phone}`}
+            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <PhoneCall className="h-4 w-4" />
+            Call instead
+          </a>
+          <button
+            onClick={() => onBookDemo(lead)}
+            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            <CalendarDays className="h-4 w-4" />
+            They booked
+          </button>
+        </div>
+      }
+    >
+      <div className="px-5 py-4">
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700">
+          <strong>Calendar opened — awaiting booking.</strong>
+          <p className="mt-1 opacity-80">
+            They showed intent, but a calendar click is not treated as a confirmed appointment.
+          </p>
+        </div>
+
+        <label className="mb-1.5 block text-xs font-medium text-slate-500">
+          Scheduling follow-up
+        </label>
+        <textarea
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          rows={5}
+          className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        />
+
+        <button
+          onClick={() => onNotInterested(lead)}
+          className="mt-4 text-xs font-medium text-slate-500 hover:text-rose-600"
+        >
+          Not interested — archive lead
+        </button>
       </div>
     </ModalShell>
   );
@@ -1311,7 +1597,7 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'engaged', label: 'Engaged' },
 ];
 
-type ModalType = 'brief' | 'text' | 'followup' | 'call' | 'detail';
+type ModalType = 'brief' | 'text' | 'followup' | 'call' | 'scheduling' | 'detail';
 type ModalState = { type: ModalType; lead: PipelineLead } | null;
 
 type ViewMode = 'grid' | 'board';
@@ -1350,9 +1636,16 @@ function BoardCard({
   });
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
-  const actionLabel = noReplyProgress?.actionLabel ?? progress?.actionLabel ?? rec?.label ?? cfg.action;
+  const schedulingProgress = getSchedulingProgress(lead);
+  const actionLabel =
+    schedulingProgress?.actionLabel
+    ?? noReplyProgress?.actionLabel
+    ?? progress?.actionLabel
+    ?? rec?.label
+    ?? cfg.action;
   const isCallAction =
-    noReplyProgress?.action === 'call'
+    schedulingProgress?.action === 'call'
+    || noReplyProgress?.action === 'call'
     || progress?.action === 'call'
     || (!progress && !noReplyProgress && rec?.action === 'call');
   return (
@@ -1391,7 +1684,11 @@ function BoardCard({
         </div>
       )}
       {rec && <EngagedRecommendationPanel lead={lead} compact />}
-      {lead.status === 'sent_no_reply' && <NoReplyProgressPanel lead={lead} compact />}
+      {lead.status === 'sent_no_reply' && (
+        getSchedulingProgress(lead)
+          ? <SchedulingProgressPanel lead={lead} compact />
+          : <NoReplyProgressPanel lead={lead} compact />
+      )}
       {isStaleLead(lead) && (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
           <strong>Stale {lead.status === 'sent_no_reply' ? '14+' : '30+'} days.</strong> Make one last attempt or archive.
@@ -1417,7 +1714,7 @@ function BoardCard({
               <Archive className="h-3.5 w-3.5" />
             </button>
           )}
-          {lead.status === 'sent_no_reply' && (
+          {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && !lead.replied && (
             <button
               onClick={() => onReply(lead)}
               title="They replied"
@@ -1501,6 +1798,15 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   }, [undo]);
 
   const openFor = (lead: PipelineLead) => {
+    const scheduling = getSchedulingProgress(lead);
+    if (scheduling) {
+      if (lead.calendarClicked && !lead.schedulingFollowupSent) {
+        setModal({ type: 'scheduling', lead });
+      } else {
+        setModal({ type: 'call', lead });
+      }
+      return;
+    }
     if (lead.status === 'sent_no_reply') {
       const progress = getNoReplyProgress(lead);
       setModal({ type: progress?.action === 'call' ? 'call' : 'followup', lead });
@@ -1546,7 +1852,15 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const runAction = async (
     leadId: number,
-    action: 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived',
+    action:
+      | 'intro_sent'
+      | 'followed_up'
+      | 'reply_received'
+      | 'call_outcome'
+      | 'calendar_sent'
+      | 'scheduling_followup'
+      | 'called'
+      | 'archived',
     toastMessage: string,
     meta?: unknown,
   ) => {
@@ -1567,14 +1881,63 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const markFollowedUp = (leadId: number, messageBody: string) =>
     runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
 
+  const recordCallOutcome = async (
+    lead: PipelineLead,
+    outcome: CallOutcome,
+  ): Promise<boolean> => {
+    try {
+      const { lead: updated } = await api.pipeline.action(lead.id, {
+        action: 'call_outcome',
+        meta: { outcome },
+      });
+      applyMutation(updated, 'call_outcome');
+      return true;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not record call outcome';
+      showToast(msg, 'error');
+      return false;
+    }
+  };
+
+  const markCalendarSent = (
+    lead: PipelineLead,
+    outcome: CallOutcome,
+    message: string,
+  ) =>
+    runAction(lead.id, 'calendar_sent', 'Calendar link sent', {
+      call_outcome: outcome,
+      body: message,
+      calendar_url: lead.calendarUrl,
+    });
+
+  const markSchedulingFollowupSent = (lead: PipelineLead, message: string) =>
+    runAction(lead.id, 'scheduling_followup', 'Scheduling follow-up sent', {
+      body: message,
+    });
+
   const archiveLead = (lead: PipelineLead) => {
     if (!window.confirm(`Archive ${lead.name}? It will leave the active Text Outreach board.`)) return;
     void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
   };
 
+  const archiveNotInterested = (lead: PipelineLead) => {
+    if (!window.confirm(`Archive ${lead.name} as not interested?`)) return;
+    void runAction(lead.id, 'archived', 'Archived as not interested', {
+      reason: 'not_interested_after_call',
+    });
+  };
+
   const markReplied = (lead: PipelineLead) => {
-    if (!window.confirm(`Mark ${lead.name} as replied and move it to Engaged?`)) return;
-    void runAction(lead.id, 'reply_received', 'Moved to Engaged', { reason: 'replied_by_text' });
+    const prompt = lead.status === 'engaged'
+      ? `Record a text reply from ${lead.name}?`
+      : `Mark ${lead.name} as replied and move it to Engaged?`;
+    if (!window.confirm(prompt)) return;
+    void runAction(
+      lead.id,
+      'reply_received',
+      lead.status === 'engaged' ? 'Reply recorded' : 'Moved to Engaged',
+      { reason: 'replied_by_text' },
+    );
   };
 
   const openBookDemo = async (lead: PipelineLead) => {
@@ -1831,6 +2194,21 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         <CallPrepModal
           lead={modal.lead}
           onClose={() => setModal(null)}
+          onCallOutcome={recordCallOutcome}
+          onCalendarSent={markCalendarSent}
+          onNotInterested={archiveNotInterested}
+          onBookDemo={(lead) => {
+            setModal(null);
+            void openBookDemo(lead);
+          }}
+        />
+      )}
+      {modal?.type === 'scheduling' && (
+        <SchedulingFollowupModal
+          lead={modal.lead}
+          onClose={() => setModal(null)}
+          onSent={markSchedulingFollowupSent}
+          onNotInterested={archiveNotInterested}
           onBookDemo={(lead) => {
             setModal(null);
             void openBookDemo(lead);

@@ -67,24 +67,11 @@ const BANNED_WORDS = [
 // branding is supplied — which converges on the same navy-blue template for
 // every lead. It also says "use the supplied business branding when
 // available": that's the hook. We assign each lead a concrete direction
-// (palette, typography, hero layout, one signature element) IN CODE, seeded
+// (typography and one signature element) IN CODE, seeded
 // by lead id — asking the model to "pick a unique look" converges the same
 // way the pre-angle-led master briefs did (see CLAUDE.md brief evolution).
 // Seeding by id keeps a lead's look stable across regenerates while
 // neighbouring leads land on different combinations.
-
-const PALETTES = [
-  'Deep forest green (#1B4332) with aged-brass accents (#B08D57) on warm off-white (#FAF7F2) — grounded, premium, outdoorsy',
-  'Charcoal (#23262B) with safety orange (#E8590C) on light gray (#F4F5F6) — bold, industrial, job-site energy',
-  'Midnight navy (#14213D) with warm amber (#FCA311) on soft white (#F8F9FA) — classic, established',
-  'Slate blue (#3D5A80) with copper (#C46F33) on cream (#FBF6EF) — steady, craftsman',
-  'Dark teal (#134E4A) with sun yellow (#FACC15) on white — fresh but workmanlike',
-  'Graphite (#2B2D31) with steel blue (#5C8DB8) and a single red accent (#C0392B) — no-nonsense, technical',
-  'Espresso brown (#3E2C23) with burnt orange (#CC5500) on cream (#FFF8F0) — warm, family-business',
-  'Deep burgundy (#5C1A2B) with tan leather tones (#C9A66B) on off-white — heritage, old-school trade pride',
-  'Ink black (#181818) with construction yellow (#F5B301) — heavy-equipment confidence',
-  'Gunmetal (#39424E) with muted aqua (#2A9D8F) and sand (#E9C46A) — modern industrial',
-];
 
 const TYPOGRAPHY = [
   'Heavy geometric sans headlines with a clean humanist sans body — modern shop-front',
@@ -93,14 +80,6 @@ const TYPOGRAPHY = [
   'Classic serif headlines with a plain sans body — established, editorial',
   'Sturdy rounded sans throughout — approachable, family-run',
   'High-contrast modern sans with tight headline tracking — crisp, current',
-];
-
-const HERO_LAYOUTS = [
-  'Full-bleed photo with a dark gradient overlay, copy and CTA left-aligned',
-  'Split hero: headline and proof points left, a quote-request card right',
-  'Solid brand-color hero with an oversized centered headline, photo band directly below',
-  'Light hero: copy left, photo right, review stars directly under the CTA',
-  "Dark hero on the palette's darkest tone, oversized headline, phone number as the dominant CTA",
 ];
 
 const SIGNATURE_ELEMENTS = [
@@ -135,19 +114,15 @@ const HEADLINE_ANGLES = [
 ];
 
 interface DesignDirection {
-  palette: string;
   typography: string;
-  hero: string;
   signature: string;
 }
 
-// Distinct multipliers/offsets decorrelate the four picks so sequential
+// Distinct multipliers/offsets decorrelate the three picks so sequential
 // lead ids don't walk through the lists in lockstep.
 function assignDesignDirection(leadId: number): DesignDirection {
   return {
-    palette: PALETTES[leadId % PALETTES.length],
     typography: TYPOGRAPHY[(leadId * 7 + 3) % TYPOGRAPHY.length],
-    hero: HERO_LAYOUTS[(leadId * 13 + 1) % HERO_LAYOUTS.length],
     signature: SIGNATURE_ELEMENTS[(leadId * 17 + 2) % SIGNATURE_ELEMENTS.length],
   };
 }
@@ -250,8 +225,11 @@ themselves, not a description of them. Format:
 Open the section with a line telling the builder to use this copy
 verbatim as the page hero and NOT to replace it with a generated
 headline. The H1 must read like something a customer would actually
-search for: it names the primary service(s) and the town. Include the
-business name only when it flows naturally — never force it. Write the
+search for. It must explicitly state both what the business does and
+where it does it by naming the primary service(s) or trade and the target
+town. It may contain other natural supporting text, but service + location
+is non-negotiable for SEO. Include the business name only when it flows
+naturally — never force it. Write the
 copy through the assigned headline angle in the input; if the angle
 calls for data that isn't on file, keep its spirit and build from what
 is. The subhead must contain at least one concrete fact from the data
@@ -305,15 +283,20 @@ warranties, emergency availability) as questions answered with a neutral
 contact-for-details line.
 
 DESIGN DIRECTION rules: the input assigns this business a specific visual
-direction — palette (with hex codes), typography, hero layout, and one
-signature element. Reproduce all four in this section, hex codes exact,
+direction — typography and one signature element. Reproduce both,
 and open it with a line telling the builder this direction replaces its
 default industry styling (e.g. "Use this visual direction instead of a
-default 'professional' look:"). Then add one or two imagery notes specific
+default 'professional' look:"). Choose an appropriate color palette from
+the business's trade, available imagery, brand personality, and desired
+positioning. No logo or verified brand colors are available, so do not
+claim the palette is established branding and do not prescribe invented
+hex codes. Then add one or two imagery notes specific
 to THIS business — its trade, its town, its landmarks, its owners — so the
 photos and texture feel local rather than stock-generic. The assignment is
-binding: do not soften it into a suggestion, swap the palette, or fall
-back to industry-typical colors.
+binding: do not soften the assigned typography or signature element into
+a suggestion. Do not prescribe a hero layout, column
+arrangement, image position, or placement of ratings and CTA elements;
+landingsite.ai must choose a unique composition.
 
 Rules:
 - Ground every claim in the enrichment data provided. Never invent services, awards, staff members, or history.
@@ -365,9 +348,7 @@ Rules:
 
   dataLines.push('');
   dataLines.push('Assigned design direction (carry into the DESIGN DIRECTION section):');
-  dataLines.push(`  Palette: ${design.palette}`);
   dataLines.push(`  Typography: ${design.typography}`);
-  dataLines.push(`  Hero layout: ${design.hero}`);
   dataLines.push(`  Signature element: ${design.signature}`);
 
   if (quotes.length) {

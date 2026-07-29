@@ -14,6 +14,8 @@ import type { Env, Lead } from '../types';
 import { log } from '../utils/errors';
 
 export const redirectRouter = new Hono<{ Bindings: Env }>();
+const CALENDAR_URL =
+  'https://shauncarldesigns397463.hbportal.co/public/69d52364c8dc9c00078c64b6';
 
 // GET /r/:lead_id
 redirectRouter.get('/r/:lead_id', async (c) => {
@@ -35,6 +37,23 @@ redirectRouter.get('/r/:lead_id', async (c) => {
       }>();
 
     if (!lead || !lead.site_url) return c.text('Link expired or not found', 404);
+    const reply = await c.env.DB.prepare(
+      `SELECT 1 AS found
+         FROM lead_activity activity
+        WHERE activity.lead_id = ?
+          AND activity.action = 'reply_received'
+          AND NOT EXISTS (
+            SELECT 1
+              FROM lead_activity undo
+             WHERE undo.action = 'undo'
+               AND json_extract(undo.meta, '$.undid_activity_id') = activity.id
+          )
+        LIMIT 1`,
+    ).bind(id).first<{ found: number }>();
+    const clickFloor = reply ? 55 : 40;
+    const clickReason = reply
+      ? '+15 clicked tracked link after replying'
+      : '+40 clicked tracked text link';
 
     // Bump the click counter. Any tracked click from Sent — No Reply makes
     // the lead Engaged; old/imported rows may already have a session count
@@ -56,11 +75,11 @@ redirectRouter.get('/r/:lead_id', async (c) => {
       `UPDATE leads
          SET pipeline_sessions = pipeline_sessions + 1,
              pipeline_status = ?,
-             engagement_score = MAX(engagement_score, 40),
+             engagement_score = MAX(engagement_score, ?),
              engagement_grade = CASE
-               WHEN MAX(engagement_score, 40) >= 90 THEN 'hot'
-               WHEN MAX(engagement_score, 40) >= 70 THEN 'walkthrough'
-               WHEN MAX(engagement_score, 40) >= 40 THEN 'follow_up'
+               WHEN MAX(engagement_score, ?) >= 90 THEN 'hot'
+               WHEN MAX(engagement_score, ?) >= 70 THEN 'walkthrough'
+               WHEN MAX(engagement_score, ?) >= 40 THEN 'follow_up'
                ELSE 'nurture'
              END,
              engagement_reasons = CASE
@@ -74,7 +93,16 @@ redirectRouter.get('/r/:lead_id', async (c) => {
              updated_at = datetime('now')
          WHERE id = ?`,
     )
-      .bind(nextStatus, '+40 clicked tracked text link', '+40 clicked tracked text link', id)
+      .bind(
+        nextStatus,
+        clickFloor,
+        clickFloor,
+        clickFloor,
+        clickFloor,
+        clickReason,
+        clickReason,
+        id,
+      )
       .run();
 
     await c.env.DB.prepare(
@@ -105,4 +133,62 @@ redirectRouter.get('/r/:lead_id', async (c) => {
     }
     return c.text('Link temporarily unavailable', 500);
   }
+});
+
+// GET /book/:lead_id — records scheduling intent, then forwards to the
+// agency's public HoneyBook calendar. This is deliberately separate from
+// website sessions/Clarity: opening a calendar is an 80-point intent floor,
+// not a site visit or confirmed booking.
+redirectRouter.get('/book/:lead_id', async (c) => {
+  const id = parseInt(c.req.param('lead_id'), 10);
+  if (isNaN(id) || id <= 0) return c.redirect(CALENDAR_URL, 302);
+
+  try {
+    const lead = await c.env.DB.prepare(
+      `SELECT id, pipeline_status
+         FROM leads
+        WHERE id = ? AND deleted_at IS NULL`,
+    ).bind(id).first<{ id: number; pipeline_status: string }>();
+    if (!lead) return c.redirect(CALENDAR_URL, 302);
+
+    const nextStatus =
+      lead.pipeline_status === 'sent_no_reply' ? 'engaged' : lead.pipeline_status;
+    const reason = '+80 opened scheduling calendar';
+    await c.env.DB.prepare(
+      `UPDATE leads
+          SET pipeline_status = ?,
+              engagement_score = MAX(engagement_score, 80),
+              engagement_grade = CASE
+                WHEN MAX(engagement_score, 80) >= 90 THEN 'hot'
+                ELSE 'walkthrough'
+              END,
+              engagement_reasons = CASE
+                WHEN COALESCE(engagement_reasons, '') LIKE '%opened scheduling calendar%'
+                  THEN engagement_reasons
+                WHEN json_valid(engagement_reasons)
+                  THEN json_insert(engagement_reasons, '$[#]', ?)
+                ELSE json_array(?)
+              END,
+              pipeline_last_action_at = datetime('now'),
+              updated_at = datetime('now')
+        WHERE id = ?`,
+    ).bind(nextStatus, reason, reason, id).run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+       VALUES (?, 'calendar_clicked', ?, ?, ?)`,
+    ).bind(
+      id,
+      lead.pipeline_status,
+      nextStatus !== lead.pipeline_status ? nextStatus : null,
+      JSON.stringify({ destination: 'honeybook' }),
+    ).run();
+
+    log('info', 'redirect', `Calendar click tracked for lead ${id}`, {
+      promoted: nextStatus !== lead.pipeline_status,
+    });
+  } catch (err) {
+    log('error', 'redirect', 'Calendar click tracker failed', err);
+  }
+  return c.redirect(CALENDAR_URL, 302);
 });

@@ -1263,6 +1263,10 @@ function activityTitle(action: string): string {
     case 'brief_generated': return 'Brief generated';
     case 'intro_sent': return 'Intro text sent';
     case 'followed_up': return 'Follow-up text sent';
+    case 'call_outcome': return 'Call outcome recorded';
+    case 'calendar_sent': return 'Calendar link sent';
+    case 'calendar_clicked': return 'Calendar opened';
+    case 'scheduling_followup': return 'Scheduling follow-up sent';
     case 'called': return 'Call action logged';
     case 'click_tracked': return 'Tracked site visit';
     case 'clarity_synced': return 'Clarity synced';
@@ -1280,6 +1284,13 @@ function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): 
   if (activity.action === 'url_saved') return 'This is the demo-site URL saved for outreach.';
   if (activity.action === 'intro_sent') return 'First text opened in Messages.';
   if (activity.action === 'followed_up') return 'Follow-up text opened in Messages.';
+  if (activity.action === 'call_outcome') {
+    const outcome = typeof meta.outcome === 'string' ? meta.outcome.replace(/_/g, ' ') : null;
+    return outcome ? `Call result: ${outcome}.` : 'The call result was recorded.';
+  }
+  if (activity.action === 'calendar_sent') return 'Tracked HoneyBook link opened in Messages.';
+  if (activity.action === 'calendar_clicked') return 'Prospect opened the tracked HoneyBook calendar.';
+  if (activity.action === 'scheduling_followup') return 'Scheduling follow-up opened in Messages.';
   if (activity.action === 'click_tracked') return 'Prospect opened the tracked link.';
   if (activity.action === 'clarity_synced') {
     const score = typeof meta.score === 'number' ? meta.score : null;
