@@ -18,6 +18,10 @@ interface LeadForClarity extends Pick<
 > {
   /** Authoritative app-owned opens recorded by /r/:lead_id. */
   tracked_clicks: number;
+  /** Manual positive/neutral SMS reply recorded by the operator. */
+  reply_received: number;
+  /** Scheduling intent recorded by /book/:lead_id. */
+  calendar_clicked: number;
   /** 1 while known test traffic is still inside Clarity's rolling window. */
   clarity_suppressed: number;
 }
@@ -142,6 +146,8 @@ function scoreLead(records: unknown[], lead: LeadForClarity): EngagementScore {
   // structural key "information" look like a form interaction.
   const text = collectTextValues(records).join(' ').toLowerCase();
   const trackedClicks = lead.tracked_clicks ?? 0;
+  const replied = lead.reply_received > 0;
+  const calendarClicked = lead.calendar_clicked > 0;
   const claritySessions = Math.round(maxNumberMatching(records, [/^totalSessionCount$/i]));
   const visits = trackedClicks;
   const engagementSeconds = maxNumberMatching(records, [/engagement/i, /time/i, /duration/i]);
@@ -152,9 +158,17 @@ function scoreLead(records: unknown[], lead: LeadForClarity): EngagementScore {
   // Clarity is context, not identity. Do not score a shared-project URL row
   // until the app-owned text link proves this lead actually opened the site.
   if (trackedClicks === 0) {
+    if (replied) {
+      score = 40;
+      reasons.push('+40 replied by text');
+    }
+    if (calendarClicked) {
+      score = Math.max(score, 80);
+      reasons.push('+80 opened scheduling calendar');
+    }
     return {
-      score: 0,
-      grade: gradeFor(0),
+      score,
+      grade: gradeFor(score),
       reasons,
       visits,
       claritySessions,
@@ -164,6 +178,10 @@ function scoreLead(records: unknown[], lead: LeadForClarity): EngagementScore {
 
   score += 40;
   reasons.push('+40 clicked tracked text link');
+  if (replied) {
+    score += 15;
+    reasons.push('+15 replied and opened site');
+  }
   if (engagementSeconds >= 30) {
     score += 5;
     reasons.push('+5 stayed 30 sec');
@@ -199,6 +217,10 @@ function scoreLead(records: unknown[], lead: LeadForClarity): EngagementScore {
   if (trackedClicks > 1 || claritySessions > 1) {
     score += 20;
     reasons.push('+20 returned later');
+  }
+  if (calendarClicked) {
+    score = Math.max(score, 80);
+    reasons.push('+80 opened scheduling calendar');
   }
 
   score = Math.min(100, score);
@@ -268,6 +290,24 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
         WHERE lead_activity.lead_id = leads.id
           AND lead_activity.action = 'click_tracked'
       ) AS tracked_clicks,
+      (
+        SELECT COUNT(*)
+        FROM lead_activity
+        WHERE lead_activity.lead_id = leads.id
+          AND lead_activity.action = 'reply_received'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM lead_activity AS undo_activity
+            WHERE undo_activity.action = 'undo'
+              AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
+          )
+      ) AS reply_received,
+      (
+        SELECT COUNT(*)
+        FROM lead_activity
+        WHERE lead_activity.lead_id = leads.id
+          AND lead_activity.action = 'calendar_clicked'
+      ) AS calendar_clicked,
       CASE
         WHEN clarity_ignore_until IS NOT NULL
           AND clarity_ignore_until > datetime('now') THEN 1
@@ -286,6 +326,33 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
   // trustworthy number of tracked outreach-link opens, never a rolling
   // shared-project Clarity aggregate.
   await env.DB.prepare(`
+    WITH activity_flags AS (
+      SELECT l.id,
+             EXISTS (
+               SELECT 1 FROM lead_activity
+               WHERE lead_id = l.id AND action = 'click_tracked'
+             ) AS has_click,
+             EXISTS (
+               SELECT 1
+               FROM lead_activity AS reply_activity
+               WHERE reply_activity.lead_id = l.id
+                 AND reply_activity.action = 'reply_received'
+                 AND NOT EXISTS (
+                   SELECT 1
+                   FROM lead_activity AS undo_activity
+                   WHERE undo_activity.action = 'undo'
+                     AND json_extract(undo_activity.meta, '$.undid_activity_id') = reply_activity.id
+                 )
+             ) AS has_reply,
+             EXISTS (
+               SELECT 1 FROM lead_activity
+               WHERE lead_id = l.id AND action = 'calendar_clicked'
+             ) AS has_calendar
+      FROM leads AS l
+      WHERE l.deleted_at IS NULL
+        AND l.site_url IS NOT NULL
+        AND l.pipeline_status NOT IN ('booked', 'archived')
+    )
     UPDATE leads
     SET pipeline_sessions = (
           SELECT COUNT(*)
@@ -294,30 +361,39 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
             AND lead_activity.action = 'click_tracked'
         ),
         engagement_score = CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM lead_activity
-            WHERE lead_activity.lead_id = leads.id
-              AND lead_activity.action = 'click_tracked'
-          ) THEN 40
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1 THEN 80
+          WHEN (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1 THEN 55
+          WHEN (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+            OR (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1 THEN 40
           ELSE 0
         END,
         engagement_grade = CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM lead_activity
-            WHERE lead_activity.lead_id = leads.id
-              AND lead_activity.action = 'click_tracked'
-          ) THEN 'follow_up'
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1 THEN 'walkthrough'
+          WHEN (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+            OR (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1 THEN 'follow_up'
           ELSE 'nurture'
         END,
         engagement_reasons = CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM lead_activity
-            WHERE lead_activity.lead_id = leads.id
-              AND lead_activity.action = 'click_tracked'
-          ) THEN json_array('+40 clicked tracked text link')
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 clicked tracked text link', '+15 replied and opened site', '+80 opened scheduling calendar')
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 clicked tracked text link', '+80 opened scheduling calendar')
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 replied by text', '+80 opened scheduling calendar')
+          WHEN (SELECT has_calendar FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+80 opened scheduling calendar')
+          WHEN (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+           AND (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 clicked tracked text link', '+15 replied and opened site')
+          WHEN (SELECT has_click FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 clicked tracked text link')
+          WHEN (SELECT has_reply FROM activity_flags WHERE id = leads.id) = 1
+            THEN json_array('+40 replied by text')
           ELSE NULL
         END
     WHERE deleted_at IS NULL

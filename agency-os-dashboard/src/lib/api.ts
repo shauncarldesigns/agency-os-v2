@@ -489,7 +489,18 @@ export const api = {
     // the operator dismisses the toast in the ~6s window.
     action: (
       id: number,
-      body: { action: 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived'; meta?: unknown },
+      body: {
+        action:
+          | 'intro_sent'
+          | 'followed_up'
+          | 'reply_received'
+          | 'call_outcome'
+          | 'calendar_sent'
+          | 'scheduling_followup'
+          | 'called'
+          | 'archived';
+        meta?: unknown;
+      },
     ) =>
       apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/action`, {
         method: 'POST',

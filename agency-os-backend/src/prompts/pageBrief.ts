@@ -83,7 +83,7 @@ A small set of labelled fields the builder uses as actual data — \`<title>\`, 
 - Schema: \`{LocalBusiness | Service | FAQPage | …}\`
 - Internal links: \`{comma-separated slugs the page must link to}\`
 
-These are LITERAL. The builder reads them as data, not suggestions. The meta description must hit 150–160 characters. The H1 must contain the SEO target (for service-area pages, both the service name and the city).
+These are LITERAL. The builder reads them as data, not suggestions. The meta description must hit 150–160 characters. Every H1 must clearly state both what the business does and where it does it by including the page's primary service or trade and the target city or service area. It may contain other natural supporting text, but service + location is non-negotiable for SEO. For hub, About, FAQ, and Contact pages, use the business's primary trade/service and primary city rather than writing a generic page-title H1.
 
 Then a horizontal rule (\`---\`) and the letter starts.
 
@@ -97,7 +97,7 @@ What the letter does:
 
 - **Names the angle directly.** The single strongest thing this business has — drawn from the master brief's review themes, owner identity, differentiators, or testimonials. Examples: "Kyle answers his own phone." "Same-day response when other shops ghost." "Specialists, not generalists." Pick ONE angle for this page and lead with it.
 
-- **Supplies headline and subhead suggestions inline, as quoted phrases.** Not as labelled fields. Write something like: *"The headline should communicate the owner-operated angle directly — something like 'Owner-operated plumbing in Greenleaf, WI'. The subhead should make it human — 'Kyle answers the phone. Kyle shows up. No estimating fees, no upsells.' Those are the words to use."* The builder may lightly adjust phrasing but won't write its own headline from scratch — your suggestions land as the headline.
+- **Supplies headline and subhead suggestions inline, as quoted phrases.** Not as labelled fields. The suggested headline must preserve the same service + location requirement as the literal H1. Write something like: *"The headline should communicate the owner-operated angle directly — something like 'Owner-operated plumbing in Greenleaf, WI'. The subhead should make it human — 'Kyle answers the phone. Kyle shows up. No estimating fees, no upsells.' Those are the words to use."* The builder may lightly adjust phrasing but must not remove the service or location, and won't write its own headline from scratch — your suggestions land as the headline.
 
 - **Surfaces specific facts.** Years in trade, owner name, license numbers, certifications, named differentiators. Pull these from the master brief verbatim. If the master brief has \`[TBD: founded year]\`, propagate the TBD — never fabricate.
 
@@ -127,6 +127,7 @@ Also avoid "family-owned-and-operated" as a tagline (it's a fact, not a value pr
 
 ═══ MECHANICAL RULES (rigid — the builder relies on them) ═══
 
+- Every page H1: explicitly name what the business does and where it does it. Include the primary service/trade and target city/service area in natural language; other copy may surround them.
 - Service-area pages: meta title follows \`{Service} in {City}, {State} | {Business Name}\`. URL slug follows the master brief's \`/service-areas/<service>-<city>-<state>\` pattern. H1 must contain both the service name and the city.
 - Service pages: list every child service-area page slug in the SEO \`Internal links\` field. Phone reachability is a constraint stated in the letter, not a header.
 - Meta descriptions: 150–160 characters. Count them.
