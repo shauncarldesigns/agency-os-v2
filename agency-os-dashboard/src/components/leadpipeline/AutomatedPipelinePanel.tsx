@@ -202,8 +202,8 @@ function deriveOwnerFirst(ownerNames: string | null): string {
 }
 
 // Human-readable relative time. Server sends ISO; UI shows "Sent 3 days ago".
-// The action prefix comes from the most recent activity type; if we don't
-// know it, we just say "Updated <when>".
+// The action prefix comes from the most recent activity type; older rows
+// without one fall back to a specific label derived from workflow state.
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return 'recently';
@@ -224,11 +224,13 @@ function relativeTime(iso: string): string {
 function actionLabel(action: string | null, status: PipelineStatus): string {
   switch (action) {
     case 'url_saved':
-      return 'Built';
+      return 'Site URL saved';
+    case 'brief_generated':
+      return 'Brief generated';
     case 'intro_sent':
-      return 'Sent';
+      return 'Intro text sent';
     case 'followed_up':
-      return 'Followed up';
+      return 'Follow-up text sent';
     case 'called':
       return 'Called';
     case 'call_outcome':
@@ -239,10 +241,28 @@ function actionLabel(action: string | null, status: PipelineStatus): string {
       return 'Scheduling follow-up sent';
     case 'click_tracked':
       return 'Visited';
+    case 'calendar_clicked':
+      return 'Calendar opened';
+    case 'reply_received':
+      return 'Reply received';
+    case 'archived':
+      return 'Archived';
+    case 'clarity_synced':
+      return 'Engagement synced';
+    case 'engagement_reset':
+      return 'Engagement reset';
+    case 'status_changed':
+      return 'Status changed';
     default:
-      // No activity yet — fall back to something status-appropriate.
-      if (status === 'awaiting_build') return 'Enriched';
-      return 'Updated';
+      // Old/imported rows can have a last-action timestamp without an
+      // activity row. Use the workflow state instead of the useless
+      // catch-all "Updated" label.
+      if (status === 'awaiting_build') return 'Lead enriched';
+      if (status === 'ready_to_send') return 'Brief ready';
+      if (status === 'sent_no_reply') return 'Intro text sent';
+      if (status === 'engaged') return 'Engagement recorded';
+      if (status === 'booked') return 'Demo booked';
+      return 'Archived';
   }
 }
 
@@ -309,6 +329,127 @@ function EngagementDot({ sessions }: { sessions: number }) {
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
       {sessions} session{sessions === 1 ? '' : 's'}
     </span>
+  );
+}
+
+type TouchDecay = {
+  label: string;
+  detail: string;
+  activeSegments: number;
+  pillClass: string;
+  dotClass: string;
+  segmentClass: string;
+};
+
+function getTouchDecay(lead: PipelineLead): TouchDecay {
+  if (!lead.pipelineLastActionAt) {
+    return {
+      label: 'No outreach yet',
+      detail: 'Start sequence',
+      activeSegments: 0,
+      pillClass: 'border-slate-200 bg-slate-50 text-slate-600',
+      dotClass: 'bg-slate-300',
+      segmentClass: 'bg-slate-300',
+    };
+  }
+
+  const ageMs = Math.max(0, Date.now() - new Date(lead.pipelineLastActionAt).getTime());
+  const ageHours = ageMs / (60 * 60 * 1000);
+  const action = lead.lastAction.replace(
+    /\s+(just now|\d+\s+(?:min|hrs?|days?|mos?)\s+ago)$/,
+    '',
+  );
+  const elapsed = relativeTime(lead.pipelineLastActionAt);
+
+  if (ageHours < 24) {
+    return {
+      label: action,
+      detail: elapsed,
+      activeSegments: 1,
+      pillClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      dotClass: 'bg-emerald-500',
+      segmentClass: 'bg-emerald-400',
+    };
+  }
+  if (ageHours < 72) {
+    return {
+      label: action,
+      detail: elapsed,
+      activeSegments: 2,
+      pillClass: 'border-blue-200 bg-blue-50 text-blue-700',
+      dotClass: 'bg-blue-500',
+      segmentClass: 'bg-blue-400',
+    };
+  }
+  if (ageHours < 168) {
+    return {
+      label: action,
+      detail: elapsed,
+      activeSegments: 3,
+      pillClass: 'border-amber-200 bg-amber-50 text-amber-800',
+      dotClass: 'bg-amber-500',
+      segmentClass: 'bg-amber-400',
+    };
+  }
+  return {
+    label: action,
+    detail: elapsed,
+    activeSegments: 4,
+    pillClass: 'border-rose-200 bg-rose-50 text-rose-700',
+    dotClass: 'bg-rose-500',
+    segmentClass: 'bg-rose-400',
+  };
+}
+
+function LastTouchIndicator({
+  lead,
+  compact = false,
+}: {
+  lead: PipelineLead;
+  compact?: boolean;
+}) {
+  const decay = getTouchDecay(lead);
+  const followupCount = Math.max(lead.followupStep, lead.noReplyStep);
+  const isLatestFollowup = lead.lastAction.startsWith('Follow-up text sent');
+  const displayLabel = isLatestFollowup && followupCount > 0
+    ? `Follow-up #${followupCount} sent`
+    : decay.label;
+  return (
+    <div
+      className={`rounded-lg border ${decay.pillClass} ${compact ? 'px-2 py-1.5' : 'px-2.5 py-2'}`}
+      title={`Last outreach activity: ${lead.lastAction}`}
+    >
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${decay.dotClass}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className={`${compact ? 'text-[10px]' : 'text-xs'} truncate font-semibold`}>
+              {displayLabel}
+            </span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {followupCount > 0 && !isLatestFollowup && (
+                <span className={`${compact ? 'text-[8px]' : 'text-[9px]'} rounded-full bg-white/80 px-1.5 py-0.5 font-semibold`}>
+                  {followupCount} follow-up{followupCount === 1 ? '' : 's'}
+                </span>
+              )}
+              <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} font-medium opacity-80`}>
+                {decay.detail}
+              </span>
+            </div>
+          </div>
+          <div className="mt-1 flex gap-0.5" aria-label={`Touch decay: ${decay.activeSegments} of 4`}>
+            {[1, 2, 3, 4].map((segment) => (
+              <span
+                key={segment}
+                className={`h-1 flex-1 rounded-full ${
+                  segment <= decay.activeSegments ? decay.segmentClass : 'bg-white/80'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -808,26 +949,30 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
-        <span className="text-xs text-slate-400">{lead.lastAction}</span>
-        {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && !lead.replied && (
+      <div className="mt-auto flex items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          <LastTouchIndicator lead={lead} />
+        </div>
+        <div className="flex shrink-0 items-center">
+          {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && !lead.replied && (
+            <button
+              onClick={() => onReply(lead)}
+              title="They replied"
+              aria-label={`Mark ${lead.name} as replied`}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              <MessageCircleReply className="h-4 w-4" strokeWidth={2.25} />
+            </button>
+          )}
           <button
-            onClick={() => onReply(lead)}
-            title="They replied"
-            aria-label={`Mark ${lead.name} as replied`}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+            onClick={() => onViewLead(lead)}
+            title="View lead"
+            aria-label={`View ${lead.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
           >
-            <MessageCircleReply className="h-4 w-4" strokeWidth={2.25} />
+            <Eye className="h-4 w-4" strokeWidth={2.25} />
           </button>
-        )}
-        <button
-          onClick={() => onViewLead(lead)}
-          title="View lead"
-          aria-label={`View ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-        >
-          <Eye className="h-4 w-4" strokeWidth={2.25} />
-        </button>
+        </div>
       </div>
     </div>
   );
@@ -1734,7 +1879,9 @@ function BoardCard({
           </button>
         </div>
       </div>
-      <p className="mt-1.5 text-[10px] text-slate-400">{lead.lastAction}</p>
+      <div className="mt-2">
+        <LastTouchIndicator lead={lead} compact />
+      </div>
     </div>
   );
 }
@@ -1776,7 +1923,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     setLoadError(null);
     try {
       const { leads: rows } = await api.pipeline.list();
-      setLeads(rows.map((l) => mapLeadRow(l)));
+      setLeads(rows.map((l) => mapLeadRow(l, l.pipeline_last_action ?? null)));
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Failed to load leads';
       setLoadError(msg);
