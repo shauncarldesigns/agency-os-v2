@@ -1400,40 +1400,42 @@ function BoardCard({
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button
           onClick={() => onAction(lead)}
-          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
+          className="flex w-fit min-w-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
         >
-          {isCallAction && <PhoneCall className="h-3 w-3" strokeWidth={2.25} />}
-          {actionLabel}
-          <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+          {isCallAction && <PhoneCall className="h-3 w-3 shrink-0" strokeWidth={2.25} />}
+          <span className="truncate">{actionLabel}</span>
+          <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
         </button>
-        {isStaleLead(lead) && (
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {isStaleLead(lead) && (
+            <button
+              onClick={() => onArchive(lead)}
+              title="Archive stale lead"
+              aria-label={`Archive ${lead.name}`}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {lead.status === 'sent_no_reply' && (
+            <button
+              onClick={() => onReply(lead)}
+              title="They replied"
+              aria-label={`Mark ${lead.name} as replied`}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              <MessageCircleReply className="h-3.5 w-3.5" strokeWidth={2.25} />
+            </button>
+          )}
           <button
-            onClick={() => onArchive(lead)}
-            title="Archive stale lead"
-            aria-label={`Archive ${lead.name}`}
-            className="flex h-7 w-4 shrink-0 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            onClick={() => onViewLead(lead)}
+            title="View lead"
+            aria-label={`View ${lead.name}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
           >
-            <Archive className="h-3.5 w-3.5" />
+            <Eye className="h-3.5 w-3.5" strokeWidth={2.25} />
           </button>
-        )}
-        {lead.status === 'sent_no_reply' && (
-          <button
-            onClick={() => onReply(lead)}
-            title="They replied"
-            aria-label={`Mark ${lead.name} as replied`}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-          >
-            <MessageCircleReply className="h-3.5 w-3.5" strokeWidth={2.25} />
-          </button>
-        )}
-        <button
-          onClick={() => onViewLead(lead)}
-          title="View lead"
-          aria-label={`View ${lead.name}`}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-        >
-          <Eye className="h-3.5 w-3.5" strokeWidth={2.25} />
-        </button>
+        </div>
       </div>
       <p className="mt-1.5 text-[10px] text-slate-400">{lead.lastAction}</p>
     </div>
