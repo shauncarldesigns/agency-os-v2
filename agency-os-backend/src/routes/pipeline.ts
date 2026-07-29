@@ -37,6 +37,7 @@ const REVERSIBLE_ACTIONS = new Set([
   'url_saved',
   'intro_sent',
   'followed_up',
+  'reply_received',
   'called',
   'archived',
 ]);
@@ -70,7 +71,23 @@ const PIPELINE_LEAD_SELECT = `
                 )
            )
            ELSE 0
-         END AS pipeline_followup_step
+         END AS pipeline_followup_step,
+         CASE
+           WHEN leads.pipeline_status = 'sent_no_reply' THEN (
+             SELECT COUNT(*)
+               FROM lead_activity
+              WHERE lead_activity.lead_id = leads.id
+                AND lead_activity.action = 'followed_up'
+                AND lead_activity.from_status = 'sent_no_reply'
+                AND NOT EXISTS (
+                  SELECT 1
+                    FROM lead_activity AS undo_activity
+                   WHERE undo_activity.action = 'undo'
+                     AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
+                )
+           )
+           ELSE 0
+         END AS pipeline_no_reply_step
     FROM leads`;
 
 // ---------------------------------------------------------------------------
@@ -412,12 +429,12 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 // ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/action
 // ---------------------------------------------------------------------------
-// Body: { action: 'intro_sent' | 'followed_up' | 'called' | 'archived', meta?: unknown }
+// Body: { action: 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived', meta?: unknown }
 // Applies the (optional) status transition, updates the last-action pointer,
 // writes an activity row. Optimistic: the client fires this on tap of
 // "Open in Messages" even though we can't confirm the operator actually
 // sent — /undo lets them recover.
-type OutreachAction = 'intro_sent' | 'followed_up' | 'called' | 'archived';
+type OutreachAction = 'intro_sent' | 'followed_up' | 'reply_received' | 'called' | 'archived';
 
 const ACTION_TRANSITIONS: Record<
   OutreachAction,
@@ -425,6 +442,7 @@ const ACTION_TRANSITIONS: Record<
 > = {
   intro_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
   followed_up: {}, // no status change — stays in sent_no_reply or engaged
+  reply_received: { from: ['sent_no_reply'], to: 'engaged' },
   called: {}, // no status change — display-only
   archived: { from: ['sent_no_reply', 'engaged'], to: 'archived' },
 };
@@ -468,6 +486,16 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       sets.push('pipeline_status = ?');
       params.push(toStatus);
     }
+    if (action === 'reply_received') {
+      sets.push(
+        'engagement_score = MAX(engagement_score, 40)',
+        "engagement_grade = CASE WHEN engagement_score < 40 THEN 'follow_up' ELSE engagement_grade END",
+        `engagement_reasons = CASE
+           WHEN engagement_score < 40 THEN '["+40 replied by text"]'
+           ELSE engagement_reasons
+         END`,
+      );
+    }
     params.push(id);
     await c.env.DB.prepare(`UPDATE leads SET ${sets.join(', ')} WHERE id = ?`)
       .bind(...params)
@@ -484,6 +512,13 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
               ...(body.meta && typeof body.meta === 'object' ? body.meta : {}),
               previous_pipeline_last_action_at: lead.pipeline_last_action_at,
             }
+          : action === 'reply_received'
+            ? {
+                ...(body.meta && typeof body.meta === 'object' ? body.meta : {}),
+                previous_engagement_score: lead.engagement_score,
+                previous_engagement_grade: lead.engagement_grade,
+                previous_engagement_reasons: lead.engagement_reasons,
+              }
           : body.meta,
     });
 
@@ -749,6 +784,37 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
       }
       sets.push('pipeline_last_action_at = ?');
       params.push(previousLastAction);
+    }
+    if (target.action === 'reply_received') {
+      try {
+        const parsed = target.meta ? JSON.parse(target.meta) as {
+          previous_engagement_score?: unknown;
+          previous_engagement_grade?: unknown;
+          previous_engagement_reasons?: unknown;
+        } : null;
+        sets.push(
+          'engagement_score = ?',
+          'engagement_grade = ?',
+          'engagement_reasons = ?',
+        );
+        params.push(
+          typeof parsed?.previous_engagement_score === 'number'
+            ? parsed.previous_engagement_score
+            : 0,
+          typeof parsed?.previous_engagement_grade === 'string'
+            ? parsed.previous_engagement_grade
+            : 'nurture',
+          typeof parsed?.previous_engagement_reasons === 'string'
+            ? parsed.previous_engagement_reasons
+            : null,
+        );
+      } catch {
+        sets.push(
+          'engagement_score = 0',
+          "engagement_grade = 'nurture'",
+          'engagement_reasons = NULL',
+        );
+      }
     }
     // pipeline_last_action_at is intentionally NOT rolled back to the prior
     // action's timestamp — showing "just now" is misleading, and showing the

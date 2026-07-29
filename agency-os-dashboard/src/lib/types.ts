@@ -71,6 +71,7 @@ export interface Lead {
   pipeline_sessions: number;                   // engagement counter (click-tracker + Clarity)
   pipeline_last_action_at: string | null;      // ISO timestamp — display string derived client-side
   pipeline_followup_step?: number;             // derived from Engaged follow-up activity
+  pipeline_no_reply_step?: number;             // derived from Sent — No Reply activity
   engagement_score: number;
   engagement_grade: 'hot' | 'walkthrough' | 'follow_up' | 'nurture' | string;
   engagement_reasons: string | null;
@@ -91,6 +92,7 @@ export interface LeadActivity {
     | 'url_saved'
     | 'intro_sent'
     | 'followed_up'
+    | 'reply_received'
     | 'called'
     | 'status_changed'
     | 'click_tracked'
