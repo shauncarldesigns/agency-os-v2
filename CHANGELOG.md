@@ -12,6 +12,7 @@ when a manual deploy was needed.
 ### Sent — No Reply outreach sequence
 
 - **Sent — No Reply now advances through a complete, activity-backed outreach sequence inside one column.** Cards progress from Send Reminder to Send Final Nudge to Call — Last Chance, become archive-eligible 14 days after the completed text sequence, and expose a compact “They replied” action that promotes the lead to Engaged with a reversible 40-point floor. Every text retains the tracked homepage link until the lead records a real visit, including leads promoted by a reply before clicking. Ready to Send remains unchanged. Backend + dashboard.
+- **Text Outreach card actions now keep a consistent compact layout at every stage.** Archive, reply, and view controls share a fixed right-aligned icon group, while the primary action remains content-width and cannot push the icons through the card padding. Dashboard.
 
 ### Engaged outreach sequence
 
