@@ -224,7 +224,9 @@ themselves, not a description of them. Format:
   Subhead: <one or two sentences>
 Open the section with a line telling the builder to use this copy
 verbatim as the page hero and NOT to replace it with a generated
-headline. The H1 must read like something a customer would actually
+headline. The H1 must be the first text element in the hero: never place
+an eyebrow, category label, kicker, announcement chip, or AI-cliché pill
+badge above it. The H1 must read like something a customer would actually
 search for. It must explicitly state both what the business does and
 where it does it by naming the primary service(s) or trade and the target
 town. It may contain other natural supporting text, but service + location
@@ -303,6 +305,7 @@ Rules:
 - Contact details (phone, address, hours) must be written VERBATIM wherever you reference them — the exact digits, the exact street address. Never write "phone number" or "address" generically: this brief is landingsite's only data source, so a value you don't transcribe does not exist to the builder. If a detail is marked "(none on file)", do not instruct the page to include it — route contact through the form instead.
 - If the enrichment is sparse, say so honestly ("Reviews do not name specific services; use category-standard defaults for barbershops.") rather than filling gaps with generic marketing copy.
 - No fabricated testimonials. If quotes are provided in the input, you may quote them verbatim with attribution; do not paraphrase them.
+- In CONSTRAINTS, include this hard prohibition explicitly: "Do not place an eyebrow, kicker, category label, announcement chip, or AI-cliché pill badge above the H1. The H1 must be the first text element in the hero."
 - A "CUSTOMER REVIEWS (VERBATIM)" section containing the business's full mined review set is appended below your brief automatically after you finish — do NOT reproduce full reviews yourself, and never write a "CUSTOMER REVIEWS" header of any kind; your output ends at CONSTRAINTS. In the Reviews section suggestion and WHAT TO EMPHASIZE, direct the builder to pull exact quotes from that appended section.
 - Do not use any of these fluff words or their close variants: ${BANNED_WORDS.join(', ')}. If you catch yourself reaching for one, cut it or find a concrete alternative.
 - Keep the whole brief under 620 words. This is a working doc, not marketing copy.
