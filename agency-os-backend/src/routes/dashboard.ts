@@ -82,8 +82,10 @@ async function textOutreachActivity(
   followUpsSent: number;
   engagedLeads: number;
   totalVisits: number;
+  sendByHour: Array<{ hour: number; intro: number; followUps: number; total: number }>;
 }> {
-  const activityRow = await db.prepare(`
+  const [activityRow, messageRows] = await Promise.all([
+    db.prepare(`
     SELECT
       COUNT(DISTINCT CASE WHEN action = 'intro_sent' THEN lead_id END) as intro_texts_sent,
       COUNT(DISTINCT CASE WHEN action = 'followed_up' THEN lead_id END) as follow_ups_sent,
@@ -93,11 +95,19 @@ async function textOutreachActivity(
     WHERE action IN ('intro_sent', 'followed_up', 'click_tracked')
       AND date(created_at) >= ${since}
   `).first<{
-    intro_texts_sent: number | null;
-    follow_ups_sent: number | null;
-    engaged_leads: number | null;
-    total_visits: number | null;
-  }>();
+      intro_texts_sent: number | null;
+      follow_ups_sent: number | null;
+      engaged_leads: number | null;
+      total_visits: number | null;
+    }>(),
+    db.prepare(`
+      SELECT action, created_at
+      FROM lead_activity
+      WHERE action IN ('intro_sent', 'followed_up')
+        AND date(created_at) >= ${since}
+      ORDER BY created_at ASC
+    `).all<{ action: 'intro_sent' | 'followed_up'; created_at: string }>(),
+  ]);
 
   const sitesRow = await db.prepare(`
     SELECT COUNT(*) as n
@@ -111,12 +121,38 @@ async function textOutreachActivity(
       AND date(COALESCE(pipeline_last_action_at, updated_at, created_at)) >= ${since}
   `).first<{ n: number }>();
 
+  const sendByHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    intro: 0,
+    followUps: 0,
+    total: 0,
+  }));
+  const chicagoHour = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+  for (const row of messageRows.results) {
+    const timestamp = row.created_at.includes('T')
+      ? row.created_at
+      : `${row.created_at.replace(' ', 'T')}Z`;
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) continue;
+    const hour = Number.parseInt(chicagoHour.format(parsed), 10);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
+    const bucket = sendByHour[hour];
+    bucket.total += 1;
+    if (row.action === 'intro_sent') bucket.intro += 1;
+    else bucket.followUps += 1;
+  }
+
   return {
     sitesCreated: sitesRow?.n ?? 0,
     introTextsSent: activityRow?.intro_texts_sent ?? 0,
     followUpsSent: activityRow?.follow_ups_sent ?? 0,
     engagedLeads: activityRow?.engaged_leads ?? 0,
     totalVisits: activityRow?.total_visits ?? 0,
+    sendByHour,
   };
 }
 
@@ -495,6 +531,89 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     };
   }
 
+  async function effectivenessFor(start: string, end: string) {
+    const followUp = await c.env.DB.prepare(`
+      WITH followup_cohort AS (
+        SELECT f.lead_id, MIN(f.created_at) AS followed_at
+        FROM lead_activity f
+        WHERE f.action = 'followed_up'
+          AND date(f.created_at) BETWEEN ? AND ?
+          AND NOT EXISTS (
+            SELECT 1 FROM lead_activity undo
+            WHERE undo.action = 'undo'
+              AND json_extract(undo.meta, '$.undid_activity_id') = f.id
+          )
+        GROUP BY f.lead_id
+      )
+      SELECT
+        COUNT(*) AS followed_up,
+        SUM(CASE WHEN
+          NOT EXISTS (
+            SELECT 1 FROM lead_activity before_engagement
+            WHERE before_engagement.lead_id = cohort.lead_id
+              AND before_engagement.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
+              AND datetime(before_engagement.created_at) <= datetime(cohort.followed_at)
+              AND NOT EXISTS (
+                SELECT 1 FROM lead_activity undo
+                WHERE undo.action = 'undo'
+                  AND json_extract(undo.meta, '$.undid_activity_id') = before_engagement.id
+              )
+          )
+          AND EXISTS (
+            SELECT 1 FROM lead_activity after_engagement
+            WHERE after_engagement.lead_id = cohort.lead_id
+              AND after_engagement.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
+              AND datetime(after_engagement.created_at) > datetime(cohort.followed_at)
+              AND date(after_engagement.created_at) <= ?
+              AND NOT EXISTS (
+                SELECT 1 FROM lead_activity undo
+                WHERE undo.action = 'undo'
+                  AND json_extract(undo.meta, '$.undid_activity_id') = after_engagement.id
+              )
+          )
+          THEN 1 ELSE 0 END
+        ) AS activated
+      FROM followup_cohort cohort
+    `).bind(start, end, end).first<{
+      followed_up: number | null;
+      activated: number | null;
+    }>();
+
+    const calendar = await c.env.DB.prepare(`
+      WITH calendar_cohort AS (
+        SELECT lead_id, MIN(created_at) AS opened_at
+        FROM lead_activity
+        WHERE action = 'calendar_clicked'
+          AND date(created_at) BETWEEN ? AND ?
+        GROUP BY lead_id
+      )
+      SELECT
+        COUNT(*) AS opened,
+        SUM(CASE WHEN EXISTS (
+          SELECT 1 FROM demos
+          WHERE demos.lead_id = cohort.lead_id
+            AND datetime(demos.booked_at) >= datetime(cohort.opened_at)
+        ) THEN 1 ELSE 0 END) AS booked
+      FROM calendar_cohort cohort
+    `).bind(start, end).first<{
+      opened: number | null;
+      booked: number | null;
+    }>();
+
+    const followedUp = followUp?.followed_up ?? 0;
+    const activated = followUp?.activated ?? 0;
+    const calendarOpened = calendar?.opened ?? 0;
+    const calendarBooked = calendar?.booked ?? 0;
+    return {
+      followedUp,
+      activated,
+      followUpActivationRate: pct(activated, followedUp),
+      calendarOpened,
+      calendarBooked,
+      calendarBookingRate: pct(calendarBooked, calendarOpened),
+    };
+  }
+
   const [
     current,
     previous,
@@ -505,6 +624,8 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     hotLeads,
     smsCurrent,
     smsPrevious,
+    effectivenessCurrent,
+    effectivenessPrevious,
   ] = await Promise.all([
     funnelFor(week.monday, week.sunday),
     funnelFor(previousWeek.monday, previousWeek.sunday),
@@ -586,6 +707,8 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
     // needs explicit channel logging before it can have real numbers here.
     funnelFor(week.monday, week.sunday),
     funnelFor(previousWeek.monday, previousWeek.sunday),
+    effectivenessFor(week.monday, week.sunday),
+    effectivenessFor(previousWeek.monday, previousWeek.sunday),
   ]);
 
   currentActivity.sitesCreated = siteReadyRow?.n ?? 0;
@@ -605,6 +728,20 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
         tapRate: delta(current.tapRate, previous.tapRate),
         engagementRate: delta(current.engagementRate, previous.engagementRate),
         bookRate: delta(current.bookRate, previous.bookRate),
+      },
+    },
+    effectiveness: {
+      current: effectivenessCurrent,
+      previous: effectivenessPrevious,
+      trends: {
+        followUpActivationRate: delta(
+          effectivenessCurrent.followUpActivationRate,
+          effectivenessPrevious.followUpActivationRate,
+        ),
+        calendarBookingRate: delta(
+          effectivenessCurrent.calendarBookingRate,
+          effectivenessPrevious.calendarBookingRate,
+        ),
       },
     },
     activity: {

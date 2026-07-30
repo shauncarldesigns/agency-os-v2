@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Attributed outreach dashboard metrics
+
+- **The dashboard now prioritizes Text Outreach Activity and replaces loosely correlated funnel/channel cards with actionable, lead-attributed metrics.** Follow-up activation measures leads whose first engagement happened after a follow-up; Calendar → booked measures tracked calendar opens that later produced a demo. A Chicago-time 8am–8pm send-time chart replaces the unused Facebook Channel Split card and shows intro versus follow-up volume by hour. Backend + dashboard.
+
 ### Text Outreach search controls
 
 - **Text Outreach now has Industry and City filters plus a one-click Refresh control beside search.** Search covers company, industry, city, address, and phone; the same controls filter grid and board views, and status counts update to match the narrowed lead set. Dashboard.

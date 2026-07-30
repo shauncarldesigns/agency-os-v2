@@ -18,8 +18,6 @@ import {
   ApiError,
   type AgencySummary,
   type AnalyticsRange,
-  type PipelineChannelMetrics,
-  type PipelineFunnelMetrics,
   type PipelineHotLead,
   type PipelineKpisResponse,
   type TextOutreachActivityRange,
@@ -33,23 +31,17 @@ interface DashboardMetricsPanelProps {
   onSwitchTab?: (tab: Tab) => void;
 }
 
-// Reply-per-tap was dropped 2026-07-21: replies happen on the operator's
-// personal phone (sms: deep-link channel) and the operator decided not to
-// track them rather than log them manually.
-const FUNNEL_ITEMS: Array<{
-  key: keyof Pick<PipelineFunnelMetrics, 'tapRate' | 'engagementRate' | 'bookRate'>;
-  label: string;
-  detail: (m: PipelineFunnelMetrics) => string;
-}> = [
-  { key: 'tapRate', label: 'Tap rate', detail: (m) => `${m.tapped} taps / ${m.sent} sent` },
-  { key: 'engagementRate', label: 'Engagement rate', detail: (m) => `${m.engaged} engaged / ${m.sent} sent` },
-  { key: 'bookRate', label: 'Book rate', detail: (m) => `${m.booked} booked / ${m.sent} sent` },
-];
+interface SendTimingState {
+  activity: TextOutreachActivityResponse['activity'];
+  range: TextOutreachActivityRange;
+  loading: boolean;
+}
 
 export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetricsPanelProps) {
   const [data, setData] = useState<PipelineKpisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sendTiming, setSendTiming] = useState<SendTimingState | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -143,50 +135,43 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         />
       </section>
 
-      <AgencySummarySection showToast={showToast} />
+      <TextOutreachActivitySection
+        showToast={showToast}
+        fallback={data.activity.current}
+        onTimingChange={setSendTiming}
+      />
 
-      <TextOutreachActivitySection showToast={showToast} fallback={data.activity.current} />
+      <AgencySummarySection showToast={showToast} />
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Funnel strip</h3>
+            <h3 className="text-sm font-bold text-slate-900">Outreach effectiveness</h3>
             <p className="mt-0.5 text-xs text-slate-400">
-              Week of {data.week.monday} vs previous week
+              Lead-attributed results for week of {data.week.monday} vs previous week
             </p>
           </div>
-          <div className="text-xs text-slate-400">
-            {data.funnel.current.sent} sent · {data.funnel.current.tapped} tapped · {data.funnel.current.booked} booked
-          </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {FUNNEL_ITEMS.map((item) => (
-            <FunnelPill
-              key={item.key}
-              label={item.label}
-              value={data.funnel.current[item.key]}
-              trend={data.funnel.trends[item.key]}
-              detail={item.detail(data.funnel.current)}
-            />
-          ))}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <EffectivenessCard
+            label="Follow-up activation"
+            value={data.effectiveness.current.followUpActivationRate}
+            trend={data.effectiveness.trends.followUpActivationRate}
+            emptyLabel="No follow-ups"
+            detail={`${data.effectiveness.current.activated} of ${data.effectiveness.current.followedUp} followed-up leads first engaged afterward`}
+          />
+          <EffectivenessCard
+            label="Calendar → booked"
+            value={data.effectiveness.current.calendarBookingRate}
+            trend={data.effectiveness.trends.calendarBookingRate}
+            emptyLabel="No calendar opens"
+            detail={`${data.effectiveness.current.calendarBooked} of ${data.effectiveness.current.calendarOpened} calendar-opened leads later booked`}
+          />
         </div>
       </section>
 
       <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Channel split</h3>
-              <p className="mt-0.5 text-xs text-slate-400">Same ratios by tracked source</p>
-            </div>
-            <Send className="h-4 w-4 text-blue-500" />
-          </div>
-          <div className="space-y-3">
-            {data.channels.map((channel) => (
-              <ChannelCard key={channel.channel} channel={channel} />
-            ))}
-          </div>
-        </section>
+        <MessageSendTimeSection timing={sendTiming} />
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -221,9 +206,11 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
 function TextOutreachActivitySection({
   showToast,
   fallback,
+  onTimingChange,
 }: {
   showToast: ShowToast;
   fallback: TextOutreachActivityResponse['activity'];
+  onTimingChange: (timing: SendTimingState) => void;
 }) {
   const [range, setRange] = useState<TextOutreachActivityRange>('30d');
   const [activity, setActivity] = useState<TextOutreachActivityResponse['activity']>(fallback);
@@ -232,9 +219,13 @@ function TextOutreachActivitySection({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    onTimingChange({ activity, range, loading: true });
     api.dashboard.textOutreachActivity(range)
       .then((res) => {
-        if (!cancelled) setActivity(res.activity);
+        if (!cancelled) {
+          setActivity(res.activity);
+          onTimingChange({ activity: res.activity, range, loading: false });
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -247,7 +238,7 @@ function TextOutreachActivitySection({
     return () => {
       cancelled = true;
     };
-  }, [range, showToast, fallback]);
+  }, [range, showToast, fallback, onTimingChange]);
 
   const rangeDetail = activityRangeLabel(range);
 
@@ -469,6 +460,12 @@ function activityRangeLabel(range: TextOutreachActivityRange): string {
   return 'all time';
 }
 
+function formatDashboardHour(hour: number): string {
+  if (hour === 0) return '12a';
+  if (hour === 12) return '12p';
+  return hour < 12 ? `${hour}a` : `${hour - 12}p`;
+}
+
 function HeroKpi({
   icon: Icon,
   label,
@@ -513,16 +510,18 @@ function HeroKpi({
   );
 }
 
-function FunnelPill({
+function EffectivenessCard({
   label,
   value,
   trend,
   detail,
+  emptyLabel,
 }: {
   label: string;
   value: number | null;
   trend: number | null;
   detail: string;
+  emptyLabel: string;
 }) {
   const hasValue = value !== null;
   const trendLabel = trend === null ? 'No trend' : `${trend > 0 ? '+' : ''}${trend.toFixed(1)} pts`;
@@ -537,7 +536,7 @@ function FunnelPill({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
-          <div className="mt-1 text-xl font-bold text-slate-900">{hasValue ? `${value.toFixed(1)}%` : 'None sent'}</div>
+          <div className="mt-1 text-xl font-bold text-slate-900">{hasValue ? `${value.toFixed(1)}%` : emptyLabel}</div>
         </div>
         <span className={`rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold ${trendCls}`}>
           {trendLabel}
@@ -548,44 +547,78 @@ function FunnelPill({
   );
 }
 
-function ChannelCard({ channel }: { channel: PipelineChannelMetrics }) {
-  if (!channel.tracked || !channel.current) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-700">{channel.channel}</span>
-          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">Not tracked</span>
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-slate-500">
-          Add channel logging before this gets real numbers.
+function MessageSendTimeSection({ timing }: { timing: SendTimingState | null }) {
+  // Operator sending window: 8am–8pm. Twelve buckets represent messages
+  // sent from 8:00–8:59am through 7:00–7:59pm; 8pm is the right edge.
+  const sendByHour = (timing?.activity.sendByHour ?? [])
+    .filter((point) => point.hour >= 8 && point.hour < 20);
+  const maxHourlySends = Math.max(1, ...sendByHour.map((point) => point.total));
+  const totalMessages = sendByHour.reduce((sum, point) => sum + point.total, 0);
+  const peakHour = sendByHour.reduce<(typeof sendByHour)[number] | null>(
+    (peak, point) => (!peak || point.total > peak.total ? point : peak),
+    null,
+  );
+  const rangeDetail = activityRangeLabel(timing?.range ?? '30d');
+
+  return (
+    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60 transition-opacity ${timing?.loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-slate-900">Message send times</h3>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Intro texts and follow-ups · 8am–8pm Chicago time · {rangeDetail}
         </p>
       </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-slate-100 p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-800">{channel.channel}</span>
-        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-          {channel.current.sent} sent
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm bg-indigo-500" />
+          Intro texts
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm bg-slate-400" />
+          Follow-ups
+        </span>
+        {peakHour && peakHour.total > 0 && (
+          <span className="font-semibold text-slate-700">
+            Peak: {formatDashboardHour(peakHour.hour)} · {peakHour.total}
+          </span>
+        )}
       </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <MiniRatio label="Tap" value={channel.current.tapRate} />
-        <MiniRatio label="Engage" value={channel.current.engagementRate} />
-        <MiniRatio label="Book" value={channel.current.bookRate} />
-      </div>
-    </div>
-  );
-}
-
-function MiniRatio({ label, value }: { label: string; value: number | null }) {
-  return (
-    <div className="rounded-lg bg-slate-50 px-2 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-0.5 text-sm font-bold text-slate-800">{formatNullablePct(value)}</div>
-    </div>
+      {totalMessages === 0 ? (
+        <div className="flex h-44 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-400">
+          {timing?.loading ? 'Loading send activity…' : 'No sent-message activity in this range.'}
+        </div>
+      ) : (
+        <div className="overflow-x-auto pb-1">
+          <div className="flex h-48 min-w-[560px] items-end gap-2 border-b border-slate-200 px-1">
+            {sendByHour.map((point) => {
+              const totalHeight = (point.total / maxHourlySends) * 144;
+              const introHeight = point.total > 0
+                ? totalHeight * (point.intro / point.total)
+                : 0;
+              const followupHeight = totalHeight - introHeight;
+              return (
+                <div
+                  key={point.hour}
+                  className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                  title={`${formatDashboardHour(point.hour)}: ${point.intro} intro, ${point.followUps} follow-up`}
+                >
+                  {point.total > 0 && (
+                    <span className="mb-1 text-[9px] font-semibold text-slate-500">{point.total}</span>
+                  )}
+                  <div className="flex w-full max-w-5 flex-col justify-end overflow-hidden rounded-t-sm">
+                    <div className="bg-slate-400" style={{ height: `${followupHeight}px` }} />
+                    <div className="bg-indigo-500" style={{ height: `${introHeight}px` }} />
+                  </div>
+                  <span className="mt-1.5 h-4 text-[9px] text-slate-400">
+                    {formatDashboardHour(point.hour)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -632,12 +665,6 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
       )}
     </div>
   );
-}
-
-// Null means the denominator was zero this week (no sends yet) — say so
-// instead of the misleading "Not tracked".
-function formatNullablePct(value: number | null) {
-  return value === null ? 'None sent' : `${value.toFixed(1)}%`;
 }
 
 function formatCountDelta(value: number) {
