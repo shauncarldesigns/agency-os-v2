@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### H1-first outreach heroes
+
+- **Generated outreach-site briefs now explicitly prohibit AI-cliché pill badges above the H1.** The H1 must be the hero’s first text element, with eyebrow labels, kickers, category chips, and announcement pills banned in both the hero instructions and final constraints. Backend.
+
 ### Outreach last-touch timers
 
 - **Text Outreach cards now show the latest real action, its age, and follow-up count at a glance.** A four-stage color-decay indicator makes fresh, cooling, due, and overdue touches visually distinct in both grid and board views; vague “Updated” labels are replaced with activity-backed names such as “Follow-up #2 sent,” “Calendar opened,” or “Engagement recorded.” Backend + dashboard.
