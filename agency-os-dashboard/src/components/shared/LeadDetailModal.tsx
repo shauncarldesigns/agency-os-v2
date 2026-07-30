@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Phone,
@@ -752,6 +753,8 @@ function PhoneRouteRow({
   onOverride: (route: PhoneRoute) => void;
   compact?: boolean;
 }) {
+  const routeBadgeRef = useRef<HTMLSpanElement>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const route = lead.phone_route ?? 'unknown';
   const badgeCls = {
     text: 'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -759,10 +762,6 @@ function PhoneRouteRow({
     review: 'bg-amber-50 text-amber-700 border-amber-100',
     unknown: 'bg-slate-50 text-slate-500 border-slate-200',
   }[route] ?? 'bg-slate-50 text-slate-500 border-slate-200';
-  const routeSummary = [
-    lead.phone_line_type ? lineTypeLabel(lead.phone_line_type) : null,
-    lead.phone_carrier,
-  ].filter(Boolean).join(' · ');
   const tooltipRows = [
     ['Route', phoneRouteLabel(route)],
     ['Line type', lead.phone_line_type ? lineTypeLabel(lead.phone_line_type) : 'Unknown'],
@@ -778,25 +777,49 @@ function PhoneRouteRow({
   ];
   const routeActions = allRouteActions.filter((action) => action.route !== route);
   const disabled = classifying || routing !== null;
+  const showTooltip = () => {
+    const rect = routeBadgeRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltipPosition({
+      top: rect.bottom + 8,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 268)),
+    });
+  };
 
   return (
     <div className={compact ? 'space-y-1' : 'flex flex-wrap items-center gap-2'}>
-      <div className="group relative inline-flex w-fit items-center gap-1.5">
-        <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeCls}`}>
+      <div className="inline-flex w-fit">
+        <span
+          ref={routeBadgeRef}
+          tabIndex={0}
+          aria-describedby={`phone-routing-tooltip-${lead.id}`}
+          onMouseEnter={showTooltip}
+          onMouseLeave={() => setTooltipPosition(null)}
+          onFocus={showTooltip}
+          onBlur={() => setTooltipPosition(null)}
+          className={`inline-flex w-fit cursor-help rounded-full border px-2 py-0.5 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-blue-200 ${badgeCls}`}
+        >
           {phoneRouteLabel(route)}
         </span>
-        {routeSummary && <span className="text-xs text-slate-500">{routeSummary}</span>}
-        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg group-hover:block">
-          <div className="mb-2 font-semibold text-slate-800">Phone routing</div>
-          <div className="space-y-1">
-            {tooltipRows.map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[78px_1fr] gap-2">
-                <span className="text-slate-400">{label}</span>
-                <span className="min-w-0 break-words text-slate-700">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {tooltipPosition && createPortal(
+          <div
+            id={`phone-routing-tooltip-${lead.id}`}
+            role="tooltip"
+            style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+            className="pointer-events-none fixed z-[500] w-64 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl"
+          >
+            <div className="mb-2 font-semibold text-slate-800">Phone routing</div>
+            <div className="space-y-1">
+              {tooltipRows.map(([label, value]) => (
+                <div key={label} className="grid grid-cols-[78px_1fr] gap-2">
+                  <span className="text-slate-400">{label}</span>
+                  <span className="min-w-0 break-words text-slate-700">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
       </div>
       <button
         type="button"

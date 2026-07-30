@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Phone-routing tooltip cleanup
+
+- **Lead details now keeps phone-routing metadata inside the active route tooltip.** The redundant inline line-type and carrier label is removed, and the hover/focus tooltip renders above the modal footer without clipping. Dashboard.
+
 ### Attributed outreach dashboard metrics
 
 - **The dashboard now prioritizes Text Outreach Activity and replaces loosely correlated funnel/channel cards with actionable, lead-attributed metrics.** Follow-up activation measures leads whose first engagement happened after a follow-up; Calendar → booked measures tracked calendar opens that later produced a demo. A Chicago-time 8am–8pm send-time chart replaces the unused Facebook Channel Split card and shows intro versus follow-up volume by hour. Backend + dashboard.
