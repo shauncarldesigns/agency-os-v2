@@ -711,6 +711,12 @@ export interface PipelineActivityMetrics {
   followUpsSent: number;
   engagedLeads: number;
   totalVisits: number;
+  sendByHour?: Array<{
+    hour: number;
+    intro: number;
+    followUps: number;
+    total: number;
+  }>;
 }
 
 export interface TextOutreachActivityResponse {
@@ -734,6 +740,15 @@ export interface PipelineHotLead {
   last_engagement_at: string | null;
 }
 
+export interface OutreachEffectivenessMetrics {
+  followedUp: number;
+  activated: number;
+  followUpActivationRate: number | null;
+  calendarOpened: number;
+  calendarBooked: number;
+  calendarBookingRate: number | null;
+}
+
 export interface PipelineKpisResponse {
   week: WeekDates;
   previousWeek: WeekDates;
@@ -749,6 +764,14 @@ export interface PipelineKpisResponse {
       tapRate: number | null;
       engagementRate: number | null;
       bookRate: number | null;
+    };
+  };
+  effectiveness: {
+    current: OutreachEffectivenessMetrics;
+    previous: OutreachEffectivenessMetrics;
+    trends: {
+      followUpActivationRate: number | null;
+      calendarBookingRate: number | null;
     };
   };
   activity: {
