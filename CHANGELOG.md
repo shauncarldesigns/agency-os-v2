@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Text Outreach search controls
+
+- **Text Outreach now has Industry and City filters plus a one-click Refresh control beside search.** Search covers company, industry, city, address, and phone; the same controls filter grid and board views, and status counts update to match the narrowed lead set. Dashboard.
+
 ### H1-first outreach heroes
 
 - **Generated outreach-site briefs now explicitly prohibit AI-cliché pill badges above the H1.** The H1 must be the hero’s first text element, with eyebrow labels, kickers, category chips, and announcement pills banned in both the hero instructions and final constraints. Backend.

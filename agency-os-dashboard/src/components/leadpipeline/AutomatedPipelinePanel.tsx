@@ -5,7 +5,9 @@ import {
   Clock,
   Sparkles,
   Search,
+  Filter,
   ChevronRight,
+  ChevronDown,
   CheckCircle2,
   Link2,
   X,
@@ -138,6 +140,7 @@ export interface PipelineLead {
   rating: number;
   reviews: number;
   phone: string;
+  city: string;
   address: string;
   hours: string;
   status: PipelineStatus;
@@ -288,6 +291,7 @@ function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLe
     rating: l.google_rating ?? 0,
     reviews: l.google_review_count ?? 0,
     phone,
+    city: l.city ?? '',
     address,
     hours: l.gbp_hours ?? '',
     status,
@@ -1906,6 +1910,8 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
   const [modal, setModal] = useState<ModalState>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
@@ -2132,31 +2138,51 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     }
   };
 
-  const filtered = useMemo(
+  const industryOptions = useMemo(
+    () => Array.from(new Set(leads.map((l) => l.category).filter(Boolean))).sort(),
+    [leads],
+  );
+
+  const cityOptions = useMemo(
+    () => Array.from(new Set(leads.map((l) => l.city).filter(Boolean))).sort(),
+    [leads],
+  );
+
+  const visibleLeads = useMemo(
     () =>
       leads.filter((l) => {
-        const matchesFilter = filter === 'all' || l.status === filter;
-        const matchesQuery = l.name.toLowerCase().includes(query.toLowerCase());
-        return matchesFilter && matchesQuery;
+        const normalizedQuery = query.trim().toLowerCase();
+        const matchesQuery =
+          normalizedQuery === ''
+          || [l.name, l.category, l.city, l.address, l.phone]
+            .some((value) => value.toLowerCase().includes(normalizedQuery));
+        const matchesIndustry = industryFilter === 'all' || l.category === industryFilter;
+        const matchesCity = cityFilter === 'all' || l.city === cityFilter;
+        return matchesQuery && matchesIndustry && matchesCity;
       }),
-    [leads, filter, query],
+    [leads, query, industryFilter, cityFilter],
+  );
+
+  const filtered = useMemo(
+    () => visibleLeads.filter((l) => filter === 'all' || l.status === filter),
+    [visibleLeads, filter],
   );
 
   const counts = useMemo(
     () =>
-      leads.reduce<Record<string, number>>((acc, l) => {
+      visibleLeads.reduce<Record<string, number>>((acc, l) => {
         acc[l.status] = (acc[l.status] || 0) + 1;
         return acc;
       }, {}),
-    [leads],
+    [visibleLeads],
   );
 
   return (
     <div className="min-h-full bg-slate-50">
       {/* Page title/subtitle live in the AppShell top bar since Phase 3. */}
       <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={query}
@@ -2165,26 +2191,66 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
               className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
-          {/* Grid / Board view toggle */}
-          <div className="flex shrink-0 gap-0.5 rounded-xl bg-slate-100 p-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[170px] flex-1 sm:flex-none">
+              <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <select
+                value={industryFilter}
+                onChange={(event) => setIndustryFilter(event.target.value)}
+                aria-label="Filter by industry"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-9 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="all">All industries</option>
+                {industryOptions.map((industry) => (
+                  <option key={industry} value={industry}>{industry}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            </div>
+            <div className="relative min-w-[150px] flex-1 sm:flex-none">
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <select
+                value={cityFilter}
+                onChange={(event) => setCityFilter(event.target.value)}
+                aria-label="Filter by city"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-9 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="all">All cities</option>
+                {cityOptions.map((city) => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            </div>
             <button
-              onClick={() => setViewPersist('grid')}
-              title="Grid view"
-              className={`rounded-[10px] p-2 transition ${
-                view === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
+              onClick={() => void loadLeads()}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <LayoutGrid className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
-            <button
-              onClick={() => setViewPersist('board')}
-              title="Board view"
-              className={`rounded-[10px] p-2 transition ${
-                view === 'board' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              <Columns3 className="h-4 w-4" />
-            </button>
+            {/* Grid / Board view toggle */}
+            <div className="flex shrink-0 gap-0.5 rounded-xl bg-slate-100 p-0.5">
+              <button
+                onClick={() => setViewPersist('grid')}
+                title="Grid view"
+                className={`rounded-[10px] p-2 transition ${
+                  view === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewPersist('board')}
+                title="Board view"
+                className={`rounded-[10px] p-2 transition ${
+                  view === 'board' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Columns3 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2239,11 +2305,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
             {BOARD_COLUMNS.map((col) => {
               const cfg = STATUS_CONFIG[col.status];
               const ColIcon = cfg.icon;
-              const items = leads.filter(
-                (l) =>
-                  l.status === col.status &&
-                  l.name.toLowerCase().includes(query.toLowerCase()),
-              );
+              const items = visibleLeads.filter((l) => l.status === col.status);
               return (
                 <div
                   key={col.status}
