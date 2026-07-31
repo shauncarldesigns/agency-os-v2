@@ -77,6 +77,7 @@ type BoardItem = {
   engagementGrade: string;
   noReplyStep: number;
   followupStep: number;
+  emailOutreachStarted: boolean;
   lastActionAt: string | null;
   lastAction: string;
   pipelineStatus: Lead['pipeline_status'];
@@ -2284,6 +2285,7 @@ function buildColumns(
         activityLabel: 'Review required',
         tone: 'amber',
         sortAt: lead.pipeline_last_action_at ?? lead.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2298,6 +2300,7 @@ function buildColumns(
         activityLabel: automation.status === 'failed' ? 'Automation needs attention' : 'Automation ready',
         tone: automation.status === 'failed' ? 'rose' : 'emerald',
         sortAt: automation.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2310,6 +2313,7 @@ function buildColumns(
         activityLabel: 'Automation active',
         tone: 'slate',
         sortAt: automation.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2322,6 +2326,7 @@ function buildColumns(
         activityLabel: 'Review required',
         tone: 'amber',
         sortAt: automation.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2335,6 +2340,7 @@ function buildColumns(
         activityLabel: 'Engaged',
         tone: 'rose',
         sortAt: lead.pipeline_last_action_at ?? lead.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2347,6 +2353,7 @@ function buildColumns(
         activityLabel: 'No reply',
         tone: 'slate',
         sortAt: lead.pipeline_last_action_at ?? lead.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2362,6 +2369,7 @@ function buildColumns(
         activityLabel: 'Automation ready',
         tone: 'emerald',
         sortAt: lead.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2374,6 +2382,7 @@ function buildColumns(
         activityLabel: 'Awaiting build',
         tone: 'amber',
         sortAt: lead.updated_at,
+        emailOutreachStarted: true,
       }));
       return;
     }
@@ -2417,6 +2426,7 @@ function leadItem(
   lead: Lead,
   overrides: Pick<BoardItem, 'eyebrow' | 'detail' | 'note' | 'tone' | 'sortAt'> & {
     activityLabel?: string;
+    emailOutreachStarted?: boolean;
   }
 ): BoardItem {
   return {
@@ -2442,6 +2452,7 @@ function leadItem(
     engagementGrade: lead.engagement_grade ?? 'nurture',
     noReplyStep: lead.pipeline_no_reply_step ?? 0,
     followupStep: lead.pipeline_followup_step ?? 0,
+    emailOutreachStarted: overrides.emailOutreachStarted ?? false,
     lastActionAt: lead.pipeline_last_action_at
       ?? (lead.outcome === 'Email Captured' ? lead.updated_at : null),
     lastAction: emailLastActionLabel(lead),
@@ -2657,6 +2668,8 @@ function EngagementDot({ sessions }: { sessions: number }) {
 }
 
 function EmailSequencePanel({ item }: { item: BoardItem }) {
+  if (!item.emailOutreachStarted) return null;
+
   if (item.eyebrow === 'Final review') {
     const callback = item.outcomeLabel === 'Callback requested' && item.callbackDate
       ? ` · ${formatFinalReviewCallback(item.callbackDate)}`
@@ -2695,7 +2708,7 @@ function EmailSequencePanel({ item }: { item: BoardItem }) {
 
 function EmailLastTouchIndicator({ item }: { item: BoardItem }) {
   const followupCount = Math.max(item.followupStep, item.noReplyStep);
-  if (!item.lastActionAt) {
+  if (!item.emailOutreachStarted || !item.lastActionAt) {
     return (
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-600">
         <div className="flex items-center gap-2">
