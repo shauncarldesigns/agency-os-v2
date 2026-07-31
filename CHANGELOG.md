@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Engagement attribution dashboard
+
+- **The dashboard now attributes each lead’s first engagement to the text that caused it.** Intro, Reminder, and Final nudge cards show engaged leads, conversion rate, and prior-period movement with 7-day, 30-day, and all-time filters. Needs action is now a compact top-of-dashboard strip containing only genuinely Engaged leads not called since their latest click, reply, or calendar interaction; channel-aware Text and Call controls open the correct outreach board. Backend + dashboard.
+
 ### Channel-safe Call Outreach history
 
 - **Call Outreach cards no longer mistake prior Text Outreach activity for sent emails.** Leads with text-history actions such as intro sent, followed up, or sent without reply now show “No outreach yet” until they actually enter the email workflow; email sequence chips and decay timers remain isolated to real email outreach. Dashboard.
