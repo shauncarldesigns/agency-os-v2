@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Confirmed outreach visits
+
+- **Tracked outreach links now distinguish confirmed visitors from automated link scanners.** The Worker records coarse Cloudflare location/network signals and classifies each redirect without storing full IP addresses; bots and implausible foreign or hosting-network checks remain visible as screened Activity events but do not add engagement points or move cards. Updated demo-site tracking blocks confirm a visible page load or interaction before awarding the 40-point visit signal, while existing sites retain safe legacy behavior until their first upgraded confirmation. The lead Activity tab includes a one-click control for copying the upgraded block. Backend + dashboard + migration (`2026-07-31-outreach-click-confirmation.sql`, apply before deploy).
+
 ### Engagement attribution dashboard
 
 - **The dashboard now attributes each lead’s first engagement to the text that caused it.** Intro, Reminder, and Final nudge cards show engaged leads, conversion rate, and prior-period movement with 7-day, 30-day, and all-time filters. Needs action is now a compact top-of-dashboard strip containing only genuinely Engaged leads not called since their latest click, reply, or calendar interaction; channel-aware Text and Call controls open the correct outreach board. Backend + dashboard.

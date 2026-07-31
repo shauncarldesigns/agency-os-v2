@@ -477,10 +477,11 @@ export async function syncClarityEngagement(env: Env): Promise<ClaritySyncResult
   return { checked: leads.length, matched, updated, skipped };
 }
 
-export function buildClaritySnippet(env: Pick<Env, 'CLARITY_PROJECT_ID'>, lead: Pick<Lead, 'id' | 'company' | 'campaign_slug' | 'clarity_tag'>): string {
+export function buildClaritySnippet(env: Pick<Env, 'CLARITY_PROJECT_ID' | 'OUTREACH_PUBLIC_URL'>, lead: Pick<Lead, 'id' | 'company' | 'campaign_slug' | 'clarity_tag'>): string {
   const projectId = env.CLARITY_PROJECT_ID || 'xt0tg8n14n';
   const tag = lead.clarity_tag || `lead-${lead.id}`;
   const campaign = lead.campaign_slug || `lead-${lead.id}`;
+  const outreachUrl = (env.OUTREACH_PUBLIC_URL || 'https://agency-os-v2-api.lively-morning-d9de.workers.dev').replace(/\/$/, '');
   return `<script type="text/javascript">
     (function(c,l,a,r,i,t,y){
         c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -491,6 +492,28 @@ export function buildClaritySnippet(env: Pick<Env, 'CLARITY_PROJECT_ID'>, lead: 
     clarity("set", "lead", "${escapeJs(tag)}");
     clarity("set", "campaign", "${escapeJs(campaign)}");
     clarity("set", "company", "${escapeJs(lead.company)}");
+
+    (function(){
+        var url = new URL(window.location.href);
+        var token = url.searchParams.get("outreach_token");
+        if (!token) return;
+        url.searchParams.delete("outreach_token");
+        window.history.replaceState(window.history.state, "", url.toString());
+
+        var sent = false;
+        var endpoint = "${escapeJs(outreachUrl)}/r/${lead.id}/confirm";
+        function confirm(signal){
+            if (sent || document.visibilityState !== "visible") return;
+            sent = true;
+            var target = endpoint + "?token=" + encodeURIComponent(token) + "&signal=" + signal;
+            if (navigator.sendBeacon) navigator.sendBeacon(target, "");
+            else fetch(target, { method: "POST", mode: "cors", credentials: "omit", keepalive: true });
+        }
+        ["pointerdown", "touchstart", "keydown", "scroll"].forEach(function(eventName){
+            window.addEventListener(eventName, function(){ confirm("interaction"); }, { once: true, passive: true });
+        });
+        window.setTimeout(function(){ confirm("visible_2s"); }, 2000);
+    })();
 </script>`;
 }
 

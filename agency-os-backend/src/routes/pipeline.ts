@@ -265,7 +265,7 @@ function formatClarityInstallBlock(env: Env, lead: Lead): string {
   });
   return [
     'CLARITY TRACKING INSTALL BLOCK',
-    'Paste this into the global header/custom-code area for this demo site so every page inherits it. Do not create a new Clarity project for this lead.',
+    'Paste this entire block into the global header/custom-code area so every page inherits both Clarity analytics and Agency OS human-visit confirmation. Do not remove the confirmation code or create a new Clarity project for this lead.',
     '',
     snippet,
   ].join('\n');
