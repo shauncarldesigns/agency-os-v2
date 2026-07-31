@@ -20,7 +20,6 @@ bucket_name = "agency-os-recordings"
 [triggers]
 crons = [
   "0 6 * * *",     # Daily 6am — refresh PageSpeed for live Tier 3 sites
-  "0 7 1 * *",    # Monthly 1st 7am — finalize prior-month snapshots + exec summaries
   "0 8 * * 1",    # Weekly Monday 8am — intermediate GSC refresh
   "0 * * * *",    # Hourly — DNS poll for projects still awaiting NS delegation
   "15 */4 * * *", # Every 4 hours — Clarity export sync (6/day; API quota is 10/day)
