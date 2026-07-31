@@ -226,6 +226,14 @@ function relativeTime(iso: string): string {
 // footer string on each card (e.g. "Sent 3 days ago").
 function actionLabel(action: string | null, status: PipelineStatus): string {
   switch (action) {
+    case 'email_captured':
+      return 'Email captured';
+    case 'email_sent':
+      return 'Email sent';
+    case 'email_followed_up':
+      return 'Email followed up';
+    case 'email_final_touch':
+      return 'Final email sent';
     case 'url_saved':
       return 'Site URL saved';
     case 'brief_generated':

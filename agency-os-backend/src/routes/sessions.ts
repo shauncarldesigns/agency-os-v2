@@ -518,6 +518,7 @@ interface OutcomeBody {
   outcome: CallOutcome;
   notes?: string;
   callbackDate?: string;          // YYYY-MM-DD, required when outcome='callback'
+  preserveFinalReview?: boolean;  // keep automation-complete leads in Final Review
   blockHint?: SessionBlock;        // optional, for callbacks
   demoData?: {                     // required when outcome='booked'
     scheduledFor: string;          // ISO datetime
@@ -628,8 +629,9 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // 14-day-excluded by a non-call.
   } else if (body.outcome === 'not_interested') {
     await c.env.DB.prepare(
-      `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?, updated_at = ? WHERE id = ?`
-    ).bind(now, friendlyOutcome, now, body.leadId).run();
+      `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?,
+         pipeline_last_action_at = ?, updated_at = ? WHERE id = ?`
+    ).bind(now, friendlyOutcome, now, now, body.leadId).run();
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
@@ -637,18 +639,23 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // no_answer | voicemail | callback — promote cold → contacted if applicable, and
     // stamp the friendly outcome on the lead row so the Pipeline list's
     // Outcome column reflects the most recent meaningful interaction.
+    const displayedOutcome = body.preserveFinalReview
+      ? `Final Review — ${friendlyOutcome}`
+      : friendlyOutcome;
     await c.env.DB.prepare(`
       UPDATE leads SET
         last_called_at = ?,
         status = CASE WHEN status = 'cold' THEN 'contacted' ELSE status END,
         outcome = ?,
         followup = COALESCE(?, followup),
+        pipeline_last_action_at = ?,
         updated_at = ?
       WHERE id = ?
     `).bind(
       now,
-      friendlyOutcome,
+      displayedOutcome,
       body.outcome === 'callback' ? body.callbackDate ?? null : null,
+      now,
       now,
       body.leadId,
     ).run();
@@ -735,6 +742,18 @@ sessionsRouter.post('/:id/outcome', async (c) => {
         `INSERT INTO demo_events (demo_id, event_type, event_data) VALUES (?, 'created', ?)`
       ).bind(demo.id, JSON.stringify({ scheduledFor: body.demoData.scheduledFor })).run();
     }
+  }
+
+  if (body.outcome !== 'skipped') {
+    await c.env.DB.prepare(`
+      INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+      VALUES (?, 'call_outcome', NULL, NULL, ?)
+    `).bind(body.leadId, JSON.stringify({
+      outcome: body.outcome,
+      label: friendlyOutcome,
+      callback_date: body.callbackDate ?? null,
+      source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
+    })).run();
   }
 
   log('info', 'sessions', `Outcome '${body.outcome}' recorded`, {

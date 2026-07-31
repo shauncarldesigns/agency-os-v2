@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Call-first email outreach automation
+
+- **Call Outreach now runs a complete Resend-backed email workflow from captured email through final operator review.** The Kanban adds Awaiting Build, Ready to Send, Sent — No Reply, Final Review, and Engaged phases; site saves automatically start a ten-minute review window, fixed automation steps send engagement-aware follow-ups, and safe controls support pause, skip-wait-and-send, per-lead email edits, stop, reversible Final Review moves, callbacks, explicit archive, and score-based Engaged actions. A dedicated automation view exposes live schedules, delivery/open/click events, provider failures, and engagement scores; call cards retain phase-local outcome chips and full activity history. Resend webhooks, first-party open pixels, tracked demo clicks, recipient validation, a five-minute Worker cron, and final-review safeguards provide the backend engine. Backend + dashboard + migration (`2026-07-30-email-outreach.sql`, apply before deploy).
+- **Call execution now has a dedicated Call Center page.** Call Outreach remains the Kanban and opens focused call modals, while the existing session execution cockpit is preserved under Call Center with the selected company/session context. Dashboard.
+
 ### Phone-routing tooltip cleanup
 
 - **Lead details now keeps phone-routing metadata inside the active route tooltip.** The redundant inline line-type and carrier label is removed, and the hover/focus tooltip renders above the modal footer without clipping. Dashboard.

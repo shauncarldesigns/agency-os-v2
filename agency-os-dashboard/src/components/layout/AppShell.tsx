@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   PhoneCall,
+  Headphones,
   Globe,
   BookOpen,
   Library,
@@ -45,6 +46,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
       { key: 'call-sessions', label: 'Call Outreach', icon: PhoneCall, badgeKey: 'callOutreach' },
+      { key: 'call-center', label: 'Call Center', icon: Headphones },
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
       { key: 'prospect', label: 'Lead Finder', icon: SearchIcon },
     ],
@@ -63,6 +65,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
   'call-sessions': { title: 'Call Outreach', subtitle: 'Active cold-call queue and follow-up board' },
+  'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and book demos' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },

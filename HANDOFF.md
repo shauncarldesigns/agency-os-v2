@@ -1,15 +1,45 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-29. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-07-31. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
 
 ## State
 
-All PRs below are **merged to `main`**. Backend Worker auto-deployed via CI
-on each merge. Dashboard manually deployed after each PR. All D1 migrations
-applied to remote.
+The Call Outreach email-automation release shipped through the standard
+PR/merge flow. Its additive D1 migration was applied before the Worker release,
+and both the Worker and dashboard were verified after deployment.
+
+## Call Outreach email engine (released 2026-07-31)
+
+- Call Outreach is now a call-first email Kanban: To Call → Awaiting Build →
+  Ready to Send → Sent — No Reply → Final Review / Engaged. Capturing an email
+  updates the lead record; saving the site URL auto-starts automation when the
+  recipient is valid. Placeholder and likely mistyped addresses route to an
+  explicit Update email action.
+- Resend sends from `info@shauncarldesigns.com`. The Worker stores send and
+  provider IDs, consumes signed delivery/open/click/failure webhooks, tracks a
+  first-party open pixel and `/r/:lead_id?channel=email` demo clicks, and runs
+  due automations every five minutes.
+- The fixed per-lead workflow is ten-minute review → initial email → 48-hour
+  engagement check → no-open/opened-no-click follow-up → five-day wait → final
+  touch → three-day wait → operator Final Review. It never auto-archives.
+- Controls are per lead: pause/resume, skip wait and send now, edit the next
+  email, stop, move to Final Review with a 15-second server-backed undo, extend
+  review, or explicitly archive. Final Review cards use Call now and preserve
+  no-answer, voicemail, and callback outcomes within that phase.
+- Engaged actions are score-driven: 40–69 email follow-up, 70–89 Call now,
+  90+ Call immediately. Call outcomes write both `call_log` and
+  `lead_activity`; card chips are phase-local while Activity remains durable.
+- Automation Grid shows live node state, timing, engagement score, send/event
+  inspection, and per-lead controls. A Resend-safe local fixture uses
+  `delivered@resend.dev`.
+- The session execution cockpit moved to the dedicated Call Center page; Call
+  Outreach owns the Kanban and focused call/build/email modals.
+- New Worker secrets/config: `RESEND_WEBHOOK_SECRET` secret plus
+  `OUTREACH_EMAIL_FROM`, `OUTREACH_EMAIL_REPLY_TO`, and `OUTREACH_PUBLIC_URL`
+  vars. The existing `RESEND_API_KEY` remains the send credential.
 
 ## Text Outreach engagement sequence (PR #183)
 

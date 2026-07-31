@@ -94,6 +94,20 @@ export interface LeadActivity {
   lead_id: number;
   action:
     | 'brief_generated'
+    | 'email_captured'
+    | 'email_sent'
+    | 'email_followed_up'
+    | 'email_final_touch'
+    | 'email_delivered'
+    | 'email_opened'
+    | 'email_clicked'
+    | 'email_bounced'
+    | 'email_complained'
+    | 'email_failed'
+    | 'email_suppressed'
+    | 'email_final_review'
+    | 'email_review_extended'
+    | 'automation_stopped'
     | 'url_saved'
     | 'intro_sent'
     | 'followed_up'
@@ -364,6 +378,7 @@ export interface ReportSummary {
 export type Tab =
   | 'dashboard'
   | 'call-sessions'
+  | 'call-center'
   | 'prospect'
   | 'pipeline'
   | 'automated-pipeline'

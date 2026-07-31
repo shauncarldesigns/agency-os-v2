@@ -22,6 +22,7 @@ redirectRouter.get('/r/:lead_id', async (c) => {
   const raw = c.req.param('lead_id');
   const id = parseInt(raw, 10);
   if (isNaN(id) || id <= 0) return c.text('Invalid link', 400);
+  const channel = c.req.query('channel') === 'email' ? 'email' : 'text';
 
   try {
     const lead = await c.env.DB.prepare(
@@ -53,7 +54,9 @@ redirectRouter.get('/r/:lead_id', async (c) => {
     const clickFloor = reply ? 55 : 40;
     const clickReason = reply
       ? '+15 clicked tracked link after replying'
-      : '+40 clicked tracked text link';
+      : channel === 'email'
+        ? '+40 clicked tracked email link'
+        : '+40 clicked tracked text link';
 
     // Bump the click counter. Any tracked click from Sent — No Reply makes
     // the lead Engaged; old/imported rows may already have a session count
@@ -83,7 +86,7 @@ redirectRouter.get('/r/:lead_id', async (c) => {
                ELSE 'nurture'
              END,
              engagement_reasons = CASE
-               WHEN COALESCE(engagement_reasons, '') LIKE '%clicked tracked text link%'
+               WHEN COALESCE(engagement_reasons, '') LIKE ?
                  THEN engagement_reasons
                WHEN json_valid(engagement_reasons)
                  THEN json_insert(engagement_reasons, '$[#]', ?)
@@ -99,11 +102,53 @@ redirectRouter.get('/r/:lead_id', async (c) => {
         clickFloor,
         clickFloor,
         clickFloor,
+        `%clicked tracked ${channel} link%`,
         clickReason,
         clickReason,
         id,
       )
       .run();
+
+    await c.env.DB.prepare(`
+      UPDATE email_automations
+         SET status = 'completed', current_step = 'complete', branch = 'demo_clicked',
+             completed_at = datetime('now'), next_run_at = NULL,
+             processing_at = NULL, updated_at = datetime('now')
+       WHERE lead_id = ? AND status IN ('active', 'paused')
+    `).bind(id).run();
+
+    if (channel === 'email') {
+      const latestSend = await c.env.DB.prepare(`
+        SELECT id FROM email_sends
+         WHERE lead_id = ?
+         ORDER BY id DESC LIMIT 1
+      `).bind(id).first<{ id: number }>();
+      if (latestSend) {
+        const clickedAt = new Date().toISOString();
+        await c.env.DB.batch([
+          c.env.DB.prepare(`
+            UPDATE email_sends
+               SET clicked_at = COALESCE(clicked_at, ?),
+                   status = CASE
+                     WHEN status IN ('bounced', 'complained', 'suppressed', 'failed') THEN status
+                     ELSE 'clicked'
+                   END,
+                   updated_at = datetime('now')
+             WHERE id = ?
+          `).bind(clickedAt, latestSend.id),
+          c.env.DB.prepare(`
+            INSERT OR IGNORE INTO email_events (
+              email_send_id, event_key, event_type, event_at, payload
+            ) VALUES (?, ?, 'first_party.clicked', ?, ?)
+          `).bind(
+            latestSend.id,
+            `redirect:${latestSend.id}:clicked`,
+            clickedAt,
+            JSON.stringify({ channel, ua_class: uaClass }),
+          ),
+        ]);
+      }
+    }
 
     await c.env.DB.prepare(
       `INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
@@ -113,12 +158,12 @@ redirectRouter.get('/r/:lead_id', async (c) => {
         id,
         lead.pipeline_status,
         shouldPromote ? nextStatus : null,
-        JSON.stringify({ ua_class: uaClass }),
+        JSON.stringify({ ua_class: uaClass, channel }),
       )
       .run();
 
     log('info', 'redirect', `Click tracked for lead ${id}`, { promoted: shouldPromote, ua_class: uaClass });
-    return c.redirect(lead.site_url, 302);
+    return c.redirect(trackedDestination(lead.site_url, channel), 302);
   } catch (err) {
     log('error', 'redirect', 'Click tracker failed', err);
     // Failing to log a click should NOT break the recipient's experience.
@@ -134,6 +179,18 @@ redirectRouter.get('/r/:lead_id', async (c) => {
     return c.text('Link temporarily unavailable', 500);
   }
 });
+
+function trackedDestination(siteUrl: string, channel: 'email' | 'text'): string {
+  if (channel !== 'email') return siteUrl;
+  try {
+    const url = new URL(siteUrl);
+    url.searchParams.set('utm_source', 'email');
+    url.searchParams.set('utm_medium', 'email');
+    return url.toString();
+  } catch {
+    return siteUrl;
+  }
+}
 
 // GET /book/:lead_id — records scheduling intent, then forwards to the
 // agency's public HoneyBook calendar. This is deliberately separate from

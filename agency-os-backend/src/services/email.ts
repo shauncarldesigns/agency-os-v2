@@ -6,7 +6,9 @@ export interface EmailInput {
   from: string;
   subject: string;
   html: string;
+  text?: string;
   replyTo?: string;
+  tags?: Array<{ name: string; value: string }>;
 }
 
 export async function sendEmail(apiKey: string, input: EmailInput): Promise<{ id: string }> {
@@ -22,7 +24,9 @@ export async function sendEmail(apiKey: string, input: EmailInput): Promise<{ id
       to: [input.to],
       subject: input.subject,
       html: input.html,
+      text: input.text,
       reply_to: input.replyTo,
+      tags: input.tags,
     }),
   });
 

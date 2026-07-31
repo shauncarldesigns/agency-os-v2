@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "hono": "^4.6.0",
+    "svix": "^1.99.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

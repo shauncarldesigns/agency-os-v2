@@ -23,7 +23,8 @@ crons = [
   "0 7 1 * *",    # Monthly 1st 7am — finalize prior-month snapshots + exec summaries
   "0 8 * * 1",    # Weekly Monday 8am — intermediate GSC refresh
   "0 * * * *",    # Hourly — DNS poll for projects still awaiting NS delegation
-  "15 */4 * * *"  # Every 4 hours — Clarity export sync (6/day; API quota is 10/day)
+  "15 */4 * * *", # Every 4 hours — Clarity export sync (6/day; API quota is 10/day)
+  "*/5 * * * *"   # Every 5 minutes — process due email outreach automations
 ]
 
 [[rules]]
@@ -34,6 +35,9 @@ fallthrough = true
 [vars]
 ENV = "production"
 CLARITY_PROJECT_ID = "xt0tg8n14n"
+OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
+OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
+OUTREACH_PUBLIC_URL = "https://agency-os-v2-api.lively-morning-d9de.workers.dev"
 
 # Secrets (set via `npx wrangler secret put`):
 # CLAUDE_API_KEY
@@ -45,6 +49,7 @@ CLARITY_PROJECT_ID = "xt0tg8n14n"
 # CLOUDFLARE_ACCOUNT_ID
 # DASHBOARD_API_KEY
 # RESEND_API_KEY
+# RESEND_WEBHOOK_SECRET
 # OUTSCRAPER_API_KEY  (optional — fetches up to 50 Google reviews per lead;
 #                     without it, enrichment falls back to Google's 5)
 # TWILIO_ACCOUNT_SID  (optional — enables phone route classification)
