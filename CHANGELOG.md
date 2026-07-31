@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-07
 
+### Channel-safe Call Outreach history
+
+- **Call Outreach cards no longer mistake prior Text Outreach activity for sent emails.** Leads with text-history actions such as intro sent, followed up, or sent without reply now show “No outreach yet” until they actually enter the email workflow; email sequence chips and decay timers remain isolated to real email outreach. Dashboard.
+
 ### Call-first email outreach automation
 
 - **Call Outreach now runs a complete Resend-backed email workflow from captured email through final operator review.** The Kanban adds Awaiting Build, Ready to Send, Sent — No Reply, Final Review, and Engaged phases; site saves automatically start a ten-minute review window, fixed automation steps send engagement-aware follow-ups, and safe controls support pause, skip-wait-and-send, per-lead email edits, stop, reversible Final Review moves, callbacks, explicit archive, and score-based Engaged actions. A dedicated automation view exposes live schedules, delivery/open/click events, provider failures, and engagement scores; call cards retain phase-local outcome chips and full activity history. Resend webhooks, first-party open pixels, tracked demo clicks, recipient validation, a five-minute Worker cron, and final-review safeguards provide the backend engine. Backend + dashboard + migration (`2026-07-30-email-outreach.sql`, apply before deploy).
