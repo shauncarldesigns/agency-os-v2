@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   DollarSign,
   RefreshCw,
+  Copy,
 } from 'lucide-react';
 import type { Lead, CallEntry, LeadActivity, ShowToast } from '../../lib/types';
 import { api, ApiError, type PhoneRoute } from '../../lib/api';
@@ -119,6 +120,10 @@ function lastActionLabel(lead: Lead, activity: LeadActivity[]): string {
       return 'Followed up';
     case 'called':
       return 'Called';
+    case 'click_observed':
+      return 'Link checked';
+    case 'click_confirmation_screened':
+      return 'Visit screened';
     case 'click_tracked':
       return 'Visited';
     case 'brief_generated':
@@ -376,6 +381,7 @@ export function LeadDetailModal({
                 <ActivityPane
                   lead={lead}
                   activity={activity}
+                  showToast={showToast}
                 />
               )}
             </div>
@@ -1123,10 +1129,27 @@ function PitchPrepPane({ lead }: { lead: Lead }) {
 function ActivityPane({
   lead,
   activity,
+  showToast,
 }: {
   lead: Lead;
   activity: LeadActivity[];
+  showToast: ShowToast;
 }) {
+  const [copyingTracking, setCopyingTracking] = useState(false);
+  const copyTrackingBlock = async () => {
+    setCopyingTracking(true);
+    try {
+      const response = await api.pipeline.claritySnippet(lead.id);
+      await navigator.clipboard.writeText(response.snippet);
+      showToast('Updated tracking block copied', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not copy tracking block';
+      showToast(message, 'error');
+    } finally {
+      setCopyingTracking(false);
+    }
+  };
+
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
   const reasons = parseList<string>(lead.engagement_reasons);
@@ -1140,6 +1163,26 @@ function ActivityPane({
   });
   return (
     <div className="space-y-4">
+      {lead.site_url && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Confirmed visitor tracking</p>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">
+              Paste this updated block into the site header to screen bots and confirm real visits.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void copyTrackingBlock()}
+            disabled={copyingTracking}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            {copyingTracking ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+            Copy tracking block
+          </button>
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1327,6 +1370,8 @@ function activityTitle(action: string): string {
     case 'calendar_clicked': return 'Calendar opened';
     case 'scheduling_followup': return 'Scheduling follow-up sent';
     case 'called': return 'Call action logged';
+    case 'click_observed': return 'Tracked link checked';
+    case 'click_confirmation_screened': return 'Site confirmation screened';
     case 'click_tracked': return 'Tracked site visit';
     case 'clarity_synced': return 'Clarity synced';
     case 'engagement_reset': return 'Engagement reset';
@@ -1381,7 +1426,19 @@ function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): 
   if (activity.action === 'calendar_sent') return 'Tracked HoneyBook link opened in Messages.';
   if (activity.action === 'calendar_clicked') return 'Prospect opened the tracked HoneyBook calendar.';
   if (activity.action === 'scheduling_followup') return 'Scheduling follow-up opened in Messages.';
-  if (activity.action === 'click_tracked') return 'Prospect opened the tracked link.';
+  if (activity.action === 'click_observed') {
+    const classification = typeof meta.classification === 'string' ? meta.classification : 'pending';
+    const place = [meta.city, meta.region, meta.country].filter((value) => typeof value === 'string').join(', ');
+    return `Redirect observed and classified as ${classification}${place ? ` from ${place}` : ''}. Awaiting JavaScript confirmation.`;
+  }
+  if (activity.action === 'click_confirmation_screened') {
+    const classification = typeof meta.classification === 'string' ? meta.classification : 'suspicious';
+    return `JavaScript loaded, but the ${classification} request was screened and did not award engagement points.`;
+  }
+  if (activity.action === 'click_tracked') {
+    const place = [meta.city, meta.region, meta.country].filter((value) => typeof value === 'string').join(', ');
+    return `JavaScript confirmed the tracked site visit${place ? ` from ${place}` : ''}.`;
+  }
   if (activity.action === 'clarity_synced') {
     const score = typeof meta.score === 'number' ? meta.score : null;
     return score !== null ? `Engagement score updated to ${score}.` : 'Clarity data checked for this lead.';

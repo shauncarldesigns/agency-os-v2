@@ -7,9 +7,30 @@ reference docs live in `docs/`._
 
 ## State
 
-The Call Outreach email-automation release shipped through the standard
-PR/merge flow. Its additive D1 migration was applied before the Worker release,
-and both the Worker and dashboard were verified after deployment.
+The confirmed-visitor tracking release is being shipped through the standard
+PR/merge flow. It screens link scanners and implausible traffic before outreach
+engagement scoring while retaining diagnostic Activity events. Its additive D1
+migration must be applied before the Worker release, and existing demo sites can
+copy the upgraded tracking block from the lead Activity tab.
+
+## Confirmed outreach visits (2026-07-31)
+
+- `/r/:lead_id` records each observation in `outreach_clicks` with coarse
+  Cloudflare country/region/city, ASN/organization, browser signals, optional
+  bot signals, classification, confidence, reasons, and a 24-hour token. Full
+  IP addresses are not stored.
+- Known crawlers and implausible foreign or hosting-network checks are screened:
+  the Activity trail retains them for debugging, but they do not add points,
+  increment sessions, promote cards, or complete email automation.
+- Updated Clarity/site-header blocks confirm a visible two-second page load or
+  user interaction through `POST /r/:lead_id/confirm`. Only plausible confirmed
+  visits create the existing authoritative `click_tracked` signal.
+- Existing sites are rollout-safe: plausible redirects keep legacy credit until
+  the first valid beacon self-enrolls the lead, without double-counting that
+  visit. Later redirects require confirmation.
+- Activity shows confirmed or screened location/reason details and offers
+  **Copy tracking block** for upgrading an existing demo site.
+- Migration: `2026-07-31-outreach-click-confirmation.sql`.
 
 ## Call Outreach email engine (released 2026-07-31)
 

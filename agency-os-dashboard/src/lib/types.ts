@@ -117,6 +117,8 @@ export interface LeadActivity {
     | 'scheduling_followup'
     | 'called'
     | 'status_changed'
+    | 'click_observed'
+    | 'click_confirmation_screened'
     | 'click_tracked'
     | 'calendar_clicked'
     | 'clarity_synced'

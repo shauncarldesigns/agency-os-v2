@@ -157,9 +157,20 @@ repurpose one for the other.**
   compatible across iOS/Android; body prefill is inconsistent, which is why
   every composer keeps a Copy fallback). No Twilio/A2P by explicit scope
   decision.
-- Engagement Layer 1 is the app-owned `/r/:lead_id` redirect. Its
-  `click_tracked` rows are the authoritative session count, immediately move
-  Sent — No Reply leads into Engaged, and establish a 40-point score floor.
+- Engagement Layer 1 starts at the app-owned `/r/:lead_id` redirect, but a
+  redirect request alone is not necessarily human: link scanners frequently
+  prefetch text and email URLs. `outreach_clicks` stores privacy-conscious
+  Cloudflare location/network metadata, a plausible/suspicious/bot
+  classification, and a short-lived confirmation token without storing full
+  IP addresses. The shared site-header block removes `outreach_token` from the
+  visible URL and confirms a visible two-second load or real interaction at
+  `POST /r/:lead_id/confirm`. Only a plausible confirmed visit creates the
+  authoritative `click_tracked` row, increments `pipeline_sessions`, moves
+  Sent — No Reply into Engaged, and establishes the 40-point score floor.
+  Screened checks are diagnostic `click_confirmation_screened` Activity rows
+  and never affect score or status. Rollout is self-enrolling: existing sites
+  retain plausible redirect credit until their upgraded block confirms once;
+  every later click requires confirmation.
   Layer 2 is the shared-project Clarity Data Export sync: it enriches that
   verified click with matching-URL behavior but never owns the displayed
   session count. Clarity runs every four hours (six calls/day) to stay under
