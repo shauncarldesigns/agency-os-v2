@@ -89,6 +89,28 @@ function relativeTime(iso: string): string {
 // activity when available, otherwise from enrichment state.
 function lastActionLabel(lead: Lead, activity: LeadActivity[]): string {
   switch (activity[0]?.action) {
+    case 'email_captured':
+      return 'Email captured';
+    case 'email_sent':
+      return 'Email sent';
+    case 'email_followed_up':
+      return 'Email followed up';
+    case 'email_final_touch':
+      return 'Final email sent';
+    case 'email_delivered':
+      return 'Email delivered';
+    case 'email_opened':
+      return 'Email opened';
+    case 'email_clicked':
+      return 'Email link clicked';
+    case 'email_bounced':
+    case 'email_failed':
+    case 'email_suppressed':
+      return 'Email failed';
+    case 'email_final_review':
+      return 'Final review required';
+    case 'email_review_extended':
+      return 'Final review extended';
     case 'url_saved':
       return 'Built';
     case 'intro_sent':
@@ -1282,6 +1304,20 @@ function parseActivityMeta(meta: string | null): Record<string, unknown> {
 
 function activityTitle(action: string): string {
   switch (action) {
+    case 'email_captured': return 'Email captured';
+    case 'email_sent': return 'Initial email sent';
+    case 'email_followed_up': return 'Follow-up email sent';
+    case 'email_final_touch': return 'Final-touch email sent';
+    case 'email_delivered': return 'Email delivered';
+    case 'email_opened': return 'Email opened';
+    case 'email_clicked': return 'Email link clicked';
+    case 'email_bounced': return 'Email bounced';
+    case 'email_complained': return 'Spam complaint received';
+    case 'email_failed': return 'Email failed';
+    case 'email_suppressed': return 'Email suppressed';
+    case 'email_final_review': return 'Final review required';
+    case 'email_review_extended': return 'Final review extended';
+    case 'automation_stopped': return 'Email automation stopped';
     case 'url_saved': return 'Site URL saved';
     case 'brief_generated': return 'Brief generated';
     case 'intro_sent': return 'Intro text sent';
@@ -1300,6 +1336,37 @@ function activityTitle(action: string): string {
 }
 
 function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): string | null {
+  if (activity.action === 'email_captured') {
+    const email = typeof meta.email === 'string' ? meta.email : null;
+    const destination = activity.to_status === 'ready_to_send' ? 'Ready to Send' : 'Awaiting Build';
+    const reason = activity.to_status === 'ready_to_send'
+      ? ' An existing tracked site URL allowed the build stage to be skipped.'
+      : '';
+    return `${email ? `${email} saved` : 'Email saved'} to the company record and moved to ${destination}.${reason}`;
+  }
+  if (
+    activity.action === 'email_sent'
+    || activity.action === 'email_followed_up'
+    || activity.action === 'email_final_touch'
+  ) {
+    const subject = typeof meta.subject === 'string' ? meta.subject : null;
+    return subject ? `Subject: ${subject}` : 'Email opened in the operator’s email client.';
+  }
+  if (activity.action === 'email_delivered') return 'Resend confirmed delivery to the recipient’s mail server.';
+  if (activity.action === 'email_opened') return 'The email tracking pixel was requested. Open signals are directional, not definitive.';
+  if (activity.action === 'email_clicked') return 'The recipient clicked a tracked email link.';
+  if (['email_bounced', 'email_complained', 'email_failed', 'email_suppressed'].includes(activity.action)) {
+    const error = typeof meta.error === 'string' ? meta.error : null;
+    return error || 'The automated sequence was stopped to protect sender reputation.';
+  }
+  if (activity.action === 'automation_stopped') return 'The sequence was stopped and moved to Final Review for an operator decision.';
+  if (activity.action === 'email_final_review') {
+    return 'The email sequence finished without engagement. The lead remains active until you decide what to do.';
+  }
+  if (activity.action === 'email_review_extended') {
+    const days = typeof meta.days === 'number' ? meta.days : 3;
+    return `The archive decision was deferred for ${days} more days.`;
+  }
   if (activity.action === 'brief_generated') {
     const model = typeof meta.model === 'string' ? meta.model : null;
     return model ? `Generated with ${model}` : 'Generated and saved to this lead';

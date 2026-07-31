@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import type { Tab, HeaderStats, NavCounts } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
-import { ExecutionView } from './components/dashboard/ExecutionView';
 import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPanel';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
@@ -10,6 +9,7 @@ import { SitesPanel } from './components/sites/SitesPanel';
 import { ReportsPanel } from './components/reports/ReportsPanel';
 import AutomatedPipelinePanel from './components/leadpipeline/AutomatedPipelinePanel';
 import { CallSessionsPage } from './components/sessions/CallSessionsPage';
+import { CallCenterPage } from './components/sessions/CallCenterPage';
 import { PlaybookPage } from './components/playbook/PlaybookPage';
 import { DocsPage } from './components/docs/DocsPage';
 import { ToastContainer } from './components/shared/Toast';
@@ -116,7 +116,10 @@ export default function App() {
     </div>
   );
 
-  const openSessionView = (id: number, leadId?: number) => setOpenSession({ sessionId: id, leadId });
+  const openSessionView = (id: number, leadId?: number) => {
+    setOpenSession({ sessionId: id, leadId });
+    setActiveTab('call-center');
+  };
 
   return (
     <>
@@ -124,41 +127,34 @@ export default function App() {
         active={activeTab}
         onNavigate={(t) => {
           setActiveTab(t);
-          // Navigating away from a live session view closes it — the session
-          // itself stays active server-side and can be resumed from
-          // Dashboard or Call Sessions.
-          setOpenSession(null);
+          // Call Center owns the execution workspace now. Keep its session
+          // reference while visiting other pages so returning restores it.
         }}
         badges={badges}
         headerExtra={headerExtra}
       >
-        {openSession !== null ? (
-          <ExecutionView
-            sessionId={openSession.sessionId}
-            initialLeadId={openSession.leadId}
-            showToast={showToast}
-            onClose={() => { setOpenSession(null); loadStats(); }}
-            onPauseAndBuild={(projectId) => {
-              // Pause-and-build flow: close the session, deep-link to the
-              // freshly-created prospect project's Brief Studio so Quick Brief
-              // is one click away.
-              setOpenSession(null);
-              setPendingOpenProjectId(projectId);
-              setActiveTab('sites');
-              loadStats();
-            }}
-          />
-        ) : (
-          <>
+        <>
             {activeTab === 'dashboard' && (
               <DashboardMetricsPanel showToast={showToast} onSwitchTab={setActiveTab} />
             )}
             {activeTab === 'call-sessions' && (
               <CallSessionsPage
                 showToast={showToast}
-                onOpenSession={openSessionView}
                 onStateChanged={loadStats}
-                onSwitchTab={setActiveTab}
+              />
+            )}
+            {activeTab === 'call-center' && (
+              <CallCenterPage
+                session={openSession}
+                showToast={showToast}
+                onOpenSession={openSessionView}
+                onCloseSession={() => { setOpenSession(null); loadStats(); }}
+                onPauseAndBuild={(projectId) => {
+                  setOpenSession(null);
+                  setPendingOpenProjectId(projectId);
+                  setActiveTab('sites');
+                  loadStats();
+                }}
               />
             )}
             {activeTab === 'prospect' && (
@@ -208,8 +204,7 @@ export default function App() {
                 <ReportsPanel showToast={showToast} />
               </div>
             )}
-          </>
-        )}
+        </>
       </AppShell>
       <ToastContainer toasts={toasts} />
     </>

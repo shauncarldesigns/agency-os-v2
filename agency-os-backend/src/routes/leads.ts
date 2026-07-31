@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
+import { scheduleEmailAutomation } from '../services/emailAutomation';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
 import { classifyPhoneNumber, savePhoneClassification } from '../services/twilioLookup';
@@ -16,13 +17,56 @@ const LEAD_FIELDS = [
   'extracted_services', 'extracted_service_areas', 'extracted_strengths', 'extracted_local_landmarks',
   'pitch_quotes', 'owner_names', 'opportunity_score', 'opportunity_reasoning', 'recommended_tier',
   'enrichment_status', 'enrichment_error', 'status', 'outcome', 'followup',
-  'notes', 'source', 'project_id',
+  'notes', 'source', 'project_id', 'pipeline_status',
 ];
 
 leadsRouter.get('/', async (c) => {
   try {
     const { status, tier, enrichment, search, industry, include_deleted, only_deleted } = c.req.query();
-    let query = 'SELECT * FROM leads WHERE 1=1';
+    let query = `
+      SELECT leads.*,
+             (
+               SELECT COUNT(*)
+                 FROM lead_activity
+                WHERE lead_activity.lead_id = leads.id
+                  AND lead_activity.action IN ('email_followed_up', 'email_final_touch')
+                  AND lead_activity.from_status = 'sent_no_reply'
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM lead_activity AS undo_activity
+                     WHERE undo_activity.action = 'undo'
+                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
+                  )
+             ) AS pipeline_no_reply_step,
+             (
+               SELECT COUNT(*)
+                 FROM lead_activity
+                WHERE lead_activity.lead_id = leads.id
+                  AND lead_activity.action IN ('email_followed_up', 'email_final_touch')
+                  AND lead_activity.from_status = 'engaged'
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM lead_activity AS undo_activity
+                     WHERE undo_activity.action = 'undo'
+                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
+                  )
+             ) AS pipeline_followup_step,
+             (
+               SELECT latest_activity.action
+                 FROM lead_activity AS latest_activity
+                WHERE latest_activity.lead_id = leads.id
+                  AND latest_activity.action != 'undo'
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM lead_activity AS undo_activity
+                     WHERE undo_activity.action = 'undo'
+                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
+                  )
+                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
+                LIMIT 1
+             ) AS pipeline_last_action
+        FROM leads
+       WHERE 1=1`;
     const params: unknown[] = [];
 
     // Soft-delete handling: default to active rows. `only_deleted=true` flips
@@ -287,10 +331,51 @@ leadsRouter.put('/:id', async (c) => {
 
     if (updates.length === 0) return c.json(badRequest('No valid fields to update'), 400);
 
-    const setClause = [...updates.map(u => `${u.key} = ?`), "updated_at = datetime('now')"].join(', ');
+    const capturedEmail = typeof body.email === 'string' ? body.email.trim() : '';
+    const emailTargetStatus =
+      body.pipeline_status === 'ready_to_send' ? 'ready_to_send'
+      : body.pipeline_status === 'awaiting_build' ? 'awaiting_build'
+      : null;
+    const isEmailCapture = Boolean(
+      capturedEmail
+      && emailTargetStatus
+      && (existing.email !== capturedEmail || existing.pipeline_status !== emailTargetStatus)
+    );
+    const automaticSets = [
+      ...(isEmailCapture ? ["pipeline_last_action_at = datetime('now')"] : []),
+      "updated_at = datetime('now')",
+    ];
+    const setClause = [...updates.map(u => `${u.key} = ?`), ...automaticSets].join(', ');
     const values = [...updates.map(u => u.value), id];
 
-    await c.env.DB.prepare(`UPDATE leads SET ${setClause} WHERE id = ?`).bind(...values).run();
+    const updateLead = c.env.DB
+      .prepare(`UPDATE leads SET ${setClause} WHERE id = ?`)
+      .bind(...values);
+
+    if (isEmailCapture) {
+      await c.env.DB.batch([
+        updateLead,
+        c.env.DB.prepare(
+          `INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+           VALUES (?, 'email_captured', ?, ?, ?)`,
+        ).bind(
+          id,
+          existing.pipeline_status,
+          emailTargetStatus,
+          JSON.stringify({
+            email: capturedEmail,
+            source: 'call_outreach',
+            skipped_build: emailTargetStatus === 'ready_to_send',
+            tracking_url: emailTargetStatus === 'ready_to_send' ? existing.site_url : null,
+          }),
+        ),
+      ]);
+      if (emailTargetStatus === 'ready_to_send') {
+        await scheduleEmailAutomation(c.env, id);
+      }
+    } else {
+      await updateLead.run();
+    }
 
     // NOTE: Auto-project-on-client was removed in the qualify-flow refactor.
     // Conversion now happens explicitly via POST /api/leads/:id/qualify, which

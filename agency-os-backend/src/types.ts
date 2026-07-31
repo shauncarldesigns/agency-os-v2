@@ -12,6 +12,10 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID: string;
   DASHBOARD_API_KEY: string;
   RESEND_API_KEY: string;
+  RESEND_WEBHOOK_SECRET?: string;
+  OUTREACH_EMAIL_FROM?: string;
+  OUTREACH_EMAIL_REPLY_TO?: string;
+  OUTREACH_PUBLIC_URL?: string;
   OUTSCRAPER_API_KEY?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;

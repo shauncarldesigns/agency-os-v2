@@ -22,7 +22,9 @@ import { playbookRouter } from './routes/playbook';
 import { recordingsRouter } from './routes/recordings';
 import { pipelineRouter } from './routes/pipeline';
 import { redirectRouter } from './routes/redirect';
+import { emailOutreachRouter, publicEmailRouter } from './routes/emailOutreach';
 import { syncClarityEngagement } from './services/clarity';
+import { processDueEmailAutomations } from './services/emailAutomation';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -39,6 +41,9 @@ app.get('/health', c => c.json({ status: 'ok', ts: new Date().toISOString() }));
 // MUST mount before the /api/* auth middleware so recipient browsers can
 // resolve the redirect without an API key.
 app.route('/', redirectRouter);
+// Public Resend webhook + first-party open pixel. Signature/token validation
+// happens inside the router, so these must remain ahead of /api authentication.
+app.route('/', publicEmailRouter);
 
 app.use('/api/*', authMiddleware());
 
@@ -71,6 +76,7 @@ app.route('/api/playbook', playbookRouter);
 app.route('/api/recordings', recordingsRouter);
 // Automated Pipeline — text + site outreach queue.
 app.route('/api/pipeline', pipelineRouter);
+app.route('/api/email', emailOutreachRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {
@@ -102,6 +108,11 @@ export default {
       // project quota for manual validation without sacrificing the
       // immediate app-owned /r/:lead_id click signal.
       ctx.waitUntil(syncClarityEngagement(env).then(out => log('info', 'cron', 'Clarity engagement sync run', out)));
+    } else if (event.cron === '*/5 * * * *') {
+      ctx.waitUntil(
+        processDueEmailAutomations(env)
+          .then(out => log('info', 'cron', 'Email automation run', out)),
+      );
     }
   },
 };

@@ -25,6 +25,95 @@ export type ProjectUpdate = Omit<Partial<Project>, 'services' | 'service_areas'>
   service_areas?: string[];
 };
 
+export interface EmailAutomationSummary {
+  id: number;
+  lead_id: number;
+  status: 'active' | 'paused' | 'completed' | 'stopped' | 'failed';
+  current_step: 'review_wait' | 'signal_wait' | 'final_wait' | 'archive_wait' | 'complete';
+  branch: 'no_open' | 'opened_no_click' | 'demo_clicked' | null;
+  next_run_at: string | null;
+  initial_send_id: number | null;
+  followup_send_id: number | null;
+  final_send_id: number | null;
+  pending_subject: string | null;
+  pending_text: string | null;
+  paused_at: string | null;
+  completed_at: string | null;
+  stopped_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  company: string;
+  email: string;
+  pipeline_status: string;
+  engagement_score: number;
+  engagement_grade: string;
+  pipeline_sessions: number;
+  site_url: string | null;
+  initial_status: string | null;
+  initial_sent_at: string | null;
+  initial_delivered_at: string | null;
+  initial_opened_at: string | null;
+  initial_clicked_at: string | null;
+  initial_provider_message_id: string | null;
+  followup_status: string | null;
+  followup_sent_at: string | null;
+  followup_delivered_at: string | null;
+  followup_opened_at: string | null;
+  followup_clicked_at: string | null;
+  followup_provider_message_id: string | null;
+  final_status: string | null;
+  final_sent_at: string | null;
+  final_delivered_at: string | null;
+  final_opened_at: string | null;
+  final_clicked_at: string | null;
+  final_provider_message_id: string | null;
+}
+
+export interface EmailSendRecord {
+  id: number;
+  lead_id: number;
+  recipient: string;
+  sender: string;
+  reply_to: string | null;
+  subject: string;
+  template_key: string;
+  text_body: string;
+  status: string;
+  provider_message_id: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  bounced_at: string | null;
+  complained_at: string | null;
+  failed_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface EmailEventRecord {
+  id: number;
+  email_send_id: number | null;
+  provider_message_id: string | null;
+  event_type: string;
+  event_at: string;
+  payload: string | null;
+}
+
+export interface EmailAutomationDetail {
+  automation: EmailAutomationSummary;
+  lead: Lead;
+  sends: EmailSendRecord[];
+  events: EmailEventRecord[];
+  nextTemplate: {
+    subject: string;
+    text: string;
+    templateKey: string;
+    action: string;
+  } | null;
+}
+
 // DNS endpoint response shapes. Mirror what routes/dns.ts returns.
 export interface DnsRecordStatus {
   type: 'A' | 'CNAME';
@@ -491,6 +580,9 @@ export const api = {
       id: number,
       body: {
         action:
+          | 'email_sent'
+          | 'email_followed_up'
+          | 'email_final_touch'
           | 'intro_sent'
           | 'followed_up'
           | 'reply_received'
@@ -518,6 +610,62 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ regenerate: !!opts?.regenerate }),
       }),
+  },
+  emailOutreach: {
+    send: (
+      id: number,
+      body: {
+        subject: string;
+        text: string;
+        templateKey: string;
+        action: 'email_sent' | 'email_followed_up' | 'email_final_touch';
+      },
+    ) =>
+      apiFetch<{
+        ok: true;
+        sendId: number;
+        providerMessageId: string;
+        status: string;
+        pipelineStatus: string;
+      }>(`/api/email/leads/${id}/send`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    automations: () =>
+      apiFetch<{ automations: EmailAutomationSummary[] }>('/api/email/automations'),
+    automation: (leadId: number) =>
+      apiFetch<EmailAutomationDetail>(`/api/email/leads/${leadId}/automation`),
+    startAutomation: (leadId: number) =>
+      apiFetch<{ automation: EmailAutomationSummary }>(`/api/email/leads/${leadId}/automation/start`, {
+        method: 'POST',
+      }),
+    automationAction: (
+      automationId: number,
+      action:
+        | 'pause'
+        | 'resume'
+        | 'send_now'
+        | 'skip'
+        | 'stop'
+        | 'return_to_call'
+        | 'undo_return_to_call'
+        | 'extend_review'
+        | 'archive',
+    ) =>
+      apiFetch<{ ok: true; automation?: EmailAutomationSummary; result?: unknown }>(
+        `/api/email/automations/${automationId}/action`,
+        { method: 'POST', body: JSON.stringify({ action }) },
+      ),
+    updateScheduledEmail: (automationId: number, subject: string, text: string) =>
+      apiFetch<{ automation: EmailAutomationSummary }>(
+        `/api/email/automations/${automationId}/scheduled-email`,
+        { method: 'PUT', body: JSON.stringify({ subject, text }) },
+      ),
+    runDue: () =>
+      apiFetch<{ checked: number; processed: number; sent: number; completed: number; failed: number }>(
+        '/api/email/automations/run-due',
+        { method: 'POST' },
+      ),
   },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),
@@ -788,6 +936,7 @@ export interface SessionOutcomeBody {
   outcome: CallOutcome;
   notes?: string;
   callbackDate?: string;
+  preserveFinalReview?: boolean;
   blockHint?: SessionBlock;
   demoData?: { scheduledFor: string; honeybookConfirmed?: boolean; interestLevel: 'hot' | 'warm' | 'cold' };
   objectionHits?: ObjectionHit[];

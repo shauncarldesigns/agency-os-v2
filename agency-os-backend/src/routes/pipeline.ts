@@ -17,6 +17,7 @@ import { callClaude } from '../services/claude';
 import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
 import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
+import { scheduleEmailAutomation } from '../services/emailAutomation';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -35,6 +36,9 @@ export type PipelineStatus =
 
 const REVERSIBLE_ACTIONS = new Set([
   'url_saved',
+  'email_sent',
+  'email_followed_up',
+  'email_final_touch',
   'intro_sent',
   'followed_up',
   'reply_received',
@@ -470,6 +474,7 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
       toStatus: 'ready_to_send',
       meta: { url: tagged, raw_url: rawUrl },
     });
+    await scheduleEmailAutomation(c.env, id);
 
     const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
       .bind(id)
@@ -493,6 +498,9 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 // "Open in Messages" even though we can't confirm the operator actually
 // sent — /undo lets them recover.
 type OutreachAction =
+  | 'email_sent'
+  | 'email_followed_up'
+  | 'email_final_touch'
   | 'intro_sent'
   | 'followed_up'
   | 'reply_received'
@@ -506,6 +514,9 @@ const ACTION_TRANSITIONS: Record<
   OutreachAction,
   { from?: PipelineStatus[]; to?: PipelineStatus }
 > = {
+  email_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
+  email_followed_up: { from: ['sent_no_reply', 'engaged'] },
+  email_final_touch: { from: ['sent_no_reply', 'engaged'] },
   intro_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
   followed_up: {}, // no status change — stays in sent_no_reply or engaged
   reply_received: { from: ['sent_no_reply', 'engaged'], to: 'engaged' },
