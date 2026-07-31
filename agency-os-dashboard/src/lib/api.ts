@@ -470,7 +470,8 @@ export const api = {
       apiFetch<ObjectionsOverviewResponse>(`/api/dashboard/objections-overview?range=${range}`),
     textOutreachActivity: (range: TextOutreachActivityRange = '30d') =>
       apiFetch<TextOutreachActivityResponse>(`/api/dashboard/text-outreach-activity?range=${range}`),
-    pipelineKpis: () => apiFetch<PipelineKpisResponse>('/api/dashboard/pipeline-kpis'),
+    pipelineKpis: (engagementRange: TextOutreachActivityRange = '30d') =>
+      apiFetch<PipelineKpisResponse>(`/api/dashboard/pipeline-kpis?engagement_range=${engagementRange}`),
   },
   sessions: {
     today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
@@ -885,16 +886,25 @@ export interface PipelineHotLead {
   engagement_grade: string;
   engagement_reasons: string | null;
   pipeline_last_action_at: string | null;
+  outreach_channel: 'text' | 'call';
   last_engagement_at: string | null;
 }
 
 export interface OutreachEffectivenessMetrics {
-  followedUp: number;
-  activated: number;
-  followUpActivationRate: number | null;
+  engagementByTouch: {
+    intro: OutreachTouchMetric;
+    reminder: OutreachTouchMetric;
+    finalNudge: OutreachTouchMetric;
+  };
   calendarOpened: number;
   calendarBooked: number;
   calendarBookingRate: number | null;
+}
+
+export interface OutreachTouchMetric {
+  sent: number;
+  engaged: number;
+  rate: number | null;
 }
 
 export interface PipelineKpisResponse {
@@ -915,10 +925,15 @@ export interface PipelineKpisResponse {
     };
   };
   effectiveness: {
+    range: TextOutreachActivityRange;
     current: OutreachEffectivenessMetrics;
     previous: OutreachEffectivenessMetrics;
     trends: {
-      followUpActivationRate: number | null;
+      engagementByTouch: {
+        intro: number | null;
+        reminder: number | null;
+        finalNudge: number | null;
+      };
       calendarBookingRate: number | null;
     };
   };

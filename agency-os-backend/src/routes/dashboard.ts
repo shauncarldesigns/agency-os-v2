@@ -456,6 +456,21 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
   const previousRef = new Date(weekStart);
   previousRef.setDate(previousRef.getDate() - 7);
   const previousWeek = pipelineKpiWeek(previousRef);
+  const engagementRangeQuery = c.req.query('engagement_range');
+  const engagementRange: TextOutreachRange = engagementRangeQuery === '7d' || engagementRangeQuery === 'all'
+    ? engagementRangeQuery
+    : '30d';
+  const engagementEnd = chicagoToday();
+  const engagementDays = engagementRange === '7d' ? 7 : 30;
+  const engagementStart = engagementRange === 'all'
+    ? '1970-01-01'
+    : addDaysIso(engagementEnd, -(engagementDays - 1));
+  const previousEngagementEnd = engagementRange === 'all'
+    ? '1970-01-01'
+    : addDaysIso(engagementStart, -1);
+  const previousEngagementStart = engagementRange === 'all'
+    ? '1970-01-01'
+    : addDaysIso(previousEngagementEnd, -(engagementDays - 1));
 
   async function activityFor(start: string, end: string) {
     const row = await c.env.DB.prepare(`
@@ -532,51 +547,91 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
   }
 
   async function effectivenessFor(start: string, end: string) {
-    const followUp = await c.env.DB.prepare(`
-      WITH followup_cohort AS (
-        SELECT f.lead_id, MIN(f.created_at) AS followed_at
-        FROM lead_activity f
-        WHERE f.action = 'followed_up'
-          AND date(f.created_at) BETWEEN ? AND ?
+    const touchAttribution = await c.env.DB.prepare(`
+      WITH valid_activity AS (
+        SELECT activity.*
+        FROM lead_activity activity
+        WHERE activity.action != 'undo'
           AND NOT EXISTS (
             SELECT 1 FROM lead_activity undo
             WHERE undo.action = 'undo'
-              AND json_extract(undo.meta, '$.undid_activity_id') = f.id
+              AND json_extract(undo.meta, '$.undid_activity_id') = activity.id
           )
-        GROUP BY f.lead_id
+      ),
+      send_touches AS (
+        SELECT
+          id,
+          lead_id,
+          created_at,
+          CASE
+            WHEN action = 'intro_sent' THEN 'intro'
+            WHEN SUM(CASE WHEN action = 'followed_up' THEN 1 ELSE 0 END) OVER (
+              PARTITION BY lead_id
+              ORDER BY datetime(created_at), id
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) = 1 THEN 'reminder'
+            ELSE 'final_nudge'
+          END AS stage
+        FROM valid_activity
+        WHERE action = 'intro_sent'
+           OR (action = 'followed_up' AND from_status = 'sent_no_reply')
+      ),
+      first_engagement AS (
+        SELECT id, lead_id, created_at
+        FROM (
+          SELECT
+            id,
+            lead_id,
+            created_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY lead_id
+              ORDER BY datetime(created_at), id
+            ) AS position
+          FROM valid_activity
+          WHERE action IN ('click_tracked', 'reply_received', 'calendar_clicked')
+        )
+        WHERE position = 1
+      ),
+      attributed_engagement AS (
+        SELECT send.lead_id, send.stage, send.created_at AS sent_at, engagement.created_at AS engaged_at
+        FROM send_touches send
+        JOIN first_engagement engagement ON engagement.lead_id = send.lead_id
+        WHERE (
+          datetime(send.created_at) < datetime(engagement.created_at)
+          OR (datetime(send.created_at) = datetime(engagement.created_at) AND send.id < engagement.id)
+        )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM send_touches later_send
+            WHERE later_send.lead_id = send.lead_id
+              AND (
+                datetime(later_send.created_at) > datetime(send.created_at)
+                OR (datetime(later_send.created_at) = datetime(send.created_at) AND later_send.id > send.id)
+              )
+              AND (
+                datetime(later_send.created_at) < datetime(engagement.created_at)
+                OR (datetime(later_send.created_at) = datetime(engagement.created_at) AND later_send.id < engagement.id)
+              )
+          )
       )
       SELECT
-        COUNT(*) AS followed_up,
-        SUM(CASE WHEN
-          NOT EXISTS (
-            SELECT 1 FROM lead_activity before_engagement
-            WHERE before_engagement.lead_id = cohort.lead_id
-              AND before_engagement.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
-              AND datetime(before_engagement.created_at) <= datetime(cohort.followed_at)
-              AND NOT EXISTS (
-                SELECT 1 FROM lead_activity undo
-                WHERE undo.action = 'undo'
-                  AND json_extract(undo.meta, '$.undid_activity_id') = before_engagement.id
-              )
-          )
-          AND EXISTS (
-            SELECT 1 FROM lead_activity after_engagement
-            WHERE after_engagement.lead_id = cohort.lead_id
-              AND after_engagement.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
-              AND datetime(after_engagement.created_at) > datetime(cohort.followed_at)
-              AND date(after_engagement.created_at) <= ?
-              AND NOT EXISTS (
-                SELECT 1 FROM lead_activity undo
-                WHERE undo.action = 'undo'
-                  AND json_extract(undo.meta, '$.undid_activity_id') = after_engagement.id
-              )
-          )
-          THEN 1 ELSE 0 END
-        ) AS activated
-      FROM followup_cohort cohort
-    `).bind(start, end, end).first<{
-      followed_up: number | null;
-      activated: number | null;
+        COUNT(DISTINCT CASE WHEN stage = 'intro' AND date(created_at) BETWEEN ? AND ? THEN lead_id END) AS intro_sent,
+        COUNT(DISTINCT CASE WHEN stage = 'reminder' AND date(created_at) BETWEEN ? AND ? THEN lead_id END) AS reminder_sent,
+        COUNT(DISTINCT CASE WHEN stage = 'final_nudge' AND date(created_at) BETWEEN ? AND ? THEN lead_id END) AS final_nudge_sent,
+        (SELECT COUNT(DISTINCT lead_id) FROM attributed_engagement WHERE stage = 'intro' AND date(sent_at) BETWEEN ? AND ? AND date(engaged_at) <= ?) AS intro_engaged,
+        (SELECT COUNT(DISTINCT lead_id) FROM attributed_engagement WHERE stage = 'reminder' AND date(sent_at) BETWEEN ? AND ? AND date(engaged_at) <= ?) AS reminder_engaged,
+        (SELECT COUNT(DISTINCT lead_id) FROM attributed_engagement WHERE stage = 'final_nudge' AND date(sent_at) BETWEEN ? AND ? AND date(engaged_at) <= ?) AS final_nudge_engaged
+      FROM send_touches
+    `).bind(
+      start, end, start, end, start, end,
+      start, end, end, start, end, end, start, end, end,
+    ).first<{
+      intro_sent: number | null;
+      reminder_sent: number | null;
+      final_nudge_sent: number | null;
+      intro_engaged: number | null;
+      reminder_engaged: number | null;
+      final_nudge_engaged: number | null;
     }>();
 
     const calendar = await c.env.DB.prepare(`
@@ -600,14 +655,20 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
       booked: number | null;
     }>();
 
-    const followedUp = followUp?.followed_up ?? 0;
-    const activated = followUp?.activated ?? 0;
+    const introSent = touchAttribution?.intro_sent ?? 0;
+    const reminderSent = touchAttribution?.reminder_sent ?? 0;
+    const finalNudgeSent = touchAttribution?.final_nudge_sent ?? 0;
+    const introEngaged = touchAttribution?.intro_engaged ?? 0;
+    const reminderEngaged = touchAttribution?.reminder_engaged ?? 0;
+    const finalNudgeEngaged = touchAttribution?.final_nudge_engaged ?? 0;
     const calendarOpened = calendar?.opened ?? 0;
     const calendarBooked = calendar?.booked ?? 0;
     return {
-      followedUp,
-      activated,
-      followUpActivationRate: pct(activated, followedUp),
+      engagementByTouch: {
+        intro: { sent: introSent, engaged: introEngaged, rate: pct(introEngaged, introSent) },
+        reminder: { sent: reminderSent, engaged: reminderEngaged, rate: pct(reminderEngaged, reminderSent) },
+        finalNudge: { sent: finalNudgeSent, engaged: finalNudgeEngaged, rate: pct(finalNudgeEngaged, finalNudgeSent) },
+      },
       calendarOpened,
       calendarBooked,
       calendarBookingRate: pct(calendarBooked, calendarOpened),
@@ -663,16 +724,28 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
         l.engagement_grade,
         l.engagement_reasons,
         l.pipeline_last_action_at,
+        CASE
+          WHEN l.outcome = 'Email Captured'
+            OR EXISTS (SELECT 1 FROM email_automations automation WHERE automation.lead_id = l.id)
+            OR EXISTS (SELECT 1 FROM email_sends send WHERE send.lead_id = l.id)
+          THEN 'call'
+          ELSE 'text'
+        END AS outreach_channel,
         MAX(la.created_at) as last_engagement_at
       FROM leads l
       LEFT JOIN lead_activity la
         ON la.lead_id = l.id
-       AND la.action = 'click_tracked'
+       AND la.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
+       AND NOT EXISTS (
+         SELECT 1 FROM lead_activity undo
+         WHERE undo.action = 'undo'
+           AND json_extract(undo.meta, '$.undid_activity_id') = la.id
+       )
       WHERE l.deleted_at IS NULL
         AND l.status IN ('cold', 'contacted')
         AND l.enrichment_status = 'enriched'
         AND l.has_website = 0
-        AND (l.pipeline_status = 'engaged' OR l.pipeline_sessions > 0)
+        AND l.pipeline_status = 'engaged'
         AND NOT EXISTS (
           SELECT 1
           FROM lead_activity called
@@ -682,7 +755,12 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
               SELECT MAX(c2.created_at)
               FROM lead_activity c2
               WHERE c2.lead_id = l.id
-                AND c2.action = 'click_tracked'
+                AND c2.action IN ('click_tracked', 'reply_received', 'calendar_clicked')
+                AND NOT EXISTS (
+                  SELECT 1 FROM lead_activity undo
+                  WHERE undo.action = 'undo'
+                    AND json_extract(undo.meta, '$.undid_activity_id') = c2.id
+                )
             ), '1970-01-01'))
         )
       GROUP BY l.id
@@ -701,14 +779,15 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
       engagement_grade: string;
       engagement_reasons: string | null;
       pipeline_last_action_at: string | null;
+      outreach_channel: 'text' | 'call';
       last_engagement_at: string | null;
     }>(),
     // The current automated pipeline sends through the SMS composer. Facebook
     // needs explicit channel logging before it can have real numbers here.
     funnelFor(week.monday, week.sunday),
     funnelFor(previousWeek.monday, previousWeek.sunday),
-    effectivenessFor(week.monday, week.sunday),
-    effectivenessFor(previousWeek.monday, previousWeek.sunday),
+    effectivenessFor(engagementStart, engagementEnd),
+    effectivenessFor(previousEngagementStart, previousEngagementEnd),
   ]);
 
   currentActivity.sitesCreated = siteReadyRow?.n ?? 0;
@@ -731,13 +810,24 @@ dashboardRouter.get('/pipeline-kpis', async (c) => {
       },
     },
     effectiveness: {
+      range: engagementRange,
       current: effectivenessCurrent,
       previous: effectivenessPrevious,
       trends: {
-        followUpActivationRate: delta(
-          effectivenessCurrent.followUpActivationRate,
-          effectivenessPrevious.followUpActivationRate,
-        ),
+        engagementByTouch: {
+          intro: delta(
+            effectivenessCurrent.engagementByTouch.intro.rate,
+            effectivenessPrevious.engagementByTouch.intro.rate,
+          ),
+          reminder: delta(
+            effectivenessCurrent.engagementByTouch.reminder.rate,
+            effectivenessPrevious.engagementByTouch.reminder.rate,
+          ),
+          finalNudge: delta(
+            effectivenessCurrent.engagementByTouch.finalNudge.rate,
+            effectivenessPrevious.engagementByTouch.finalNudge.rate,
+          ),
+        },
         calendarBookingRate: delta(
           effectivenessCurrent.calendarBookingRate,
           effectivenessPrevious.calendarBookingRate,

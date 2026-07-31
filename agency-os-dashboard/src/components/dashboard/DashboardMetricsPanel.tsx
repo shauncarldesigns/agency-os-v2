@@ -42,12 +42,13 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sendTiming, setSendTiming] = useState<SendTimingState | null>(null);
+  const [engagementRange, setEngagementRange] = useState<TextOutreachActivityRange>('30d');
 
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await api.dashboard.pipelineKpis();
+      const res = await api.dashboard.pipelineKpis(engagementRange);
       setData(res);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -56,7 +57,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
       setLoading(false);
       setRefreshing(false);
     }
-  }, [showToast]);
+  }, [showToast, engagementRange]);
 
   useEffect(() => {
     void load();
@@ -108,12 +109,18 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         </button>
       </div>
 
+      <NeedsActionSection
+        leads={data.needsAction}
+        onOpenText={() => onSwitchTab?.('automated-pipeline')}
+        onOpenCall={() => onSwitchTab?.('call-sessions')}
+      />
+
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <HeroKpi
           icon={Flame}
-          label="Hot leads ready to call"
+          label="Engaged leads ready to call"
           value={data.hero.hotLeadsReadyToCall.toString()}
-          sub="Tapped or engaged, not called since"
+          sub="Not called since their latest engagement"
           tone="emerald"
           onClick={() => onSwitchTab?.('automated-pipeline')}
         />
@@ -146,19 +153,38 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Outreach effectiveness</h3>
+            <h3 className="text-sm font-bold text-slate-900">Engagement by touch</h3>
             <p className="mt-0.5 text-xs text-slate-400">
-              Lead-attributed results for week of {data.week.monday} vs previous week
+              First engagement attributed to the most recent text · {activityRangeLabel(engagementRange)}
             </p>
           </div>
+          <div className="inline-flex rounded-lg bg-slate-100 p-1">
+            <RangeButton active={engagementRange === '7d'} onClick={() => setEngagementRange('7d')}>Last 7 days</RangeButton>
+            <RangeButton active={engagementRange === '30d'} onClick={() => setEngagementRange('30d')}>Last 30 days</RangeButton>
+            <RangeButton active={engagementRange === 'all'} onClick={() => setEngagementRange('all')}>All time</RangeButton>
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <EffectivenessCard
-            label="Follow-up activation"
-            value={data.effectiveness.current.followUpActivationRate}
-            trend={data.effectiveness.trends.followUpActivationRate}
-            emptyLabel="No follow-ups"
-            detail={`${data.effectiveness.current.activated} of ${data.effectiveness.current.followedUp} followed-up leads first engaged afterward`}
+            label="Intro text"
+            value={data.effectiveness.current.engagementByTouch.intro.rate}
+            trend={data.effectiveness.trends.engagementByTouch.intro}
+            emptyLabel="No intro texts"
+            detail={`${data.effectiveness.current.engagementByTouch.intro.engaged} of ${data.effectiveness.current.engagementByTouch.intro.sent} leads engaged after the intro`}
+          />
+          <EffectivenessCard
+            label="Reminder"
+            value={data.effectiveness.current.engagementByTouch.reminder.rate}
+            trend={data.effectiveness.trends.engagementByTouch.reminder}
+            emptyLabel="No reminders"
+            detail={`${data.effectiveness.current.engagementByTouch.reminder.engaged} of ${data.effectiveness.current.engagementByTouch.reminder.sent} leads engaged after the reminder`}
+          />
+          <EffectivenessCard
+            label="Final nudge"
+            value={data.effectiveness.current.engagementByTouch.finalNudge.rate}
+            trend={data.effectiveness.trends.engagementByTouch.finalNudge}
+            emptyLabel="No final nudges"
+            detail={`${data.effectiveness.current.engagementByTouch.finalNudge.engaged} of ${data.effectiveness.current.engagementByTouch.finalNudge.sent} leads engaged after the final nudge`}
           />
           <EffectivenessCard
             label="Calendar → booked"
@@ -170,36 +196,62 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
         </div>
       </section>
 
-      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="mt-5">
         <MessageSendTimeSection timing={sendTiming} />
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Needs action</h3>
-              <p className="mt-0.5 text-xs text-slate-400">Warmest leads first, sorted by recent tracked engagement</p>
-            </div>
-            <button
-              onClick={() => onSwitchTab?.('automated-pipeline')}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200"
-            >
-              Open queue <ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {data.needsAction.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 py-9 text-center text-sm text-slate-400">
-              No tapped or engaged leads waiting on a call.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {data.needsAction.map((lead) => (
-                <NeedsActionRow key={lead.id} lead={lead} />
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </div>
+  );
+}
+
+function NeedsActionSection({
+  leads,
+  onOpenText,
+  onOpenCall,
+}: {
+  leads: PipelineHotLead[];
+  onOpenText: () => void;
+  onOpenCall: () => void;
+}) {
+  const visibleLeads = leads.slice(0, 4);
+  const textCount = leads.filter((lead) => lead.outreach_channel === 'text').length;
+  const callCount = leads.filter((lead) => lead.outreach_channel === 'call').length;
+  return (
+    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900">Needs action</h3>
+          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600">{leads.length}</span>
+          <span className="hidden truncate text-xs text-slate-400 sm:inline">Engaged and awaiting follow-up</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {textCount > 0 && (
+            <button
+              onClick={onOpenText}
+              className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              Text {textCount} <ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {callCount > 0 && (
+            <button
+              onClick={onOpenCall}
+              className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+            >
+              Call {callCount} <ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+      {leads.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-xs text-slate-400">
+          No engaged leads waiting on a call.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {visibleLeads.map((lead) => <NeedsActionRow key={lead.id} lead={lead} />)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -642,25 +694,24 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
         : 'Nurture';
   const place = [lead.city, lead.state].filter(Boolean).join(', ') || 'No location';
   return (
-    <div className={`rounded-xl border px-3 py-3 ${tone}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{lead.company}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-            <span>{place}</span>
-            <span className="text-slate-300">·</span>
-            <span>{lead.pipeline_sessions} visit{lead.pipeline_sessions === 1 ? '' : 's'}</span>
-          </div>
+    <div className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 ${tone}`}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="truncate text-xs font-semibold text-slate-900">{lead.company}</div>
+          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-slate-700">{score}</span>
         </div>
-        <div className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
-          <MousePointerClick className="h-3 w-3" />
-          {score} · {actionLabel}
+        <div className="mt-0.5 truncate text-[10px] text-slate-500">
+          {lead.outreach_channel === 'call' ? 'Call Outreach' : 'Text Outreach'} · {actionLabel} · {lead.pipeline_sessions} visit{lead.pipeline_sessions === 1 ? '' : 's'} · {place}
         </div>
       </div>
       {lead.phone && (
-        <a href={`tel:${lead.phone}`} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700">
+        <a
+          href={`tel:${lead.phone}`}
+          title={`Call ${lead.company}`}
+          aria-label={`Call ${lead.company}`}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 shadow-sm"
+        >
           <PhoneCall className="h-3.5 w-3.5" />
-          {lead.phone}
         </a>
       )}
     </div>
