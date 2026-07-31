@@ -89,11 +89,13 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     log('info', 'cron', `Scheduled trigger: ${event.cron}`);
     if (event.cron === '0 6 * * *') {
-      // Daily 6am — refresh PageSpeed for live Tier 3 sites
+      // Daily 6am — refresh PageSpeed for live Tier 3 sites. On the first
+      // of each month, also finalize the prior-month snapshots. Combining
+      // these keeps the Worker within Cloudflare's five-trigger limit.
       ctx.waitUntil(refreshTier3PageSpeed(env));
-    } else if (event.cron === '0 7 1 * *') {
-      // Monthly 1st 7am — finalize prior-month snapshots + exec summaries
-      ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Monthly snapshot run`, { results: out })));
+      if (new Date(event.scheduledTime).getUTCDate() === 1) {
+        ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Monthly snapshot run`, { results: out })));
+      }
     } else if (event.cron === '0 8 * * 1') {
       // Weekly Monday 8am — refresh GSC for current period (intermediate progress check)
       ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Weekly GSC refresh run`, { results: out })));
