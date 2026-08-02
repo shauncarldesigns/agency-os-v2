@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Workspace settings and integration health
+
+- **The sidebar Settings and operator footer now open real workspace controls.** Agency OS persists general identity, calling/outreach composition, engagement thresholds, agency defaults, pricing references, service conventions, and writing guidance; new calling weeks consume the configured session size, score floor, and industry rotation. Integration cards report configuration health without exposing Worker secrets, System & Data shows live D1 totals and supports CSV export and manual Clarity sync, and the operator menu adds profile access, shortcut help, and Cloudflare Access sign-out. Backend + dashboard + migration (`2026-08-02-agency-settings.sql`, apply before deploy).
+
 ### Access security hardening
 
 - **Agency OS now uses passwordless Cloudflare Access and no longer embeds production API credentials in the browser.** Administrative API requests validate Access JWT signatures, audience, issuer, and the exact operator email; dashboard requests use the protected session. CORS and browser security headers are restricted, public outreach redirects are rate-limited, call recordings play through an authenticated Worker route instead of public R2, uploads are constrained, scraper URLs reject local/private targets, and production dependencies audit clean. Backend + dashboard.

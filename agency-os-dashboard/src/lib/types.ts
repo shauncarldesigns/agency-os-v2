@@ -387,7 +387,34 @@ export type Tab =
   | 'sites'
   | 'docs'
   | 'playbook'
-  | 'reports';
+  | 'reports'
+  | 'settings';
+
+export interface AgencySettings {
+  general: {
+    agencyName: string; operatorName: string; operatorEmail: string; initials: string;
+    timezone: string; currency: string; dateFormat: string; defaultServiceArea: string;
+    appearance: 'light' | 'system';
+  };
+  outreach: {
+    sessionSize: number; scoreFloor: number; industryRotation: string[];
+    geographicFilters: string[]; callingDays: string[]; callingBlocks: string[];
+    recallCooldownDays: number; hotThreshold: number; walkthroughThreshold: number;
+    followUpThreshold: number; bookingUrl: string;
+  };
+  defaults: {
+    tier1Mrr: number; tier2Mrr: number; tier3Mrr: number; services: string[];
+    serviceAreas: string[]; reportSenderName: string; reportSenderEmail: string;
+    companyVoice: string; bannedPhrases: string[];
+  };
+  updatedAt: string | null;
+}
+
+export interface SettingsHealth {
+  status: 'ok'; checkedAt: string;
+  integrations: Array<{ id: string; name: string; configured: boolean; optional?: boolean; detail: string; lastSuccessAt?: string | null }>;
+  system: { database: string; environment: string; counts: { leads: number; projects: number; sessions: number }; lastAutomationAt: string | null };
+}
 
 export type ToastType = 'default' | 'success' | 'error';
 export type ShowToast = (message: string, type?: ToastType) => void;

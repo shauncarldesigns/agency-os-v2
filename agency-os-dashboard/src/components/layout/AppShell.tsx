@@ -15,8 +15,11 @@ import {
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
+  Keyboard,
+  UserRound,
 } from 'lucide-react';
-import type { Tab } from '../../lib/types';
+import type { AgencySettings, Tab } from '../../lib/types';
 
 // ---------------------------------------------------------------------------
 // App shell — sidebar navigation layout (visual spec: mockups/AppShell.jsx).
@@ -73,6 +76,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },
   playbook: { title: 'Playbook', subtitle: 'Scripts, objections, and follow-ups' },
   reports: { title: 'Reports', subtitle: 'Monthly client reporting' },
+  settings: { title: 'Settings', subtitle: 'Workspace preferences, integrations, and system health' },
 };
 
 function Sidebar({
@@ -81,6 +85,7 @@ function Sidebar({
   badges,
   onClose,
   collapsed,
+  profile,
 }: {
   active: Tab;
   onNavigate: (t: Tab) => void;
@@ -89,7 +94,9 @@ function Sidebar({
   /** Icon-only rail mode (desktop collapse). The mobile drawer always
    *  renders expanded. */
   collapsed?: boolean;
+  profile: AgencySettings['general'];
 }) {
+  const [userOpen, setUserOpen] = useState(false);
   return (
     <div
       className={`flex h-full flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ${
@@ -104,7 +111,7 @@ function Sidebar({
         {!collapsed && (
           <div className="leading-tight">
             <div className="text-[15px] font-semibold text-slate-900">Agency OS</div>
-            <div className="text-[11px] text-slate-400">Shaun Carl Designs</div>
+            <div className="text-[11px] text-slate-400">{profile.agencyName}</div>
           </div>
         )}
         {!collapsed && (
@@ -180,8 +187,9 @@ function Sidebar({
       </nav>
 
       {/* Footer / user */}
-      <div className={`border-t border-slate-100 ${collapsed ? 'p-2.5' : 'p-3'}`}>
+      <div className={`relative border-t border-slate-100 ${collapsed ? 'p-2.5' : 'p-3'}`}>
         <button
+          onClick={() => { onNavigate('settings'); onClose?.(); }}
           title={collapsed ? 'Settings' : undefined}
           className={`mb-1 flex w-full items-center rounded-xl py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 ${
             collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
@@ -190,20 +198,29 @@ function Sidebar({
           <Settings className="h-4 w-4 shrink-0 text-slate-400" />
           {!collapsed && 'Settings'}
         </button>
-        <div
+        <button
+          onClick={() => setUserOpen((v) => !v)}
           className={`flex items-center rounded-xl py-2 ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'}`}
-          title={collapsed ? 'Shaun Gehrke' : undefined}
+          title={collapsed ? profile.operatorName : undefined}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-semibold text-white">
-            SG
+            {profile.initials || 'SG'}
           </div>
           {!collapsed && (
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-medium text-slate-800">Shaun Gehrke</div>
-              <div className="truncate text-[11px] text-slate-400">info@shauncarldesigns.com</div>
+              <div className="truncate text-sm font-medium text-slate-800">{profile.operatorName}</div>
+              <div className="truncate text-[11px] text-slate-400">{profile.operatorEmail}</div>
             </div>
           )}
-        </div>
+        </button>
+        {userOpen && (
+          <div className={`absolute bottom-3 z-50 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${collapsed ? 'left-[76px] w-56' : 'left-3 w-[232px]'}`}>
+            <button onClick={() => { onNavigate('settings'); setUserOpen(false); onClose?.(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"><UserRound className="h-4 w-4 text-slate-400" />Profile & preferences</button>
+            <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs text-slate-500"><Keyboard className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>Call Center: 1–4 outcomes, S skip, Esc close</span></div>
+            <div className="my-1 border-t border-slate-100" />
+            <button onClick={() => { window.location.href = '/cdn-cgi/access/logout'; }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sign out</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -217,11 +234,12 @@ interface AppShellProps {
    *  (e.g. clients count + MRR, previously in the dark header). */
   headerExtra?: React.ReactNode;
   children: React.ReactNode;
+  profile: AgencySettings['general'];
 }
 
 const COLLAPSE_KEY = 'agency-os-sidebar-collapsed';
 
-export function AppShell({ active, onNavigate, badges, headerExtra, children }: AppShellProps) {
+export function AppShell({ active, onNavigate, badges, headerExtra, profile, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   // Desktop rail collapse — persisted so the operator's preference survives
   // reloads. The mobile drawer ignores it (always expanded).
@@ -240,7 +258,7 @@ export function AppShell({ active, onNavigate, badges, headerExtra, children }: 
     <div className="flex h-screen bg-slate-50">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
-        <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} />
+        <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} profile={profile} />
       </div>
 
       {/* Mobile drawer */}
@@ -256,6 +274,7 @@ export function AppShell({ active, onNavigate, badges, headerExtra, children }: 
               onNavigate={onNavigate}
               badges={badges}
               onClose={() => setMobileOpen(false)}
+              profile={profile}
             />
           </div>
         </div>

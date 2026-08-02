@@ -268,6 +268,26 @@ sessionsRouter.post('/generate-week', async (c) => {
   const week = chicagoCallingWeek(ref);
   const callingDates = [week.tuesday, week.wednesday, week.thursday];
 
+  // Settings are optional at runtime during migration rollout. A missing
+  // settings table safely falls back to the established composition defaults.
+  let sessionSize = 40;
+  let scoreFloor = 50;
+  let configuredRotation: string[] = [];
+  try {
+    const row = await c.env.DB.prepare('SELECT outreach_json FROM agency_settings WHERE id = 1')
+      .first<{ outreach_json: string }>();
+    const configured = row ? JSON.parse(row.outreach_json) as Record<string, unknown> : {};
+    const size = Number(configured.sessionSize);
+    const floor = Number(configured.scoreFloor);
+    if (Number.isFinite(size) && size >= 1 && size <= 100) sessionSize = size;
+    if (Number.isFinite(floor) && floor >= 0 && floor <= 100) scoreFloor = floor;
+    if (Array.isArray(configured.industryRotation)) {
+      configuredRotation = configured.industryRotation.filter((v): v is string => typeof v === 'string' && v.length > 0);
+    }
+  } catch {
+    // Migration may not have been applied yet; defaults above remain valid.
+  }
+
   // Industry rotation pulls from weekly_rotation single-row table.
   const rotation = await c.env.DB
     .prepare(`SELECT last_industry FROM weekly_rotation WHERE id = 1`)
@@ -278,7 +298,11 @@ sessionsRouter.post('/generate-week', async (c) => {
   const skipped: Array<{ date: string; block: SessionBlock; reason: string }> = [];
 
   for (const date of callingDates) {
-    const industry = nextIndustry(lastIndustry);
+    const configuredIndex = configuredRotation.length > 0 ? configuredRotation.indexOf(lastIndustry ?? '') : -1;
+    const configuredKey = configuredRotation.length > 0
+      ? configuredRotation[(configuredIndex + 1) % configuredRotation.length]
+      : null;
+    const industry = configuredKey ? { key: configuredKey } : nextIndustry(lastIndustry);
     // Store the KEY (e.g., 'plumber') in session.industry so the composer's
     // SQL match against leads.industry works. Label is computed in the UI
     // via industryLabel().
@@ -295,9 +319,9 @@ sessionsRouter.post('/generate-week', async (c) => {
       }
       const ins = await c.env.DB.prepare(`
         INSERT INTO sessions (session_date, block, industry, score_floor, lead_count_target, status)
-        VALUES (?, ?, ?, 50, 40, 'planned')
+        VALUES (?, ?, ?, ?, ?, 'planned')
         RETURNING *
-      `).bind(date, block, industry.key).first<Session>();
+      `).bind(date, block, industry.key, scoreFloor, sessionSize).first<Session>();
       if (ins) created.push(ins);
     }
   }
