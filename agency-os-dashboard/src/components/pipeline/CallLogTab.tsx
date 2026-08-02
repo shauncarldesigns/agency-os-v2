@@ -43,10 +43,10 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
   }, [leadId]);
   useEffect(() => { void loadRecordings(); }, [loadRecordings, calls.length]);
 
-  async function handleAttach(url: string) {
-    setAttaching(url);
+  async function handleAttach(key: string) {
+    setAttaching(key);
     try {
-      await api.recordings.attach(leadId, url);
+      await api.recordings.attach(leadId, key);
       showToast('Recording attached to call log', 'success');
       onCallsChanged();
     } catch (err) {
@@ -157,8 +157,8 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                 <a href={o.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   🎙 {new Date(o.uploaded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {Math.round(o.size_bytes / 1024)} KB
                 </a>
-                <Button variant="ghost" size="xs" disabled={attaching === o.url} onClick={() => void handleAttach(o.url)}>
-                  {attaching === o.url ? 'Attaching…' : 'Save to call log'}
+                <Button variant="ghost" size="xs" disabled={attaching === o.key} onClick={() => void handleAttach(o.key)}>
+                  {attaching === o.key ? 'Attaching…' : 'Save to call log'}
                 </Button>
               </div>
             ))}

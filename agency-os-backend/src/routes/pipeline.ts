@@ -426,10 +426,10 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { url?: string };
     const rawUrl = (body.url ?? '').trim();
     if (!rawUrl) return c.json(badRequest('Missing url'), 400);
-    // Loose validation — landingsite URLs vary; just make sure it parses.
+    // Landingsite URLs vary, but stored redirects must remain web URLs.
     try {
-      // eslint-disable-next-line no-new
-      new URL(rawUrl);
+      const parsed = new URL(rawUrl);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error('unsupported protocol');
     } catch {
       return c.json(badRequest('Invalid url'), 400);
     }

@@ -28,10 +28,18 @@ import { processDueEmailAutomations } from './services/emailAutomation';
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use('*', cors({
-  origin: '*',
+// Administrative API requests come only from the protected dashboard. Public
+// tracking, pixel, and webhook routes set their own narrowly-scoped headers.
+app.use('/api/*', cors({
+  origin: (origin, c) => {
+    const configured = c.env.DASHBOARD_ORIGIN?.replace(/\/$/, '');
+    const allowed = [configured, 'http://127.0.0.1:5174', 'http://localhost:5174'].filter(Boolean);
+    return allowed.includes(origin) ? origin : '';
+  },
   allowHeaders: ['Content-Type', 'X-API-Key'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  maxAge: 86400,
 }));
 
 app.get('/', c => c.json({ name: 'agency-os-v2-api', version: '2.0.0', status: 'ok' }));
@@ -72,7 +80,7 @@ app.route('/api/demos', demosRouter);
 app.route('/api/dashboard', dashboardRouter);
 // Playbook content (read endpoints + /_debug). Phase 3 adds /generate-rebuttal here.
 app.route('/api/playbook', playbookRouter);
-// Call recordings — multipart upload → R2, returns public URL.
+// Call recordings — multipart upload + authenticated R2 playback proxy.
 app.route('/api/recordings', recordingsRouter);
 // Automated Pipeline — text + site outreach queue.
 app.route('/api/pipeline', pipelineRouter);

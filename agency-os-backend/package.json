@@ -10,7 +10,8 @@
     "db:migrate:remote": "wrangler d1 execute agency-os-v2 --remote --file=src/db/schema.sql"
   },
   "dependencies": {
-    "hono": "^4.6.0",
+    "hono": "^4.12.33",
+    "jose": "^6.2.7",
     "svix": "^1.99.1",
     "yaml": "^2.9.0"
   },

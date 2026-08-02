@@ -353,12 +353,13 @@ Leads" card sits above the WeekPlanner on the dashboard.
 
 ## Call Recordings (added 2026-07-01)
 
-Mid-call audio capture via browser MediaRecorder API → R2 bucket → public URL
-persists on `call_log.recording_url`.
+Mid-call audio capture via browser MediaRecorder API → private R2 bucket. New
+rows persist an internal `r2://calls/...` reference; API responses translate it
+to an authenticated Worker playback URL.
 
-- **R2 bucket:** `agency-os-recordings`, public access enabled. Base URL:
-  `https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev`. Binding name in
-  Worker: `RECORDINGS` (see `wrangler.toml`).
+- **R2 bucket:** `agency-os-recordings`, private. Binding name in Worker:
+  `RECORDINGS` (see `wrangler.toml`). Historical public URLs are normalized at
+  response time, so the `r2.dev` development endpoint can remain disabled.
 - **Cockpit Record button** in utility row has 4 states: idle / recording
   (pulses red, live MM:SS) / uploading / done. Timer rebases to
   record-start when clicked, so objection-hit timestamps are relative to the
@@ -366,7 +367,8 @@ persists on `call_log.recording_url`.
 - **`POST /api/recordings`** — multipart upload. Streams to R2 via
   `R2.put(file.stream())`. Immediately creates a placeholder call_log row
   with `outcome='Recording'` so the recording is never orphaned. Returns
-  `{ url, key, bytes, call_id }`.
+  `{ url, key, bytes, call_id }`; `url` points at authenticated
+  `GET /api/recordings/file/*` playback.
 - **Outcome merge logic:** if the cockpit passes `recordingCallId` in the
   outcome submit, `POST /api/sessions/:id/outcome` and
   `POST /api/leads/:id/calls` UPDATE that row instead of INSERTing a new
@@ -374,7 +376,7 @@ persists on `call_log.recording_url`.
 - **Orphan recovery:** `GET /api/leads/:id/recordings` lists R2 objects
   under `calls/{leadId}/`, cross-references with `call_log` to mark each
   as attached or orphan. `POST /api/leads/:id/recordings/attach` creates
-  a placeholder call_log row for an orphan URL. CallLogTab renders a
+  a placeholder call_log row for an orphan key. CallLogTab renders a
   yellow "orphan recording" block with a "Save to call log" button.
 - **Playback:** Pipeline LeadModal's CallLogTab renders "🎙 Play recording ↗"
   link on any call_log entry with a recording_url. Opens in a new browser

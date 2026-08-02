@@ -53,6 +53,11 @@ redirectRouter.get('/r/:lead_id', async (c) => {
   if (isNaN(id) || id <= 0) return c.text('Invalid link', 400);
   const channel = c.req.query('channel') === 'email' ? 'email' : 'text';
 
+  if (c.env.CLICK_RATE_LIMITER) {
+    const rate = await c.env.CLICK_RATE_LIMITER.limit({ key: `redirect:${id}` });
+    if (!rate.success) return c.text('Too many requests', 429, { 'Retry-After': '60' });
+  }
+
   try {
     const lead = await c.env.DB.prepare(
       `SELECT id, site_url, pipeline_status, pipeline_sessions, state,
@@ -173,6 +178,11 @@ redirectRouter.post('/r/:lead_id/confirm', async (c) => {
   const token = c.req.query('token');
   const signal = normalizeConfirmationSignal(c.req.query('signal'));
   if (isNaN(id) || id <= 0 || !token) return confirmationResponse('Invalid confirmation', 400);
+
+  if (c.env.CLICK_RATE_LIMITER) {
+    const rate = await c.env.CLICK_RATE_LIMITER.limit({ key: `confirm:${id}` });
+    if (!rate.success) return confirmationResponse('Too many requests', 429);
+  }
 
   try {
     const click = await c.env.DB.prepare(`

@@ -1,7 +1,6 @@
 export interface Env {
   DB: D1Database;
   RECORDINGS: R2Bucket;       // agency-os-recordings — call audio captures
-  RECORDINGS_PUBLIC_URL?: string; // override of the pub-xxx.r2.dev URL; set via wrangler secret if a custom domain replaces it
   ENV: string;
   CLAUDE_API_KEY: string;
   GOOGLE_PLACES_API_KEY: string;
@@ -11,6 +10,13 @@ export interface Env {
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_ACCOUNT_ID: string;
   DASHBOARD_API_KEY: string;
+  /** Cloudflare Access rollout: legacy (key only), mixed, or access (JWT only). */
+  AUTH_MODE?: 'legacy' | 'mixed' | 'access';
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
+  ACCESS_ALLOWED_EMAIL?: string;
+  DASHBOARD_ORIGIN?: string;
+  CLICK_RATE_LIMITER?: RateLimit;
   RESEND_API_KEY: string;
   RESEND_WEBHOOK_SECRET?: string;
   OUTREACH_EMAIL_FROM?: string;

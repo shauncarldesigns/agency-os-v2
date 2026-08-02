@@ -13,6 +13,10 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http:/
 const TRACKING_BASE = (import.meta.env.VITE_TRACKING_URL as string | undefined) ?? API_BASE;
 const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
 
+function authHeaders(): Record<string, string> {
+  return API_KEY ? { 'X-API-Key': API_KEY } : {};
+}
+
 /**
  * Project update payload. The DB stores `services` and `service_areas` as
  * JSON-encoded strings, but the backend PUT route accepts arrays (and does
@@ -165,9 +169,10 @@ function qs(params?: Record<string, string | number | boolean | undefined | null
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
+      ...authHeaders(),
       ...(options.headers as Record<string, string> | undefined ?? {}),
     },
   });
@@ -439,12 +444,11 @@ export const api = {
       apiFetch<{ snapshot: unknown }>(`/api/reports/${projectId}/refresh${qs({ period })}`, { method: 'POST' }),
     snapshot: (projectId: number, period?: string) =>
       apiFetch<{ snapshot: unknown }>(`/api/reports/${projectId}/snapshot${qs({ period })}`, { method: 'POST' }),
-    exportUrl: (projectId: number, period: string, sections: string[]) =>
-      `${API_BASE}/api/reports/${projectId}/export?key=${encodeURIComponent(API_KEY)}#${encodeURIComponent(JSON.stringify({ period, sections }))}`,
     exportHtml: (projectId: number, period: string, sections: string[]) =>
       fetch(`${API_BASE}/api/reports/${projectId}/export`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ period, sections }),
       }).then(r => r.text()),
     email: (projectId: number, opts: { period: string; sections: string[]; to?: string }) =>
@@ -535,7 +539,8 @@ export const api = {
       form.append('ext', ext);
       const res = await fetch(`${API_BASE}/api/recordings`, {
         method: 'POST',
-        headers: { 'X-API-Key': API_KEY },
+        credentials: 'include',
+        headers: authHeaders(),
         body: form,
       });
       if (!res.ok) {
@@ -548,12 +553,12 @@ export const api = {
     // attached to a call_log row. Frontend uses this to detect orphans.
     listForLead: (leadId: number) =>
       apiFetch<{ recordings: RecordingObject[] }>(`/api/leads/${leadId}/recordings`),
-    // Creates a placeholder call_log row pointing at an orphan R2 URL.
-    // Idempotent — re-attaching the same URL returns the existing call_id.
-    attach: (leadId: number, url: string) =>
+    // Creates a placeholder call_log row pointing at an orphan R2 object.
+    // Idempotent — re-attaching the same key returns the existing call_id.
+    attach: (leadId: number, key: string) =>
       apiFetch<{ call_id: number; created: boolean }>(
         `/api/leads/${leadId}/recordings/attach`,
-        { method: 'POST', body: JSON.stringify({ url }) }
+        { method: 'POST', body: JSON.stringify({ key }) }
       ),
   },
   // Automated Pipeline — text + site outreach queue.

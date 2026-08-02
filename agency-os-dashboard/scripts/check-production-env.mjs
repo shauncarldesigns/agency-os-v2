@@ -3,7 +3,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const envPath = path.resolve(process.cwd(), '.env.production');
-const required = ['VITE_API_URL', 'VITE_TRACKING_URL', 'VITE_API_KEY'];
+const required = ['VITE_API_URL', 'VITE_TRACKING_URL'];
 
 function parseEnv(contents) {
   const values = new Map();
@@ -25,7 +25,7 @@ function fail(message) {
 }
 
 if (!fs.existsSync(envPath)) {
-  fail('.env.production is missing. Production deploys must include the dashboard API URL, tracking URL, and API key.');
+  fail('.env.production is missing. Production deploys must include the protected API URL and public tracking URL.');
 }
 
 const env = parseEnv(fs.readFileSync(envPath, 'utf8'));

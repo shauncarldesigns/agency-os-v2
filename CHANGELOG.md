@@ -7,6 +7,12 @@ Backend Worker auto-deploys via CI on merge. Dashboard requires manual
 `cd agency-os-dashboard && npm run deploy` — entries below note "dashboard"
 when a manual deploy was needed.
 
+## 2026-08
+
+### Access security hardening (in progress)
+
+- **Agency OS is prepared for passwordless Cloudflare Access and removes browser-embedded production API credentials.** Administrative API requests can validate Access JWTs for the operator email, dashboard requests use the protected session, CORS and browser security headers are restricted, public outreach redirects are rate-limited, call recordings play through an authenticated Worker route instead of public R2, uploads are constrained, scraper URLs reject local/private targets, and production dependencies audit clean. Backend + dashboard; final Access identifiers are added after the operator creates the Access application.
+
 ## 2026-07
 
 ### Confirmed outreach visits
