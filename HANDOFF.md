@@ -7,9 +7,9 @@ reference docs live in `docs/`._
 
 ## State
 
-Security hardening shipped in PR #197. Cloudflare Access is live on the custom
-dashboard/API domains; `AUTH_MODE=mixed` is the validation phase before removing
-the legacy fallback.
+Security hardening shipped through PRs #197–#198. Cloudflare Access is live on
+the custom dashboard/API domains and production is now `AUTH_MODE=access`; the
+browser-bundled and Worker-side legacy key have been retired.
 The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to

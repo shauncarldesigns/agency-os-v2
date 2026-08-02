@@ -53,7 +53,7 @@ CLARITY_PROJECT_ID = "xt0tg8n14n"
 OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
 OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
 OUTREACH_PUBLIC_URL = "https://try.shauncarldesigns.com"
-AUTH_MODE = "mixed"
+AUTH_MODE = "access"
 ACCESS_TEAM_DOMAIN = "https://tight-disk-cf65.cloudflareaccess.com"
 ACCESS_AUD = "7eeaead9db443c98d907f4b64f34997a6cf1c6065591640b3f8a0e0e7159c388"
 ACCESS_ALLOWED_EMAIL = "info@shauncarldesigns.com"
@@ -67,7 +67,6 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 # GOOGLE_OAUTH_REFRESH_TOKEN
 # CLOUDFLARE_API_TOKEN
 # CLOUDFLARE_ACCOUNT_ID
-# DASHBOARD_API_KEY
 # RESEND_API_KEY
 # RESEND_WEBHOOK_SECRET
 # OUTSCRAPER_API_KEY  (optional — fetches up to 50 Google reviews per lead;
