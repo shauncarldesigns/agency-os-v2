@@ -3,6 +3,7 @@ import type {
   Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
+  AgencySettings, SettingsHealth,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -184,6 +185,18 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
+  settings: {
+    get: () => apiFetch<{ settings: AgencySettings }>('/api/settings'),
+    update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults'>) =>
+      apiFetch<{ settings: AgencySettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+    health: () => apiFetch<SettingsHealth>('/api/settings/health'),
+    claritySync: () => apiFetch<{ checked: number; matched: number; updated: number; skipped: number; error?: string }>('/api/settings/clarity-sync', { method: 'POST' }),
+    exportLeads: async () => {
+      const res = await fetch(`${API_BASE}/api/leads/export`, { credentials: 'include', headers: authHeaders() });
+      if (!res.ok) throw new ApiError('Could not export leads', res.status);
+      return res.blob();
+    },
+  },
   leads: {
     list: (filters?: { status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>
       apiFetch<{ leads: Lead[]; total: number }>(`/api/leads${qs(filters)}`),

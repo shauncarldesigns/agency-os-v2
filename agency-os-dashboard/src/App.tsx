@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Tab, HeaderStats, NavCounts } from './lib/types';
+import type { AgencySettings, Tab, HeaderStats, NavCounts } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
 import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPanel';
@@ -15,6 +15,7 @@ import { DocsPage } from './components/docs/DocsPage';
 import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
+import { SettingsPage } from './components/settings/SettingsPage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -33,8 +34,17 @@ export default function App() {
   // over the whole viewport.
   const [openSession, setOpenSession] = useState<{ sessionId: number; leadId?: number } | null>(null);
   const { toasts, showToast } = useToast();
+  const [profile, setProfile] = useState<AgencySettings['general']>({
+    agencyName: 'Shaun Carl Designs', operatorName: 'Shaun Gehrke',
+    operatorEmail: 'info@shauncarldesigns.com', initials: 'SG',
+    timezone: 'America/Chicago', currency: 'USD', dateFormat: 'MM/DD/YYYY',
+    defaultServiceArea: '', appearance: 'system',
+  });
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    api.settings.get().then(r => setProfile(r.settings.general)).catch(() => undefined);
+  }, []);
 
   async function loadStats() {
     try {
@@ -132,6 +142,7 @@ export default function App() {
         }}
         badges={badges}
         headerExtra={headerExtra}
+        profile={profile}
       >
         <>
             {activeTab === 'dashboard' && (
@@ -203,6 +214,9 @@ export default function App() {
               <div className="main">
                 <ReportsPanel showToast={showToast} />
               </div>
+            )}
+            {activeTab === 'settings' && (
+              <SettingsPage showToast={showToast} onProfileChanged={setProfile} />
             )}
         </>
       </AppShell>

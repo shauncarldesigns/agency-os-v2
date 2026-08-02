@@ -25,6 +25,7 @@ import { redirectRouter } from './routes/redirect';
 import { emailOutreachRouter, publicEmailRouter } from './routes/emailOutreach';
 import { syncClarityEngagement } from './services/clarity';
 import { processDueEmailAutomations } from './services/emailAutomation';
+import { settingsRouter } from './routes/settings';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -85,6 +86,7 @@ app.route('/api/recordings', recordingsRouter);
 // Automated Pipeline — text + site outreach queue.
 app.route('/api/pipeline', pipelineRouter);
 app.route('/api/email', emailOutreachRouter);
+app.route('/api/settings', settingsRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError((err, c) => {
