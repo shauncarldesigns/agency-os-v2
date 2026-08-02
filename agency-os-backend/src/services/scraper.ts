@@ -33,6 +33,26 @@ const PREFERRED_INTERNAL_PATHS = [
   '/team',
 ];
 
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  return a === 0 || a === 10 || a === 127 || a >= 224
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168);
+}
+
+function isSafePublicUrl(url: URL): boolean {
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password) return false;
+  if (url.port && !['80', '443'].includes(url.port)) return false;
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpv4(host)) return false;
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb')) return false;
+  return true;
+}
+
 export interface ScrapeResult {
   ok: boolean;
   reason?: 'no-website' | 'robots' | 'fetch-failed' | 'empty' | 'extract-failed';
@@ -55,7 +75,7 @@ export async function scrapeWebsite(
   } catch {
     return { ...empty, reason: 'fetch-failed' };
   }
-  if (!/^https?:$/.test(origin.protocol)) {
+  if (!isSafePublicUrl(origin)) {
     return { ...empty, reason: 'fetch-failed' };
   }
 
@@ -121,6 +141,8 @@ export async function scrapeWebsite(
 
 async function fetchPageText(url: string): Promise<{ html: string; text: string } | null> {
   try {
+    const requestedUrl = new URL(url);
+    if (!isSafePublicUrl(requestedUrl)) return null;
     const res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -132,6 +154,7 @@ async function fetchPageText(url: string): Promise<{ html: string; text: string 
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) return null;
+    if (!isSafePublicUrl(new URL(res.url))) return null;
     const ct = res.headers.get('content-type') ?? '';
     if (!ct.includes('html')) return null;
     const reader = res.body?.getReader();

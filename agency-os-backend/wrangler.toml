@@ -1,11 +1,15 @@
 name = "agency-os-v2-api"
 main = "src/index.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [[routes]]
 pattern = "try.shauncarldesigns.com"
+custom_domain = true
+
+[[routes]]
+pattern = "api.shauncarldesigns.com"
 custom_domain = true
 
 [[d1_databases]]
@@ -16,6 +20,18 @@ database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
 [[r2_buckets]]
 binding = "RECORDINGS"
 bucket_name = "agency-os-recordings"
+
+[[ratelimits]]
+name = "CLICK_RATE_LIMITER"
+namespace_id = "19601"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[observability]
+enabled = true
+head_sampling_rate = 1
 
 [triggers]
 crons = [
@@ -36,7 +52,12 @@ ENV = "production"
 CLARITY_PROJECT_ID = "xt0tg8n14n"
 OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
 OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
-OUTREACH_PUBLIC_URL = "https://agency-os-v2-api.lively-morning-d9de.workers.dev"
+OUTREACH_PUBLIC_URL = "https://try.shauncarldesigns.com"
+AUTH_MODE = "legacy"
+ACCESS_TEAM_DOMAIN = "https://tight-disk-cf65.cloudflareaccess.com"
+ACCESS_AUD = "7eeaead9db443c98d907f4b64f34997a6cf1c6065591640b3f8a0e0e7159c388"
+ACCESS_ALLOWED_EMAIL = "info@shauncarldesigns.com"
+DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 
 # Secrets (set via `npx wrangler secret put`):
 # CLAUDE_API_KEY

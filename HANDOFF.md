@@ -1,17 +1,35 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-07-31. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-02. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
 
 ## State
 
-The confirmed-visitor tracking release is being shipped through the standard
-PR/merge flow. It screens link scanners and implausible traffic before outreach
-engagement scoring while retaining diagnostic Activity events. Its additive D1
-migration must be applied before the Worker release, and existing demo sites can
-copy the upgraded tracking block from the lead Activity tab.
+Security hardening is staged on `codex/access-security-hardening`. Code supports
+Cloudflare Access without enabling it yet (`AUTH_MODE=legacy`) to avoid lockout.
+The Agency OS Access application now protects the planned app/API hostnames;
+team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
+test passwordless login for `info@shauncarldesigns.com`, then switch to
+`AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Access security hardening (2026-08-02)
+
+- Planned protected hosts: dashboard `app.shauncarldesigns.com`, API
+  `api.shauncarldesigns.com`; public tracking remains `try.shauncarldesigns.com`.
+- Access team domain: `https://tight-disk-cf65.cloudflareaccess.com`; the
+  application AUD is stored as the non-secret `ACCESS_AUD` Worker variable.
+- Worker auth verifies Cloudflare Access JWT issuer, audience, signature, and
+  exact operator email. Legacy API-key and mixed rollout modes remain available
+  only for the staged transition.
+- Dashboard requests include Access credentials; production validation no longer
+  requires a browser-bundled `VITE_API_KEY`. CORS and security headers are narrow.
+- Outreach redirects have a Cloudflare rate-limit binding. Scraping rejects
+  private/local targets. Audio uploads are audio-only and capped at 25 MB.
+- Recordings are served through authenticated `/api/recordings/file/*`; existing
+  public URLs are understood without a database migration. Disable R2 `r2.dev`
+  only after this Worker/dashboard version is deployed and playback is verified.
 
 ## Confirmed outreach visits (2026-07-31)
 

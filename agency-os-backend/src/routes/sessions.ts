@@ -18,6 +18,7 @@ import type {
   CallOutcome, SessionLead, Demo, Project,
 } from '../types';
 import { badRequest, conflict, notFound, log } from '../utils/errors';
+import { normalizeRecordingStorageValue } from '../utils/recordings';
 import { createProjectFromLead } from './leads';
 import {
   chicagoToday, chicagoCallingMode, chicagoCallingWeek,
@@ -588,7 +589,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   } as const)[body.outcome];
   if (body.outcome !== 'skipped') {
     const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
-    const recordingUrl = body.recordingUrl ?? null;
+    const recordingUrl = normalizeRecordingStorageValue(body.recordingUrl);
     // Booked outcome — prepend an interest-level tag onto the notes so the
     // temperature persists in the CallLogTab notes display when the operator
     // opens the lead to prep for the demo call.
@@ -608,7 +609,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
             SET outcome = ?,
                 notes = ?,
                 objection_hits = ?,
-                recording_url = COALESCE(?, recording_url)
+                recording_url = COALESCE(recording_url, ?)
           WHERE id = ? AND lead_id = ?`
       ).bind(friendlyOutcome, callLogNotes, objectionHits, recordingUrl, body.recordingCallId, body.leadId).run();
     } else {

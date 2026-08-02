@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, log, serverError } from '../utils/errors';
+import { authenticatedRecordingUrl, recordingStorageRef } from '../utils/recordings';
 
 /**
  * POST /api/recordings
  *
  * Accepts a single audio file (multipart) from the cockpit's RecordButton.
  * Uploads to R2 at `calls/{leadId}/{timestamp}-{random}.{ext}` and returns
- * the public r2.dev URL. The cockpit then stores the URL in local state
+ * an authenticated API URL. The cockpit then stores the URL in local state
  * and attaches it to the next outcome submit, which persists it on the
  * call_log row.
  *
@@ -18,8 +19,6 @@ import { badRequest, log, serverError } from '../utils/errors';
  *
  * Returns: { url: string, key: string, bytes: number }
  */
-
-const PUBLIC_BASE_DEFAULT = 'https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev';
 
 // Generate an 8-character base36 random suffix — ~ 41 bits of entropy, plenty
 // for "unguessable by humans" while keeping the URL short.
@@ -45,6 +44,8 @@ recordingsRouter.post('/', async (c) => {
   const extRaw = (body.ext as string | undefined) ?? 'webm';
 
   if (!file) return c.json(badRequest('file is required'), 400);
+  if (!file.type.startsWith('audio/')) return c.json(badRequest('file must be audio'), 400);
+  if (file.size > 25 * 1024 * 1024) return c.json(badRequest('file must be 25 MB or smaller'), 413);
   if (!leadIdRaw) return c.json(badRequest('leadId is required'), 400);
 
   const leadId = Number(leadIdRaw);
@@ -67,8 +68,8 @@ recordingsRouter.post('/', async (c) => {
     return c.json(serverError(`Upload failed: ${(err as Error).message}`), 500);
   }
 
-  const base = c.env.RECORDINGS_PUBLIC_URL || PUBLIC_BASE_DEFAULT;
-  const url = `${base}/${key}`;
+  const url = authenticatedRecordingUrl(c.req.url, key);
+  const storageRef = recordingStorageRef(key);
 
   // Create a placeholder call_log row immediately so the recording is never
   // orphaned. If the operator later submits an outcome (Voicemail / Booked /
@@ -79,10 +80,29 @@ recordingsRouter.post('/', async (c) => {
   const placeholderNotes = '(call recorded — outcome not yet logged)';
   const inserted = await c.env.DB
     .prepare(`INSERT INTO call_log (lead_id, outcome, notes, recording_url) VALUES (?, 'Recording', ?, ?)`)
-    .bind(leadId, placeholderNotes, url)
+    .bind(leadId, placeholderNotes, storageRef)
     .run();
   const callId = inserted.meta.last_row_id;
 
   log('info', 'recordings', `Uploaded ${file.size} bytes → ${key} (call_log #${callId})`);
   return c.json({ url, key, bytes: file.size, call_id: callId });
+});
+
+// Authenticated R2 proxy. Once deployed and verified, the bucket's public
+// r2.dev endpoint can be disabled without breaking call playback.
+recordingsRouter.get('/file/*', async (c) => {
+  const key = decodeURIComponent(c.req.param('*') ?? '').replace(/^\/+/, '');
+  if (!key.startsWith('calls/') || key.includes('..') || key.includes('\\')) {
+    return c.json(badRequest('Invalid recording key'), 400);
+  }
+  const object = await c.env.RECORDINGS.get(key);
+  if (!object) return c.json({ error: 'Recording not found', code: 'NOT_FOUND' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream');
+  headers.set('Content-Disposition', `inline; filename="${key.split('/').pop() ?? 'recording'}"`);
+  headers.set('Cache-Control', 'private, no-store');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return new Response(object.body, { headers });
 });

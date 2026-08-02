@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
+import {
+  authenticatedRecordingUrl,
+  normalizeRecordingStorageValue,
+  recordingKeyFromValue,
+  recordingResponseUrl,
+  recordingStorageRef,
+} from '../utils/recordings';
 
 // Mounted at /api/leads — handles /:id/calls (list, create) and at /api/calls — handles /:id (delete)
 export const leadCallsRouter = new Hono<{ Bindings: Env }>();
@@ -17,7 +24,11 @@ leadCallsRouter.get('/:id/calls', async (c) => {
     .prepare('SELECT * FROM call_log WHERE lead_id = ? ORDER BY created_at DESC')
     .bind(leadId)
     .all();
-  return c.json({ calls: result.results });
+  const calls = (result.results as Array<Record<string, unknown>>).map((call) => ({
+    ...call,
+    recording_url: recordingResponseUrl(c.req.url, call.recording_url as string | null),
+  }));
+  return c.json({ calls });
 });
 
 leadCallsRouter.post('/:id/calls', async (c) => {
@@ -37,7 +48,9 @@ leadCallsRouter.post('/:id/calls', async (c) => {
     const objectionHits = Array.isArray(objectionHitsRaw) && objectionHitsRaw.length
       ? JSON.stringify(objectionHitsRaw)
       : null;
-    const recordingUrl = (body.recording_url ?? body.recordingUrl) as string | null | undefined;
+    const recordingUrl = normalizeRecordingStorageValue(
+      (body.recording_url ?? body.recordingUrl) as string | null | undefined,
+    );
     const recordingCallIdRaw = body.recording_call_id ?? body.recordingCallId;
     const recordingCallId = typeof recordingCallIdRaw === 'number' ? recordingCallIdRaw : null;
 
@@ -49,7 +62,7 @@ leadCallsRouter.post('/:id/calls', async (c) => {
       await c.env.DB
         .prepare(`UPDATE call_log
                      SET outcome = ?, notes = ?, followup_date = ?, objection_hits = ?,
-                         recording_url = COALESCE(?, recording_url)
+                         recording_url = COALESCE(recording_url, ?)
                    WHERE id = ? AND lead_id = ?`)
         .bind(outcome, notes, followupDate ?? null, objectionHits, recordingUrl ?? null, recordingCallId, leadId)
         .run();
@@ -102,16 +115,12 @@ callsRouter.delete('/:id', async (c) => {
 // for orphans.
 // ============================================================================
 
-const PUBLIC_BASE_DEFAULT = 'https://pub-80e0811bf1bd472a8ff972eb94b314e0.r2.dev';
-
 leadCallsRouter.get('/:id/recordings', async (c) => {
   const leadId = parseInt(c.req.param('id'), 10);
   if (isNaN(leadId)) return c.json(badRequest('Invalid lead ID'), 400);
 
   const lead = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(leadId).first();
   if (!lead) return c.json(notFound('Lead'), 404);
-
-  const base = c.env.RECORDINGS_PUBLIC_URL || PUBLIC_BASE_DEFAULT;
 
   // List R2 objects under this lead's prefix.
   const listed = await c.env.RECORDINGS.list({ prefix: `calls/${leadId}/` });
@@ -122,14 +131,15 @@ leadCallsRouter.get('/:id/recordings', async (c) => {
     .prepare(`SELECT id, recording_url FROM call_log WHERE lead_id = ? AND recording_url IS NOT NULL`)
     .bind(leadId)
     .all<{ id: number; recording_url: string }>();
-  const attachedByUrl = new Map<string, number>();
+  const attachedByKey = new Map<string, number>();
   for (const row of (callsWithRecording.results ?? [])) {
-    attachedByUrl.set(row.recording_url, row.id);
+    const key = recordingKeyFromValue(row.recording_url);
+    if (key) attachedByKey.set(key, row.id);
   }
 
   const recordings = listed.objects.map((obj) => {
-    const url = `${base}/${obj.key}`;
-    const callId = attachedByUrl.get(url) ?? null;
+    const url = authenticatedRecordingUrl(c.req.url, obj.key);
+    const callId = attachedByKey.get(obj.key) ?? null;
     return {
       key: obj.key,
       url,
@@ -150,22 +160,29 @@ leadCallsRouter.post('/:id/recordings/attach', async (c) => {
   const leadId = parseInt(c.req.param('id'), 10);
   if (isNaN(leadId)) return c.json(badRequest('Invalid lead ID'), 400);
 
-  const body = await c.req.json().catch(() => ({})) as { url?: string };
-  if (!body.url) return c.json(badRequest('url is required'), 400);
+  const body = await c.req.json().catch(() => ({})) as { key?: string; url?: string };
+  const key = body.key ?? recordingKeyFromValue(body.url);
+  if (!key || !key.startsWith(`calls/${leadId}/`)) {
+    return c.json(badRequest('valid recording key is required'), 400);
+  }
 
   const lead = await c.env.DB.prepare('SELECT id FROM leads WHERE id = ?').bind(leadId).first();
   if (!lead) return c.json(notFound('Lead'), 404);
 
-  // Idempotent — if a call_log row already holds this URL, return that row.
-  const existing = await c.env.DB
-    .prepare(`SELECT id FROM call_log WHERE lead_id = ? AND recording_url = ? LIMIT 1`)
-    .bind(leadId, body.url)
-    .first<{ id: number }>();
+  const object = await c.env.RECORDINGS.head(key);
+  if (!object) return c.json(notFound('Recording'), 404);
+
+  // Idempotent across old public URLs and new internal R2 references.
+  const refs = await c.env.DB
+    .prepare(`SELECT id, recording_url FROM call_log WHERE lead_id = ? AND recording_url IS NOT NULL`)
+    .bind(leadId)
+    .all<{ id: number; recording_url: string }>();
+  const existing = (refs.results ?? []).find((row) => recordingKeyFromValue(row.recording_url) === key);
   if (existing) return c.json({ call_id: existing.id, created: false });
 
   const result = await c.env.DB
     .prepare(`INSERT INTO call_log (lead_id, outcome, notes, recording_url) VALUES (?, 'Recording', ?, ?)`)
-    .bind(leadId, '(orphan recording re-attached from R2)', body.url)
+    .bind(leadId, '(orphan recording re-attached from R2)', recordingStorageRef(key))
     .run();
 
   return c.json({ call_id: result.meta.last_row_id, created: true });

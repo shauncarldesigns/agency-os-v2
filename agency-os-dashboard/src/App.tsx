@@ -87,7 +87,7 @@ export default function App() {
       setAwaitingBuildCount(awaitingBuild);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        showToast('API auth failed — check VITE_API_KEY', 'error');
+        showToast('Your secure session expired — refresh to sign in again', 'error');
       } else {
         showToast('Could not reach API', 'error');
       }
