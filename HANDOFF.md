@@ -7,8 +7,9 @@ reference docs live in `docs/`._
 
 ## State
 
-Security hardening is staged on `codex/access-security-hardening`. Code supports
-Cloudflare Access without enabling it yet (`AUTH_MODE=legacy`) to avoid lockout.
+Security hardening shipped in PR #197. Cloudflare Access is live on the custom
+dashboard/API domains; `AUTH_MODE=mixed` is the validation phase before removing
+the legacy fallback.
 The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
