@@ -4,6 +4,7 @@ import { api, ApiError, type RecordingObject } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
 import { formatDateTime, todayIso, outcomeBadge } from '../../lib/format';
+import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 
 interface CallLogTabProps {
   leadId: number;
@@ -189,9 +190,7 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                 </div>
                 <div className="call-entry-notes">{c.notes}</div>
                 {c.recording_url && (
-                  <div className="call-entry-followup">
-                    🎙 <a href={c.recording_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Play recording ↗</a>
-                  </div>
+                  <div style={{ marginTop: 10 }}><AuthenticatedAudioPlayer url={c.recording_url} compact /></div>
                 )}
                 {c.followup_date && (
                   <div className="call-entry-followup">📅 Follow-up: {new Date(c.followup_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>

@@ -18,6 +18,31 @@ function authHeaders(): Record<string, string> {
   return API_KEY ? { 'X-API-Key': API_KEY } : {};
 }
 
+function authenticatedRecordingPlaybackUrl(value: string): string {
+  const authenticatedPrefix = '/api/recordings/file/';
+  let key: string | null = null;
+
+  if (value.startsWith('r2://')) {
+    key = value.slice('r2://'.length);
+  } else {
+    try {
+      const parsed = new URL(value, API_BASE);
+      if (parsed.pathname.startsWith(authenticatedPrefix)) {
+        key = decodeURIComponent(parsed.pathname.slice(authenticatedPrefix.length));
+      } else if (parsed.hostname.endsWith('.r2.dev')) {
+        key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+      }
+    } catch {
+      key = value;
+    }
+  }
+
+  const normalizedKey = key?.replace(/^\/+/, '') ?? '';
+  if (!normalizedKey.startsWith('calls/') || normalizedKey.includes('..') || normalizedKey.includes('\\')) return value;
+  const encodedKey = normalizedKey.split('/').map(encodeURIComponent).join('/');
+  return `${API_BASE.replace(/\/$/, '')}${authenticatedPrefix}${encodedKey}`;
+}
+
 /**
  * Project update payload. The DB stores `services` and `service_areas` as
  * JSON-encoded strings, but the backend PUT route accepts arrays (and does
@@ -550,6 +575,15 @@ export const api = {
       apiFetch<{ callback: Callback }>(`/api/callbacks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   },
   recordings: {
+    fetchBlob: async (url: string): Promise<Blob> => {
+      const playbackUrl = authenticatedRecordingPlaybackUrl(url);
+      const res = await fetch(playbackUrl, {
+        credentials: 'include',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new ApiError(`Recording playback failed: ${res.status}`, res.status);
+      return res.blob();
+    },
     upload: async (
       leadId: number,
       blob: Blob,

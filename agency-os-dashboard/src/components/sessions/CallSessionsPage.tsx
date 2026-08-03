@@ -5,6 +5,7 @@ import {
   Archive,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock,
   Copy,
@@ -39,10 +40,12 @@ import {
   type EmailAutomationDetail,
   type EmailAutomationSummary,
 } from '../../lib/api';
-import type { Lead } from '../../lib/types';
+import type { CallEntry, Lead } from '../../lib/types';
 import type { CallOutcome, ShowToast } from '../../lib/types';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { Spinner } from '../shared/Spinner';
+import { RecordButton } from '../dashboard/RecordButton';
+import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 
 interface Props {
   showToast: ShowToast;
@@ -454,6 +457,22 @@ function CallOutreachModal({
   const [callbackDate, setCallbackDate] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
   const [recordingOutcome, setRecordingOutcome] = useState<CallOutcome | null>(null);
+  const [callNotes, setCallNotes] = useState('');
+  const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!lead) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    void api.calls.list(lead.id)
+      .then((response) => { if (!cancelled) setCallHistory(response.calls); })
+      .catch(() => { if (!cancelled) setCallHistory([]); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [lead?.id]);
 
   if (!lead) return null;
 
@@ -508,6 +527,9 @@ function CallOutreachModal({
       await api.sessions.outcome(hot.session_id, {
         leadId: lead.id,
         outcome,
+        notes: callNotes.trim() || undefined,
+        recordingUrl: recordingUrl ?? undefined,
+        recordingCallId: recordingCallId ?? undefined,
         callbackDate: outcome === 'callback' ? callbackDate : undefined,
         preserveFinalReview: returnedFromAutomation,
       });
@@ -551,7 +573,7 @@ function CallOutreachModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-xl sm:rounded-2xl">
+      <div className={`flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${returnedFromAutomation ? 'sm:max-w-2xl' : 'sm:max-w-5xl'}`}>
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">Open call</h2>
@@ -559,14 +581,25 @@ function CallOutreachModal({
               {lead.company} · {returnedFromAutomation ? 'Final Review' : 'To Call'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close call"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <RecordButton
+              leadId={lead.id}
+              showToast={showToast}
+              resetKey={lead.id}
+              onRecorded={(url, callId) => {
+                setRecordingUrl(url);
+                setRecordingCallId(callId);
+              }}
+            />
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Close call"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto">
@@ -576,6 +609,23 @@ function CallOutreachModal({
                 automation={previousAutomation}
                 archiving={recordingOutcome !== null}
                 onArchive={() => void archiveLead()}
+              />
+            )}
+
+            {!returnedFromAutomation && (
+              <EmailCaptureSplitScript
+                firstName={firstName}
+                leadId={lead.id}
+                email={email}
+                savingEmail={savingEmail}
+                lead={lead}
+                callHistory={callHistory}
+                historyLoading={historyLoading}
+                callNotes={callNotes}
+                recordingUrl={recordingUrl}
+                onEmailChange={setEmail}
+                onCallNotesChange={setCallNotes}
+                onSave={() => void saveEmail()}
               />
             )}
 
@@ -629,37 +679,19 @@ function CallOutreachModal({
               </button>
             </section>
 
-            <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Suggested opener
-              </h3>
-              <div className="whitespace-pre-wrap rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
-                {opener}
-              </div>
-            </section>
-
-            <section>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                On the call
-              </h3>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li className="flex gap-2">
-                  <span className="text-slate-300">·</span>
-                  Confirm you have the right person and ask permission to take 30 seconds.
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-slate-300">·</span>
-                  Lead with one specific observation about their local presence, then ask how they currently win new jobs.
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-slate-300">·</span>
-                  If there is interest, capture the best email below before ending the call.
-                </li>
-              </ul>
-            </section>
+            {returnedFromAutomation && (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Suggested opener
+                </h3>
+                <div className="whitespace-pre-wrap rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
+                  {opener}
+                </div>
+              </section>
+            )}
           </div>
 
-          <section className="border-t border-slate-100 px-5 py-4">
+          {returnedFromAutomation && <section className="border-t border-slate-100 px-5 py-4">
             <div className="mb-2 flex items-center gap-2">
               <Mail className="h-3.5 w-3.5 text-slate-400" />
               <label htmlFor={`call-email-${lead.id}`} className="text-xs font-medium text-slate-500">
@@ -688,7 +720,7 @@ function CallOutreachModal({
             <p className="mt-2 text-[11px] text-slate-400">
               Saving an email tags the lead and moves it to Awaiting Build.
             </p>
-          </section>
+          </section>}
         </div>
 
         <footer className="border-t border-slate-100 px-5 py-4">
@@ -712,6 +744,199 @@ function CallOutreachModal({
         </footer>
       </div>
     </div>
+  );
+}
+
+const EMAIL_CAPTURE_RESPONSES = [
+  {
+    title: 'Why did you build it?',
+    body: 'I build examples for businesses that already have a great reputation but don’t have a website that reflects it. I figured it would be more helpful to show you an example than try to describe it over the phone.',
+  },
+  {
+    title: 'They hesitate',
+    body: 'No problem at all. I’m not asking you to buy anything today. I simply wanted to show you what I put together and get your honest opinion.',
+  },
+  {
+    title: 'They’re busy',
+    body: 'No worries. What’s the best email address to send it to? You can look at it whenever it’s convenient, and if you have any thoughts afterward, just reply to the email or text me.',
+  },
+  {
+    title: 'They decline',
+    body: 'No worries at all. I appreciate your time. If you ever decide you’d like to see what I put together, just let me know. Have a great day.',
+  },
+] as const;
+
+function EmailCaptureSplitScript({
+  firstName,
+  leadId,
+  email,
+  savingEmail,
+  lead,
+  callHistory,
+  historyLoading,
+  callNotes,
+  recordingUrl,
+  onEmailChange,
+  onCallNotesChange,
+  onSave,
+}: {
+  firstName: string;
+  leadId: number;
+  email: string;
+  savingEmail: boolean;
+  lead: Lead;
+  callHistory: CallEntry[];
+  historyLoading: boolean;
+  callNotes: string;
+  recordingUrl: string | null;
+  onEmailChange: (value: string) => void;
+  onCallNotesChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  const latestCall = callHistory[0] ?? null;
+
+  return (
+    <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Email capture call</p>
+              <h3 className="mt-1 text-lg font-semibold text-slate-900">Create curiosity. Get permission to send.</h3>
+            </div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">Do not sell</span>
+          </div>
+
+          <div className="mt-5 border-l-2 border-blue-200 pl-4 sm:pl-5">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
+            <div className="space-y-4 text-[15px] leading-7 text-slate-700">
+              <p>Hey {firstName}, this is Shaun with Shaun Carl Designs. I know you weren’t expecting my call, so I’ll keep it quick.</p>
+              <p>I was looking up your business earlier and noticed you had some really great Google reviews, but I couldn’t find a website where people could learn more about your business.</p>
+              <p>So I put one together for you. It’s nothing live and there’s no cost—I thought it would be easier to show you what your business could look like online rather than try to explain it over the phone.</p>
+              <p className="font-semibold text-slate-950">I’d be happy to send it over and hear what you think. What’s the best email address for you?</p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Mail className="h-3.5 w-3.5 text-slate-500" />
+              <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">Capture email</label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                id={`split-call-email-${leadId}`}
+                type="email"
+                value={email}
+                onChange={(event) => onEmailChange(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') onSave(); }}
+                placeholder="owner@business.com"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={savingEmail}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingEmail ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
+                Save
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">Saving moves this lead to Awaiting Build.</p>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
+            <p className="mt-1.5 text-xs leading-5 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
+          </div>
+
+          {recordingUrl && (
+            <div className="mt-3"><AuthenticatedAudioPlayer url={recordingUrl} /></div>
+          )}
+        </div>
+
+        <aside className="overflow-visible border-t border-slate-200 bg-slate-50/80 p-5 lg:border-l lg:border-t-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Objection responses</p>
+          <p className="mt-1 text-[11px] leading-4 text-slate-400">Click a response to see what to say.</p>
+          <div className="mt-4 space-y-2">
+            {EMAIL_CAPTURE_RESPONSES.map((response) => (
+              <ScriptResponseDropdown key={response.title} label={response.title} body={response.body} />
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call context</p>
+                <p className="mt-1 text-xs text-slate-400">Useful details while you’re talking.</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-lg font-bold leading-none text-slate-900">{lead.google_review_count ?? 0}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reviews</p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <strong>{lead.google_rating != null ? lead.google_rating.toFixed(1) : 'No rating'}</strong>
+              <span className="text-amber-700">Google reputation</span>
+            </div>
+
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Previous call</p>
+              {historyLoading ? (
+                <p className="mt-2 text-xs text-slate-400">Loading call history…</p>
+              ) : latestCall ? (
+                <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">{latestCall.outcome}</span>
+                    <span className="text-[10px] text-slate-400">{new Date(latestCall.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-4 text-slate-500">{latestCall.notes || 'No notes were recorded.'}</p>
+                  {latestCall.recording_url && (
+                    <div className="mt-2"><AuthenticatedAudioPlayer url={latestCall.recording_url} compact /></div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">No previous calls recorded.</p>
+              )}
+            </div>
+
+            {lead.notes && (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Lead notes</p>
+                <p className="mt-1.5 max-h-20 overflow-y-auto whitespace-pre-wrap text-[11px] leading-4 text-slate-500">{lead.notes}</p>
+              </div>
+            )}
+
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <label htmlFor={`split-call-notes-${lead.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes for this call</label>
+              <textarea
+                id={`split-call-notes-${lead.id}`}
+                value={callNotes}
+                onChange={(event) => onCallNotesChange(event.target.value)}
+                rows={4}
+                placeholder="Add context, concerns, or what to remember next time…"
+                className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+              <p className="mt-1.5 text-[10px] leading-4 text-slate-400">Saved with the call when you choose an outcome below.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function ScriptResponseDropdown({ label, body }: { label: string; body: string }) {
+  return (
+    <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white open:border-blue-200 open:shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-left text-xs font-semibold text-slate-700 transition hover:bg-blue-50 marker:content-none">
+        {label}
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
+      </summary>
+      <p className="border-t border-slate-100 bg-white px-4 py-3.5 text-xs leading-5 text-slate-600">{body}</p>
+    </details>
   );
 }
 

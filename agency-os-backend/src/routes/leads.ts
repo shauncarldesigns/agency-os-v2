@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { recordingResponseUrl } from '../utils/recordings';
 import type { Env, Lead } from '../types';
 import { scheduleEmailAutomation } from '../services/emailAutomation';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
@@ -238,7 +239,12 @@ leadsRouter.get('/:id', async (c) => {
     .bind(id)
     .all();
 
-  return c.json({ lead, calls: calls.results });
+  const normalizedCalls = (calls.results as Array<Record<string, unknown>>).map((call) => ({
+    ...call,
+    recording_url: recordingResponseUrl(c.req.url, call.recording_url as string | null),
+  }));
+
+  return c.json({ lead, calls: normalizedCalls });
 });
 
 // POST /api/leads/:id/phone-classify — classify one lead with Twilio Lookup.
