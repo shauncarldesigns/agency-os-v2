@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 
 interface ScoreHoverProps {
   score: number;
@@ -18,7 +18,8 @@ interface ScoreHoverProps {
 export function ScoreHover({ score, reasoning, color, meta }: ScoreHoverProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipId = useId();
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -26,9 +27,9 @@ export function ScoreHover({ score, reasoning, color, meta }: ScoreHoverProps) {
     if (!el) return;
     const r = el.getBoundingClientRect();
     // Anchor below-right of the score number, clamped to the viewport
-    const popoverWidth = 320;
-    const left = Math.min(window.innerWidth - popoverWidth - 12, r.left + 8);
-    setPosition({ top: r.bottom + 6, left });
+    const popoverWidth = Math.min(320, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(window.innerWidth - popoverWidth - 12, r.left + 8));
+    setPosition({ top: r.bottom + 6, left, width: popoverWidth });
   }, [open]);
 
   const bullets = (reasoning ?? '').split('·').map((s) => s.trim()).filter(Boolean);
@@ -36,20 +37,27 @@ export function ScoreHover({ score, reasoning, color, meta }: ScoreHoverProps) {
   return (
     <span
       ref={wrapRef}
+      tabIndex={bullets.length > 0 ? 0 : undefined}
+      aria-describedby={open && bullets.length > 0 ? tooltipId : undefined}
+      aria-label={bullets.length > 0 ? `Opportunity score ${score} out of 100. Hover or focus for the score breakdown.` : `Opportunity score ${score} out of 100.`}
       style={{ display: 'inline-block', position: 'relative', cursor: bullets.length > 0 ? 'help' : 'default' }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
     >
       <span className="score-num" style={{ color: color ?? 'var(--text2)' }}>
         {score}
       </span>
       {open && bullets.length > 0 && position && (
         <span
+          id={tooltipId}
+          role="tooltip"
           style={{
             position: 'fixed',
             top: position.top,
             left: position.left,
-            width: 320,
+            width: position.width,
             background: 'var(--surface)',
             border: '1px solid var(--border2)',
             borderRadius: 'var(--r)',

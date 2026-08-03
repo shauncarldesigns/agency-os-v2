@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Sidebar workflow and modal score context
+
+- **The main sidebar now follows the operating workflow: Dashboard, Lead Finder, Lead Pipeline, Email Outreach, Text Outreach, then Call Center.** The former Call Outreach navigation label uses an email icon while retaining its existing route and behavior; lead detail modals restore the opportunity-score explanation directly on the score with responsive hover and keyboard-focus support. Dashboard.
+
 ### Automated Lead Finder inbox
 
 - **Lead Finder can now discover no-website home-service prospects on a configurable schedule and hold them for operator review.** Settings controls the enabled weekdays, local run hour, approved industries, search locations, phone requirement, score floor, run size, inbox capacity, rejection suppression, and expiration without a redeploy. The responsive prospect inbox supports manual runs plus bulk approval or rejection, rechecks website and phone eligibility before pipeline entry, suppresses duplicates, rotates profiles idempotently through the existing hourly Worker trigger, and reports invalid local Google Places credentials clearly. Backend + dashboard + migration (`2026-08-03-automated-lead-finder.sql`, apply before deploy).

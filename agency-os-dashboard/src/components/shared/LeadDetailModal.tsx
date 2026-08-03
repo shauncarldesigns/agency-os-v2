@@ -21,6 +21,7 @@ import type { Lead, CallEntry, LeadActivity, ShowToast } from '../../lib/types';
 import { api, ApiError, type PhoneRoute } from '../../lib/api';
 import { CallLogTab } from '../pipeline/CallLogTab';
 import { StarRating } from './StarRating';
+import { ScoreHover } from './ScoreHover';
 import { formatPhone, parseList, stars, googleMapsUrl } from '../../lib/format';
 import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 
@@ -307,7 +308,15 @@ export function LeadDetailModal({
                     <Sparkles className="h-3.5 w-3.5" />
                     {tier ? `Recommended: Tier ${tier}` : 'Unscored tier'}
                     {lead.opportunity_score != null && (
-                      <span className="font-semibold">· score {lead.opportunity_score}</span>
+                      <span className="font-semibold">
+                        · score{' '}
+                        <ScoreHover
+                          score={lead.opportunity_score}
+                          reasoning={lead.opportunity_reasoning}
+                          color="currentColor"
+                          meta={`${tier ? `Tier ${tier}` : 'No tier'} · ${lead.enrichment_status}`}
+                        />
+                      </span>
                     )}
                   </span>
                   {tier && (
