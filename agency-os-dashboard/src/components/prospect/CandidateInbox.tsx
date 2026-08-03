@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Check, CheckCircle2, Clock3, Inbox, MapPin, Phone, Play, RotateCw, Star, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, Clock3, ExternalLink, Inbox, MapPin, Phone, Play, RotateCw, Star, Trash2 } from 'lucide-react';
 import type { ProspectCandidate, ProspectInboxSummary } from '../../lib/types';
+import { googleMapsUrl } from '../../lib/format';
 import { Spinner } from '../shared/Spinner';
 
 interface CandidateInboxProps {
@@ -107,6 +108,14 @@ export function CandidateInbox({
                 <h3 className="mt-2 text-sm font-semibold text-slate-950">{candidate.company}</h3>
                 <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><MapPin size={12} /> {[candidate.city, candidate.state].filter(Boolean).join(', ') || candidate.search_location}</p>
                 <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-600"><Phone size={12} /> {candidate.phone || 'Phone unavailable'}</p>
+                <a
+                  href={googleMapsUrl(candidate) ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 transition hover:text-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  <MapPin size={12} /> View on Google Maps <ExternalLink size={11} />
+                </a>
               </div>
               <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-3">
                 <div className="text-[11px] text-slate-500"><span className="font-semibold text-slate-700">{candidate.industry}</span><br />Found {timeLabel(candidate.first_seen_at)}</div>

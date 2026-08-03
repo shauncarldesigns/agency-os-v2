@@ -2188,7 +2188,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   return (
     <div className="min-h-full bg-slate-50">
       {/* Page title/subtitle live in the AppShell top bar since Phase 3. */}
-      <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="page-container">
         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

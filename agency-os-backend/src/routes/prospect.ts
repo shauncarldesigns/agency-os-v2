@@ -196,6 +196,7 @@ prospectRouter.post('/add-to-pipeline', async (c) => {
 
     let added = 0;
     let skipped = 0;
+    const addedPlaceIds: string[] = [];
     const errors: string[] = [];
 
     for (const placeId of body.placeIds) {
@@ -233,13 +234,14 @@ prospectRouter.post('/add-to-pipeline', async (c) => {
           JSON.stringify(details.reviews),
         ).run();
         added++;
+        addedPlaceIds.push(placeId);
       } catch (err) {
         skipped++;
         errors.push(`${placeId}: ${(err as Error).message}`);
       }
     }
 
-    return c.json({ added, skipped, errors: errors.slice(0, 10) });
+    return c.json({ added, skipped, addedPlaceIds, errors: errors.slice(0, 10) });
   } catch (err) {
     log('error', 'prospect', 'POST /prospect/add-to-pipeline failed', err);
     return c.json(serverError(), 500);

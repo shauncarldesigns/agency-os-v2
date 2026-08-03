@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Workspace UI consistency and Lead Finder bulk intake
+
+- **Email Outreach, Call Center, Reports, Lead Pipeline, and Lead Finder now share a consistent responsive page shell and interaction design.** Email Outreach completes the former Call Outreach rename (including its route), adds search parity with Text Outreach, and removes redundant headings; Call Center aligns its controls and spacing; Reports adopts the current card system; Pipeline uses a recoverable Archive action for completed not-interested prospects and replaces the legacy enrichment accent with a full-card border. Lead Finder puts manual results above the automated inbox, adds Google Maps research links to inbox cards, and supports selecting up to 25 manual results for one bulk pipeline add with accurate partial-success reporting. Backend + dashboard.
+
 ### Sidebar workflow and modal score context
 
 - **The main sidebar now follows the operating workflow: Dashboard, Lead Finder, Lead Pipeline, Email Outreach, Text Outreach, then Call Center.** The former Call Outreach navigation label uses an email icon while retaining its existing route and behavior; lead detail modals restore the opportunity-score explanation directly on the score with responsive hover and keyboard-focus support. Dashboard.

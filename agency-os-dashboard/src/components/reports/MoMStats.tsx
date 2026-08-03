@@ -7,7 +7,9 @@ interface MoMStatsProps {
 
 export function MoMStats({ current, previous }: MoMStatsProps) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
+    <section>
+      <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-900">Month-over-month performance</h2><span className="text-[11px] text-slate-400">Previous → current</span></div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Card
         label="Impressions"
         prev={previous?.impressions}
@@ -39,7 +41,8 @@ export function MoMStats({ current, previous }: MoMStatsProps) {
         deltaSuffix="pp"
         scaleDeltaBy={100}
       />
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -72,20 +75,20 @@ function Card({ label, prev, cur, format, higherIsBetter, deltaSuffix, scaleDelt
     const pct = ((cur - prev!) / prev!) * 100;
     return `${isImproved ? '↑' : '↓'} ${Math.abs(pct).toFixed(1)}%`;
   })();
-  const color = !showDelta ? 'var(--text3)' : isImproved ? 'var(--green)' : 'var(--red)';
-  const valColor = !hasCur ? 'var(--text3)' : showDelta ? color : 'var(--accent)';
+  const deltaClass = !showDelta ? 'text-slate-400' : isImproved ? 'text-emerald-600' : 'text-rose-600';
+  const valueClass = !hasCur ? 'text-slate-400' : showDelta ? deltaClass : 'text-blue-600';
 
   return (
-    <div className="mom-card">
-      <div className="mom-label">{label}</div>
-      <div className="mom-row">
-        <div className="mom-prev">{hasPrev ? format(prev!) : '—'}</div>
-        <div className="mom-arrow">→</div>
-        <div className="mom-current" style={{ color: valColor }}>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <div className="text-xs text-slate-400">{hasPrev ? format(prev!) : '—'}</div>
+        <div className="text-xs text-slate-300">→</div>
+        <div className={`text-xl font-semibold tracking-tight ${valueClass}`}>
           {hasCur ? format(cur) : '—'}
         </div>
       </div>
-      <div className="mom-delta" style={{ color }}>{deltaText}</div>
+      <div className={`mt-2 text-xs font-semibold ${deltaClass}`}>{deltaText}</div>
     </div>
   );
 }

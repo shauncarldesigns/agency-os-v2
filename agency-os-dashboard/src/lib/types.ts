@@ -381,7 +381,7 @@ export interface ReportSummary {
 
 export type Tab =
   | 'dashboard'
-  | 'call-sessions'
+  | 'email-outreach'
   | 'call-center'
   | 'prospect'
   | 'pipeline'

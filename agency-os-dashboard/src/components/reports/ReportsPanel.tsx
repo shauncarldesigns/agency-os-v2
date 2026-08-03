@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Project, ReportSummary, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
-import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
-import { EmptyState } from '../shared/EmptyState';
 import { ClientFilter } from './ClientFilter';
 import { ExecSummary } from './ExecSummary';
 import { MoMStats } from './MoMStats';
 import { KeywordWins } from './KeywordWins';
 import { ExportReportModal } from './ExportReportModal';
+import { BarChart3, Download, RefreshCw } from 'lucide-react';
 
 interface ReportsPanelProps {
   showToast: ShowToast;
@@ -106,60 +105,58 @@ export function ReportsPanel({ showToast }: ReportsPanelProps) {
 
   return (
     <>
-      <div className="sec-header">
-        <div>
-          <div className="sec-title">Reports</div>
-          <div className="sec-sub">
-            Monthly performance reports for Tier 3 clients · Pulled from Search Console + PageSpeed + Cloudflare
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 7 }}>
-          <Button variant="ghost" size="sm" disabled={selectedId === null || refreshing} onClick={handleRefresh}>
-            {refreshing ? <><Spinner /> Refreshing…</> : '↻ Refresh data'}
-          </Button>
-          <Button variant="primary" size="sm" disabled={!summary} onClick={() => setExportOpen(true)}>
-            ↓ Export Report (PDF)
-          </Button>
-        </div>
-      </div>
-
-      {projects.length === 0 ? (
-        <EmptyState
-          icon="📊"
-          title="No Tier 3 clients yet"
-          sub="Reports are generated for Tier 3 clients only. Convert a Tier 3 lead in Pipeline, then generate a brief in Build to add a project."
-        />
-      ) : (
-        <>
-          <ClientFilter
-            projects={projects}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            period={period}
-            onPeriodChange={setPeriod}
-          />
-
-          {loading ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
-              <Spinner /> Loading {periodLabel}…
+      <div className="min-h-full bg-slate-50">
+        <div className="page-container">
+          {projects.length === 0 ? (
+            <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><BarChart3 className="h-7 w-7" /></span>
+              <h2 className="mt-4 text-base font-semibold text-slate-900">No Tier 3 clients yet</h2>
+              <p className="mt-1 max-w-lg text-sm leading-6 text-slate-500">Reports are generated for Tier 3 clients. Convert a Tier 3 lead in Pipeline and create its project to begin reporting.</p>
             </div>
-          ) : !summary ? (
-            <EmptyState icon="—" title="No data" sub="Could not load this report. Try Refresh data." />
           ) : (
             <>
-              <ExecSummary
-                businessName={summary.project.name}
-                period={periodLabel}
-                text={summary.current?.exec_summary ?? null}
-                onRegenerate={handleGenerateSummary}
-                regenerating={generating}
-              />
-              <MoMStats current={summary.current} previous={summary.previous} />
-              <KeywordWins wins={summary.keywordWins} />
+              <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <ClientFilter
+                    projects={projects}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    period={period}
+                    onPeriodChange={setPeriod}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" disabled={selectedId === null || refreshing} onClick={handleRefresh} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+                      {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />} {refreshing ? 'Refreshing…' : 'Refresh data'}
+                    </button>
+                    <button type="button" disabled={!summary} onClick={() => setExportOpen(true)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
+                      <Download className="h-4 w-4" /> Export report
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-slate-400">Tier 3 performance · Google Search Console, PageSpeed, and Cloudflare data</p>
+              </section>
+
+              {loading ? (
+                <div className="flex min-h-[320px] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-sm text-slate-500"><Spinner /> Loading {periodLabel}…</div>
+              ) : !summary ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center"><h2 className="text-sm font-semibold text-slate-800">No report data</h2><p className="mt-1 text-xs text-slate-500">Try refreshing data for this client and period.</p></div>
+              ) : (
+                <div className="space-y-4">
+                  <ExecSummary
+                    businessName={summary.project.name}
+                    period={periodLabel}
+                    text={summary.current?.exec_summary ?? null}
+                    onRegenerate={handleGenerateSummary}
+                    regenerating={generating}
+                  />
+                  <MoMStats current={summary.current} previous={summary.previous} />
+                  <KeywordWins wins={summary.keywordWins} />
+                </div>
+              )}
             </>
           )}
-        </>
-      )}
+        </div>
+      </div>
 
       <ExportReportModal
         open={exportOpen}

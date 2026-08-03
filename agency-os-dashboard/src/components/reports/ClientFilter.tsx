@@ -1,4 +1,5 @@
 import type { Project } from '../../lib/types';
+import { Building2, CalendarDays, ChevronDown } from 'lucide-react';
 
 interface ClientFilterProps {
   projects: Project[];
@@ -25,18 +26,13 @@ export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodC
   const periods = recentPeriods();
 
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--rl)', padding: '12px 16px', marginBottom: 18,
-      display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-          Client:
-        </span>
+    <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+      <label className="block min-w-0">
+        <span className="mb-1.5 block text-xs font-semibold text-slate-600">Client</span>
+        <span className="relative block">
+          <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <select
-          className="finput"
-          style={{ width: 'auto', minWidth: 240, padding: '6px 10px', fontSize: '0.78rem' }}
+          className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           value={selectedId ?? ''}
           onChange={e => onSelect(parseInt(e.target.value, 10))}
         >
@@ -47,15 +43,15 @@ export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodC
             </option>
           ))}
         </select>
-      </div>
-      <div style={{ width: 1, height: 20, background: 'var(--border2)' }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-          Period:
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </span>
+      </label>
+      <label className="block min-w-0">
+        <span className="mb-1.5 block text-xs font-semibold text-slate-600">Reporting period</span>
+        <span className="relative block">
+          <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <select
-          className="finput"
-          style={{ width: 'auto', padding: '6px 10px', fontSize: '0.78rem' }}
+          className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           value={period}
           onChange={e => onPeriodChange(e.target.value)}
         >
@@ -63,7 +59,9 @@ export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodC
             <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
-      </div>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </span>
+      </label>
     </div>
   );
 }

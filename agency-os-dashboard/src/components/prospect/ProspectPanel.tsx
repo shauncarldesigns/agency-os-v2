@@ -25,6 +25,8 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   const [sortBy, setSortBy] = useState<SortBy>('score');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+  const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
+  const [bulkAdding, setBulkAdding] = useState(false);
   const [candidates, setCandidates] = useState<ProspectCandidate[]>([]);
   const [inboxSummary, setInboxSummary] = useState<ProspectInboxSummary | null>(null);
   const [inboxLoading, setInboxLoading] = useState(true);
@@ -123,6 +125,7 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
       setResults(res.results);
       setHasSearched(true);
       setAddedIds(new Set());
+      setSelectedResultIds(new Set());
       setLastSearch(input);
       setNextPageToken(res.nextPageToken);
       // Auto-apply the no-website pill so the operator sees only the target audience.
@@ -186,6 +189,47 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
     }
   }
 
+  function toggleResult(placeId: string) {
+    setSelectedResultIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(placeId)) next.delete(placeId); else if (next.size < 25) next.add(placeId);
+      return next;
+    });
+  }
+
+  function selectAllResults() {
+    const selectable = visible.filter((result) => !addedIds.has(result.placeId)).slice(0, 25).map((result) => result.placeId);
+    const allSelected = selectable.length > 0 && selectable.every((placeId) => selectedResultIds.has(placeId));
+    setSelectedResultIds(allSelected ? new Set() : new Set(selectable));
+  }
+
+  async function handleBulkAdd() {
+    const placeIds = [...selectedResultIds].filter((placeId) => !addedIds.has(placeId)).slice(0, 25);
+    if (!placeIds.length) return;
+    setBulkAdding(true);
+    setAddingIds((previous) => new Set([...previous, ...placeIds]));
+    try {
+      const res = await api.prospect.addToPipeline(placeIds);
+      if (res.added > 0) {
+        setAddedIds((previous) => new Set([...previous, ...res.addedPlaceIds]));
+        onLeadAdded?.();
+      }
+      showToast(`${res.added} lead${res.added === 1 ? '' : 's'} added to the pipeline${res.skipped ? ` · ${res.skipped} skipped` : ''}`, res.added ? 'success' : 'default');
+      if (res.errors.length) showToast(res.errors[0], 'error');
+      setSelectedResultIds(new Set());
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Bulk add failed: ${msg}`, 'error');
+    } finally {
+      setAddingIds((previous) => {
+        const next = new Set(previous);
+        placeIds.forEach((placeId) => next.delete(placeId));
+        return next;
+      });
+      setBulkAdding(false);
+    }
+  }
+
   const visible = useMemo(() => {
     let list = results.filter(r => !r.alreadyInPipeline);
     switch (filter) {
@@ -219,21 +263,6 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
 
       <SearchForm onSearch={handleSearch} loading={searching} />
 
-      <CandidateInbox
-        candidates={candidates}
-        summary={inboxSummary}
-        loading={inboxLoading}
-        running={runningDiscovery}
-        acting={inboxActing}
-        selected={selectedCandidates}
-        onToggle={toggleCandidate}
-        onSelectAll={selectAllCandidates}
-        onRun={handleRunDiscovery}
-        onApprove={() => void handleCandidateAction('approve')}
-        onReject={() => void handleCandidateAction('reject')}
-        onRefresh={() => void loadInbox()}
-      />
-
       {hasSearched && (
         <>
           <FilterPills
@@ -250,6 +279,11 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
             addedIds={addedIds}
             addingIds={addingIds}
             onAdd={handleAdd}
+            selectedIds={selectedResultIds}
+            onToggle={toggleResult}
+            onSelectAll={selectAllResults}
+            onBulkAdd={() => void handleBulkAdd()}
+            bulkAdding={bulkAdding}
           />
           {(nextPageToken || loadingMore) && (
             <div className="flex justify-center py-4">
@@ -260,6 +294,21 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
           )}
         </>
       )}
+
+      <CandidateInbox
+        candidates={candidates}
+        summary={inboxSummary}
+        loading={inboxLoading}
+        running={runningDiscovery}
+        acting={inboxActing}
+        selected={selectedCandidates}
+        onToggle={toggleCandidate}
+        onSelectAll={selectAllCandidates}
+        onRun={handleRunDiscovery}
+        onApprove={() => void handleCandidateAction('approve')}
+        onReject={() => void handleCandidateAction('reject')}
+        onRefresh={() => void loadInbox()}
+      />
 
       {!hasSearched && (
         <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">

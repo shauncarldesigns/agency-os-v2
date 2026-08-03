@@ -886,7 +886,7 @@ function PhoneRouteRow({
 
 function phoneRouteLabel(route: Lead['phone_route']): string {
   if (route === 'text') return 'Text Outreach';
-  if (route === 'call') return 'Call Outreach';
+  if (route === 'call') return 'Email Outreach';
   if (route === 'review') return 'Manual review';
   return 'Unclassified';
 }

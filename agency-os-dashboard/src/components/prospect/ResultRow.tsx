@@ -11,9 +11,11 @@ interface ResultRowProps {
   added: boolean;
   adding: boolean;
   onAdd: (placeId: string) => void;
+  selected: boolean;
+  onToggle: (placeId: string) => void;
 }
 
-export function ResultRow({ result, added, adding, onAdd }: ResultRowProps) {
+export function ResultRow({ result, added, adding, onAdd, selected, onToggle }: ResultRowProps) {
   const [expanded, setExpanded] = useState(false);
 
   const tier = result.recommendedTier;
@@ -31,6 +33,16 @@ export function ResultRow({ result, added, adding, onAdd }: ResultRowProps) {
   return (
     <>
       <tr style={{ background: rowBg, opacity: fadeOpacity, transition: 'opacity 0.3s' }}>
+        <td style={{ width: 44 }}>
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={added || result.alreadyInPipeline || adding}
+            onChange={() => onToggle(result.placeId)}
+            aria-label={`Select ${result.name}`}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+        </td>
         <td style={{ width: 32, cursor: 'pointer' }} onClick={() => setExpanded(v => !v)}>
           <span style={{ color: 'var(--text3)', fontSize: 11 }}>{expanded ? '▾' : '▸'}</span>
         </td>
@@ -82,7 +94,7 @@ export function ResultRow({ result, added, adding, onAdd }: ResultRowProps) {
       </tr>
       {expanded && (
         <tr style={{ background: isUnclaimed ? 'rgba(167,139,250,0.06)' : 'var(--surface2)' }}>
-          <td colSpan={8} style={{ padding: 0 }}>
+          <td colSpan={9} style={{ padding: 0 }}>
             <div className="expand-detail">
               <div className="detail-grid">
                 <div className="detail-section">

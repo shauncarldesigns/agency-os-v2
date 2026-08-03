@@ -11,39 +11,35 @@ export function ExecSummary({ businessName, period, text, loading, onRegenerate,
   const empty = !text || !text.trim();
 
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, var(--tier3-bg), rgba(167,139,250,0.04))',
-      border: '1px solid rgba(167,139,250,0.25)',
-      borderRadius: 'var(--rl)',
-      padding: '18px 20px',
-      marginBottom: 18,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10 }}>
-        <div style={{
-          fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1.5px',
-          textTransform: 'uppercase', color: 'var(--tier3)',
-        }}>
-          📊 Executive Summary — {businessName} · {period}
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><FileText className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900">Executive summary</h2>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{businessName} · {period}</p>
+          </div>
         </div>
         {onRegenerate && (
           <button
             type="button"
-            className="btn btn-ghost btn-xs"
             onClick={onRegenerate}
             disabled={regenerating || loading}
-            style={{ flexShrink: 0 }}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
-            {regenerating ? '⏳ …' : empty ? '✦ Generate' : '↻ Regenerate'}
+            {empty ? <Sparkles className="h-3.5 w-3.5" /> : <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
+            {regenerating ? 'Generating…' : empty ? 'Generate' : 'Regenerate'}
           </button>
         )}
       </div>
-      <div style={{ fontSize: '0.88rem', color: 'var(--text)', lineHeight: 1.7 }}>
+      <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700">
         {loading
-          ? <em style={{ color: 'var(--text3)' }}>Loading…</em>
+          ? <em className="text-slate-400">Loading…</em>
           : empty
-            ? <em style={{ color: 'var(--text3)' }}>No summary yet — click Generate to have Claude write one from this period's data.</em>
+            ? <em className="text-slate-400">No summary yet — generate one from this period’s performance data.</em>
             : text}
       </div>
-    </div>
+    </section>
   );
 }
+import { FileText, RefreshCw, Sparkles } from 'lucide-react';

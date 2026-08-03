@@ -91,7 +91,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-6 lg:px-8">
+    <div className="page-container">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-[18px] font-bold text-slate-900">Pipeline dashboard</h2>
@@ -112,7 +112,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
       <NeedsActionSection
         leads={data.needsAction}
         onOpenText={() => onSwitchTab?.('automated-pipeline')}
-        onOpenCall={() => onSwitchTab?.('call-sessions')}
+        onOpenCall={() => onSwitchTab?.('email-outreach')}
       />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -130,7 +130,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
           value={data.hero.meetingsBookedThisWeek.toString()}
           sub="This calling week"
           tone="indigo"
-          onClick={() => onSwitchTab?.('call-sessions')}
+          onClick={() => onSwitchTab?.('email-outreach')}
         />
         <HeroKpi
           icon={Users}
@@ -701,7 +701,7 @@ function NeedsActionRow({ lead }: { lead: PipelineHotLead }) {
           <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-slate-700">{score}</span>
         </div>
         <div className="mt-0.5 truncate text-[10px] text-slate-500">
-          {lead.outreach_channel === 'call' ? 'Call Outreach' : 'Text Outreach'} · {actionLabel} · {lead.pipeline_sessions} visit{lead.pipeline_sessions === 1 ? '' : 's'} · {place}
+          {lead.outreach_channel === 'call' ? 'Email Outreach' : 'Text Outreach'} · {actionLabel} · {lead.pipeline_sessions} visit{lead.pipeline_sessions === 1 ? '' : 's'} · {place}
         </div>
       </div>
       {lead.phone && (

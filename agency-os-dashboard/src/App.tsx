@@ -148,7 +148,7 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardMetricsPanel showToast={showToast} onSwitchTab={setActiveTab} />
             )}
-            {activeTab === 'call-sessions' && (
+            {activeTab === 'email-outreach' && (
               <CallSessionsPage
                 showToast={showToast}
                 onStateChanged={loadStats}
@@ -211,9 +211,7 @@ export default function App() {
             {activeTab === 'docs' && <DocsPage />}
             {activeTab === 'playbook' && <PlaybookPage showToast={showToast} />}
             {activeTab === 'reports' && (
-              <div className="main">
-                <ReportsPanel showToast={showToast} />
-              </div>
+              <ReportsPanel showToast={showToast} />
             )}
             {activeTab === 'settings' && (
               <SettingsPage showToast={showToast} onProfileChanged={setProfile} />

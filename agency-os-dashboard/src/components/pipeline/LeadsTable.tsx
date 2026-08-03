@@ -320,7 +320,14 @@ function LeadRow({
               </Button>
             </>
           ) : (
-            <Button variant="ghost" size="xs" onClick={handleDelete} title="Move to trash">🗑</Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleDelete}
+              title={lead.status === 'not_interested' ? 'Archive this closed prospect to recoverable Trash' : 'Move to trash'}
+            >
+              {lead.status === 'not_interested' ? 'Archive' : '🗑'}
+            </Button>
           )}
         </div>
       </td>
@@ -441,7 +448,8 @@ function latestTouchPresentation(lead: Lead): SignalPresentation {
 function nextActionPresentation(lead: Lead): SignalPresentation {
   if (lead.status === 'client') return { label: 'Manage client', sub: 'Open Clients & Sites', tone: 'green' };
   if (lead.status === 'qualified' || lead.pipeline_status === 'booked') return { label: 'Prepare demo', sub: lead.demo_scheduled_for ? shortDate(lead.demo_scheduled_for) : 'Demo booked', tone: 'green' };
-  if (lead.status === 'not_interested' || lead.status === 'dead' || lead.pipeline_status === 'archived') return { label: 'No action', sub: 'Closed', tone: 'gray' };
+  if (lead.status === 'not_interested') return { label: 'Archive', sub: 'If outreach is complete', tone: 'gray' };
+  if (lead.status === 'dead' || lead.pipeline_status === 'archived') return { label: 'No action', sub: 'Closed', tone: 'gray' };
   if (lead.phone_route === 'review') return { label: 'Review route', sub: 'Confirm text or call', tone: 'yellow' };
   if (lead.followup) return { label: 'Callback', sub: shortDate(lead.followup), tone: 'yellow' };
   if (lead.pipeline_status === 'engaged') {

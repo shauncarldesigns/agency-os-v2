@@ -81,7 +81,7 @@ export function CallCenterPage({
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-6 lg:px-8">
+    <div className="page-container">
       <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="min-w-0 flex-1">
@@ -152,7 +152,7 @@ export function CallCenterPage({
           </div>
           <h2 className="text-base font-bold text-slate-900">Choose a company to start calling</h2>
           <p className="mt-1 max-w-md text-sm text-slate-500">
-            Select a company above, or open one from the Call Outreach board. The full execution playbook will stay on this page.
+            Select a company above, or open one from the Email Outreach board. The full execution playbook will stay on this page.
           </p>
         </section>
       )}

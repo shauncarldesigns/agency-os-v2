@@ -84,7 +84,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
   if (loading || !settings) return <div className="flex min-h-[420px] items-center justify-center text-sm text-slate-400">Loading settings…</div>;
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+    <div className="page-container">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Workspace settings</h2>
