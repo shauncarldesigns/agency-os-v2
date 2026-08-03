@@ -833,7 +833,22 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
     )
       .bind(id)
       .all<LeadActivityRow>();
-    const target = (recent.results ?? []).find((r) => REVERSIBLE_ACTIONS.has(r.action));
+    const undoneIds = new Set(
+      (recent.results ?? [])
+        .filter((row) => row.action === 'undo')
+        .map((row) => {
+          try {
+            const parsed = row.meta ? JSON.parse(row.meta) as { undid_activity_id?: unknown } : null;
+            return typeof parsed?.undid_activity_id === 'number' ? parsed.undid_activity_id : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter((id): id is number => id !== null),
+    );
+    const target = (recent.results ?? []).find(
+      (row) => REVERSIBLE_ACTIONS.has(row.action) && !undoneIds.has(row.id),
+    );
     if (!target) return c.body(null, 204);
 
     const sets: string[] = ["updated_at = datetime('now')"];

@@ -65,7 +65,7 @@ enrichRouter.post('/enrich-all', async (c) => {
         failures.push({ id, error: msg });
         log('error', 'enrich', `Lead ${id} enrichment failed`, err);
         await c.env.DB
-          .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
+          .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_stage = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
           .bind(msg.slice(0, 500), id)
           .run();
 
@@ -116,7 +116,7 @@ leadEnrichRouter.post('/:id/enrich', async (c) => {
   } catch (err) {
     log('error', 'enrich', `POST /leads/${id}/enrich failed`, err);
     await c.env.DB
-      .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
+      .prepare("UPDATE leads SET enrichment_status = 'failed', enrichment_stage = 'failed', enrichment_error = ?, updated_at = datetime('now') WHERE id = ?")
       .bind((err as Error).message.slice(0, 500), id)
       .run();
     return c.json(serverError(`Enrichment failed: ${(err as Error).message}`), 500);
@@ -124,17 +124,24 @@ leadEnrichRouter.post('/:id/enrich', async (c) => {
 });
 
 // Core enrichment pipeline — Places (resolve if no place_id) → PageSpeed → review mining → scoring
+async function setEnrichmentProgress(env: Env, leadId: number, stage: string, progress: number): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE leads SET enrichment_stage = ?, enrichment_progress = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(stage, Math.max(0, Math.min(100, progress)), leadId).run();
+}
+
 export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   const lead = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
   if (!lead) throw new Error('Lead not found');
 
   // Mark enriching
   await env.DB
-    .prepare("UPDATE leads SET enrichment_status = 'enriching', enrichment_error = NULL, updated_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE leads SET enrichment_status = 'enriching', enrichment_stage = 'preparing', enrichment_progress = 5, enrichment_error = NULL, updated_at = datetime('now') WHERE id = ?")
     .bind(leadId)
     .run();
 
   // 1. Resolve place_id if missing (best-effort, search by company + city)
+  await setEnrichmentProgress(env, leadId, 'matching_google_business', 15);
   let placeId = lead.place_id;
   if (!placeId && lead.city) {
     try {
@@ -148,6 +155,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   }
 
   // 2. Pull GBP details (reviews, photos, hours, claimed signals)
+  await setEnrichmentProgress(env, leadId, 'loading_business_profile', 30);
   let placeData: Awaited<ReturnType<typeof getPlaceDetails>> | null = null;
   if (placeId) {
     try {
@@ -177,6 +185,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   // wall-clock enrich time. Promise.allSettled so one's failure doesn't
   // poison the other.
   const websiteUrl = placeData?.website ?? lead.website;
+  await setEnrichmentProgress(env, leadId, 'collecting_reviews_and_performance', 45);
   let pagespeedMobile: number | null = lead.pagespeed_mobile;
   let pagespeedDesktop: number | null = lead.pagespeed_desktop;
 
@@ -228,6 +237,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   }
 
   // 4. Review mining via Claude (only if we have reviews)
+  await setEnrichmentProgress(env, leadId, 'analyzing_customer_reviews', 70);
   let mined: Awaited<ReturnType<typeof mineReviews>> | null = null;
   if (placeData?.reviews?.length) {
     try {
@@ -250,6 +260,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   }
 
   // 5. Score
+  await setEnrichmentProgress(env, leadId, 'calculating_opportunity_score', 82);
   const score = calculateOpportunityScore({
     hasWebsite: !!websiteUrl,
     pagespeedMobile,
@@ -265,6 +276,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
   });
 
   // 6. Persist
+  await setEnrichmentProgress(env, leadId, 'saving_enrichment', 90);
   await env.DB.prepare(`
     UPDATE leads SET
       place_id = ?,
@@ -294,7 +306,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
       opportunity_score = ?,
       opportunity_reasoning = ?,
       recommended_tier = ?,
-      enrichment_status = 'enriched',
+      enrichment_status = 'enriching',
       enrichment_error = NULL,
       updated_at = datetime('now')
     WHERE id = ?
@@ -341,6 +353,7 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
     saved.phone_route === 'unknown';
 
   let updated = saved;
+  await setEnrichmentProgress(env, leadId, 'checking_phone_route', 95);
   if (needsPhoneClassification) {
     try {
       const classification = await classifyPhoneNumber(env, phoneForLookup);
@@ -354,6 +367,11 @@ export async function enrichLead(env: Env, leadId: number): Promise<Lead> {
       log('warn', 'enrich', `Phone classification failed for lead ${leadId}`, err);
     }
   }
+
+  await env.DB.prepare(
+    "UPDATE leads SET enrichment_status = 'enriched', enrichment_stage = 'complete', enrichment_progress = 100, enrichment_error = NULL, updated_at = datetime('now') WHERE id = ?"
+  ).bind(leadId).run();
+  updated = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>() ?? updated;
 
   log('info', 'enrich', `Lead ${leadId} enriched`, { score: score.score, tier: score.tier });
   return updated;

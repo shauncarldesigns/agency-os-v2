@@ -39,6 +39,8 @@ export interface Lead {
   recommended_tier: number | null;
   enrichment_status: 'pending' | 'enriching' | 'enriched' | 'failed';
   enrichment_error: string | null;
+  enrichment_stage: string | null;
+  enrichment_progress: number;
   // Lead lifecycle (Phase-0 vocabulary):
   // - cold           — never called
   // - contacted      — called at least once, no commitment
@@ -448,7 +450,11 @@ export interface SettingsHealth {
 }
 
 export type ToastType = 'default' | 'success' | 'error';
-export type ShowToast = (message: string, type?: ToastType) => void;
+export interface ToastAction {
+  label: string;
+  onClick: () => void | Promise<void>;
+}
+export type ShowToast = (message: string, type?: ToastType, action?: ToastAction) => void;
 
 // ============================================================================
 // Calling dashboard (added 2026-06-14)

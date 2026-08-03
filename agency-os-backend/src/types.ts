@@ -71,6 +71,8 @@ export interface Lead {
   recommended_tier: number | null;
   enrichment_status: string;
   enrichment_error: string | null;
+  enrichment_stage: string | null;
+  enrichment_progress: number;
   status: string;
   outcome: string | null;
   followup: string | null;
