@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, Loader2, X } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
@@ -180,11 +182,29 @@ function LeadRow({
   lead, selected, onToggleSelected, showToast, onLeadUpdated, onOpenLead, onQualify,
 }: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
+  const [showEnrichmentProgress, setShowEnrichmentProgress] = useState(false);
+  const [progressLead, setProgressLead] = useState<Lead>(lead);
   const stage = statusBadge(lead.status);
   const route = routePresentation(lead);
   const outreach = outreachPresentation(lead);
   const latestTouch = latestTouchPresentation(lead);
   const nextAction = nextActionPresentation(lead);
+
+  useEffect(() => {
+    if (!showEnrichmentProgress) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await api.leads.get(lead.id);
+        if (!cancelled) setProgressLead(response.lead);
+      } catch {
+        // The enrich request owns error reporting. Keep the last real checkpoint visible.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 900);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [lead.id, showEnrichmentProgress]);
 
   // Row visual state varies by enrichment status
   let rowStyle: React.CSSProperties = { cursor: 'pointer' };
@@ -194,12 +214,16 @@ function LeadRow({
 
   async function handleEnrich() {
     setEnriching(true);
+    setProgressLead({ ...lead, enrichment_status: 'enriching', enrichment_stage: 'preparing', enrichment_progress: 3 });
+    setShowEnrichmentProgress(true);
     try {
-      await api.leads.enrich(lead.id);
+      const response = await api.leads.enrich(lead.id);
+      setProgressLead(response.lead);
       showToast(`Enriched ${lead.company}`, 'success');
       onLeadUpdated();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      setProgressLead((current) => ({ ...current, enrichment_status: 'failed', enrichment_stage: 'failed', enrichment_error: msg }));
       showToast(`Enrichment failed: ${msg}`, 'error');
     } finally {
       setEnriching(false);
@@ -210,7 +234,18 @@ function LeadRow({
     if (!window.confirm(`Move "${lead.company}" to trash? You can restore it later.`)) return;
     try {
       await api.leads.delete(lead.id);
-      showToast(`${lead.company} moved to trash`, 'default');
+      showToast(`${lead.company} moved to trash`, 'default', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.leads.restore(lead.id);
+            showToast(`${lead.company} restored`, 'success');
+            onLeadUpdated();
+          } catch (err) {
+            showToast(`Restore failed: ${(err as Error).message}`, 'error');
+          }
+        },
+      });
       onLeadUpdated();
     } catch (err) {
       showToast(`Delete failed: ${(err as Error).message}`, 'error');
@@ -245,6 +280,7 @@ function LeadRow({
   const stop = (e: React.MouseEvent | React.ChangeEvent) => e.stopPropagation();
 
   return (
+    <>
     <tr style={rowStyle} onClick={() => onOpenLead(lead.id)}>
       <td onClick={stop} style={{ width: 32, textAlign: 'center' }}>
         <input
@@ -301,7 +337,13 @@ function LeadRow({
             </Button>
           )}
           {lead.enrichment_status === 'enriching' && (
-            <Button variant="ghost" size="xs" disabled>⌛ Wait</Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => { setProgressLead(lead); setShowEnrichmentProgress(true); }}
+            >
+              View progress
+            </Button>
           )}
           {lead.enrichment_status === 'failed' && (
             <Button variant="ghost" size="xs" disabled={enriching} onClick={handleEnrich}>↻ Retry</Button>
@@ -332,6 +374,92 @@ function LeadRow({
         </div>
       </td>
     </tr>
+    {showEnrichmentProgress && createPortal(
+      <EnrichmentProgressModal
+        lead={progressLead}
+        onClose={() => setShowEnrichmentProgress(false)}
+      />,
+      document.body,
+    )}
+    </>
+  );
+}
+
+const ENRICHMENT_STAGES = [
+  ['preparing', 'Preparing lead'],
+  ['matching_google_business', 'Matching Google Business profile'],
+  ['loading_business_profile', 'Loading business details'],
+  ['collecting_reviews_and_performance', 'Collecting reviews and performance'],
+  ['analyzing_customer_reviews', 'Analyzing customer reviews'],
+  ['calculating_opportunity_score', 'Calculating opportunity score'],
+  ['saving_enrichment', 'Saving enrichment'],
+  ['checking_phone_route', 'Checking phone route'],
+] as const;
+
+function EnrichmentProgressModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+  const failed = lead.enrichment_status === 'failed';
+  const complete = lead.enrichment_status === 'enriched' || lead.enrichment_stage === 'complete';
+  const progress = complete ? 100 : Math.max(3, Math.min(99, lead.enrichment_progress ?? 3));
+  const activeIndex = ENRICHMENT_STAGES.findIndex(([key]) => key === lead.enrichment_stage);
+  const resolvedIndex = complete ? ENRICHMENT_STAGES.length : Math.max(0, activeIndex);
+  const remaining = complete ? 0 : Math.max(0, ENRICHMENT_STAGES.length - resolvedIndex - 1);
+  const activeLabel = failed
+    ? 'Enrichment stopped'
+    : complete
+      ? 'Enrichment complete'
+      : ENRICHMENT_STAGES[resolvedIndex]?.[1] ?? 'Preparing lead';
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-end justify-center bg-slate-900/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !complete && !failed) onClose(); }}>
+      <div className="w-full rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-w-lg sm:rounded-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Lead enrichment</p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-950">{lead.company}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close progress"><X className="h-4 w-4" /></button>
+        </header>
+
+        <div className="px-5 py-5">
+          <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${failed ? 'bg-rose-50 text-rose-700' : complete ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+            {failed ? <X className="h-5 w-5" /> : complete ? <Check className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{activeLabel}</p>
+              <p className="mt-0.5 text-[11px] opacity-75">{failed ? 'Review the error below and retry when ready.' : complete ? 'All enrichment steps finished successfully.' : `${remaining} step${remaining === 1 ? '' : 's'} remaining`}</p>
+            </div>
+            <strong className="text-xl tabular-nums">{progress}%</strong>
+          </div>
+
+          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100">
+            <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${failed ? 'bg-rose-500' : complete ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-indigo-500'}`} style={{ width: `${progress}%` }} />
+          </div>
+
+          <div className="mt-5 space-y-1.5">
+            {ENRICHMENT_STAGES.map(([key, label], index) => {
+              const done = complete || index < resolvedIndex;
+              const active = !failed && !complete && index === resolvedIndex;
+              return (
+                <div key={key} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs ${active ? 'bg-blue-50 font-semibold text-blue-700' : done ? 'text-slate-600' : 'text-slate-400'}`}>
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${done ? 'border-emerald-500 bg-emerald-500 text-white' : active ? 'border-blue-500 text-blue-600' : 'border-slate-200 text-slate-300'}`}>
+                    {done ? <Check className="h-3 w-3" /> : active ? <Loader2 className="h-3 w-3 animate-spin" /> : index + 1}
+                  </span>
+                  {label}
+                </div>
+              );
+            })}
+          </div>
+
+          {failed && lead.enrichment_error && (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-700">{lead.enrichment_error}</div>
+          )}
+        </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
+          <p className="text-[11px] text-slate-400">You can close this window; enrichment will continue.</p>
+          <button type="button" onClick={onClose} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800">{complete || failed ? 'Done' : 'Run in background'}</button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS leads (
   -- Pipeline state
   enrichment_status TEXT DEFAULT 'pending',
   enrichment_error TEXT,
+  enrichment_stage TEXT,
+  enrichment_progress INTEGER NOT NULL DEFAULT 0,
   status          TEXT DEFAULT 'cold',
   outcome         TEXT,
   followup        TEXT,

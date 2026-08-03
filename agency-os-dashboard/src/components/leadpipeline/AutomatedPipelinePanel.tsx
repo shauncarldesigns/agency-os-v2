@@ -18,7 +18,6 @@ import {
   Columns3,
   MousePointerClick,
   PhoneCall,
-  RotateCcw,
   Loader2,
   RefreshCw,
   AlertCircle,
@@ -1705,43 +1704,6 @@ function SchedulingFollowupModal({
 }
 
 
-// ---------- Undo toast ----------
-
-// Floating pill anchored to the bottom of the pipeline scope. Visible for
-// ~6 seconds after each optimistic transition. z-[210] beats the modal
-// backdrop (z-[200]) so it stays visible even mid-close animation.
-function UndoBanner({
-  message,
-  onUndo,
-  onDismiss,
-}: {
-  message: string;
-  onUndo: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <div className="fixed inset-x-0 bottom-6 z-[210] flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm shadow-lg shadow-slate-900/10">
-        <span className="text-slate-700">{message}</span>
-        <button
-          onClick={onUndo}
-          className="flex items-center gap-1 text-blue-600 font-medium hover:text-blue-700"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Undo
-        </button>
-        <button
-          onClick={onDismiss}
-          className="text-slate-400 hover:text-slate-600"
-          aria-label="Dismiss"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ---------- Page ----------
 
 type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'engaged';
@@ -1922,7 +1884,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [cityFilter, setCityFilter] = useState('all');
   const [modal, setModal] = useState<ModalState>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
-  const [undo, setUndo] = useState<{ leadId: number; message: string; key: string } | null>(null);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
@@ -1949,14 +1910,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   useEffect(() => {
     void loadLeads();
   }, [loadLeads]);
-
-  // Auto-dismiss the undo pill after ~6s. Re-keyed on every new toast so
-  // rapid consecutive actions reset the timer instead of stacking.
-  useEffect(() => {
-    if (!undo) return;
-    const t = setTimeout(() => setUndo(null), 6000);
-    return () => clearTimeout(t);
-  }, [undo]);
 
   const openFor = (lead: PipelineLead) => {
     const scheduling = getSchedulingProgress(lead);
@@ -2008,7 +1961,25 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const handleSaveUrl = async (leadId: number, url: string) => {
     const { lead } = await api.pipeline.saveSiteUrl(leadId, url);
     applyMutation(lead, 'url_saved');
-    setUndo({ leadId, message: 'URL saved', key: `save-${leadId}-${Date.now()}` });
+    offerUndo(leadId, 'URL saved');
+  };
+
+  const undoAction = async (leadId: number) => {
+    try {
+      const result = await api.pipeline.undo(leadId);
+      if (result?.lead) applyMutation(result.lead, null);
+      showToast('Action undone', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Undo failed';
+      showToast(msg, 'error');
+    }
+  };
+
+  const offerUndo = (leadId: number, message: string) => {
+    showToast(message, 'success', {
+      label: 'Undo',
+      onClick: () => undoAction(leadId),
+    });
   };
 
   const runAction = async (
@@ -2029,7 +2000,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
       const { lead } = await api.pipeline.action(leadId, { action, meta });
       applyMutation(lead, action);
       setModal(null);
-      setUndo({ leadId, message: toastMessage, key: `${action}-${leadId}-${Date.now()}` });
+      offerUndo(leadId, toastMessage);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Action failed';
       showToast(msg, 'error');
@@ -2037,7 +2008,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   };
 
   const markSent = (leadId: number, messageBody: string) =>
-    runAction(leadId, 'intro_sent', 'Marked sent', { body: messageBody });
+    runAction(leadId, 'intro_sent', "Moved to Sent — no reply. Didn't send it?", { body: messageBody });
 
   const markFollowedUp = (leadId: number, messageBody: string) =>
     runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
@@ -2107,20 +2078,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
       setQualifyLead(res.lead);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not open booking flow';
-      showToast(msg, 'error');
-    }
-  };
-
-  const undoLast = async () => {
-    if (!undo) return;
-    const target = undo;
-    setUndo(null);
-    try {
-      const result = await api.pipeline.undo(target.leadId);
-      if (result?.lead) applyMutation(result.lead, null);
-      showToast('Undone', 'success');
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Undo failed';
       showToast(msg, 'error');
     }
   };
@@ -2459,14 +2416,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         }}
       />
 
-      {undo && (
-        <UndoBanner
-          key={undo.key}
-          message={undo.message}
-          onUndo={() => void undoLast()}
-          onDismiss={() => setUndo(null)}
-        />
-      )}
     </div>
   );
 }

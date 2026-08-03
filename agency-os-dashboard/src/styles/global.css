@@ -246,13 +246,19 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .pipe-pill strong{color:var(--text);font-weight:600;}
 
 /* TOAST */
-.toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column-reverse;gap:8px;z-index:500;pointer-events:none;}
-.toast{background:var(--surface);border-radius:9999px;padding:10px 16px;font-size:0.76rem;color:var(--text);display:flex;align-items:center;gap:7px;box-shadow:0 8px 24px rgba(15,23,42,0.12);animation:toast-in 0.2s ease-out;pointer-events:auto;min-width:240px;}
-.toast.success{border-left:3px solid var(--green);}
-.toast.error{border-left:3px solid var(--red);}
+.toast-container{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column-reverse;gap:8px;z-index:500;pointer-events:none;}
+.toast{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 4px 0 12px;font-size:0.76rem;color:var(--text);display:flex;align-items:center;gap:9px;box-shadow:0 6px 18px rgba(15,23,42,0.10);animation:toast-in 0.18s ease-out;pointer-events:auto;min-height:44px;min-width:240px;max-width:min(400px,calc(100vw - 36px));}
+.toast-status-dot{width:7px;height:7px;flex:none;border-radius:50%;background:var(--muted);}
+.toast.success .toast-status-dot{background:var(--green);}
+.toast.error .toast-status-dot{background:var(--red);}
+.toast-message{min-width:0;flex:1;line-height:1.35;}
+.toast-action{align-self:stretch;display:inline-flex;align-items:center;flex:none;border:0;border-left:1px solid var(--border);background:transparent;padding:0 11px;color:var(--blue);font:inherit;font-weight:650;cursor:pointer;}
+.toast-action:hover{background:var(--surface2);}
+.toast-action:disabled{cursor:wait;opacity:.65;}
 .toast.hiding{animation:toast-out 0.2s ease-in forwards;}
-@keyframes toast-in{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-@keyframes toast-out{to{transform:translateY(20px);opacity:0;}}
+@keyframes toast-in{from{transform:translateY(8px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+@keyframes toast-out{to{transform:translateY(8px);opacity:0;}}
+@media(max-width:600px){.toast-container{left:12px;right:12px;bottom:12px}.toast{max-width:none;width:100%;}}
 
 /* MANAGEMENT — month-over-month cards */
 .mom-card{background:var(--surface);box-shadow:0 1px 3px rgba(148,163,184,0.25);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;}

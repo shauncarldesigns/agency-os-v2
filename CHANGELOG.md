@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Enrichment progress and reversible outreach actions
+
+- **Lead enrichment now reports real backend progress instead of leaving the operator at an indefinite loading state.** A responsive progress modal shows the active enrichment stage, completed steps, percentage, and remaining work while safely polling in the background. Text Outreach’s optimistic Messages handoff, URL saves, pipeline transitions, and lead trash actions now use a shared compact Undo notification; actionable timers pause while the app is hidden or an external Messages dialog has focus, then resume when the operator returns. Backend + dashboard + migration (`2026-08-03-enrichment-progress.sql`, apply before deploy).
+
 ### Email capture call workspace and private recording playback
 
 - **Email Outreach’s first-call modal is now a focused two-column email-capture workspace.** The personalized script, inline email capture, and post-capture close sit beside expandable objection responses, Google reputation context, prior call history, and outcome-linked notes; the Call Center recorder is available directly in the modal and attaches its upload to the selected outcome. Current and historical recordings play inline in both Email Outreach and lead/client Call History, while legacy public R2 references are safely translated through the authenticated Worker playback route so the recording bucket can remain private. Backend + dashboard.
