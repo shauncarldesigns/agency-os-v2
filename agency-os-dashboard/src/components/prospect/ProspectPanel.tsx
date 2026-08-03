@@ -6,6 +6,7 @@ import { ResultsTable } from './ResultsTable';
 import { FilterPills, type ProspectFilter, type SortBy } from './FilterPills';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
+import { Search, Sparkles } from 'lucide-react';
 
 interface ProspectPanelProps {
   showToast: ShowToast;
@@ -124,14 +125,15 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
 
   return (
     <>
-      <div className="sec-header">
-        <div>
-          <div className="sec-title">Prospect</div>
-          <div className="sec-sub">
-            Search Google Places — auto-scored by website quality, GBP completeness, and review activity
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Sparkles size={19} /></span>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950">Lead Finder</h1>
+            <p className="mt-0.5 text-sm text-slate-500">Discover local businesses and prioritize the strongest opportunities.</p>
           </div>
         </div>
-      </div>
+      </section>
 
       <SearchForm onSearch={handleSearch} loading={searching} />
 
@@ -153,7 +155,7 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
             onAdd={handleAdd}
           />
           {(nextPageToken || loadingMore) && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 8px' }}>
+            <div className="flex justify-center py-4">
               <Button variant="ghost" size="sm" disabled={loadingMore} onClick={handleLoadMore}>
                 {loadingMore ? <><Spinner /> Loading more…</> : `Load more results · ${results.length} so far`}
               </Button>
@@ -163,15 +165,10 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
       )}
 
       {!hasSearched && (
-        <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text3)' }}>
-          <div style={{ fontSize: '2.4rem', opacity: 0.2, marginBottom: 14 }}>🔍</div>
-          <div style={{ fontSize: '0.86rem', color: 'var(--text2)', fontWeight: 500, marginBottom: 5 }}>
-            Search for new leads
-          </div>
-          <div style={{ fontSize: '0.7rem', lineHeight: 1.7 }}>
-            Each result is auto-scored 0–100 based on website quality, GBP completeness, and review activity.<br />
-            Color-coded by recommended pricing tier.
-          </div>
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Search size={22} /></span>
+          <h2 className="mt-4 text-sm font-semibold text-slate-800">Search for new leads</h2>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Results are scored from 0–100 using website quality, Google Business Profile completeness, and review activity, then assigned a recommended pricing tier.</p>
         </div>
       )}
     </>

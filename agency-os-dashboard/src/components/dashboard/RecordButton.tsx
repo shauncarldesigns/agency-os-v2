@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api, ApiError } from '../../lib/api';
 import type { ShowToast } from '../../lib/types';
+import { Check, Circle, LoaderCircle, Square, TriangleAlert } from 'lucide-react';
 
 /**
  * In-cockpit audio recorder. Replaces the static "ON CALL HH:MM" timer
@@ -174,11 +175,11 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
   const mmss = formatMMSS(elapsedS);
   const label = (() => {
     switch (state) {
-      case 'idle': return <>● REC</>;
-      case 'recording': return <>⬛ STOP · {mmss}</>;
-      case 'uploading': return <>⏳ Uploading…</>;
-      case 'done': return <>✓ Recorded {mmss} · click to re-record</>;
-      case 'denied': return <>⚠ Mic blocked — retry</>;
+      case 'idle': return <><Circle size={11} fill="currentColor" /> REC</>;
+      case 'recording': return <><Square size={11} fill="currentColor" /> STOP · {mmss}</>;
+      case 'uploading': return <><LoaderCircle size={12} className="animate-spin" /> Uploading…</>;
+      case 'done': return <><Check size={12} /> Recorded {mmss} · click to re-record</>;
+      case 'denied': return <><TriangleAlert size={12} /> Mic blocked — retry</>;
     }
   })();
 

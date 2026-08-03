@@ -8,6 +8,7 @@ import { SiteDetailPanel } from './SiteDetailPanel';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { QuickBriefModal } from './QuickBriefModal';
 import { TIER_MRR } from '../../lib/pricing';
+import { ArrowUpDown, BriefcaseBusiness, Gem, Handshake, Sparkles, Zap } from 'lucide-react';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -174,6 +175,11 @@ export function SitesPanel({
     };
   }, [projects]);
 
+  const groupedProjects = useMemo(() => ({
+    clients: sorted.filter((project) => project.status !== 'prospect'),
+    prospects: sorted.filter((project) => project.status === 'prospect'),
+  }), [sorted]);
+
   const editorElement = editorCtx && (
     <OperatorInputForm
       open={true}
@@ -230,86 +236,84 @@ export function SitesPanel({
 
   return (
     <>
-      <div className="sec-header">
-        <div>
-          <div className="sec-title">Sites</div>
-          <div className="sec-sub">
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><BriefcaseBusiness size={18} /></span>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-slate-950">Clients &amp; sites</h1>
+                <p className="mt-0.5 text-sm text-slate-500">
             {filter === 'all'
-              ? 'All client projects · click a tile below to filter'
-              : `Filtered: ${filterLabel(filter)} · `}
+              ? 'Manage prospects, active clients, and every site in one place.'
+              : `Showing ${filterLabel(filter).toLowerCase()}`}
             {filter !== 'all' && (
               <button
                 type="button"
                 onClick={() => setFilter('all')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--accent)',
-                  cursor: 'pointer',
-                  font: 'inherit',
-                  padding: 0,
-                  textDecoration: 'underline',
-                }}
+                className="ml-1 font-medium text-blue-600 hover:text-blue-700"
               >
-                clear filter
+                Show all
               </button>
             )}
+                </p>
+              </div>
+            </div>
           </div>
+          <label className="relative block sm:w-60">
+            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <span className="sr-only">Sort sites</span>
+            <select className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-8 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100" value={sort} onChange={e => setSort(e.target.value as Sort)}>
+              <option value="tier">Tier: high to low</option>
+              <option value="due">Next update due</option>
+              <option value="az">Business name: A–Z</option>
+            </select>
+          </label>
         </div>
-        <select className="fsel" value={sort} onChange={e => setSort(e.target.value as Sort)}>
-          <option value="tier">Sort: Tier (high to low)</option>
-          <option value="due">Sort: Update due</option>
-          <option value="az">Sort: A-Z</option>
-        </select>
-      </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
         <StatTile
           active={filter === 'active'}
           onClick={() => setFilter((f) => (f === 'active' ? 'all' : 'active'))}
-          variant="scard"
+          icon={<Handshake size={17} />}
+          tone="blue"
         >
-          <div className="snum">{stats.total}</div>
-          <div className="slabel">Active Clients</div>
-          <div className="sdelta">${(stats.t3Mrr + stats.t2Mrr).toLocaleString()}/mo total MRR</div>
+          <StatValue value={stats.total} label="Active clients" detail={`$${(stats.t3Mrr + stats.t2Mrr).toLocaleString()}/mo MRR`} />
         </StatTile>
         <StatTile
           active={filter === 'prospect'}
           onClick={() => setFilter((f) => (f === 'prospect' ? 'all' : 'prospect'))}
-          variant="scard prospect"
+          icon={<BriefcaseBusiness size={17} />}
+          tone="amber"
         >
-          <div className="snum" style={{ color: 'var(--yellow)' }}>{stats.prospects}</div>
-          <div className="slabel">Prospects</div>
-          <div className="sdelta">Qualified · not yet signed</div>
+          <StatValue value={stats.prospects} label="Prospects" detail="Qualified · not signed" />
         </StatTile>
         <StatTile
           active={filter === 't3'}
           onClick={() => setFilter((f) => (f === 't3' ? 'all' : 't3'))}
-          variant="tier-stat t3"
+          icon={<Gem size={17} />}
+          tone="violet"
         >
-          <div className="tier-num t3">{stats.t3}</div>
-          <div className="slabel" style={{ color: 'var(--tier3)' }}>Tier 3 active</div>
-          <div className="sdelta">${stats.t3Mrr.toLocaleString()}/mo recurring</div>
+          <StatValue value={stats.t3} label="Tier 3 active" detail={`$${stats.t3Mrr.toLocaleString()}/mo`} />
         </StatTile>
         <StatTile
           active={filter === 't2'}
           onClick={() => setFilter((f) => (f === 't2' ? 'all' : 't2'))}
-          variant="tier-stat t2"
+          icon={<Sparkles size={17} />}
+          tone="amber"
         >
-          <div className="tier-num t2">{stats.t2}</div>
-          <div className="slabel" style={{ color: 'var(--tier2)' }}>Tier 2 active</div>
-          <div className="sdelta">${stats.t2Mrr.toLocaleString()}/mo recurring</div>
+          <StatValue value={stats.t2} label="Tier 2 active" detail={`$${stats.t2Mrr.toLocaleString()}/mo`} />
         </StatTile>
         <StatTile
           active={filter === 't1'}
           onClick={() => setFilter((f) => (f === 't1' ? 'all' : 't1'))}
-          variant="tier-stat t1"
+          icon={<Zap size={17} />}
+          tone="emerald"
         >
-          <div className="tier-num t1">{stats.t1}</div>
-          <div className="slabel" style={{ color: 'var(--tier1)' }}>Tier 1 (handed off)</div>
-          <div className="sdelta">No ongoing work</div>
+          <StatValue value={stats.t1} label="Tier 1 handoff" detail="No ongoing work" />
         </StatTile>
-      </div>
+        </div>
+      </section>
 
       {loading ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
@@ -324,47 +328,56 @@ export function SitesPanel({
         />
       ) : sorted.length === 0 ? (
         // Projects exist but the active filter excludes them all.
-        <div style={{
-          marginTop: 14,
-          padding: '24px 16px',
-          textAlign: 'center',
-          color: 'var(--text3)',
-          background: 'var(--surface2)',
-          border: '1px dashed var(--border)',
-          borderRadius: 'var(--r)',
-          fontSize: '0.78rem',
-        }}>
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
           No projects match the <strong>{filterLabel(filter)}</strong> filter.{' '}
           <button
             type="button"
             onClick={() => setFilter('all')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--accent)',
-              cursor: 'pointer',
-              font: 'inherit',
-              padding: 0,
-              textDecoration: 'underline',
-            }}
+            className="font-semibold text-blue-600 hover:text-blue-700"
           >
             Show all
           </button>
         </div>
       ) : (
-        <div className="sites-grid">
-          {sorted.map(p => (
-            <SiteCard
-              key={p.id}
-              project={p}
-              showToast={showToast}
-              onSwitchTab={onSwitchTab}
-              onOpenDetail={() => setDetailProjectId(p.id)}
-              onEditInfo={() => openEditor(p)}
-              onQuickBrief={() => openQuickBrief(p)}
-              onProjectChanged={() => { void load(); }}
+        <div className="space-y-7">
+          {groupedProjects.clients.length > 0 && (
+            <ProjectGroup
+              title="Clients"
+              description="Active and historical client projects"
+              projects={groupedProjects.clients}
+              renderCard={(project) => (
+                <SiteCard
+                  key={project.id}
+                  project={project}
+                  showToast={showToast}
+                  onSwitchTab={onSwitchTab}
+                  onOpenDetail={() => setDetailProjectId(project.id)}
+                  onEditInfo={() => openEditor(project)}
+                  onQuickBrief={() => openQuickBrief(project)}
+                  onProjectChanged={() => { void load(); }}
+                />
+              )}
             />
-          ))}
+          )}
+          {groupedProjects.prospects.length > 0 && (
+            <ProjectGroup
+              title="Prospects"
+              description="Qualified opportunities awaiting a decision"
+              projects={groupedProjects.prospects}
+              renderCard={(project) => (
+                <SiteCard
+                  key={project.id}
+                  project={project}
+                  showToast={showToast}
+                  onSwitchTab={onSwitchTab}
+                  onOpenDetail={() => setDetailProjectId(project.id)}
+                  onEditInfo={() => openEditor(project)}
+                  onQuickBrief={() => openQuickBrief(project)}
+                  onProjectChanged={() => { void load(); }}
+                />
+              )}
+            />
+          )}
         </div>
       )}
 
@@ -385,39 +398,59 @@ export function SitesPanel({
  * div with no extra chrome if onClick is not provided.
  */
 function StatTile({
-  active, onClick, variant, children,
+  active, onClick, icon, tone, children,
 }: {
   active: boolean;
   onClick: () => void;
-  variant: string;
+  icon: React.ReactNode;
+  tone: 'blue' | 'amber' | 'violet' | 'emerald';
   children: React.ReactNode;
 }) {
+  const tones = {
+    blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600',
+    violet: 'bg-violet-50 text-violet-600', emerald: 'bg-emerald-50 text-emerald-600',
+  };
   return (
     <button
       type="button"
       onClick={onClick}
-      className={variant}
-      style={{
-        textAlign: 'left',
-        cursor: 'pointer',
-        font: 'inherit',
-        color: 'inherit',
-        background: variant.includes('prospect')
-          ? 'rgba(245,200,66,0.06)'
-          : undefined,
-        // Active state: thicker accent-coloured outline so the operator can
-        // see which slice the grid below is filtered to at a glance.
-        outline: active ? '2px solid var(--accent)' : undefined,
-        outlineOffset: active ? -2 : 0,
-        border: variant.includes('prospect')
-          ? '1px solid rgba(245,200,66,0.2)'
-          : undefined,
-      }}
+      className={`min-w-0 rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${active ? 'border-blue-400 bg-blue-50/60 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50/70 hover:border-slate-300'}`}
       title={active ? 'Click to clear filter' : 'Click to filter the grid below'}
       aria-pressed={active}
     >
+      <span className={`mb-2 flex h-8 w-8 items-center justify-center rounded-lg ${tones[tone]}`}>{icon}</span>
       {children}
     </button>
+  );
+}
+
+function StatValue({ value, label, detail }: { value: number; label: string; detail: string }) {
+  return <><div className="text-2xl font-semibold tracking-tight text-slate-950">{value}</div><div className="truncate text-xs font-semibold text-slate-700">{label}</div><div className="mt-0.5 truncate text-[11px] text-slate-500">{detail}</div></>;
+}
+
+function ProjectGroup({
+  title, description, projects, renderCard,
+}: {
+  title: string;
+  description: string;
+  projects: Project[];
+  renderCard: (project: Project) => React.ReactNode;
+}) {
+  return (
+    <section aria-labelledby={`project-group-${title.toLowerCase()}`}>
+      <div className="mb-3 flex items-end justify-between gap-3 px-1">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 id={`project-group-${title.toLowerCase()}`} className="text-base font-semibold text-slate-950">{title}</h2>
+            <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-xs font-semibold text-slate-600">{projects.length}</span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+        {projects.map(renderCard)}
+      </div>
+    </section>
   );
 }
 

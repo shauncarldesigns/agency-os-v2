@@ -63,8 +63,34 @@ leadsRouter.get('/', async (c) => {
                        AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
                   )
                 ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
+               LIMIT 1
+             ) AS pipeline_last_action,
+             (
+               SELECT latest_activity.meta
+                 FROM lead_activity AS latest_activity
+                WHERE latest_activity.lead_id = leads.id
+                  AND latest_activity.action != 'undo'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM lead_activity AS undo_activity
+                     WHERE undo_activity.action = 'undo'
+                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
+                  )
+                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
                 LIMIT 1
-             ) AS pipeline_last_action
+             ) AS pipeline_last_action_meta,
+             (
+               SELECT latest_activity.created_at
+                 FROM lead_activity AS latest_activity
+                WHERE latest_activity.lead_id = leads.id
+                  AND latest_activity.action != 'undo'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM lead_activity AS undo_activity
+                     WHERE undo_activity.action = 'undo'
+                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
+                  )
+                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
+                LIMIT 1
+             ) AS pipeline_last_action_created_at
         FROM leads
        WHERE 1=1`;
     const params: unknown[] = [];

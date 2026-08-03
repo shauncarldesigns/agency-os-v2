@@ -16,6 +16,7 @@ import {
 } from '../../lib/briefExtract';
 import { TIER_MRR } from '../../lib/pricing';
 import { formatDate } from '../../lib/format';
+import { ArrowLeft, FileText, MapPin } from 'lucide-react';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -190,17 +191,20 @@ export function SiteDetailPanel({
   return (
     <>
       <div className="bs-topbar">
-        <div>
-          <button type="button" className="bs-back" onClick={onBack}>← All sites</button>
-          <div className="bs-breadcrumb">Sites › {project.business_name}</div>
-          <h1 className="bs-title">Brief Studio</h1>
+        <div className="bs-heading-wrap">
+          <button type="button" className="bs-back" onClick={onBack}><ArrowLeft size={15} /> Clients &amp; sites</button>
+          <div className="bs-heading-icon"><FileText size={20} /></div>
+          <div>
+            <div className="bs-breadcrumb">{project.business_name}</div>
+            <h1 className="bs-title">Brief Studio</h1>
+          </div>
         </div>
         <div className="bs-topbar-meta">
           <span className={`bs-tier-badge bs-tier-${tier}`}>
             {TIER_LABEL[tier]}{mrr > 0 ? ` · $${mrr}/mo` : ''}
           </span>
           <span className="bs-topbar-sub">
-            {[project.city, project.state].filter(Boolean).join(', ') || '—'}
+            <MapPin size={13} /> {[project.city, project.state].filter(Boolean).join(', ') || '—'}
             {project.pages_built ? ` · ${project.pages_built} pages built` : ' · 0 pages built'}
           </span>
         </div>
@@ -235,12 +239,17 @@ export function SiteDetailPanel({
                 />
               )}
 
-              <h2 className="bs-section-h">Page Matrix</h2>
-              <div className="bs-matrix-legend">
-                <LegendDot color="empty" label="Not started" />
-                <LegendDot color="recommended" label="Recommended" />
-                <LegendDot color="briefed" label="Brief generated" />
-                <LegendDot color="live" label="Live" />
+              <div className="bs-matrix-heading">
+                <div>
+                  <h2 className="bs-section-h">Page Matrix</h2>
+                  <p>Generate and track every page brief for this site.</p>
+                </div>
+                <div className="bs-matrix-legend">
+                  <LegendDot color="empty" label="Not started" />
+                  <LegendDot color="recommended" label="Recommended" />
+                  <LegendDot color="briefed" label="Brief generated" />
+                  <LegendDot color="live" label="Live" />
+                </div>
               </div>
 
               <div className="bs-matrix-card">
