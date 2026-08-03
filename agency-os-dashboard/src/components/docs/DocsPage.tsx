@@ -656,7 +656,7 @@ export function DocsPage() {
   const ActiveIcon = activeDoc.icon;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <div className="page-container">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-600">

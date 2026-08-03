@@ -406,7 +406,7 @@ export function PlaybookPage({ showToast }: { showToast: ShowToast }) {
   const [tab, setTab] = useState<PlaybookTab>('scripts');
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
+    <div className="page-container">
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {TABS.map((t) => {
           const Icon = t.icon;

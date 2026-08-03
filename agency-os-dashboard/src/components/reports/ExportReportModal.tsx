@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import type { ReportSummary, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Modal } from '../shared/Modal';
-import { Button } from '../shared/Button';
-import { TierPill } from '../shared/TierPill';
 import { Spinner } from '../shared/Spinner';
+import { Download, FileText, Mail, X } from 'lucide-react';
 
 interface ExportReportModalProps {
   open: boolean;
@@ -120,32 +119,27 @@ export function ExportReportModal({ open, summary, onClose, showToast }: ExportR
 
   return (
     <Modal open={open} onClose={onClose} width={580}>
-      <div style={{ padding: '20px 22px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', letterSpacing: '2px' }}>Export Client Report</div>
-          <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {summary.project.name} · {formatPeriodLabel(summary.period)}
-            <TierPill tier={summary.project.tier} />
-          </div>
+      <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><FileText className="h-5 w-5" /></span>
+          <div className="min-w-0"><h2 className="text-base font-semibold text-slate-900">Export client report</h2><p className="mt-0.5 truncate text-xs text-slate-500">{summary.project.name} · {formatPeriodLabel(summary.period)} · Tier {summary.project.tier}</p></div>
         </div>
-        <button className="mclose" onClick={onClose}>✕</button>
+        <button type="button" aria-label="Close export report" className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" onClick={onClose}><X className="h-4 w-4" /></button>
       </div>
 
-      <div style={{ padding: '14px 22px 4px' }}>
-        <div style={{ fontSize: '0.62rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 8 }}>
-          Include in Report
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', marginBottom: 14 }}>
+      <div className="px-5 py-4">
+        <div className="mb-3 text-xs font-semibold text-slate-700">Include in report</div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {ALL_SECTIONS.map(s => (
             <label
               key={s.key}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.72rem', color: 'var(--text2)', cursor: 'pointer' }}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
             >
               <input
                 type="checkbox"
                 checked={sections.has(s.key)}
                 onChange={() => toggleSection(s.key)}
-                style={{ accentColor: 'var(--tier3)' }}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
               {s.label}
             </label>
@@ -153,18 +147,16 @@ export function ExportReportModal({ open, summary, onClose, showToast }: ExportR
         </div>
       </div>
 
-      <div style={{ padding: '0 22px', background: 'var(--surface2)' }}>
-        <div style={{ padding: '14px 0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: '0.62rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-            PDF Preview
-          </div>
-          <div style={{ fontSize: '0.6rem', color: 'var(--text3)' }}>
+      <div className="border-y border-slate-100 bg-slate-50 px-5 py-4">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="text-xs font-semibold text-slate-700">PDF preview</div>
+          <div className="text-[11px] text-slate-400">
             {loadingPreview ? 'Rendering…' : 'Live preview'}
           </div>
         </div>
-        <div style={{ marginBottom: 14, maxHeight: 340, overflowY: 'auto', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', background: '#fff' }}>
+        <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           {loadingPreview ? (
-            <div style={{ padding: 60, textAlign: 'center', color: '#888' }}><Spinner /> Loading preview…</div>
+            <div className="flex min-h-[220px] items-center justify-center gap-2 text-sm text-slate-400"><Spinner /> Loading preview…</div>
           ) : previewHtml ? (
             <iframe
               title="Report preview"
@@ -172,30 +164,30 @@ export function ExportReportModal({ open, summary, onClose, showToast }: ExportR
               style={{ width: '100%', height: 340, border: 'none', display: 'block', background: '#fff' }}
             />
           ) : (
-            <div style={{ padding: 60, textAlign: 'center', color: '#888' }}>No preview yet</div>
+            <div className="flex min-h-[220px] items-center justify-center text-sm text-slate-400">No preview yet</div>
           )}
         </div>
       </div>
 
-      <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>
+      <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-slate-500">
           {summary.project.client_email
-            ? <>📧 {summary.project.client_email}</>
+            ? <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{summary.project.client_email}</span>
             : <em>No client email on file</em>}
         </div>
-        <div style={{ display: 'flex', gap: 7 }}>
-          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-          <Button variant="ghost" size="sm" disabled={!previewHtml || downloading} onClick={handleDownload}>
-            {downloading ? '⏳ …' : '↓ Download PDF'}
-          </Button>
-          <Button
-            variant="tier3"
-            size="sm"
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50" onClick={onClose}>Cancel</button>
+          <button type="button" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={!previewHtml || downloading} onClick={handleDownload}>
+            <Download className="h-3.5 w-3.5" /> {downloading ? 'Preparing…' : 'Download PDF'}
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             disabled={!previewHtml || emailing || !summary.project.client_email}
             onClick={handleEmail}
           >
-            {emailing ? <><Spinner /> Sending…</> : '📧 Email to Client'}
-          </Button>
+            {emailing ? <><Spinner /> Sending…</> : <><Mail className="h-3.5 w-3.5" /> Email client</>}
+          </button>
         </div>
       </div>
     </Modal>

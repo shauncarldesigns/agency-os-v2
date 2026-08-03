@@ -283,7 +283,7 @@ export const api = {
     place: (placeId: string) =>
       apiFetch<{ place: unknown; cached: boolean }>(`/api/prospect/place/${placeId}`),
     addToPipeline: (placeIds: string[]) =>
-      apiFetch<{ added: number; skipped: number; errors: string[] }>('/api/prospect/add-to-pipeline', {
+      apiFetch<{ added: number; skipped: number; addedPlaceIds: string[]; errors: string[] }>('/api/prospect/add-to-pipeline', {
         method: 'POST',
         body: JSON.stringify({ placeIds }),
       }),

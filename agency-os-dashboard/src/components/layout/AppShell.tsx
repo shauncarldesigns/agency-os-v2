@@ -49,7 +49,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { key: 'prospect', label: 'Lead Finder', icon: SearchIcon },
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
-      { key: 'call-sessions', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
+      { key: 'email-outreach', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
       { key: 'call-center', label: 'Call Center', icon: Headphones },
     ],
@@ -67,7 +67,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
-  'call-sessions': { title: 'Call Outreach', subtitle: 'Active cold-call queue and follow-up board' },
+  'email-outreach': { title: 'Email Outreach', subtitle: 'Call-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and book demos' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },

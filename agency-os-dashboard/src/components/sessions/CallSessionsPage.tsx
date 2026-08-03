@@ -107,6 +107,7 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
   });
   const [industryFilter, setIndustryFilter] = useState(ALL);
   const [cityFilter, setCityFilter] = useState(ALL);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [callModalLeadId, setCallModalLeadId] = useState<number | null>(null);
@@ -155,20 +156,25 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
   }, [columns]);
 
   const filteredColumns = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return columns.map((column) => ({
       ...column,
       items: column.items.filter((item) => {
+        const searchMatch = !query || [
+          item.title, item.email, item.phone, item.industry, item.city, item.state,
+        ].some((value) => value?.toLowerCase().includes(query));
         const industryMatch = industryFilter === ALL || item.industry === industryFilter;
         const cityMatch = cityFilter === ALL || formatPlace(item.city, item.state) === cityFilter;
-        return industryMatch && cityMatch;
+        return searchMatch && industryMatch && cityMatch;
       }),
     }));
-  }, [columns, industryFilter, cityFilter]);
+  }, [columns, industryFilter, cityFilter, searchQuery]);
 
   const totalVisible = filteredColumns.reduce((sum, column) => sum + column.items.length, 0);
-  const hasFilters = industryFilter !== ALL || cityFilter !== ALL;
+  const hasFilters = searchQuery.trim().length > 0 || industryFilter !== ALL || cityFilter !== ALL;
   const filteredAutomationLeads = useMemo(() => {
     const automatedLeadIds = new Set(automations.map((automation) => automation.lead_id));
+    const query = searchQuery.trim().toLowerCase();
     return leads.filter((lead) => {
       const canStartAutomation = Boolean(
         lead.email
@@ -177,11 +183,15 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
         && ['ready_to_send', 'sent_no_reply'].includes(lead.pipeline_status),
       );
       if (!automatedLeadIds.has(lead.id) && !canStartAutomation) return false;
+      if (query && ![
+        lead.company, lead.contact, lead.email, lead.phone, lead.industry,
+        lead.city, lead.state, lead.address,
+      ].some((value) => value?.toLowerCase().includes(query))) return false;
       if (industryFilter !== ALL && lead.industry !== industryFilter) return false;
       if (cityFilter !== ALL && formatPlace(lead.city, lead.state) !== cityFilter) return false;
       return true;
     });
-  }, [leads, automations, industryFilter, cityFilter]);
+  }, [leads, automations, industryFilter, cityFilter, searchQuery]);
 
   function setViewPersist(next: CallOutreachView) {
     setView(next);
@@ -211,25 +221,25 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
   if (loading && leads.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-sm text-slate-400">
-        <Spinner /> Loading call board...
+        <Spinner /> Loading Email Outreach…
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-6 lg:px-8">
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-[18px] font-bold text-slate-900">
-            {view === 'board' ? 'Call board' : 'Email automations'}
-          </h2>
-          <p className="mt-1 text-xs text-slate-400">
-            {view === 'board'
-              ? 'Call-first email outreach from initial contact through engagement.'
-              : 'Live sequence timing, delivery state, and engagement scoring.'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="page-container">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+          <label className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search leads…"
+              aria-label="Search email outreach leads"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-800 shadow-sm shadow-slate-200/50 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
           <BoardSelect
             icon={Filter}
             value={industryFilter}
@@ -248,6 +258,7 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
             <button
               type="button"
               onClick={() => {
+                setSearchQuery('');
                 setIndustryFilter(ALL);
                 setCityFilter(ALL);
               }}
@@ -294,7 +305,6 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
               <Columns3 className="h-4 w-4" />
             </button>
           </div>
-        </div>
       </div>
 
       {view === 'board' ? (
