@@ -17,6 +17,11 @@ import { BookingPane } from './BookingPane';
 import { RecordButton } from './RecordButton';
 import { ApproachSelector } from './ApproachSelector';
 import { QuestionOrientedPanel } from './QuestionOrientedPanel';
+import {
+  ArrowLeft, ArrowRight, Ban, BookOpen, CalendarClock, Check, Circle,
+  ExternalLink, Flame, Globe2, Hammer, MapPinned, Phone, PhoneMissed,
+  RotateCcw, Sparkles, StickyNote, Target, X,
+} from 'lucide-react';
 
 // Objection IDs that mention websites, cost, or the operator's offering.
 // Hidden in the Question-oriented objection panel until the operator has
@@ -865,7 +870,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
 
       <div className="cockpit-utility">
         <span>
-          <button className="cockpit-exit" type="button" onClick={onClose}>← Exit</button>
+          <button className="cockpit-exit" type="button" onClick={onClose}><ArrowLeft size={14} /> Exit</button>
           {session && ` · ${session.session_date} · ${session.block === 'morning' ? 'Morning' : 'Evening'}`}
         </span>
         <div className="cockpit-utility-right">
@@ -889,16 +894,16 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
             </div>
             <div className="cockpit-company-name">{lead.company}</div>
             <div className="cockpit-company-meta">
-              {lead.website && <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer">🌐 {cleanDomain(lead.website)} ↗</a>}
+              {lead.website && <a href={normalizeUrl(lead.website)} target="_blank" rel="noreferrer"><Globe2 size={13} /> {cleanDomain(lead.website)} <ExternalLink size={11} /></a>}
               {(() => {
                 const maps = googleMapsUrl(lead);
-                return maps ? <a href={maps} target="_blank" rel="noreferrer">🗺️ Maps ↗</a> : null;
+                return maps ? <a href={maps} target="_blank" rel="noreferrer"><MapPinned size={13} /> Maps <ExternalLink size={11} /></a> : null;
               })()}
             </div>
           </div>
           <div className="cockpit-call-cluster">
             <div className="cockpit-phone-hero">
-              <div className="cockpit-phone-label">📞 CALL</div>
+              <div className="cockpit-phone-label"><Phone size={12} /> CALL</div>
               <div className="cockpit-phone-number">
                 {lead.phone ? <a href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a> : '—'}
               </div>
@@ -922,8 +927,8 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
           </div>
           <div className="cockpit-scores">
             <ScoreChip label="REVIEWS" value={`${lead.google_review_count ?? 0}${lead.google_rating ? ` · ${lead.google_rating}★` : ''}`} kind={reviewKind(lead.google_review_count)} />
-            <ScoreChip label="GBP" value={lead.gbp_claimed ? '✓ Claimed' : '— Unclaimed'} kind={lead.gbp_claimed ? 'good' : 'warn'} />
-            <ScoreChip label="WEBSITE" value={lead.website ? '✓ Has site' : '— none'} kind={lead.website ? 'good' : 'bad'} />
+            <ScoreChip label="GBP" value={lead.gbp_claimed ? 'Claimed' : 'Unclaimed'} kind={lead.gbp_claimed ? 'good' : 'warn'} />
+            <ScoreChip label="WEBSITE" value={lead.website ? 'Has site' : 'None'} kind={lead.website ? 'good' : 'bad'} />
             <ScoreChip
               label="SCORE"
               value={`${lead.opportunity_score ?? '—'}${lead.recommended_tier ? ` · T${lead.recommended_tier}` : ''}`}
@@ -952,7 +957,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
               }}
             />
             {approach === 'question_oriented' && solutionRevealed && (
-              <span className="cockpit-approach-reveal-flag">✓ Solution revealed — full objection library unlocked</span>
+              <span className="cockpit-approach-reveal-flag"><Check size={13} /> Solution revealed — full objection library unlocked</span>
             )}
             {approach === 'question_oriented' && !questionScript && (
               <span className="cockpit-approach-reveal-flag" style={{ color: 'var(--yellow)' }}>
@@ -1060,17 +1065,17 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
       )}
 
       <div className="cockpit-outcome-bar">
-        <button type="button" className="cockpit-outcome-btn cockpit-outcome-no-answer" onClick={handleNoAnswer} disabled={recording || bookingMode}>○ No answer</button>
-        <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}>📵 Voicemail</button>
-        <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}>✕ Not interested</button>
-        <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}>↻ Callback</button>
-        <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}>✓ Booked demo</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-no-answer" onClick={handleNoAnswer} disabled={recording || bookingMode}><Circle size={15} /> No answer</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}><PhoneMissed size={15} /> Voicemail</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}><Ban size={15} /> Not interested</button>
+        <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}><RotateCcw size={15} /> Callback</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}><CalendarClock size={15} /> Booked demo</button>
       </div>
 
       <div className="cockpit-navrow">
-        <button type="button" className="cockpit-btn" onClick={handlePrevious} disabled={!canGoBack}>← Previous</button>
+        <button type="button" className="cockpit-btn" onClick={handlePrevious} disabled={!canGoBack}><ArrowLeft size={14} /> Previous</button>
         <ProgressDashes total={leads.length} called={calledCount} currentIndex={currentIndex} />
-        <button type="button" className="cockpit-btn" onClick={handleSkip}>Skip for now →</button>
+        <button type="button" className="cockpit-btn" onClick={handleSkip}>Skip for now <ArrowRight size={14} /></button>
       </div>
     </div>
   );
@@ -1084,7 +1089,7 @@ function NotesPanel({ notes, onChange }: { notes: string; onChange: (value: stri
   return (
     <div className="cockpit-notes-panel">
       <div className="cockpit-panel-header">
-        <span className="cockpit-panel-title orange">📝 NOTES</span>
+        <span className="cockpit-panel-title orange"><StickyNote size={15} /> NOTES</span>
         <span className="cockpit-panel-meta">auto-saves · objection chips auto-tag in</span>
       </div>
       <textarea
@@ -1115,7 +1120,7 @@ function ScriptPanel({
     return (
       <div className="cockpit-panel">
         <div className="cockpit-panel-header">
-          <span className="cockpit-panel-title blue">📖 SCRIPT</span>
+          <span className="cockpit-panel-title blue"><BookOpen size={15} /> SCRIPT</span>
         </div>
         <div style={{ fontSize: '0.74rem', color: 'var(--text3)' }}>No script loaded.</div>
       </div>
@@ -1124,7 +1129,7 @@ function ScriptPanel({
   return (
     <div className="cockpit-panel">
       <div className="cockpit-panel-header">
-        <span className="cockpit-panel-title blue">📖 {script.label.toUpperCase()}</span>
+        <span className="cockpit-panel-title blue"><BookOpen size={15} /> {script.label.toUpperCase()}</span>
         <span className="cockpit-panel-meta">
           Stage {Math.max(linearProgressIdx + 1, 1)} of {linearStages.length}
         </span>
@@ -1164,8 +1169,8 @@ function ScriptPanel({
         </div>
       )}
       <div className="cockpit-stage-controls">
-        <button type="button" className="cockpit-btn" onClick={onBack} disabled={!prevStage}>← Back</button>
-        <button type="button" className="cockpit-btn-primary" onClick={onAdvance} disabled={!nextStage}>Advance →</button>
+        <button type="button" className="cockpit-btn" onClick={onBack} disabled={!prevStage}><ArrowLeft size={14} /> Back</button>
+        <button type="button" className="cockpit-btn-primary" onClick={onAdvance} disabled={!nextStage}>Advance <ArrowRight size={14} /></button>
       </div>
     </div>
   );
@@ -1194,7 +1199,7 @@ function ObjectionPanel({
   return (
     <div className="cockpit-panel">
       <div className="cockpit-panel-header">
-        <span className="cockpit-panel-title coral">🎯 OBJECTIONS</span>
+        <span className="cockpit-panel-title coral"><Target size={15} /> OBJECTIONS</span>
         <span className="cockpit-panel-meta" style={{ color: totalHits ? 'var(--yellow)' : undefined }}>
           {totalHits} hit{totalHits === 1 ? '' : 's'}
         </span>
@@ -1268,7 +1273,7 @@ function ActiveObjectionPanel({
     <div className="cockpit-active-obj">
       <div className="cockpit-panel-header">
         <span className="cockpit-panel-title coral">
-          🎯 {isBranching ? 'BRANCHING REBUTTAL' : 'REBUTTAL'} · "{objection.label.toUpperCase()}"
+          <Target size={15} /> {isBranching ? 'BRANCHING REBUTTAL' : 'REBUTTAL'} · "{objection.label.toUpperCase()}"
         </span>
         <button type="button" className="cockpit-btn" style={{ padding: '3px 8px' }} onClick={onBack}>← back</button>
       </div>
@@ -1276,7 +1281,7 @@ function ActiveObjectionPanel({
       {variantOverride ? (
         <div className="cockpit-rebuttal-card" style={{ borderColor: '#afa9ec' }}>
           <div className="cockpit-rebuttal-heading" style={{ color: '#afa9ec' }}>
-            ✨ Using generated variant — {variantOverride.angle}
+            <Sparkles size={14} /> Using generated variant — {variantOverride.angle}
           </div>
           <div className="cockpit-rebuttal-body">{interpolate(variantOverride.rebuttal, ctx)}</div>
         </div>
@@ -1346,18 +1351,18 @@ function ActiveObjectionPanel({
       )}
 
       <div className="cockpit-obj-actions">
-        <button type="button" className="cockpit-btn-success" onClick={onHandled}>✓ Handled — continue</button>
-        <button type="button" className="cockpit-btn-danger" onClick={onDidntLand}>✕ Didn't land</button>
+        <button type="button" className="cockpit-btn-success" onClick={onHandled}><Check size={14} /> Handled — continue</button>
+        <button type="button" className="cockpit-btn-danger" onClick={onDidntLand}><X size={14} /> Didn't land</button>
         {!hideGenerate && (
           <button type="button" className="cockpit-btn-generate" onClick={onGenerate} disabled={generating}>
-            {generating ? '✨ Generating…' : '✨ Generate alternative'}
+            <Sparkles size={14} /> {generating ? 'Generating…' : 'Generate alternative'}
           </button>
         )}
       </div>
 
       {generated && (
         <div className="cockpit-gen-results">
-          <div className="cockpit-gen-label">✨ Generated alternatives · {generated.variants.length} angles</div>
+          <div className="cockpit-gen-label"><Sparkles size={14} /> Generated alternatives · {generated.variants.length} angles</div>
           {generated.variants.map((v, i) => (
             <div key={i} className="cockpit-gen-variant">
               <div className="cockpit-gen-angle">{v.angle}</div>
@@ -1406,10 +1411,10 @@ function PostBookingPrompt({ company, onContinue, onPauseAndBuild }: {
   return (
     <div className="cockpit-overlay">
       <div className="cockpit-overlay-card">
-        <div className="cockpit-overlay-title">✓ DEMO BOOKED</div>
+        <div className="cockpit-overlay-title"><Check size={18} /> DEMO BOOKED</div>
         <div className="cockpit-overlay-sub">Booked a demo with <strong>{company}</strong>. Build the demo site now, or keep calling?</div>
         <div className="cockpit-overlay-actions">
-          <button type="button" className="cockpit-btn-success" onClick={onPauseAndBuild}>🛠 Pause & build demo</button>
+          <button type="button" className="cockpit-btn-success" onClick={onPauseAndBuild}><Hammer size={14} /> Pause &amp; build demo</button>
           <button type="button" className="cockpit-btn" onClick={onContinue}>Keep calling →</button>
         </div>
       </div>
@@ -1433,8 +1438,8 @@ function BurnThroughComplete({
   };
   return (
     <div style={{ textAlign: 'center', maxWidth: 480, margin: '60px auto', padding: 24, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--rl)' }}>
-      <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.6rem', letterSpacing: 2, color: 'var(--accent)', marginBottom: 10 }}>
-        🔥 SESSION COMPLETE
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.6rem', letterSpacing: 2, color: 'var(--accent)', marginBottom: 10 }}>
+        <Flame size={18} /> SESSION COMPLETE
       </div>
       <div style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: 20 }}>
         Called {progress.called} of {progress.total} leads. Nothing left in the queue.

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import type { Project, ShowToast, Tab } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
-import { Button } from '../shared/Button';
-import { TierPill } from '../shared/TierPill';
 import { formatDate } from '../../lib/format';
 import { TIER_MRR } from '../../lib/pricing';
+import { ArrowRight, BarChart3, Bolt, Check, ExternalLink, FileText, Globe2, LoaderCircle, MapPin, Pencil, X } from 'lucide-react';
 
 interface SiteCardProps {
   project: Project;
@@ -96,72 +95,56 @@ export function SiteCard({
   const headerTitle = hasBriefStudio ? 'Open Brief Studio' : 'Edit project info';
 
   return (
-    <div className={`scard2 t${tier}`}>
-      <div
-        className="scard-header"
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 border-b border-slate-100 p-4 text-left sm:p-5"
         onClick={headerAction}
-        role="button"
         title={headerTitle}
-        style={{ cursor: 'pointer' }}
       >
-        <div>
-          <div className="scard-title">{project.business_name}</div>
-          <div className="scard-sub">{subtitle}</div>
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold text-slate-950">{project.business_name}</h2>
+          <div className="mt-1 flex items-start gap-1.5 text-xs text-slate-500">
+            <MapPin size={13} className="mt-px shrink-0" />
+            <span>{subtitle}</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {isProspect && (
-            <span
-              style={{
-                fontSize: '0.6rem',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                color: 'var(--yellow)',
-                background: 'rgba(245,200,66,0.1)',
-                border: '1px solid rgba(245,200,66,0.3)',
-                padding: '2px 7px',
-                borderRadius: 999,
-                textTransform: 'uppercase',
-              }}
+            <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200"
               title="Qualified for pitch, not yet signed. Excluded from MRR."
-            >
-              📝 Prospect
-            </span>
+            >Prospect</span>
           )}
-          <TierPill tier={tier} />
+          <TierBadge tier={tier} />
         </div>
-      </div>
-      <div className="scard-body">
-        <div className="url-row">
-          <span style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '1px', color: 'var(--text3)', width: 50 }}>SITE</span>
+      </button>
+      <div className="p-4 sm:p-5">
+        <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm">
+          <Globe2 size={15} className="shrink-0 text-slate-400" />
           {isBuilding && !liveUrl ? (
             <>
-              <span className="url-mono" style={{ color: 'var(--text3)' }}>Building…</span>
-              <span style={{ display: 'inline-block', animation: 'spin 2s linear infinite', fontSize: 11 }}>⚙️</span>
+              <span className="min-w-0 flex-1 truncate text-slate-500">Site is being built</span>
+              <LoaderCircle size={14} className="animate-spin text-blue-500" />
             </>
           ) : liveUrl ? (
             <>
-              <span className="url-mono">{liveUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-700">{liveUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
               <a
                 href={liveUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="url-link"
+                className="rounded-md p-1 text-slate-400 transition hover:bg-white hover:text-blue-600"
                 aria-label="Open site"
                 onClick={(e) => e.stopPropagation()}
-              >↗</a>
+              ><ExternalLink size={14} /></a>
             </>
           ) : (
-            <span className="url-mono" style={{ color: 'var(--text3)' }}>—</span>
+            <span className="text-slate-400">No site URL yet</span>
           )}
         </div>
 
         {/* MRR + pages-this-month — uniform across all tiers (no tier-gating in v2.2) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 10,
-          marginTop: 10,
-        }}>
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <MetricChip
             label="MRR"
             value={mrr > 0 ? `$${mrr}/mo` : '— '}
@@ -174,74 +157,48 @@ export function SiteCard({
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+        <div className="mt-4 grid grid-cols-2 gap-2">
           {/* Prospects get a dedicated "they signed!" button at the top of
               the action row. Once flipped, the card becomes a regular active
               client and this button stops rendering. */}
           {isProspect && (
             <>
-              <Button variant="primary" size="sm" onClick={handleMarkActive} disabled={signing}
+              <ActionButton primary className="col-span-2" onClick={handleMarkActive} disabled={signing}
                       title="They signed. Move to active client status — counts toward MRR.">
-                {signing ? '⏳ Marking…' : '✓ Mark as active client'}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleDemoPassed} disabled={signing}
+                {signing ? <><LoaderCircle size={14} className="animate-spin" /> Marking…</> : <><Check size={14} /> Mark active client</>}
+              </ActionButton>
+              <ActionButton onClick={handleDemoPassed} disabled={signing}
                       title="The demo happened and they declined. Archive the project and send the lead back to the pipeline."
-                      style={{ color: 'var(--red)' }}>
-                ✗ Demo passed
-              </Button>
+                      danger><X size={14} /> Demo passed</ActionButton>
             </>
           )}
           {hasBriefStudio ? (
             <>
               {!isProspect && (
-                <Button variant="primary" size="sm" onClick={onOpenDetail}>
-                  📋 Brief Studio
-                </Button>
+                <ActionButton primary onClick={onOpenDetail}><FileText size={14} /> Brief Studio</ActionButton>
               )}
               {isProspect && (
-                <Button variant="ghost" size="sm" onClick={onOpenDetail}>
-                  📋 Brief Studio
-                </Button>
+                <ActionButton onClick={onOpenDetail}><FileText size={14} /> Brief Studio</ActionButton>
               )}
-              <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
-                ⚡ Quick brief
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onSwitchTab('reports')}>
-                📈 Report
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onEditInfo}>
-                ✎ Edit
-              </Button>
+              <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
+              <ActionButton onClick={() => onSwitchTab('reports')}><BarChart3 size={14} /> Reports</ActionButton>
+              <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
             </>
           ) : (
             <>
               {!isProspect && (
-                <Button variant="primary" size="sm" onClick={onEditInfo}>
-                  ✎ Edit Info
-                </Button>
+                <ActionButton primary onClick={onEditInfo}><Pencil size={14} /> Edit info</ActionButton>
               )}
               {isProspect && (
-                <Button variant="ghost" size="sm" onClick={onEditInfo}>
-                  ✎ Edit
-                </Button>
+                <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
               )}
-              <Button variant="ghost" size="sm" onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste">
-                ⚡ Quick brief
-              </Button>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                fontSize: '0.62rem',
-                color: 'var(--text3)',
-                fontStyle: 'italic',
-              }}>
-                Upgrade to Tier 3 for Brief Studio
-              </span>
+              <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
+              <span className="col-span-2 flex items-center gap-1 text-xs text-slate-400"><ArrowRight size={13} /> Upgrade to Tier 3 for Brief Studio</span>
             </>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -250,20 +207,21 @@ function MetricChip({
 }: {
   label: string; value: string; tone: 'accent' | 'green' | 'muted';
 }) {
-  const color = tone === 'green' ? 'var(--green)' : tone === 'accent' ? 'var(--accent)' : 'var(--text3)';
+  const color = tone === 'green' ? 'text-emerald-600' : tone === 'accent' ? 'text-blue-600' : 'text-slate-500';
   return (
-    <div style={{
-      background: 'var(--surface2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--r)',
-      padding: '8px 11px',
-    }}>
-      <div style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.15rem', color, lineHeight: 1.2 }}>
-        {value}
-      </div>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`mt-0.5 text-lg font-semibold tracking-tight ${color}`}>{value}</div>
     </div>
   );
+}
+
+function TierBadge({ tier }: { tier: 1 | 2 | 3 }) {
+  const styles = tier === 3 ? 'bg-violet-50 text-violet-700 ring-violet-200' : tier === 2 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  return <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${styles}`}>Tier {tier}</span>;
+}
+
+function ActionButton({ children, primary = false, danger = false, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
+  const tone = primary ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700' : danger ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50';
+  return <button type="button" className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${tone} ${className}`} {...props}>{children}</button>;
 }

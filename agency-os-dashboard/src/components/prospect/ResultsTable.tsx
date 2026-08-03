@@ -11,15 +11,15 @@ interface ResultsTableProps {
 export function ResultsTable({ results, addedIds, addingIds, onAdd }: ResultsTableProps) {
   if (results.length === 0) {
     return (
-      <div className="twrap" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text3)' }}>
+      <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-sm text-slate-500">
         No results match the current filter.
       </div>
     );
   }
 
   return (
-    <div className="twrap">
-      <table>
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <table className="min-w-[900px]">
         <thead>
           <tr>
             <th style={{ width: 32 }}></th>

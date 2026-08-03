@@ -1,5 +1,6 @@
 import type { Lead } from '../../lib/types';
 import { tierSdeltaSublabel } from '../../lib/pricing';
+import { Gem, Sparkles, Zap } from 'lucide-react';
 
 interface TierStatsProps {
   leads: Lead[];
@@ -19,23 +20,23 @@ export function TierStats({ leads }: TierStatsProps) {
   const t2 = prospects.filter(l => l.recommended_tier === 2).length;
   const t1 = prospects.filter(l => l.recommended_tier === 1).length;
 
+  const tiers = [
+    { tier: 3 as const, count: t3, icon: Gem, iconClass: 'bg-violet-50 text-violet-600', valueClass: 'text-violet-700' },
+    { tier: 2 as const, count: t2, icon: Sparkles, iconClass: 'bg-amber-50 text-amber-600', valueClass: 'text-amber-700' },
+    { tier: 1 as const, count: t1, icon: Zap, iconClass: 'bg-emerald-50 text-emerald-600', valueClass: 'text-emerald-700' },
+  ];
+
   return (
-    <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-      <div className="tier-stat t3">
-        <div className="tier-num t3">{t3}</div>
-        <div className="slabel" style={{ color: 'var(--tier3)' }}>Tier 3 prospects</div>
-        <div className="sdelta" style={{ color: 'var(--text3)' }}>{tierSdeltaSublabel(3)}</div>
-      </div>
-      <div className="tier-stat t2">
-        <div className="tier-num t2">{t2}</div>
-        <div className="slabel" style={{ color: 'var(--tier2)' }}>Tier 2 prospects</div>
-        <div className="sdelta" style={{ color: 'var(--text3)' }}>{tierSdeltaSublabel(2)}</div>
-      </div>
-      <div className="tier-stat t1">
-        <div className="tier-num t1">{t1}</div>
-        <div className="slabel" style={{ color: 'var(--tier1)' }}>Tier 1 prospects</div>
-        <div className="sdelta" style={{ color: 'var(--text3)' }}>{tierSdeltaSublabel(1)}</div>
-      </div>
-    </div>
+    <section className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {tiers.map(({ tier, count, icon: Icon, iconClass, valueClass }) => (
+        <div key={tier} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-4">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClass}`}><Icon className="h-5 w-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2"><span className={`text-2xl font-bold leading-none ${valueClass}`}>{count}</span><span className="truncate text-[11px] font-bold uppercase tracking-wider text-slate-500">Tier {tier}</span></div>
+            <p className="mt-1 truncate text-[11px] text-slate-400">{tierSdeltaSublabel(tier)}</p>
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }

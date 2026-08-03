@@ -21,20 +21,13 @@ export function FilterPills({ results, active, onChange, filteredCount, inPipeli
   const unclaimed = results.filter(r => !r.claimed && !r.alreadyInPipeline).length;
   const noWebsite = results.filter(r => !r.website && !r.alreadyInPipeline).length;
 
-  const Pill: React.FC<{ filter: ProspectFilter; className: string; children: React.ReactNode; outlineColor?: string }> = ({ filter, className, children, outlineColor }) => {
+  const Pill: React.FC<{ filter: ProspectFilter; children: React.ReactNode }> = ({ filter, children }) => {
     const isActive = active === filter;
     return (
       <button
         type="button"
-        className={className}
+        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${isActive ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
         onClick={() => onChange(isActive ? 'all' : filter)}
-        style={{
-          cursor: 'pointer',
-          background: 'none',
-          font: 'inherit',
-          outline: isActive ? `2px solid ${outlineColor ?? 'var(--accent)'}` : 'none',
-          outlineOffset: 2,
-        }}
       >
         {children}
       </button>
@@ -42,52 +35,28 @@ export function FilterPills({ results, active, onChange, filteredCount, inPipeli
   };
 
   return (
-    <div className="fbar">
-      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.6rem', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text3)' }}>
-          Filter:
-        </span>
-        <Pill filter="t3" className="tier-pill t3" outlineColor="var(--tier3)">
-          <span className="tier-icon" />Tier 3 ({t3})
+    <div className="my-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Filter</span>
+        <Pill filter="t3">Tier 3 ({t3})
         </Pill>
-        <Pill filter="t2" className="tier-pill t2" outlineColor="var(--tier2)">
-          <span className="tier-icon" />Tier 2 ({t2})
+        <Pill filter="t2">Tier 2 ({t2})
         </Pill>
-        <Pill filter="t1" className="tier-pill t1" outlineColor="var(--tier1)">
-          <span className="tier-icon" />Tier 1 ({t1})
+        <Pill filter="t1">Tier 1 ({t1})
         </Pill>
-        <span style={{ color: 'var(--border2)' }}>|</span>
-        <Pill filter="unclaimed" className="gbp-pill unclaimed" outlineColor="var(--purple)">
-          ⭐ Unclaimed GBP ({unclaimed})
+        <Pill filter="unclaimed">Unclaimed GBP ({unclaimed})
         </Pill>
-        <button
-          type="button"
-          onClick={() => onChange(active === 'no-website' ? 'all' : 'no-website')}
-          style={{
-            cursor: 'pointer',
-            background: 'var(--red-bg)',
-            color: 'var(--red)',
-            border: '1px solid rgba(248,113,113,0.3)',
-            fontSize: '0.6rem',
-            fontWeight: 600,
-            padding: '2px 8px',
-            borderRadius: 20,
-            outline: active === 'no-website' ? '2px solid var(--red)' : 'none',
-            outlineOffset: 2,
-          }}
-        >
-          🚫 No Website ({noWebsite})
-        </button>
+        <Pill filter="no-website">No website ({noWebsite})</Pill>
       </div>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, alignItems: 'center' }}>
-        <span style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>
-          Showing <strong style={{ color: 'var(--text)' }}>{filteredCount}</strong> new
-          {inPipelineCount > 0 && <> · <strong style={{ color: 'var(--text3)' }}>{inPipelineCount}</strong> in pipeline</>}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <span className="text-xs text-slate-500">
+          Showing <strong className="text-slate-800">{filteredCount}</strong> new
+          {inPipelineCount > 0 && <> · <strong>{inPipelineCount}</strong> in pipeline</>}
         </span>
-        <select className="fsel" value={sortBy} onChange={e => onSortChange(e.target.value as SortBy)}>
-          <option value="score">Sort: Opportunity score</option>
-          <option value="reviews">Sort: Reviews count</option>
-          <option value="pagespeed">Sort: Has website</option>
+        <select className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" value={sortBy} onChange={e => onSortChange(e.target.value as SortBy)}>
+          <option value="score">Opportunity score</option>
+          <option value="reviews">Review count</option>
+          <option value="pagespeed">Website status</option>
         </select>
       </div>
     </div>

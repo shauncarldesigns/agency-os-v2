@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Core workspace UI refresh
+
+- **Lead Pipeline, Clients & Sites, Brief Studio, Lead Finder, and the selected-company Call Center now share one responsive design system.** Pipeline adds sticky sortable headers, a locked company column, compact cross-channel routing and latest-touch context, and a one-click return to last-updated order; client projects are grouped above prospects, portfolio and Brief Studio cards scale cleanly to mobile, Lead Finder gains a clearer search/review surface, and Call Center uses consistent Lucide icons, full-width execution panels, and responsive outcome controls. Backend + dashboard.
+
 ### Workspace settings and integration health
 
 - **The sidebar Settings and operator footer now open real workspace controls.** Agency OS persists general identity, calling/outreach composition, engagement thresholds, agency defaults, pricing references, service conventions, and writing guidance; new calling weeks consume the configured session size, score floor, and industry rotation. Integration cards report configuration health without exposing Worker secrets, System & Data shows live D1 totals and supports CSV export and manual Clarity sync, and the operator menu adds profile access, shortcut help, and Cloudflare Access sign-out. Backend + dashboard + migration (`2026-08-02-agency-settings.sql`, apply before deploy).

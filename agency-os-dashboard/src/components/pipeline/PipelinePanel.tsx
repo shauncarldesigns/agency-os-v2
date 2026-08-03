@@ -11,6 +11,7 @@ import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { AddLeadModal } from './AddLeadModal';
 import { QualifyLeadModal } from './QualifyLeadModal';
+import { ArrowLeft, FileUp, PhoneCall, Plus, Trash2 } from 'lucide-react';
 
 interface PipelinePanelProps {
   showToast: ShowToast;
@@ -162,37 +163,46 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
 
   return (
     <>
-      <div className="sec-header">
+      <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="sec-title">{view === 'trash' ? 'Pipeline — Trash' : 'Pipeline'}</div>
-          <div className="sec-sub">
+          <div className="text-base font-bold text-slate-900 sm:text-lg">{view === 'trash' ? 'Pipeline trash' : 'Prospect pipeline'}</div>
+          <div className="mt-1 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">
             {view === 'trash'
               ? 'Soft-deleted leads. Restore to move them back to the active pipeline.'
-              : 'Cold call tracker — every lead has tier recommendation, review-mined data, and pitch ammo ready'}
+              : 'Review prospect fit, outreach progress, latest activity, and the next best action.'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 7 }}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
           {view === 'active' ? (
             <>
-              <Button
-                variant={phoneFilter === 'review' ? 'primary' : 'ghost'}
-                size="sm"
+              <button
                 onClick={() => setPhoneFilter((current) => current === 'review' ? 'all' : 'review')}
                 title="Show leads whose phone route needs manual review"
+                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition sm:min-h-0 ${phoneFilter === 'review' ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
               >
-                Phone Review {phoneReviewCount > 0 ? `(${phoneReviewCount})` : ''}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setView('trash')}>
-                🗑 Trash {trashCount > 0 ? `(${trashCount})` : ''}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setImportOpen(true)}>↑ Import CSV</Button>
-              <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>+ Add Lead</Button>
+                <PhoneCall className="h-3.5 w-3.5" />
+                <span>Phone review</span>
+                {phoneReviewCount > 0 && <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phoneFilter === 'review' ? 'bg-white/20' : 'bg-amber-100 text-amber-700'}`}>{phoneReviewCount}</span>}
+              </button>
+              <button onClick={() => setView('trash')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 sm:min-h-0">
+                <Trash2 className="h-3.5 w-3.5" /> Trash {trashCount > 0 && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px]">{trashCount}</span>}
+              </button>
+              <button onClick={() => setImportOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 sm:min-h-0">
+                <FileUp className="h-3.5 w-3.5" /> Import CSV
+              </button>
+              <button onClick={() => setAddOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:min-h-0">
+                <Plus className="h-3.5 w-3.5" /> Add lead
+              </button>
             </>
           ) : (
-            <Button variant="primary" size="sm" onClick={() => setView('active')}>← Back to active pipeline</Button>
+            <button onClick={() => setView('active')} className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 sm:min-h-0">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to active pipeline
+            </button>
           )}
         </div>
-      </div>
+        </div>
+      </section>
 
       {view === 'active' && (
         <>

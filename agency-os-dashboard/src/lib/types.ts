@@ -71,6 +71,8 @@ export interface Lead {
   pipeline_sessions: number;                   // engagement counter (click-tracker + Clarity)
   pipeline_last_action_at: string | null;      // ISO timestamp — display string derived client-side
   pipeline_last_action?: string | null;        // derived latest non-undone activity action
+  pipeline_last_action_meta?: string | null;   // JSON metadata for that activity
+  pipeline_last_action_created_at?: string | null;
   pipeline_followup_step?: number;             // derived from Engaged follow-up activity
   pipeline_no_reply_step?: number;             // derived from Sent — No Reply activity
   pipeline_replied?: number;                   // 1 after a non-undone manual reply event
