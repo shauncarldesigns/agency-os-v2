@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { log, serverError } from '../utils/errors';
 import { syncClarityEngagement } from '../services/clarity';
+import { hasUsableGooglePlacesKey } from '../services/places';
 
 export const settingsRouter = new Hono<{ Bindings: Env }>();
 
@@ -9,8 +10,17 @@ interface SettingsRow {
   general_json: string;
   outreach_json: string;
   defaults_json: string;
+  discovery_json: string;
   updated_at: string;
 }
+
+export const HOME_SERVICE_INDUSTRIES = [
+  'Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting',
+  'Landscaping', 'Painting', 'Flooring', 'Concrete and Masonry', 'Siding',
+  'Gutters', 'Garage Doors', 'Fencing', 'Remodeling',
+  'Kitchen and Bathroom Remodeling', 'Water Damage Restoration',
+  'Pest Control', 'Tree Services', 'Septic Services', 'Drain and Sewer Services',
+] as const;
 
 const DEFAULTS = {
   general: {
@@ -34,6 +44,20 @@ const DEFAULTS = {
     companyVoice: 'Specific, local, plainspoken, and evidence-led.',
     bannedPhrases: ['premier', 'trusted', 'leading', 'passionate'],
   },
+  discovery: {
+    enabled: false,
+    websiteMode: 'no_website',
+    phoneRequired: true,
+    industries: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting'],
+    locations: ['Green Bay, WI', 'Appleton, WI'],
+    runDays: ['monday', 'wednesday', 'friday'],
+    localRunHour: 8,
+    maxCandidatesPerRun: 20,
+    inboxLimit: 50,
+    scoreFloor: 0,
+    suppressionDays: 90,
+    expirationDays: 30,
+  },
 };
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -45,14 +69,15 @@ function parseObject(raw: string): Record<string, unknown> {
   try { return objectValue(JSON.parse(raw)); } catch { return {}; }
 }
 
-async function readSettings(db: D1Database) {
+export async function readSettings(db: D1Database) {
   const row = await db.prepare(
-    'SELECT general_json, outreach_json, defaults_json, updated_at FROM agency_settings WHERE id = 1',
+    'SELECT general_json, outreach_json, defaults_json, discovery_json, updated_at FROM agency_settings WHERE id = 1',
   ).first<SettingsRow>();
   return {
     general: { ...DEFAULTS.general, ...parseObject(row?.general_json ?? '{}') },
     outreach: { ...DEFAULTS.outreach, ...parseObject(row?.outreach_json ?? '{}') },
     defaults: { ...DEFAULTS.defaults, ...parseObject(row?.defaults_json ?? '{}') },
+    discovery: { ...DEFAULTS.discovery, ...parseObject(row?.discovery_json ?? '{}') },
     updatedAt: row?.updated_at ?? null,
   };
 }
@@ -72,6 +97,7 @@ settingsRouter.put('/', async (c) => {
     const general = { ...current.general, ...objectValue(body.general) };
     const outreach = { ...current.outreach, ...objectValue(body.outreach) };
     const defaults = { ...current.defaults, ...objectValue(body.defaults) };
+    const discovery = { ...current.discovery, ...objectValue(body.discovery) };
 
     const sessionSize = Number(outreach.sessionSize);
     const scoreFloor = Number(outreach.scoreFloor);
@@ -84,14 +110,60 @@ settingsRouter.put('/', async (c) => {
     if (typeof general.operatorEmail !== 'string' || !general.operatorEmail.includes('@')) {
       return c.json({ error: 'Enter a valid operator email' }, 400);
     }
+    const industries = Array.isArray(discovery.industries) ? discovery.industries.filter((value): value is string => typeof value === 'string') : [];
+    const locations = Array.isArray(discovery.locations) ? discovery.locations.filter((value): value is string => typeof value === 'string' && value.trim().length > 0) : [];
+    if (industries.length === 0 || industries.some((industry) => !(HOME_SERVICE_INDUSTRIES as readonly string[]).includes(industry))) {
+      return c.json({ error: 'Lead Discovery industries must use the home-services list' }, 400);
+    }
+    if (locations.length === 0) return c.json({ error: 'Lead Discovery needs at least one search location' }, 400);
+    const maxCandidates = Number(discovery.maxCandidatesPerRun);
+    const inboxLimit = Number(discovery.inboxLimit);
+    const localRunHour = Number(discovery.localRunHour);
+    const discoveryScoreFloor = Number(discovery.scoreFloor);
+    const suppressionDays = Number(discovery.suppressionDays);
+    const expirationDays = Number(discovery.expirationDays);
+    const allowedRunDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    const runDays = Array.isArray(discovery.runDays)
+      ? discovery.runDays.filter((value): value is string => typeof value === 'string')
+      : [];
+    if (!Number.isFinite(maxCandidates) || maxCandidates < 1 || maxCandidates > 60) {
+      return c.json({ error: 'Candidates per run must be between 1 and 60' }, 400);
+    }
+    if (!Number.isFinite(inboxLimit) || inboxLimit < 10 || inboxLimit > 500) {
+      return c.json({ error: 'Pending inbox limit must be between 10 and 500' }, 400);
+    }
+    if (!Number.isInteger(localRunHour) || localRunHour < 0 || localRunHour > 23) {
+      return c.json({ error: 'Lead Discovery run hour must be between 0 and 23' }, 400);
+    }
+    if (!runDays.length || runDays.some((day) => !allowedRunDays.includes(day))) {
+      return c.json({ error: 'Lead Discovery needs at least one weekday' }, 400);
+    }
+    if (!Number.isFinite(discoveryScoreFloor) || discoveryScoreFloor < 0 || discoveryScoreFloor > 100) {
+      return c.json({ error: 'Lead Discovery score floor must be between 0 and 100' }, 400);
+    }
+    if (!Number.isInteger(suppressionDays) || suppressionDays < 1 || suppressionDays > 365) {
+      return c.json({ error: 'Rejected suppression must be between 1 and 365 days' }, 400);
+    }
+    if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 180) {
+      return c.json({ error: 'Unreviewed expiration must be between 1 and 180 days' }, 400);
+    }
+    discovery.websiteMode = 'no_website';
+    discovery.industries = industries;
+    discovery.locations = locations;
+    discovery.runDays = runDays;
+    discovery.localRunHour = localRunHour;
+    discovery.scoreFloor = discoveryScoreFloor;
+    discovery.suppressionDays = suppressionDays;
+    discovery.expirationDays = expirationDays;
 
     await c.env.DB.prepare(`
-      INSERT INTO agency_settings (id, general_json, outreach_json, defaults_json, updated_at)
-      VALUES (1, ?, ?, ?, datetime('now'))
+      INSERT INTO agency_settings (id, general_json, outreach_json, defaults_json, discovery_json, updated_at)
+      VALUES (1, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET general_json=excluded.general_json,
         outreach_json=excluded.outreach_json, defaults_json=excluded.defaults_json,
+        discovery_json=excluded.discovery_json,
         updated_at=datetime('now')
-    `).bind(JSON.stringify(general), JSON.stringify(outreach), JSON.stringify(defaults)).run();
+    `).bind(JSON.stringify(general), JSON.stringify(outreach), JSON.stringify(defaults), JSON.stringify(discovery)).run();
     return c.json({ settings: await readSettings(c.env.DB) });
   } catch (err) {
     log('error', 'settings', 'PUT /settings failed', err);
@@ -113,7 +185,7 @@ settingsRouter.get('/health', async (c) => {
     const configured = (value: string | undefined) => Boolean(value?.trim());
     const integrations = [
       { id: 'anthropic', name: 'Anthropic', configured: configured(c.env.CLAUDE_API_KEY), detail: 'Briefs, review mining, and rebuttals' },
-      { id: 'google', name: 'Google Places & PageSpeed', configured: configured(c.env.GOOGLE_PLACES_API_KEY), detail: 'Prospecting and performance data' },
+      { id: 'google', name: 'Google Places & PageSpeed', configured: hasUsableGooglePlacesKey(c.env.GOOGLE_PLACES_API_KEY), detail: hasUsableGooglePlacesKey(c.env.GOOGLE_PLACES_API_KEY) ? 'Prospecting and performance data' : 'A valid Google Places API key is required' },
       { id: 'gsc', name: 'Google Search Console', configured: configured(c.env.GOOGLE_OAUTH_REFRESH_TOKEN), detail: 'Client search reporting' },
       { id: 'outscraper', name: 'Outscraper', configured: configured(c.env.OUTSCRAPER_API_KEY), optional: true, detail: 'Extended Google review history' },
       { id: 'cloudflare', name: 'Cloudflare DNS', configured: configured(c.env.CLOUDFLARE_API_TOKEN) && configured(c.env.CLOUDFLARE_ACCOUNT_ID), detail: `${dns?.n ?? 0} zones awaiting delegation` },

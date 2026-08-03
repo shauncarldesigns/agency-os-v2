@@ -3,7 +3,7 @@ import type {
   Brief, BriefSummary, BrandAttribute, BrandAttributeCategory, BrandAttributeSource,
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
-  AgencySettings, SettingsHealth,
+  AgencySettings, SettingsHealth, ProspectCandidate, ProspectInboxSummary,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -187,7 +187,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 export const api = {
   settings: {
     get: () => apiFetch<{ settings: AgencySettings }>('/api/settings'),
-    update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults'>) =>
+    update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults' | 'discovery'>) =>
       apiFetch<{ settings: AgencySettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(settings) }),
     health: () => apiFetch<SettingsHealth>('/api/settings/health'),
     claritySync: () => apiFetch<{ checked: number; matched: number; updated: number; skipped: number; error?: string }>('/api/settings/clarity-sync', { method: 'POST' }),
@@ -287,6 +287,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ placeIds }),
       }),
+    candidates: (status: ProspectCandidate['status'] = 'pending') =>
+      apiFetch<{ candidates: ProspectCandidate[] }>(`/api/prospect/candidates${qs({ status })}`),
+    inboxSummary: () => apiFetch<ProspectInboxSummary>('/api/prospect/inbox-summary'),
+    approveCandidates: (ids: number[]) =>
+      apiFetch<{ added: number; skipped: number; errors: string[] }>('/api/prospect/candidates/approve', { method: 'POST', body: JSON.stringify({ ids }) }),
+    rejectCandidates: (ids: number[]) =>
+      apiFetch<{ rejected: number }>('/api/prospect/candidates/reject', { method: 'POST', body: JSON.stringify({ ids }) }),
+    runDiscovery: (input?: { industry?: string; location?: string }) =>
+      apiFetch<{ status: string; reason?: string; newCandidates: number; refreshedCandidates: number; resultsFound: number }>('/api/prospect/run-now', { method: 'POST', body: JSON.stringify(input ?? {}) }),
   },
   projects: {
     list: (filters?: { tier?: number; status?: string }) =>

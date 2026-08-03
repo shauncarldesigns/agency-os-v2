@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-02. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-03. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,25 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Automated Lead Finder inbox (2026-08-03)
+
+- Lead Finder now has a durable `prospect_candidates` review inbox and
+  `prospect_search_runs` audit history. Migration:
+  `2026-08-03-automated-lead-finder.sql`.
+- Targeting is intentionally locked to businesses without a website and a
+  server-curated home-services list. Settings controls enabled state, M/W/F-style
+  schedule, local hour, industries, locations, phone requirement, score floor,
+  run/inbox limits, rejection suppression, and candidate expiration.
+- The existing hourly Worker trigger checks the configured local weekday/hour;
+  scheduled keys make retries idempotent and the profile rotation advances only
+  after completed scheduled runs. Discovery is disabled by default.
+- The responsive inbox supports manual discovery and bulk approve/reject up to
+  25 candidates. Approval refetches Google details and rejects candidates that
+  acquired a website or lack a phone before creating a cold pipeline lead.
+- Local discovery requires a real `GOOGLE_PLACES_API_KEY` in `.dev.vars`; the
+  checked-in/local placeholder is reported as disconnected rather than failing
+  with a generic Google 400.
 
 ## Access security hardening (2026-08-02)
 
@@ -222,14 +241,19 @@ QA each one.
 
 ### Open items carried from prior sessions
 
-1. Runtime demo scripts vs `docs/practice-demo-calls.md` drift — pending
+1. Retire the public `agency-os-v2-dashboard.pages.dev` hostname after the
+   custom app domain rollout: add a Cloudflare Bulk Redirect (preserve paths
+   and query strings, include preview subdomains unless previews remain
+   intentionally available), make `app.shauncarldesigns.com` canonical in
+   repo docs, and verify the Pages hostname can no longer bypass Access.
+2. Runtime demo scripts vs `docs/practice-demo-calls.md` drift — pending
    operator decision.
-2. HVAC pool empty (sessions composing for `hvac_contractor` find nothing).
-3. `reviewExtraction.ts` still requests unused `differentiators` field.
-4. Pitch card backfill — many leads still have null `pitch_card_text`.
-5. `voicemail.md` playbook script still missing content.
-6. Generated-variant promotion workflow (playbook_generations → markdown).
-7. Auto-project-on-booked can double-create projects.
+3. HVAC pool empty (sessions composing for `hvac_contractor` find nothing).
+4. `reviewExtraction.ts` still requests unused `differentiators` field.
+5. Pitch card backfill — many leads still have null `pitch_card_text`.
+6. `voicemail.md` playbook script still missing content.
+7. Generated-variant promotion workflow (playbook_generations → markdown).
+8. Auto-project-on-booked can double-create projects.
 
 ## Recent quirks worth remembering
 

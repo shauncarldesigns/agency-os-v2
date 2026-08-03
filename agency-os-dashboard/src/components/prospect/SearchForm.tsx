@@ -24,7 +24,7 @@ export function SearchForm({ onSearch, loading }: SearchFormProps) {
   const [location, setLocation] = useState('Green Bay, WI');
   const [industry, setIndustry] = useState('');
   const [radius, setRadius] = useState<number>(40234); // 25 mi default
-  const [noWebsiteOnly, setNoWebsiteOnly] = useState<boolean>(false);
+  const [noWebsiteOnly, setNoWebsiteOnly] = useState<boolean>(true);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

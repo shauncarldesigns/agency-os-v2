@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Automated Lead Finder inbox
+
+- **Lead Finder can now discover no-website home-service prospects on a configurable schedule and hold them for operator review.** Settings controls the enabled weekdays, local run hour, approved industries, search locations, phone requirement, score floor, run size, inbox capacity, rejection suppression, and expiration without a redeploy. The responsive prospect inbox supports manual runs plus bulk approval or rejection, rechecks website and phone eligibility before pipeline entry, suppresses duplicates, rotates profiles idempotently through the existing hourly Worker trigger, and reports invalid local Google Places credentials clearly. Backend + dashboard + migration (`2026-08-03-automated-lead-finder.sql`, apply before deploy).
+
 ### Core workspace UI refresh
 
 - **Lead Pipeline, Clients & Sites, Brief Studio, Lead Finder, and the selected-company Call Center now share one responsive design system.** Pipeline adds sticky sortable headers, a locked company column, compact cross-channel routing and latest-touch context, and a one-click return to last-updated order; client projects are grouped above prospects, portfolio and Brief Studio cards scale cleanly to mobile, Lead Finder gains a clearer search/review surface, and Call Center uses consistent Lucide icons, full-width execution panels, and responsive outcome controls. Backend + dashboard.

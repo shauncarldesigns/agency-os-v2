@@ -409,7 +409,36 @@ export interface AgencySettings {
     serviceAreas: string[]; reportSenderName: string; reportSenderEmail: string;
     companyVoice: string; bannedPhrases: string[];
   };
+  discovery: {
+    enabled: boolean;
+    websiteMode: 'no_website';
+    phoneRequired: boolean;
+    industries: string[];
+    locations: string[];
+    runDays: string[];
+    localRunHour: number;
+    maxCandidatesPerRun: number;
+    inboxLimit: number;
+    scoreFloor: number;
+    suppressionDays: number;
+    expirationDays: number;
+  };
   updatedAt: string | null;
+}
+
+export interface ProspectCandidate {
+  id: number; place_id: string; company: string; phone: string | null; website: string | null;
+  address: string | null; city: string | null; state: string | null; industry: string;
+  search_location: string; google_rating: number | null; google_review_count: number | null;
+  gbp_claimed: number; gbp_photos_count: number; opportunity_score: number;
+  recommended_tier: 1 | 2 | 3; score_reasoning: string | null;
+  source: 'automated' | 'manual'; status: 'pending' | 'approved' | 'rejected' | 'expired';
+  first_seen_at: string; last_seen_at: string; lead_id: number | null;
+}
+
+export interface ProspectInboxSummary {
+  pending: number; newToday: number; approvedThisWeek: number; rejected: number;
+  lastRun: { id: number; status: string; industry: string; search_location: string; started_at: string; new_candidates: number; error_message: string | null } | null;
 }
 
 export interface SettingsHealth {

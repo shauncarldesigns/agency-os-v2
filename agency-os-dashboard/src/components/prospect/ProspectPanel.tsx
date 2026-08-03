@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import type { ProspectResult, ShowToast } from '../../lib/types';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import type { ProspectCandidate, ProspectInboxSummary, ProspectResult, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { SearchForm, type SearchInput } from './SearchForm';
 import { ResultsTable } from './ResultsTable';
@@ -7,6 +7,7 @@ import { FilterPills, type ProspectFilter, type SortBy } from './FilterPills';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { Search, Sparkles } from 'lucide-react';
+import { CandidateInbox } from './CandidateInbox';
 
 interface ProspectPanelProps {
   showToast: ShowToast;
@@ -24,6 +25,87 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
   const [sortBy, setSortBy] = useState<SortBy>('score');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+  const [candidates, setCandidates] = useState<ProspectCandidate[]>([]);
+  const [inboxSummary, setInboxSummary] = useState<ProspectInboxSummary | null>(null);
+  const [inboxLoading, setInboxLoading] = useState(true);
+  const [runningDiscovery, setRunningDiscovery] = useState(false);
+  const [inboxActing, setInboxActing] = useState(false);
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<number>>(new Set());
+
+  const loadInbox = useCallback(async () => {
+    setInboxLoading(true);
+    try {
+      const [candidateResponse, summaryResponse] = await Promise.all([
+        api.prospect.candidates(),
+        api.prospect.inboxSummary(),
+      ]);
+      setCandidates(candidateResponse.candidates);
+      setInboxSummary(summaryResponse);
+      setSelectedCandidates((previous) => new Set([...previous].filter((id) => candidateResponse.candidates.some((candidate) => candidate.id === id))));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not load prospect inbox: ${msg}`, 'error');
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { void loadInbox(); }, [loadInbox]);
+
+  async function handleRunDiscovery() {
+    setRunningDiscovery(true);
+    try {
+      const result = await api.prospect.runDiscovery();
+      const message = result.reason === 'inbox_limit'
+        ? 'Inbox is at its configured limit. Review candidates before searching again.'
+        : `Discovery complete · ${result.newCandidates} new · ${result.refreshedCandidates} refreshed`;
+      showToast(message, result.reason ? 'default' : 'success');
+      await loadInbox();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Discovery failed: ${msg}`, 'error');
+    } finally {
+      setRunningDiscovery(false);
+    }
+  }
+
+  function toggleCandidate(id: number) {
+    setSelectedCandidates((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id); else if (next.size < 25) next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllCandidates() {
+    const selectable = candidates.slice(0, 25).map((candidate) => candidate.id);
+    const allSelected = selectable.every((id) => selectedCandidates.has(id));
+    setSelectedCandidates(allSelected ? new Set() : new Set(selectable));
+  }
+
+  async function handleCandidateAction(action: 'approve' | 'reject') {
+    const ids = [...selectedCandidates].slice(0, 25);
+    if (!ids.length) return;
+    setInboxActing(true);
+    try {
+      if (action === 'approve') {
+        const result = await api.prospect.approveCandidates(ids);
+        showToast(`${result.added} lead${result.added === 1 ? '' : 's'} added to the pipeline${result.skipped ? ` · ${result.skipped} skipped` : ''}`, result.added ? 'success' : 'default');
+        if (result.errors.length) showToast(result.errors[0], 'error');
+        if (result.added) onLeadAdded?.();
+      } else {
+        const result = await api.prospect.rejectCandidates(ids);
+        showToast(`${result.rejected} candidate${result.rejected === 1 ? '' : 's'} rejected`, 'success');
+      }
+      setSelectedCandidates(new Set());
+      await loadInbox();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`${action === 'approve' ? 'Approval' : 'Rejection'} failed: ${msg}`, 'error');
+    } finally {
+      setInboxActing(false);
+    }
+  }
 
   async function handleSearch(input: SearchInput) {
     setSearching(true);
@@ -137,6 +219,21 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
 
       <SearchForm onSearch={handleSearch} loading={searching} />
 
+      <CandidateInbox
+        candidates={candidates}
+        summary={inboxSummary}
+        loading={inboxLoading}
+        running={runningDiscovery}
+        acting={inboxActing}
+        selected={selectedCandidates}
+        onToggle={toggleCandidate}
+        onSelectAll={selectAllCandidates}
+        onRun={handleRunDiscovery}
+        onApprove={() => void handleCandidateAction('approve')}
+        onReject={() => void handleCandidateAction('reject')}
+        onRefresh={() => void loadInbox()}
+      />
+
       {hasSearched && (
         <>
           <FilterPills
@@ -165,10 +262,10 @@ export function ProspectPanel({ showToast, onLeadAdded }: ProspectPanelProps) {
       )}
 
       {!hasSearched && (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Search size={22} /></span>
-          <h2 className="mt-4 text-sm font-semibold text-slate-800">Search for new leads</h2>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Results are scored from 0–100 using website quality, Google Business Profile completeness, and review activity, then assigned a recommended pricing tier.</p>
+          <h2 className="mt-4 text-sm font-semibold text-slate-800">Need a one-off search?</h2>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Use the search form above for a specific trade or location. Scheduled discovery results appear in the prospect inbox.</p>
         </div>
       )}
     </>

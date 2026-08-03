@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, serverError, log } from '../utils/errors';
 import { searchPlaces, getPlaceDetails, type PlaceResult } from '../services/places';
-import { calculateOpportunityScore } from '../services/scoring';
+import { approveCandidates, discoverCandidates, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
+import { readSettings } from './settings';
 
 export const prospectRouter = new Hono<{ Bindings: Env }>();
 
@@ -44,29 +45,7 @@ prospectRouter.post('/search', async (c) => {
       existing = new Set((rows.results as Array<{ place_id: string }>).map(r => r.place_id));
     }
 
-    const results: ProspectSearchResult[] = search.places.map(p => {
-      const score = calculateOpportunityScore({
-        hasWebsite: !!p.website,
-        pagespeedMobile: null,
-        pagespeedDesktop: null,
-        gbpClaimed: p.claimed,
-        gbpPhotos: p.photoCount,
-        gbpHasDescription: p.hasDescription,
-        gbpHasHours: p.hasHours,
-        reviewCount: p.reviewCount ?? 0,
-        rating: p.rating,
-        recentReviewActivity: false,
-        yearsInBusiness: null,
-      });
-
-      return {
-        ...p,
-        alreadyInPipeline: existing.has(p.placeId),
-        opportunityScore: score.score,
-        recommendedTier: score.tier,
-        reasoning: score.reasoning,
-      };
-    });
+    const results: ProspectSearchResult[] = search.places.map(p => toProspectResult(p, existing.has(p.placeId)));
 
     // Sort by opportunity score desc, then unclaimed first
     results.sort((a, b) => {
@@ -83,6 +62,93 @@ prospectRouter.post('/search', async (c) => {
   } catch (err) {
     log('error', 'prospect', 'POST /prospect/search failed', err);
     return c.json(serverError(`Search failed: ${(err as Error).message}`), 500);
+  }
+});
+
+prospectRouter.get('/candidates', async (c) => {
+  try {
+    const status = c.req.query('status') ?? 'pending';
+    if (!['pending', 'approved', 'rejected', 'expired'].includes(status)) return c.json(badRequest('Invalid candidate status'), 400);
+    const rows = await c.env.DB.prepare(`
+      SELECT * FROM prospect_candidates WHERE status = ?
+      ORDER BY opportunity_score DESC, first_seen_at DESC LIMIT 200
+    `).bind(status).all();
+    return c.json({ candidates: rows.results });
+  } catch (err) {
+    log('error', 'prospect', 'GET /prospect/candidates failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+prospectRouter.get('/inbox-summary', async (c) => {
+  try {
+    const [counts, lastRun] = await c.env.DB.batch([
+      c.env.DB.prepare(`SELECT
+        SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status='pending' AND date(first_seen_at)=date('now') THEN 1 ELSE 0 END) AS newToday,
+        SUM(CASE WHEN status='approved' AND approved_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS approvedThisWeek,
+        SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejected
+        FROM prospect_candidates`),
+      c.env.DB.prepare(`SELECT id, status, industry, search_location, started_at, new_candidates, error_message
+        FROM prospect_search_runs ORDER BY started_at DESC LIMIT 1`),
+    ]);
+    const row = (counts.results[0] ?? {}) as Record<string, number | null>;
+    return c.json({
+      pending: Number(row.pending ?? 0), newToday: Number(row.newToday ?? 0),
+      approvedThisWeek: Number(row.approvedThisWeek ?? 0), rejected: Number(row.rejected ?? 0),
+      lastRun: lastRun.results[0] ?? null,
+    });
+  } catch (err) {
+    log('error', 'prospect', 'GET /prospect/inbox-summary failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+prospectRouter.post('/candidates/approve', async (c) => {
+  try {
+    const body = await c.req.json() as { ids?: number[] };
+    if (!Array.isArray(body.ids) || body.ids.length === 0) return c.json(badRequest('ids array required'), 400);
+    return c.json(await approveCandidates(c.env, body.ids.map(Number).filter(Number.isInteger)));
+  } catch (err) {
+    log('error', 'prospect', 'POST /prospect/candidates/approve failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+prospectRouter.post('/candidates/reject', async (c) => {
+  try {
+    const body = await c.req.json() as { ids?: number[] };
+    const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger).slice(0, 200) : [];
+    if (!ids.length) return c.json(badRequest('ids array required'), 400);
+    const settings = await readSettings(c.env.DB);
+    const days = Math.max(1, Number((settings.discovery as Record<string, unknown>).suppressionDays ?? 90));
+    const statement = c.env.DB.prepare(`
+      UPDATE prospect_candidates SET status='rejected', rejected_at=datetime('now'),
+        suppression_until=datetime('now', ?), updated_at=datetime('now')
+      WHERE id=? AND status='pending'
+    `);
+    const results = await c.env.DB.batch(ids.map((id) => statement.bind(`+${days} days`, id)));
+    return c.json({ rejected: results.reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0) });
+  } catch (err) {
+    log('error', 'prospect', 'POST /prospect/candidates/reject failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+prospectRouter.post('/run-now', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as { industry?: string; location?: string };
+    const settings = await readSettings(c.env.DB);
+    const discovery = settings.discovery as unknown as DiscoverySettings;
+    const industry = body.industry ?? discovery.industries[0];
+    const location = body.location ?? discovery.locations[0];
+    if (!discovery.industries.includes(industry) || !discovery.locations.includes(location)) {
+      return c.json(badRequest('Choose an enabled home-service industry and location'), 400);
+    }
+    return c.json(await discoverCandidates(c.env, { industry, location, triggerType: 'manual', settings: discovery }));
+  } catch (err) {
+    log('error', 'prospect', 'POST /prospect/run-now failed', err);
+    return c.json(serverError(`Discovery failed: ${(err as Error).message}`), 500);
   }
 });
 
