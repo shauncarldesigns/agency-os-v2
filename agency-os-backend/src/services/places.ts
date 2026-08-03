@@ -2,6 +2,20 @@ import { log } from '../utils/errors';
 
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
+export function hasUsableGooglePlacesKey(value: string | undefined): boolean {
+  const key = value?.trim() ?? '';
+  return key.length >= 20 && !/^(stub|placeholder|test|replace[-_ ]?me)$/i.test(key);
+}
+
+function googleErrorMessage(raw: string, fallback: string): string {
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } };
+    return parsed.error?.message?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export interface GoogleReview {
   author: string;
   rating: number;
@@ -135,6 +149,9 @@ export async function searchPlaces(
   location: string,
   options?: { pageToken?: string | null; maxPages?: number }
 ): Promise<SearchPlacesResult> {
+  if (!hasUsableGooglePlacesKey(apiKey)) {
+    throw new Error('Google Places is not configured for the local Worker. Add a valid GOOGLE_PLACES_API_KEY to agency-os-backend/.dev.vars, then restart the backend dev server.');
+  }
   const MAX_PAGES = options?.maxPages ?? 3;
   let pageToken: string | null | undefined = options?.pageToken ?? null;
   let pagesFetched = 0;
@@ -160,7 +177,7 @@ export async function searchPlaces(
     if (!res.ok) {
       const err = await res.text();
       log('error', 'places', `searchText failed: ${res.status}`, { err, page: pagesFetched });
-      throw new Error(`Google Places API error: ${res.status}`);
+      throw new Error(`Google Places search failed: ${googleErrorMessage(err, `HTTP ${res.status}`)}`);
     }
 
     const data = (await res.json()) as {
@@ -185,6 +202,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function getPlaceDetails(apiKey: string, placeId: string): Promise<PlaceDetails> {
+  if (!hasUsableGooglePlacesKey(apiKey)) {
+    throw new Error('Google Places is not configured for the local Worker. Add a valid GOOGLE_PLACES_API_KEY to agency-os-backend/.dev.vars, then restart the backend dev server.');
+  }
   const res = await fetch(`${PLACES_BASE}/places/${placeId}`, {
     headers: {
       'X-Goog-Api-Key': apiKey,
@@ -195,7 +215,7 @@ export async function getPlaceDetails(apiKey: string, placeId: string): Promise<
   if (!res.ok) {
     const err = await res.text();
     log('error', 'places', `getDetails failed: ${res.status}`, { err, placeId });
-    throw new Error(`Google Places detail fetch failed: ${res.status}`);
+    throw new Error(`Google Places detail fetch failed: ${googleErrorMessage(err, `HTTP ${res.status}`)}`);
   }
 
   const p = await res.json() as Record<string, unknown>;

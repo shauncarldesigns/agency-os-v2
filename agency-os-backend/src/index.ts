@@ -26,6 +26,7 @@ import { emailOutreachRouter, publicEmailRouter } from './routes/emailOutreach';
 import { syncClarityEngagement } from './services/clarity';
 import { processDueEmailAutomations } from './services/emailAutomation';
 import { settingsRouter } from './routes/settings';
+import { runScheduledDiscovery } from './services/prospectDiscovery';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -114,7 +115,14 @@ export default {
       // nameserver delegation. Flips dns_status pending→active when CF
       // reports the zone is active. Partial index makes this cheap when
       // there are zero pending projects.
-      ctx.waitUntil(pollPendingDnsZones(env).then(out => log('info', 'cron', `DNS poll run`, { count: out.length })));
+      ctx.waitUntil(Promise.all([
+        pollPendingDnsZones(env).then(out => log('info', 'cron', `DNS poll run`, { count: out.length })),
+        runScheduledDiscovery(env, event.scheduledTime)
+          .then(out => {
+            if (out.reason !== 'not_due' && out.reason !== 'disabled') log('info', 'cron', 'Lead discovery run', out);
+          })
+          .catch(error => log('error', 'cron', 'Lead discovery run failed', error)),
+      ]));
     } else if (event.cron === '15 */4 * * *') {
       // Six scheduled exports/day leaves headroom under Clarity's 10/day
       // project quota for manual validation without sacrificing the

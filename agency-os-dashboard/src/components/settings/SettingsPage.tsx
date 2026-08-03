@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import {
   Building2, PhoneCall, SlidersHorizontal, PlugZap, Database, CheckCircle2,
   AlertCircle, RefreshCw, Download, Save, ShieldCheck,
+  SearchCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { AgencySettings, SettingsHealth, ShowToast } from '../../lib/types';
 
-type Section = 'general' | 'outreach' | 'defaults' | 'integrations' | 'system';
+type Section = 'general' | 'outreach' | 'discovery' | 'defaults' | 'integrations' | 'system';
 
 const sections: Array<{ id: Section; label: string; icon: typeof Building2 }> = [
   { id: 'general', label: 'General', icon: Building2 },
   { id: 'outreach', label: 'Calling & outreach', icon: PhoneCall },
+  { id: 'discovery', label: 'Lead discovery', icon: SearchCheck },
   { id: 'defaults', label: 'Agency defaults', icon: SlidersHorizontal },
   { id: 'integrations', label: 'Integrations', icon: PlugZap },
   { id: 'system', label: 'System & data', icon: Database },
@@ -39,7 +41,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
     finally { setLoading(false); }
   }
 
-  function patch<K extends 'general' | 'outreach' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) {
+  function patch<K extends 'general' | 'outreach' | 'discovery' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) {
     setSettings((current) => current ? { ...current, [group]: { ...current[group], ...values } } : current);
   }
 
@@ -47,7 +49,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
     if (!settings) return;
     setSaving(true);
     try {
-      const result = await api.settings.update({ general: settings.general, outreach: settings.outreach, defaults: settings.defaults });
+      const result = await api.settings.update({ general: settings.general, outreach: settings.outreach, discovery: settings.discovery, defaults: settings.defaults });
       setSettings(result.settings);
       onProfileChanged(result.settings.general);
       showToast('Settings saved', 'success');
@@ -107,6 +109,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
           {active === 'general' && <General settings={settings} patch={patch} />}
           {active === 'outreach' && <Outreach settings={settings} patch={patch} />}
+          {active === 'discovery' && <Discovery settings={settings} patch={patch} />}
           {active === 'defaults' && <Defaults settings={settings} patch={patch} />}
           {active === 'integrations' && <Integrations health={health} syncing={syncing} onRefresh={load} onSync={syncClarity} />}
           {active === 'system' && <System health={health} onExport={exportLeads} onRefresh={load} />}
@@ -116,7 +119,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
   );
 }
 
-type Patch = <K extends 'general' | 'outreach' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) => void;
+type Patch = <K extends 'general' | 'outreach' | 'discovery' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) => void;
 
 function General({ settings: s, patch }: { settings: AgencySettings; patch: Patch }) {
   return <div>
@@ -158,6 +161,42 @@ function Outreach({ settings: s, patch }: { settings: AgencySettings; patch: Pat
     <Divider />
     <TagEditor label="Industry rotation" value={s.outreach.industryRotation} onChange={v => patch('outreach', { industryRotation: v })} />
     <div className="mt-5"><TagEditor label="Default geographic filters" value={s.outreach.geographicFilters} placeholder="Add a city or state" onChange={v => patch('outreach', { geographicFilters: v })} /></div>
+  </div>;
+}
+
+const homeServiceIndustries = [
+  'Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting',
+  'Landscaping', 'Painting', 'Flooring', 'Concrete and Masonry', 'Siding',
+  'Gutters', 'Garage Doors', 'Fencing', 'Remodeling',
+  'Kitchen and Bathroom Remodeling', 'Water Damage Restoration',
+  'Pest Control', 'Tree Services', 'Septic Services', 'Drain and Sewer Services',
+];
+
+function Discovery({ settings: s, patch }: { settings: AgencySettings; patch: Patch }) {
+  const d = s.discovery;
+  return <div>
+    <Heading title="Lead discovery" sub="Control the automated no-website home-services prospect inbox. Changes apply without a deployment." />
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div><h4 className="text-sm font-semibold text-slate-800">Automated discovery</h4><p className="mt-1 text-xs leading-5 text-slate-500">Runs only on the selected days and pauses automatically when the pending inbox is full. Click Save changes after switching this on.</p></div>
+      <button type="button" role="switch" aria-checked={d.enabled} onClick={() => patch('discovery', { enabled: !d.enabled })} className={`relative h-6 w-11 shrink-0 rounded-full transition ${d.enabled ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${d.enabled ? 'left-6' : 'left-1'}`} /></button>
+    </div>
+    <Divider />
+    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Current targeting</p><p className="mt-1 text-sm font-semibold text-blue-950">Home services · no website · manual approval required</p><p className="mt-1 text-xs leading-5 text-blue-700">Website targeting is intentionally locked to no-website businesses for this first version. Candidates are rechecked before approval. Google Places must show as connected under Integrations for searches to run.</p></div>
+    <Divider />
+    <h4 className="mb-3 text-sm font-semibold text-slate-800">Schedule and capacity</h4>
+    <ChoiceGroup label="Run days" options={['monday', 'tuesday', 'wednesday', 'thursday', 'friday']} value={d.runDays} onChange={v => patch('discovery', { runDays: v })} />
+    <Grid>
+      <Field label="Local run hour"><Select value={String(d.localRunHour)} options={Array.from({ length: 12 }, (_, i) => String(i + 6))} onChange={v => patch('discovery', { localRunHour: Number(v) })} /></Field>
+      <Field label="Candidates per run"><NumberInput value={d.maxCandidatesPerRun} min={1} max={60} onChange={v => patch('discovery', { maxCandidatesPerRun: v })} /></Field>
+      <Field label="Pending inbox maximum"><NumberInput value={d.inboxLimit} min={10} max={500} onChange={v => patch('discovery', { inboxLimit: v })} /></Field>
+      <Field label="Minimum opportunity score"><NumberInput value={d.scoreFloor} min={0} max={100} onChange={v => patch('discovery', { scoreFloor: v })} /></Field>
+      <Field label="Rejected suppression (days)"><NumberInput value={d.suppressionDays} min={1} max={365} onChange={v => patch('discovery', { suppressionDays: v })} /></Field>
+      <Field label="Unreviewed expiration (days)"><NumberInput value={d.expirationDays} min={1} max={180} onChange={v => patch('discovery', { expirationDays: v })} /></Field>
+    </Grid>
+    <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3"><input type="checkbox" checked={d.phoneRequired} onChange={e => patch('discovery', { phoneRequired: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-blue-600" /><span><span className="block text-sm font-medium text-slate-700">Require a phone number</span><span className="block text-xs text-slate-500">Recommended so every approved lead is immediately actionable.</span></span></label>
+    <Divider />
+    <TagEditor label="Search locations" value={d.locations} placeholder="Add city, state" onChange={v => patch('discovery', { locations: v })} />
+    <div className="mt-6"><ChoiceGroup label="Allowed home-service industries" options={homeServiceIndustries} value={d.industries} onChange={v => patch('discovery', { industries: v })} /></div>
   </div>;
 }
 
