@@ -288,10 +288,10 @@ export function LeadDetailModal({
                         onQualify?.(lead);
                         onClose();
                       }}
-                      title="Book a demo — creates a Sites prospect project"
+                      title="They signed — create their client workspace"
                       className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 hover:shadow-md"
                     >
-                      Book demo
+                      Convert to client
                     </button>
                   )}
                 </div>
@@ -444,10 +444,10 @@ export function LeadDetailModal({
                         onQualify(lead);
                         onClose();
                       }}
-                      title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
+                      title="They signed — create the client workspace and preserve the outreach assets"
                       className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-blue-600/20 hover:shadow-md"
                     >
-                      → Book demo
+                      → Convert to client
                     </button>
                   )}
                 {(lead.status === 'qualified' || lead.status === 'client') && lead.project_id && (
@@ -1372,6 +1372,7 @@ function activityTitle(action: string): string {
     case 'automation_stopped': return 'Email automation stopped';
     case 'url_saved': return 'Site URL saved';
     case 'brief_generated': return 'Brief generated';
+    case 'client_converted': return 'Converted to client';
     case 'intro_sent': return 'Intro text sent';
     case 'followed_up': return 'Follow-up text sent';
     case 'call_outcome': return 'Call outcome recorded';
@@ -1425,6 +1426,7 @@ function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): 
     const model = typeof meta.model === 'string' ? meta.model : null;
     return model ? `Generated with ${model}` : 'Generated and saved to this lead';
   }
+  if (activity.action === 'client_converted') return 'Signed deal converted into a client workspace; outreach automation was stopped and demo assets were preserved.';
   if (activity.action === 'url_saved') return 'This is the demo-site URL saved for outreach.';
   if (activity.action === 'intro_sent') return 'First text opened in Messages.';
   if (activity.action === 'followed_up') return 'Follow-up text opened in Messages.';

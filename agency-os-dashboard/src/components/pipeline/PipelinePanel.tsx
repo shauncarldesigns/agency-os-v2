@@ -16,7 +16,7 @@ import { ArrowLeft, FileUp, PhoneCall, Plus, Trash2 } from 'lucide-react';
 interface PipelinePanelProps {
   showToast: ShowToast;
   onLeadCountChanged?: () => void;
-  /** Called when a lead is qualified into a project. App-level handler decides
+  /** Called when a signed lead is converted into a project. App-level handler decides
    *  whether to switch to the Sites tab and (for Tier 3) deep-link to the new
    *  project's Brief Studio. */
   onQualified?: (project: Project, tier: 1 | 2 | 3) => void;

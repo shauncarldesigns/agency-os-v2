@@ -4,6 +4,7 @@ import type {
   Testimonial, TestimonialSource,
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
   AgencySettings, SettingsHealth, ProspectCandidate, ProspectInboxSummary,
+  GrowthCycle, GrowthWorkItem, GrowthPhase, GrowthWorkCategory, GrowthWorkStatus, GrowthStrategy, OnboardingItem, PageSearchMetrics, PageInsights,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -268,6 +269,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    convertToClient: (id: number, input: {
+      tier: 1 | 2 | 3;
+      initialStatus: 'building' | 'live';
+      contractStart: string;
+      clientEmail?: string;
+      note?: string;
+    }) => apiFetch<{ lead: Lead; project: Project }>(`/api/leads/${id}/convert-to-client`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
     /**
      * Bulk enrich. Two modes:
      * - `ids` provided → re-enrich those specific leads regardless of current
@@ -345,6 +356,31 @@ export const api = {
       clear: (id: number) =>
         apiFetch<void>(`/api/projects/${id}/discovery`, { method: 'DELETE' }),
     },
+    growthCycles: {
+      current: (id: number) =>
+        apiFetch<{ cycle: GrowthCycle | null; items: GrowthWorkItem[] }>(`/api/projects/${id}/growth-cycles/current`),
+      create: (id: number, data?: { period?: string; phase?: GrowthPhase }) =>
+        apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/projects/${id}/growth-cycles`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
+      update: (id: number, data: Partial<Pick<GrowthCycle, 'phase' | 'status' | 'client_summary' | 'next_priorities'>>) =>
+        apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/growth-cycles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      addItem: (cycleId: number, data: { category: GrowthWorkCategory; title: string; description?: string; evidence_url?: string; page_id?: number; recommended_page_type?: string; recommended_service?: string; recommended_city?: string }) =>
+        apiFetch<{ item: GrowthWorkItem }>(`/api/growth-cycles/${cycleId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+      updateItem: (id: number, data: Partial<Pick<GrowthWorkItem, 'title' | 'description' | 'evidence_url' | 'client_visible'>> & { status?: GrowthWorkStatus }) =>
+        apiFetch<{ item: GrowthWorkItem }>(`/api/growth-work-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      generateItemBrief: (id: number) =>
+        apiFetch<{ item: GrowthWorkItem; brief: Brief }>(`/api/growth-work-items/${id}/brief`, { method: 'POST' }),
+      deleteItem: (id: number) => apiFetch<{ success: boolean }>(`/api/growth-work-items/${id}`, { method: 'DELETE' }),
+      generate: (id: number, replace = false) =>
+        apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/projects/${id}/growth-cycles/generate`, { method: 'POST', body: JSON.stringify({ replace }) }),
+      strategy: (id: number) => apiFetch<{ strategy: GrowthStrategy }>(`/api/projects/${id}/growth-strategy`),
+      saveStrategy: (id: number, data: Omit<Partial<GrowthStrategy>, 'priority_services' | 'priority_areas'> & { priority_services?: string[]; priority_areas?: string[] }) =>
+        apiFetch<{ strategy: GrowthStrategy }>(`/api/projects/${id}/growth-strategy`, { method: 'PUT', body: JSON.stringify(data) }),
+    },
+    onboarding: {
+      get: (id: number) => apiFetch<{ items: OnboardingItem[]; completed: number; total: number }>(`/api/projects/${id}/onboarding`),
+      update: (id: number, key: string, completed: boolean, notes?: string | null) =>
+        apiFetch<{ success: boolean }>(`/api/projects/${id}/onboarding/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify({ completed, notes }) }),
+    },
     // Hard-delete a project. Cascades to its pages/briefs/etc; the linked lead
     // is reverted to status='contacted' with project_id cleared.
     delete: (id: number) =>
@@ -405,6 +441,8 @@ export const api = {
     // Page briefs
     generatePage: (projectId: number, pageId: number) =>
       apiFetch<Brief>(`/api/projects/${projectId}/pages/${pageId}/brief`, { method: 'POST' }),
+    complete: (briefId: number) =>
+      apiFetch<{ brief: Brief; growth_work_completed: boolean }>(`/api/briefs/${briefId}/complete`, { method: 'POST' }),
 
     // Brief content edits (inline TBD fill / manual edits)
     updateContent: (briefId: number, content_markdown: string) =>
@@ -414,6 +452,7 @@ export const api = {
       }),
   },
   pages: {
+    insights: (pageId: number) => apiFetch<PageInsights>(`/api/pages/${pageId}/insights`),
     /** Create a page row (used to materialize a matrix cell). */
     create: (projectId: number, input: { type: string; service?: string; city?: string; customTitle?: string }) =>
       apiFetch<Page>(`/api/projects/${projectId}/pages`, {
@@ -434,12 +473,12 @@ export const api = {
   matrix: {
     get: (projectId: number) =>
       apiFetch<{
-        foundationPages: Array<{ type: string; label: string; pageId: number | null; status: string; billingStatus: string }>;
-        servicePages: Array<{ service: string; pageId: number | null; status: string; billingStatus: string }>;
+        foundationPages: Array<{ type: string; label: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
+        servicePages: Array<{ service: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
         serviceAreaGrid: {
           services: string[];
           cities: string[];
-          cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string }>;
+          cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
         };
       }>(`/api/projects/${projectId}/matrix`),
   },

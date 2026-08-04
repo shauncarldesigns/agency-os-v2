@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, Project, Lead, Brief, BrandAttribute, Testimonial, ProjectDiscovery } from '../types';
+import type { Env, Project, Lead, Brief, Page, BrandAttribute, Testimonial, ProjectDiscovery } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
 import { callClaude } from '../services/claude';
 import {
@@ -7,7 +7,7 @@ import {
   type MasterBriefInput,
 } from '../prompts/masterBrief';
 import { buildPageBriefPrompt, type PageSpec, type PageType } from '../prompts/pageBrief';
-import { buildMatrixForProject } from '../services/matrix';
+import { buildMatrixForProject, pageMetricsHistory } from '../services/matrix';
 import { slugify } from '../utils/slug';
 import { countTbds } from '../utils/tbd';
 import type { GoogleReview } from '../services/places';
@@ -147,8 +147,17 @@ briefsRouter.post('/projects/:projectId/pages/:pageId/brief', async (c) => {
         service: string | null;
         city: string | null;
         status: string;
-      }>();
+    }>();
     if (!page) return c.json(notFound('Page'), 404);
+
+    // Idempotency guard: generating a page brief is a paid model call. If a
+    // current brief already exists, return it instead of charging for a
+    // duplicate generation. Explicit regeneration belongs on a separate
+    // endpoint with deliberate operator intent.
+    const existingBrief = await c.env.DB.prepare(
+      `SELECT * FROM briefs WHERE project_id = ? AND page_id = ? AND kind = 'page' AND status != 'archived' ORDER BY version DESC, id DESC LIMIT 1`
+    ).bind(projectId, pageId).first<Brief>();
+    if (existingBrief) return c.json(existingBrief, 200);
 
     const master = await c.env.DB
       .prepare(
@@ -253,6 +262,14 @@ briefsRouter.post('/projects/:projectId/pages', async (c) => {
       .bind(projectId, body.type, body.service ?? null, body.service ?? '', body.city ?? null, body.city ?? '')
       .first<{ id: number }>();
     if (existing) {
+      await c.env.DB.prepare(`UPDATE growth_work_items
+        SET page_id = ?, status = CASE WHEN status = 'planned' THEN 'in_progress' ELSE status END, updated_at = datetime('now')
+        WHERE page_id IS NULL
+          AND recommended_page_type = ?
+          AND (recommended_service IS ? OR recommended_service = ?)
+          AND (recommended_city IS ? OR recommended_city = ?)
+          AND cycle_id IN (SELECT id FROM growth_cycles WHERE project_id = ?)`)
+        .bind(existing.id, body.type, body.service ?? body.customTitle ?? null, body.service ?? body.customTitle ?? '', body.city ?? null, body.city ?? '', projectId).run();
       const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(existing.id).first();
       return c.json(page, 200);
     }
@@ -275,6 +292,14 @@ briefsRouter.post('/projects/:projectId/pages', async (c) => {
       .prepare('SELECT * FROM pages WHERE id = ?')
       .bind(insert.meta.last_row_id)
       .first();
+    await c.env.DB.prepare(`UPDATE growth_work_items
+      SET page_id = ?, status = CASE WHEN status = 'planned' THEN 'in_progress' ELSE status END, updated_at = datetime('now')
+      WHERE page_id IS NULL
+        AND recommended_page_type = ?
+        AND (recommended_service IS ? OR recommended_service = ?)
+        AND (recommended_city IS ? OR recommended_city = ?)
+        AND cycle_id IN (SELECT id FROM growth_cycles WHERE project_id = ?)`)
+      .bind(insert.meta.last_row_id, body.type, body.service ?? body.customTitle ?? null, body.service ?? body.customTitle ?? '', body.city ?? null, body.city ?? '', projectId).run();
     return c.json(page, 201);
   } catch (err) {
     log('error', 'briefs', 'POST page failed', err);
@@ -364,6 +389,60 @@ briefsRouter.patch('/briefs/:briefId', async (c) => {
 // PAGE STATUS / BILLING
 // ============================================================================
 
+briefsRouter.get('/pages/:pageId/insights', async (c) => {
+  try {
+    const pageId = Number(c.req.param('pageId'));
+    if (!Number.isFinite(pageId)) return c.json(badRequest('Invalid pageId'), 400);
+    const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id=?').bind(pageId).first<Page>();
+    if (!page) return c.json(notFound('Page'), 404);
+    const [briefs, workItems, metricsHistory] = await Promise.all([
+      c.env.DB.prepare(`SELECT id, project_id, kind, page_id, status, version, generated_by_model, generation_input, generated_at, updated_at, completed_at, supersedes_brief_id
+        FROM briefs WHERE page_id=? AND kind='page' ORDER BY version DESC, id DESC`).bind(pageId).all(),
+      c.env.DB.prepare(`SELECT gwi.*, gc.period, gc.phase FROM growth_work_items gwi JOIN growth_cycles gc ON gc.id=gwi.cycle_id
+        WHERE gwi.page_id=? ORDER BY gc.period DESC, gwi.created_at DESC`).bind(pageId).all(),
+      pageMetricsHistory(c.env.DB, page.project_id, page.published_url),
+    ]);
+    return c.json({ page, briefs: briefs.results, work_items: workItems.results, metrics_history: metricsHistory });
+  } catch (err) {
+    log('error', 'briefs', 'GET page insights failed', err);
+    return c.json(serverError(`Page insights failed: ${(err as Error).message}`), 500);
+  }
+});
+
+// POST /api/briefs/:briefId/complete — completes either a page-build brief or
+// the specific optimization work item that produced an update brief.
+briefsRouter.post('/briefs/:briefId/complete', async (c) => {
+  try {
+    const briefId = Number(c.req.param('briefId'));
+    if (!Number.isFinite(briefId)) return c.json(badRequest('Invalid briefId'), 400);
+    const brief = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
+    if (!brief) return c.json(notFound('Brief'), 404);
+    if (brief.kind !== 'page' || brief.page_id == null) return c.json(badRequest('Only page briefs can be completed'), 400);
+    const page = await c.env.DB.prepare('SELECT id, project_id FROM pages WHERE id = ?').bind(brief.page_id).first<{ id: number; project_id: number }>();
+    if (!page) return c.json(notFound('Page'), 404);
+    const linkedWork = await c.env.DB.prepare('SELECT id FROM growth_work_items WHERE brief_id = ?').bind(briefId).first<{ id: number }>();
+
+    const statements = [
+      c.env.DB.prepare("UPDATE briefs SET status='complete', completed_at=COALESCE(completed_at, datetime('now')), updated_at=datetime('now') WHERE id=?").bind(briefId),
+    ];
+    if (linkedWork) {
+      statements.push(c.env.DB.prepare("UPDATE growth_work_items SET status='complete', completed_at=COALESCE(completed_at, datetime('now')), updated_at=datetime('now') WHERE brief_id=?").bind(briefId));
+    } else {
+      statements.push(
+        c.env.DB.prepare("UPDATE pages SET status='complete', marked_complete_at=COALESCE(marked_complete_at, datetime('now')) WHERE id=?").bind(page.id),
+        c.env.DB.prepare("UPDATE growth_work_items SET status='complete', completed_at=COALESCE(completed_at, datetime('now')), updated_at=datetime('now') WHERE page_id=? AND category='created'").bind(page.id),
+        c.env.DB.prepare("UPDATE projects SET pages_built=(SELECT COUNT(*) FROM pages WHERE project_id=? AND status='complete'), updated_at=datetime('now') WHERE id=?").bind(page.project_id, page.project_id),
+      );
+    }
+    await c.env.DB.batch(statements);
+    const updated = await c.env.DB.prepare('SELECT * FROM briefs WHERE id = ?').bind(briefId).first<Brief>();
+    return c.json({ brief: updated, growth_work_completed: Boolean(linkedWork) });
+  } catch (err) {
+    log('error', 'briefs', 'Complete brief failed', err);
+    return c.json(serverError(`Brief completion failed: ${(err as Error).message}`), 500);
+  }
+});
+
 // PATCH /api/pages/:pageId/status — Body: { status: 'planned' | 'briefed' | 'complete' }
 briefsRouter.patch('/pages/:pageId/status', async (c) => {
   try {
@@ -400,6 +479,10 @@ briefsRouter.patch('/pages/:pageId/status', async (c) => {
       )
       .bind(page.project_id, page.project_id)
       .run();
+
+    if (setComplete) {
+      await c.env.DB.prepare(`UPDATE growth_work_items SET status = 'complete', completed_at = COALESCE(completed_at, datetime('now')), updated_at = datetime('now') WHERE page_id = ? AND category = 'created'`).bind(pageId).run();
+    }
 
     const updated = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first();
     return c.json(updated);

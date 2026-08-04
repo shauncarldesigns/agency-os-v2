@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS projects (
   services        TEXT,
   service_areas   TEXT,
   -- v2.1: monthly cadence + scrape data
-  monthly_pages_target INTEGER DEFAULT 0,
+  monthly_pages_target INTEGER DEFAULT 0, -- Growth clients persist 3; non-recurring tiers use 0
   scrape_completed_at TEXT,
   scrape_data     TEXT,
   -- landingsite.ai
@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS projects (
   contract_min_end TEXT,
   -- Status
   status          TEXT DEFAULT 'building',
+  is_internal     INTEGER NOT NULL DEFAULT 0,
   -- Reviews snapshot at project time
   reviews_snapshot TEXT,
   -- DNS management (added 2026-06-14) — set later in the project lifecycle
@@ -207,6 +208,16 @@ CREATE TABLE IF NOT EXISTS project_discovery (
 CREATE INDEX IF NOT EXISTS idx_project_discovery_status
   ON project_discovery(status, updated_at);
 
+CREATE TABLE IF NOT EXISTS project_onboarding_checks (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0,
+  completed_at TEXT,
+  notes TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (project_id, item_key)
+);
+
 -- ==================================================
 -- PAGES — Each page built in landingsite.ai
 -- ==================================================
@@ -235,6 +246,62 @@ CREATE TABLE IF NOT EXISTS pages (
 );
 CREATE INDEX IF NOT EXISTS idx_pages_proj ON pages(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_pages_batch ON pages(project_id, batch_period);
+
+-- ==================================================
+-- MONTHLY GROWTH CYCLES — managed Growth-plan delivery
+-- ==================================================
+CREATE TABLE IF NOT EXISTS growth_cycles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  phase TEXT NOT NULL DEFAULT 'expansion' CHECK (phase IN ('foundation', 'expansion', 'optimization')),
+  status TEXT NOT NULL DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'complete')),
+  due_date TEXT NOT NULL,
+  client_summary TEXT,
+  next_priorities TEXT,
+  generated_at TEXT,
+  generated_by TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(project_id, period)
+);
+CREATE INDEX IF NOT EXISTS idx_growth_cycles_project_period ON growth_cycles(project_id, period DESC);
+
+CREATE TABLE IF NOT EXISTS growth_work_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cycle_id INTEGER NOT NULL REFERENCES growth_cycles(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('created', 'improved', 'google_business', 'proof', 'measured', 'technical', 'conversion')),
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'in_progress', 'complete', 'blocked')),
+  evidence_url TEXT,
+  page_id INTEGER REFERENCES pages(id) ON DELETE SET NULL,
+  brief_id INTEGER REFERENCES briefs(id) ON DELETE SET NULL,
+  recommended_page_type TEXT,
+  recommended_service TEXT,
+  recommended_city TEXT,
+  completion_signal TEXT,
+  client_visible INTEGER NOT NULL DEFAULT 1,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_growth_work_items_cycle_status ON growth_work_items(cycle_id, status);
+
+CREATE TABLE IF NOT EXISTS growth_strategies (
+  project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  planning_mode TEXT NOT NULL DEFAULT 'auto' CHECK (planning_mode IN ('auto', 'balanced', 'expansion', 'optimization')),
+  primary_objective TEXT,
+  priority_services TEXT NOT NULL DEFAULT '[]',
+  priority_areas TEXT NOT NULL DEFAULT '[]',
+  seasonal_priorities TEXT,
+  constraints TEXT,
+  auto_generate INTEGER NOT NULL DEFAULT 0,
+  require_approval INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- ==================================================
 -- BRIEFS — Master + Page briefs (v2.2)

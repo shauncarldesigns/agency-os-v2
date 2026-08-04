@@ -6,7 +6,6 @@ import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPa
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
-import { ReportsPanel } from './components/reports/ReportsPanel';
 import AutomatedPipelinePanel from './components/leadpipeline/AutomatedPipelinePanel';
 import { CallSessionsPage } from './components/sessions/CallSessionsPage';
 import { CallCenterPage } from './components/sessions/CallCenterPage';
@@ -85,7 +84,7 @@ export default function App() {
           || (l.status === 'contacted' && !futureCallbackLeadIds.has(l.id))
         )
       ).length;
-      const clients = projectsRes.projects.filter(p => p.status === 'live' || p.status === 'building');
+      const clients = projectsRes.projects.filter(p => p.is_internal !== 1 && (p.status === 'live' || p.status === 'building'));
       const mrr = clients.reduce((sum, p) => sum + (TIER_MRR[p.tier] ?? 0), 0);
       setStats({ totalClients: clients.length, mrrUsd: mrr });
       setNavCounts({
@@ -202,7 +201,6 @@ export default function App() {
               <div className="main">
                 <SitesPanel
                   showToast={showToast}
-                  onSwitchTab={setActiveTab}
                   initialProjectId={pendingOpenProjectId}
                   onInitialProjectConsumed={() => setPendingOpenProjectId(null)}
                 />
@@ -210,9 +208,6 @@ export default function App() {
             )}
             {activeTab === 'docs' && <DocsPage />}
             {activeTab === 'playbook' && <PlaybookPage showToast={showToast} />}
-            {activeTab === 'reports' && (
-              <ReportsPanel showToast={showToast} />
-            )}
             {activeTab === 'settings' && (
               <SettingsPage showToast={showToast} onProfileChanged={setProfile} />
             )}

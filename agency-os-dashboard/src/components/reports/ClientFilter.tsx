@@ -7,6 +7,7 @@ interface ClientFilterProps {
   onSelect: (id: number) => void;
   period: string;
   onPeriodChange: (p: string) => void;
+  lockClient?: boolean;
 }
 
 // Build the last 12 monthly periods as YYYY-MM strings.
@@ -22,12 +23,12 @@ function recentPeriods(count = 12): Array<{ value: string; label: string }> {
   return out;
 }
 
-export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodChange }: ClientFilterProps) {
+export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodChange, lockClient = false }: ClientFilterProps) {
   const periods = recentPeriods();
 
   return (
-    <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
-      <label className="block min-w-0">
+    <div className={`grid min-w-0 flex-1 gap-3 ${lockClient ? '' : 'sm:grid-cols-2'}`}>
+      {!lockClient && <label className="block min-w-0">
         <span className="mb-1.5 block text-xs font-semibold text-slate-600">Client</span>
         <span className="relative block">
           <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -45,7 +46,7 @@ export function ClientFilter({ projects, selectedId, onSelect, period, onPeriodC
         </select>
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </span>
-      </label>
+      </label>}
       <label className="block min-w-0">
         <span className="mb-1.5 block text-xs font-semibold text-slate-600">Reporting period</span>
         <span className="relative block">

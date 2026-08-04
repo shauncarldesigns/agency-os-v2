@@ -127,6 +127,7 @@ export interface LeadActivity {
     | 'calendar_clicked'
     | 'clarity_synced'
     | 'engagement_reset'
+    | 'client_converted'
     | 'undo';
   from_status: string | null;
   to_status: string | null;
@@ -212,6 +213,22 @@ export interface Project {
    * - 'dead'     — churned. Excluded from MRR.
    */
   status: 'prospect' | 'building' | 'live' | 'paused' | 'dead';
+  /** Internal/test workspace: visible in Clients & Sites, excluded from MRR and conversion stats. */
+  is_internal: number;
+  /** Derived by the project-list query for the Clients & Sites action queue. */
+  pages_needing_build?: number;
+  growth_cycle_id?: number | null;
+  growth_cycle_period?: string | null;
+  growth_cycle_phase?: GrowthPhase | null;
+  growth_cycle_status?: GrowthCycleStatus | null;
+  growth_cycle_due_date?: string;
+  growth_cycle_health?: 'healthy' | 'attention' | 'urgent';
+  growth_items_total?: number;
+  growth_items_completed?: number;
+  growth_items_blocked?: number;
+  onboarding_completed?: number;
+  onboarding_total?: number;
+  onboarding_percent?: number;
   reviews_snapshot: string | null;
   gsc_property_url: string | null;
   cf_zone_id: string | null;
@@ -273,11 +290,112 @@ export interface Page {
   created_at: string;
 }
 
+export type GrowthPhase = 'foundation' | 'expansion' | 'optimization';
+export type GrowthCycleStatus = 'planning' | 'active' | 'complete';
+export type GrowthWorkCategory = 'created' | 'improved' | 'google_business' | 'proof' | 'measured' | 'technical' | 'conversion';
+export type GrowthWorkStatus = 'planned' | 'in_progress' | 'complete' | 'blocked';
+
+export interface GrowthCycle {
+  id: number;
+  project_id: number;
+  period: string;
+  phase: GrowthPhase;
+  status: GrowthCycleStatus;
+  due_date: string;
+  client_summary: string | null;
+  next_priorities: string | null;
+  generated_at: string | null;
+  generated_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type GrowthPlanningMode = 'auto' | 'balanced' | 'expansion' | 'optimization';
+export interface GrowthStrategy {
+  project_id: number;
+  planning_mode: GrowthPlanningMode;
+  primary_objective: string | null;
+  priority_services: string;
+  priority_areas: string;
+  seasonal_priorities: string | null;
+  constraints: string | null;
+  auto_generate: number;
+  require_approval: number;
+}
+
+export interface GrowthWorkItem {
+  id: number;
+  cycle_id: number;
+  category: GrowthWorkCategory;
+  title: string;
+  description: string | null;
+  status: GrowthWorkStatus;
+  evidence_url: string | null;
+  page_id: number | null;
+  brief_id: number | null;
+  recommended_page_type: string | null;
+  recommended_service: string | null;
+  recommended_city: string | null;
+  completion_signal: 'gsc_connected' | 'seo_snapshot_available' | null;
+  client_visible: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PageSearchMetrics {
+  period: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number | null;
+  positionChange: number | null;
+  impressionsChange: number | null;
+}
+
+export interface PageInsightBrief {
+  id: number;
+  project_id: number;
+  kind: BriefKind;
+  page_id: number;
+  status: BriefStatus;
+  version: number;
+  generated_by_model: string | null;
+  generation_input: string | null;
+  generated_at: string;
+  updated_at: string | null;
+  completed_at: string | null;
+  supersedes_brief_id: number | null;
+}
+
+export interface PageInsightWorkItem extends GrowthWorkItem {
+  period: string;
+  phase: GrowthPhase;
+}
+
+export interface PageInsights {
+  page: Page;
+  briefs: PageInsightBrief[];
+  work_items: PageInsightWorkItem[];
+  metrics_history: PageSearchMetrics[];
+}
+
+export interface OnboardingItem {
+  key: string;
+  label: string;
+  description: string;
+  mode: 'automatic' | 'manual';
+  completed: boolean;
+  completed_at?: string | null;
+  notes?: string | null;
+}
+
 // ============================================================================
 // v2.1 brief / brand-attribute / testimonial types
 // ============================================================================
 
-export type BriefKind = 'master' | 'page';
+export type BriefKind = 'master' | 'page' | 'outreach';
 export type BriefStatus = 'briefed' | 'complete' | 'draft' | 'saved' | 'archived';
 
 export interface Brief {
@@ -391,7 +509,6 @@ export type Tab =
   | 'sites'
   | 'docs'
   | 'playbook'
-  | 'reports'
   | 'settings';
 
 export interface AgencySettings {

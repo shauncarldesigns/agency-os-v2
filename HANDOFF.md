@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-03. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-04. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,35 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Client workspaces and managed growth operations (2026-08-04)
+
+- Clients & Sites now opens dedicated client workspaces with Overview,
+  Onboarding, Website, Brief Studio, Reporting, Activity, and Configuration
+  views. Reporting no longer has a separate main-sidebar destination.
+- Configuration keeps editable client, contract, website/reporting, DNS, and
+  integration fields together. The onboarding checklist combines system-detected
+  and operator-confirmed tasks and surfaces progress on each client card.
+- Growth work follows Foundation → Expansion → Optimization. The monthly page
+  target is three, but page production is treated as one tactic within continuous
+  visibility, website, Google Business, proof, and conversion improvement.
+- The recommendation queue identifies the next page or live-page improvement,
+  highlights the matching matrix card, permits an alternate choice, and prevents
+  repeated brief charges. Optimization items generate versioned update briefs;
+  completing the brief completes the linked work item and restores the page's
+  live state without a reload.
+- Live Page Matrix cards expose Search Console position, movement, impressions,
+  and clicks. Clicking one opens Page Insights with current metrics, trends,
+  recommendation context, brief history, page metadata, and related actions.
+- Planned-page totals are derived from current services and service areas while
+  retaining the project's intentional planned-scope offset. Local expansion and
+  fully built optimization fixtures live under `agency-os-backend/src/db/seeds/`.
+- Release migrations, in dependency order: `2026-08-04-client-conversion.sql`,
+  `2026-08-04-growth-monthly-page-target.sql`, `2026-08-04-growth-cycles.sql`,
+  `2026-08-04-growth-strategies.sql`, `2026-08-04-growth-page-recommendations.sql`,
+  `2026-08-04-growth-completion-signals.sql`,
+  `2026-08-04-growth-work-item-briefs.sql`, and
+  `2026-08-04-client-onboarding.sql`.
 
 ## Automated Lead Finder inbox (2026-08-03)
 

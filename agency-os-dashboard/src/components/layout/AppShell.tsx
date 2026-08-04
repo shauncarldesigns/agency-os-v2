@@ -11,7 +11,6 @@ import {
   Search as SearchIcon,
   Menu,
   X,
-  BarChart3,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
@@ -60,7 +59,6 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'sites', label: 'Clients & Sites', icon: Globe, badgeKey: 'sites' },
       { key: 'docs', label: 'Docs', icon: Library },
       { key: 'playbook', label: 'Playbook', icon: BookOpen },
-      { key: 'reports', label: 'Reports', icon: BarChart3 },
     ],
   },
 ];
@@ -75,7 +73,6 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
   docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },
   playbook: { title: 'Playbook', subtitle: 'Scripts, objections, and follow-ups' },
-  reports: { title: 'Reports', subtitle: 'Monthly client reporting' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences, integrations, and system health' },
 };
 

@@ -7,6 +7,7 @@ import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
 import { api, ApiError } from '../../lib/api';
 import { type Tier, TIER_LABEL, tierPriceShort } from '../../lib/pricing';
+import { Trash2 } from 'lucide-react';
 
 /**
  * The single project-editor modal.
@@ -512,11 +513,11 @@ export function OperatorInputForm({
           onChange={(e) => setStatus(e.target.value as Project['status'])}
           style={{ width: '100%' }}
         >
-          <option value="prospect">📝 Prospect — qualified, not yet signed (NOT counted in MRR)</option>
-          <option value="building">🔨 Building — signed client, site being built (counts)</option>
-          <option value="live">● Live — site is live (counts)</option>
-          <option value="paused">⏸ Paused — temporarily inactive client (counts)</option>
-          <option value="dead">⚠ Dead — churned (NOT counted in MRR)</option>
+          <option value="prospect">Prospect — qualified, not yet signed (NOT counted in MRR)</option>
+          <option value="building">Building — signed client, site being built (counts)</option>
+          <option value="live">Live — site is live (counts)</option>
+          <option value="paused">Paused — temporarily inactive client (counts)</option>
+          <option value="dead">Dead — churned (NOT counted in MRR)</option>
         </select>
 
         <SectionTitle>Business details</SectionTitle>
@@ -569,7 +570,7 @@ export function OperatorInputForm({
         <SectionTitle>Domain & DNS</SectionTitle>
         <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginBottom: 8, lineHeight: 1.5 }}>
           For after-the-fact corrections. First-time domain setup goes through the
-          <strong style={{ color: 'var(--text2)' }}> ⚡ Add domain & DNS</strong> Quick Action.
+          Use the <strong style={{ color: 'var(--text2)' }}>Domain & DNS</strong> card in Configuration.
         </div>
         <Grid2>
           <Field label={project.cf_zone_id ? 'Domain' : 'Domain (set via Quick Action)'}>
@@ -712,7 +713,7 @@ export function OperatorInputForm({
             </div>
             {!confirmingDelete ? (
               <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)} disabled={busy}>
-                🗑 Delete project
+                <Trash2 size={14} /> Delete project
               </Button>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -891,7 +892,7 @@ function TestimonialRow({
           Feature on site
         </label>
         <span style={{ fontSize: '0.62rem', color: 'var(--text3)' }}>
-          {value.source} · {value.rating ?? '–'}★ {value.is_new ? '· (new)' : ''}
+          {value.source} · {value.rating ?? '–'}/5 {value.is_new ? '· (new)' : ''}
         </span>
         <button
           type="button"

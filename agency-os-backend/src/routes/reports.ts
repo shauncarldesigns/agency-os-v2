@@ -459,16 +459,19 @@ function parseKeywords(raw: string | null | undefined): ParsedKeyword[] {
   } catch { return []; }
 }
 
-function aggregateByPage(rows: GscRow[]): Array<{ page: string; impressions: number; clicks: number }> {
-  const m = new Map<string, { impressions: number; clicks: number }>();
+function aggregateByPage(rows: GscRow[]): Array<{ page: string; impressions: number; clicks: number; position: number | null }> {
+  const m = new Map<string, { impressions: number; clicks: number; weightedPosition: number; positionWeight: number }>();
   for (const r of rows) {
-    const cur = m.get(r.page) ?? { impressions: 0, clicks: 0 };
+    const cur = m.get(r.page) ?? { impressions: 0, clicks: 0, weightedPosition: 0, positionWeight: 0 };
     cur.impressions += r.impressions;
     cur.clicks += r.clicks;
+    const weight = Math.max(r.impressions, 1);
+    cur.weightedPosition += r.position * weight;
+    cur.positionWeight += weight;
     m.set(r.page, cur);
   }
   return Array.from(m.entries())
-    .map(([page, v]) => ({ page, ...v }))
+    .map(([page, v]) => ({ page, impressions: v.impressions, clicks: v.clicks, position: v.positionWeight > 0 ? v.weightedPosition / v.positionWeight : null }))
     .sort((a, b) => b.impressions - a.impressions);
 }
 

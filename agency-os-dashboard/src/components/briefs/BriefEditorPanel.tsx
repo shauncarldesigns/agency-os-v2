@@ -3,6 +3,7 @@ import type { Brief, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
+import { AlertTriangle, Check, CheckCircle2, Copy, Pencil, RefreshCw } from 'lucide-react';
 
 interface BriefEditorPanelProps {
   open: boolean;
@@ -124,8 +125,8 @@ export function BriefEditorPanel({
     if (!current || current.kind !== 'page' || current.page_id == null) return;
     setCompleting(true);
     try {
-      await api.pages.setStatus(current.page_id, 'complete');
-      showToast('Marked complete', 'success');
+      const result = await api.briefs.complete(current.id);
+      showToast(result.growth_work_completed ? 'Optimization update completed' : 'Page marked complete', 'success');
       onPageCompleted?.(current.page_id);
       onClose();
     } catch (err) {
@@ -194,8 +195,8 @@ export function BriefEditorPanel({
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" disabled={regenerating} onClick={() => setEditing(true)}>✎ Edit</Button>
-              <Button variant="ghost" size="sm" disabled={regenerating} onClick={handleCopy}>📋 Copy</Button>
+              <Button variant="ghost" size="sm" disabled={regenerating} onClick={() => setEditing(true)}><Pencil size={14} /> Edit</Button>
+              <Button variant="ghost" size="sm" disabled={regenerating} onClick={handleCopy}><Copy size={14} /> Copy</Button>
               {current.kind === 'master' && (
                 <Button
                   variant="primary"
@@ -204,12 +205,12 @@ export function BriefEditorPanel({
                   onClick={handleRegenerate}
                   title="Rewrite this master brief from scratch using the current project data"
                 >
-                  {regenerating ? <><Spinner /> Regenerating…</> : '↻ Regenerate'}
+                  {regenerating ? <><Spinner /> Regenerating…</> : <><RefreshCw size={14} /> Regenerate</>}
                 </Button>
               )}
               {current.kind === 'page' && current.status === 'briefed' && (
                 <Button variant="primary" size="sm" disabled={completing} onClick={handleMarkComplete}>
-                  {completing ? <><Spinner /> Marking…</> : '✓ Mark complete'}
+                  {completing ? <><Spinner /> Marking…</> : <><Check size={14} /> Mark complete</>}
                 </Button>
               )}
             </>
@@ -230,9 +231,9 @@ function MasterMetaStrip({ brief }: { brief: Brief }) {
       <span className="bs-master-chip">v{brief.version}</span>
       <span className="bs-editor-meta-text">Updated {fmtRelative(brief.updated_at ?? brief.generated_at)}</span>
       {brief.tbd_count > 0 ? (
-        <span className="bs-master-tbd">⚠ {brief.tbd_count} TBD{brief.tbd_count === 1 ? '' : 's'} — fill in Edit Project Info, then Regenerate</span>
+        <span className="bs-master-tbd"><AlertTriangle size={13} /> {brief.tbd_count} TBD{brief.tbd_count === 1 ? '' : 's'} — fill in Configuration, then regenerate</span>
       ) : (
-        <span className="bs-master-ok">✓ no TBDs</span>
+        <span className="bs-master-ok"><CheckCircle2 size={13} /> No TBDs</span>
       )}
     </div>
   );
@@ -323,7 +324,7 @@ function renderLine(line: string, lineKey: number): ReactNode[] {
           fontWeight: 600,
         }}
       >
-        ⚠ {m[1].trim()}
+        <AlertTriangle size={12} style={{ display: 'inline', marginRight: 4 }} />{m[1].trim()}
       </span>
     );
     cursor = m.index + m[0].length;

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Project, Lead, ShowToast } from '../../lib/types';
 import { Modal, ModalHeader, ModalFooter } from '../shared/Modal';
 import { Button } from '../shared/Button';
+import { Check, Copy } from 'lucide-react';
 
 interface QuickBriefModalProps {
   open: boolean;
@@ -55,7 +56,7 @@ export function QuickBriefModal({
       await navigator.clipboard.writeText(content);
       setCopied(true);
       showToast('Quick brief copied — paste into landingsite.ai', 'success');
-      // Visual ✓ Copied confirmation for 2s, then back to default.
+      // Show a copied confirmation for 2s, then return to the default action.
       setTimeout(() => setCopied(false), 2000);
     } catch {
       showToast('Could not access clipboard — select the text and copy manually', 'error');
@@ -117,7 +118,7 @@ export function QuickBriefModal({
       <ModalFooter>
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         <Button variant="primary" size="sm" onClick={handleCopy}>
-          {copied ? '✓ Copied' : '📋 Copy'}
+          {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
         </Button>
       </ModalFooter>
     </Modal>
@@ -147,7 +148,7 @@ function formatQuickBrief(project: Project, lead: Lead | null): string {
     lines.push('');
     lines.push(r.author);
     const meta: string[] = [];
-    if (r.rating != null) meta.push(`${r.rating}★`);
+    if (r.rating != null) meta.push(`${r.rating}/5`);
     if (r.relativeTime) meta.push(r.relativeTime);
     if (meta.length) lines.push(meta.join(' · '));
     lines.push(r.text);

@@ -49,6 +49,9 @@ export function QualifyLeadModal({
 }: QualifyLeadModalProps) {
   const [tier, setTier] = useState<Tier>(3);
   const [note, setNote] = useState('');
+  const [initialStatus, setInitialStatus] = useState<'building' | 'live'>('building');
+  const [contractStart, setContractStart] = useState(() => new Date().toISOString().slice(0, 10));
+  const [clientEmail, setClientEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Default to the lead's recommended tier when the modal opens. Falls back to
@@ -59,6 +62,9 @@ export function QualifyLeadModal({
     if (rec === 1 || rec === 2 || rec === 3) setTier(rec);
     else setTier(3);
     setNote('');
+    setInitialStatus('building');
+    setContractStart(new Date().toISOString().slice(0, 10));
+    setClientEmail(lead.email ?? '');
   }, [open, lead]);
 
   if (!open || !lead) return null;
@@ -67,9 +73,15 @@ export function QualifyLeadModal({
     if (!lead) return;
     setSubmitting(true);
     try {
-      const res = await api.leads.qualify(lead.id, { tier, note: note.trim() || undefined });
+      const res = await api.leads.convertToClient(lead.id, {
+        tier,
+        initialStatus,
+        contractStart,
+        clientEmail: clientEmail.trim() || undefined,
+        note: note.trim() || undefined,
+      });
       const label = `Tier ${tier}`;
-      showToast(`Demo booked with ${lead.company} — ${label} prospect created`, 'success');
+      showToast(`${lead.company} converted to a ${label} client`, 'success');
       onQualified(res.project, tier);
       onClose();
     } catch (err) {
@@ -83,16 +95,15 @@ export function QualifyLeadModal({
   return (
     <Modal open={open} onClose={submitting ? () => undefined : onClose} width={560}>
       <ModalHeader
-        title={`Book demo · ${lead.company}`}
+        title={`Convert to client · ${lead.company}`}
         onClose={submitting ? () => undefined : onClose}
       />
 
       <div style={{ padding: '18px 20px' }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
-          Creates a Sites prospect project at the selected tier. Lead moves to <strong>Demo
-          booked</strong> status and Quick Brief becomes available on the prospect card for demo
-          prep. The lead stays linked — flip to active client after the demo holds + they sign,
-          or hit Demo passed to send them back to the pipeline.
+          Use this only after the business agrees to move forward. It creates the client project,
+          carries over the outreach site and brief, stops active email automation, and moves the
+          lead out of outreach in one transaction.
         </p>
 
         <label className="flabel" style={{ marginBottom: 8 }}>Tier</label>
@@ -148,19 +159,44 @@ export function QualifyLeadModal({
           })}
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+          <label>
+            <span className="flabel">Starting stage</span>
+            <select className="finput" value={initialStatus} onChange={(e) => setInitialStatus(e.target.value as 'building' | 'live')}>
+              <option value="building">Building / onboarding</option>
+              <option value="live">Already live</option>
+            </select>
+          </label>
+          <label>
+            <span className="flabel">Contract start</span>
+            <input className="finput" type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} />
+          </label>
+        </div>
+
+        <label className="flabel" htmlFor="convert-client-email">Report/client email</label>
+        <input
+          id="convert-client-email"
+          className="finput"
+          type="email"
+          value={clientEmail}
+          onChange={(e) => setClientEmail(e.target.value)}
+          placeholder="client@example.com"
+          style={{ marginBottom: 14 }}
+        />
+
         <label className="flabel" htmlFor="qlm-note">Notes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· optional</span></label>
         <textarea
           id="qlm-note"
           className="finput"
           rows={3}
-          placeholder="Why this tier? Anything to remember when they show up on Sites."
+          placeholder="What was agreed to? Any onboarding details to preserve."
           value={note}
           disabled={submitting}
           onChange={(e) => setNote(e.target.value)}
           style={{ resize: 'vertical', minHeight: 60, marginBottom: 4 }}
         />
         <div style={{ fontSize: '0.62rem', color: 'var(--text3)' }}>
-          Saved to the lead's notes with the timestamp.
+          Saved in the conversion activity for the client timeline.
         </div>
 
         {tier !== 3 && (
@@ -185,7 +221,7 @@ export function QualifyLeadModal({
           Cancel
         </Button>
         <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <><Spinner /> Booking…</> : `→ Book demo at Tier ${tier}`}
+          {submitting ? <><Spinner /> Converting…</> : `→ Convert to Tier ${tier} client`}
         </Button>
       </ModalFooter>
     </Modal>

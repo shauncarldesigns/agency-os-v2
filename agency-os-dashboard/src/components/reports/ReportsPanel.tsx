@@ -11,6 +11,8 @@ import { BarChart3, Download, RefreshCw } from 'lucide-react';
 
 interface ReportsPanelProps {
   showToast: ShowToast;
+  project?: Project;
+  embedded?: boolean;
 }
 
 function defaultPeriod(): string {
@@ -27,9 +29,9 @@ function formatPeriodLabel(period: string): string {
   });
 }
 
-export function ReportsPanel({ showToast }: ReportsPanelProps) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+export function ReportsPanel({ showToast, project, embedded = false }: ReportsPanelProps) {
+  const [projects, setProjects] = useState<Project[]>(project ? [project] : []);
+  const [selectedId, setSelectedId] = useState<number | null>(project?.id ?? null);
   const [period, setPeriod] = useState<string>(defaultPeriod());
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,16 +40,23 @@ export function ReportsPanel({ showToast }: ReportsPanelProps) {
   const [exportOpen, setExportOpen] = useState(false);
 
   const loadProjects = useCallback(async () => {
+    if (project) {
+      setProjects([project]);
+      setSelectedId(project.id);
+      return;
+    }
     try {
       const res = await api.projects.list({ tier: 3 });
-      const tier3 = res.projects.filter(p => p.tier === 3);
+      const tier3 = res.projects.filter(p =>
+        p.tier === 3 && (p.is_internal === 1 || ['building', 'live', 'paused'].includes(p.status)),
+      );
       setProjects(tier3);
       if (tier3.length > 0 && selectedId === null) setSelectedId(tier3[0].id);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not load Tier 3 projects: ${msg}`, 'error');
     }
-  }, [selectedId, showToast]);
+  }, [project, selectedId, showToast]);
 
   const loadSummary = useCallback(async () => {
     if (selectedId === null) {
@@ -105,8 +114,8 @@ export function ReportsPanel({ showToast }: ReportsPanelProps) {
 
   return (
     <>
-      <div className="min-h-full bg-slate-50">
-        <div className="page-container">
+      <div className={embedded ? '' : 'min-h-full bg-slate-50'}>
+        <div className={embedded ? '' : 'page-container'}>
           {projects.length === 0 ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><BarChart3 className="h-7 w-7" /></span>
@@ -123,6 +132,7 @@ export function ReportsPanel({ showToast }: ReportsPanelProps) {
                     onSelect={setSelectedId}
                     period={period}
                     onPeriodChange={setPeriod}
+                    lockClient={!!project}
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" disabled={selectedId === null || refreshing} onClick={handleRefresh} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
@@ -133,7 +143,7 @@ export function ReportsPanel({ showToast }: ReportsPanelProps) {
                     </button>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">Tier 3 performance · Google Search Console, PageSpeed, and Cloudflare data</p>
+                <p className="mt-3 text-xs text-slate-400">Tier 3 performance · Google Search Console and PageSpeed data</p>
               </section>
 
               {loading ? (
