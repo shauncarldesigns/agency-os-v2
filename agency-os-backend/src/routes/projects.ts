@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Lead, Project } from '../types';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
+import { chicagoToday } from '../services/dayOfWeek';
 
 export const projectsRouter = new Hono<{ Bindings: Env }>();
 
@@ -26,13 +27,60 @@ const PROJECT_FIELDS = [
 projectsRouter.get('/', async (c) => {
   try {
     const { tier, status } = c.req.query();
-    let query = 'SELECT * FROM projects WHERE 1=1';
-    const params: unknown[] = [];
-    if (tier) { query += ' AND tier = ?'; params.push(parseInt(tier, 10)); }
-    if (status) { query += ' AND status = ?'; params.push(status); }
-    query += ' ORDER BY tier DESC, updated_at DESC';
+    const today = chicagoToday();
+    const monthKey = today.slice(0, 7);
+    const dayOfMonth = Number(today.slice(8, 10));
+    const [year, month] = monthKey.split('-').map(Number);
+    const dueDate = `${monthKey}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}`;
+    let query = `SELECT projects.*,
+      (SELECT COUNT(*) FROM pages WHERE pages.project_id = projects.id AND pages.status = 'briefed') AS pages_needing_build,
+      gc.id AS growth_cycle_id,
+      gc.period AS growth_cycle_period,
+      gc.phase AS growth_cycle_phase,
+      gc.status AS growth_cycle_status,
+      gc.due_date AS growth_cycle_due_date,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id) AS growth_items_total,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND status = 'complete') AS growth_items_completed,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND status = 'blocked') AS growth_items_blocked
+      ,EXISTS(SELECT 1 FROM briefs ob WHERE ob.project_id=projects.id AND ob.kind='master' AND ob.status!='archived') AS onboarding_has_master
+      ,(SELECT COUNT(*) FROM project_onboarding_checks oc WHERE oc.project_id=projects.id AND oc.completed=1) AS onboarding_manual_completed
+      FROM projects
+      LEFT JOIN growth_cycles gc ON gc.project_id = projects.id AND gc.period = ?
+      WHERE 1=1`;
+    const params: unknown[] = [monthKey];
+    if (tier) { query += ' AND projects.tier = ?'; params.push(parseInt(tier, 10)); }
+    if (status) { query += ' AND projects.status = ?'; params.push(status); }
+    query += ' ORDER BY projects.tier DESC, projects.updated_at DESC';
     const result = await c.env.DB.prepare(query).bind(...params).all();
-    return c.json({ projects: result.results, total: result.results.length });
+    const projects = result.results.map((row) => {
+      const project = row as Record<string, unknown>;
+      const total = Number(project.growth_items_total || 0);
+      const completed = Number(project.growth_items_completed || 0);
+      const blocked = Number(project.growth_items_blocked || 0);
+      const hasCycle = Number(project.growth_cycle_id || 0) > 0;
+      const onboardingCompleted = 1
+        + (project.contract_start ? 1 : 0)
+        + (project.domain || project.custom_domain ? 1 : 0)
+        + (project.cf_zone_id ? 1 : 0)
+        + (project.dns_status === 'active' ? 1 : 0)
+        + (Number(project.onboarding_has_master || 0) > 0 ? 1 : 0)
+        + (project.gsc_property_url ? 1 : 0)
+        + (project.client_email ? 1 : 0)
+        + (project.status === 'live' && (project.custom_domain || project.landingsite_url) ? 1 : 0)
+        + Number(project.onboarding_manual_completed || 0);
+      const health = !hasCycle || blocked > 0 || (total > completed && dayOfMonth >= 24)
+        ? 'urgent'
+        : total > completed && dayOfMonth >= 15 ? 'attention' : 'healthy';
+      return {
+        ...project,
+        growth_cycle_due_date: project.growth_cycle_due_date || dueDate,
+        growth_cycle_health: health,
+        onboarding_completed: onboardingCompleted,
+        onboarding_total: 13,
+        onboarding_percent: Math.round((onboardingCompleted / 13) * 100),
+      };
+    });
+    return c.json({ projects, total: projects.length });
   } catch (err) {
     log('error', 'projects', 'GET /projects failed', err);
     return c.json(serverError(), 500);
@@ -214,9 +262,9 @@ projectsRouter.post('/', async (c) => {
       INSERT INTO projects (
         lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
         description, years_in_business, primary_color, brand_voice_notes,
-        services, service_areas, pages_planned,
+        services, service_areas, pages_planned, monthly_pages_target,
         contract_start, contract_min_end, merchynt_active, status, reviews_snapshot
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'building', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'building', ?)
     `).bind(
       leadId ?? null,
       businessName,
@@ -235,6 +283,7 @@ projectsRouter.post('/', async (c) => {
       JSON.stringify(services),
       JSON.stringify(serviceAreas),
       pagesPlanned,
+      tier === 3 ? 3 : 0,
       contractStart,
       contractMinEnd,
       merchyntActive,
@@ -335,7 +384,7 @@ projectsRouter.put('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
 
-  const existing = await c.env.DB.prepare('SELECT id FROM projects WHERE id = ?').bind(id).first();
+  const existing = await c.env.DB.prepare('SELECT id, tier, services, service_areas, pages_planned, pages_built FROM projects WHERE id = ?').bind(id).first<Pick<Project, 'id' | 'tier' | 'services' | 'service_areas' | 'pages_planned' | 'pages_built'>>();
   if (!existing) return c.json(notFound('Project'), 404);
 
   try {
@@ -348,6 +397,18 @@ projectsRouter.put('/:id', async (c) => {
         if ((k === 'services' || k === 'service_areas') && Array.isArray(v)) val = JSON.stringify(v);
         return { key: k, value: val ?? null };
       });
+
+    // Preserve any intentionally planned pages outside the generated matrix,
+    // while adding/removing the exact number of matrix cells introduced by a
+    // service or service-area change.
+    if (existing.tier === 3 && body.pages_planned === undefined && (body.services !== undefined || body.service_areas !== undefined)) {
+      const oldServices = safeParseArray(existing.services);
+      const oldAreas = safeParseArray(existing.service_areas);
+      const newServices = Array.isArray(body.services) ? body.services.map(String) : oldServices;
+      const newAreas = Array.isArray(body.service_areas) ? body.service_areas.map(String) : oldAreas;
+      const matrixDelta = matrixPlannedCount(newServices, newAreas) - matrixPlannedCount(oldServices, oldAreas);
+      updates.push({ key: 'pages_planned', value: Math.max(existing.pages_built ?? 0, (existing.pages_planned ?? 0) + matrixDelta) });
+    }
 
     if (updates.length === 0) return c.json(badRequest('No valid fields to update'), 400);
 
@@ -369,6 +430,11 @@ projectsRouter.put('/:id', async (c) => {
     return c.json(serverError(), 500);
   }
 });
+
+function matrixPlannedCount(services: string[], areas: string[]): number {
+  const foundation = areas.length >= 2 ? 6 : 5;
+  return foundation + services.length + (areas.length >= 2 ? services.length * areas.length : 0);
+}
 
 // SEO coverage matrix: cross-product of services × service_areas, with built/queued state from pages table.
 projectsRouter.get('/:id/coverage', async (c) => {

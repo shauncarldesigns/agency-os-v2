@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import type { Project, ShowToast, Tab } from '../../lib/types';
+import type { Project, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
 import { TIER_MRR } from '../../lib/pricing';
-import { ArrowRight, BarChart3, Bolt, Check, ExternalLink, FileText, Globe2, LoaderCircle, MapPin, Pencil, X } from 'lucide-react';
+import { ArrowRight, Bolt, Check, ExternalLink, FileText, Globe2, LoaderCircle, MapPin, Pencil, X } from 'lucide-react';
 
 interface SiteCardProps {
   project: Project;
   showToast: ShowToast;
-  onSwitchTab: (tab: Tab) => void;
   /** Open the Brief Studio detail (Tier 3 only — Tier 1/2 cards short-circuit
    *  this to Edit Info instead). */
   onOpenDetail: () => void;
+  /** Open the workspace directly at the page-production queue. */
+  onOpenBriefStudio: () => void;
+  /** Open the client onboarding checklist. */
+  onOpenOnboarding: () => void;
   /** Open the Edit Project modal (tier change / business info / delete). */
   onEditInfo: () => void;
   /** Open the Quick Brief modal — business name + reviews verbatim, for the
@@ -24,20 +27,34 @@ interface SiteCardProps {
 }
 
 export function SiteCard({
-  project, onSwitchTab, onOpenDetail, onEditInfo, onQuickBrief, onProjectChanged, showToast,
+  project, onOpenDetail, onOpenBriefStudio, onOpenOnboarding, onEditInfo, onQuickBrief, onProjectChanged, showToast,
 }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const isBuilding = project.status === 'building';
-  const isProspect = project.status === 'prospect';
-  const mrr = TIER_MRR[tier] ?? 0;
+  const isInternal = project.is_internal === 1;
+  const isProspect = project.status === 'prospect' && !isInternal;
+  const mrr = isInternal ? 0 : (TIER_MRR[tier] ?? 0);
   const pagesBuilt = project.pages_built ?? 0;
-  const monthlyTarget = project.monthly_pages_target ?? (tier === 3 ? 5 : 0);
+  const growthTotal = project.growth_items_total ?? 0;
+  const growthCompleted = project.growth_items_completed ?? 0;
+  const growthHealth = project.growth_cycle_health ?? 'urgent';
+  const growthDueLabel = project.growth_cycle_due_date
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      .format(new Date(`${project.growth_cycle_due_date}T12:00:00Z`))
+    : null;
+  const growthPeriodLabel = project.growth_cycle_period
+    ? new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(new Date(`${project.growth_cycle_period}-01T12:00:00Z`))
+    : 'Monthly';
+  const onboardingCompleted = project.onboarding_completed ?? 0;
+  const onboardingTotal = project.onboarding_total ?? 13;
+  const onboardingPercent = project.onboarding_percent ?? 0;
   const hasBriefStudio = tier === 3;
   const [signing, setSigning] = useState(false);
 
   const subtitle = (() => {
     const where = [project.city, project.state].filter(Boolean).join(', ');
+    if (isInternal) return `${where} · Internal workspace`;
     if (isProspect) return `${where} · Prospect (qualified, not yet signed)`;
     if (project.contract_start) {
       return `${where} · Client since ${formatDate(project.contract_start, { year: 'numeric', month: 'short' })}`;
@@ -88,11 +105,10 @@ export function SiteCard({
     }
   }
 
-  // Tier 3 → header opens Brief Studio (existing behaviour).
-  // Tier 1/2 → no Brief Studio exists; header opens Edit Info instead so the
-  // card still has a primary action and the operator can upsell from here.
-  const headerAction = hasBriefStudio ? onOpenDetail : onEditInfo;
-  const headerTitle = hasBriefStudio ? 'Open Brief Studio' : 'Edit project info';
+  // Every signed client has a workspace. Brief Studio remains tier-gated
+  // inside that workspace, rather than gating access to the client itself.
+  const headerAction = onOpenDetail;
+  const headerTitle = 'Open client workspace';
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
@@ -114,6 +130,11 @@ export function SiteCard({
             <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200"
               title="Qualified for pitch, not yet signed. Excluded from MRR."
             >Prospect</span>
+          )}
+          {isInternal && (
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 ring-1 ring-inset ring-slate-200"
+              title="Internal test workspace. Excluded from MRR and client conversion statistics."
+            >Internal</span>
           )}
           <TierBadge tier={tier} />
         </div>
@@ -151,11 +172,17 @@ export function SiteCard({
             tone={mrr > 0 ? 'green' : 'muted'}
           />
           <MetricChip
-            label={monthlyTarget > 0 ? 'This month' : 'Pages built'}
-            value={monthlyTarget > 0 ? `${pagesBuilt} / ${monthlyTarget}` : String(pagesBuilt)}
-            tone={pagesBuilt > 0 ? 'accent' : 'muted'}
+            label={hasBriefStudio ? `${growthPeriodLabel} growth${growthDueLabel ? ` · due ${growthDueLabel}` : ''}` : 'Pages built'}
+            value={hasBriefStudio ? (project.growth_cycle_id ? `${growthCompleted} of ${growthTotal} complete` : 'Plan this month') : String(pagesBuilt)}
+            tone={hasBriefStudio ? growthHealth : (pagesBuilt > 0 ? 'accent' : 'muted')}
+            onClick={hasBriefStudio ? onOpenBriefStudio : undefined}
           />
         </div>
+
+        <button type="button" onClick={onOpenOnboarding} className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" title="Open onboarding checklist">
+          <span className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><span>Onboarding</span><span>{onboardingCompleted} of {onboardingTotal}</span></span>
+          <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100"><span className={`block h-full rounded-full transition-all ${onboardingPercent === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${onboardingPercent}%` }} /></span>
+        </button>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           {/* Prospects get a dedicated "they signed!" button at the top of
@@ -175,24 +202,24 @@ export function SiteCard({
           {hasBriefStudio ? (
             <>
               {!isProspect && (
-                <ActionButton primary onClick={onOpenDetail}><FileText size={14} /> Brief Studio</ActionButton>
+                <ActionButton primary onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
               {isProspect && (
-                <ActionButton onClick={onOpenDetail}><FileText size={14} /> Brief Studio</ActionButton>
+                <ActionButton onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
               <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
-              <ActionButton onClick={() => onSwitchTab('reports')}><BarChart3 size={14} /> Reports</ActionButton>
               <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
             </>
           ) : (
             <>
               {!isProspect && (
-                <ActionButton primary onClick={onEditInfo}><Pencil size={14} /> Edit info</ActionButton>
+                <ActionButton primary onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
               {isProspect && (
-                <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
+                <ActionButton onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
               <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
+              <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
               <span className="col-span-2 flex items-center gap-1 text-xs text-slate-400"><ArrowRight size={13} /> Upgrade to Tier 3 for Brief Studio</span>
             </>
           )}
@@ -203,17 +230,31 @@ export function SiteCard({
 }
 
 function MetricChip({
-  label, value, tone,
+  label, value, tone, onClick,
 }: {
-  label: string; value: string; tone: 'accent' | 'green' | 'muted';
+  label: string;
+  value: string;
+  tone: 'accent' | 'green' | 'muted' | 'healthy' | 'attention' | 'urgent';
+  onClick?: () => void;
 }) {
-  const color = tone === 'green' ? 'text-emerald-600' : tone === 'accent' ? 'text-blue-600' : 'text-slate-500';
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+  const tones = {
+    green: 'border-slate-200 bg-slate-50 text-emerald-600',
+    accent: 'border-slate-200 bg-slate-50 text-blue-600',
+    muted: 'border-slate-200 bg-slate-50 text-slate-500',
+    healthy: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    attention: 'border-amber-300 bg-amber-50 text-amber-700',
+    urgent: 'border-red-400 bg-red-50 text-red-700 ring-1 ring-red-200',
+  } as const;
+  const content = (
+    <>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`mt-0.5 text-lg font-semibold tracking-tight ${color}`}>{value}</div>
-    </div>
+      <div className="mt-0.5 text-base font-semibold tracking-tight">{value}</div>
+    </>
   );
+  const className = `rounded-xl border p-3 text-left transition ${tones[tone]} ${onClick ? 'cursor-pointer hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-blue-300' : ''}`;
+  return onClick
+    ? <button type="button" className={className} onClick={onClick} title="Open this month’s Growth Cycle">{content}</button>
+    : <div className={className}>{content}</div>;
 }
 
 function TierBadge({ tier }: { tier: 1 | 2 | 3 }) {

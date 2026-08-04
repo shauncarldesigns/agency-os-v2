@@ -5,6 +5,7 @@ import { Modal, ModalHeader, ModalFooter } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Badge } from '../shared/Badge';
 import { Spinner } from '../shared/Spinner';
+import { Copy } from 'lucide-react';
 
 /**
  * "Manage DNS" detail view — opened from the Quick Action button after a
@@ -147,7 +148,7 @@ export function DnsManagePanel({ open, project, onClose, showToast, onProjectCha
               right={
                 status.nameservers.length > 0 && (
                   <Button variant="ghost" size="xs" onClick={copyNameservers}>
-                    📋 Copy both
+                    <Copy size={13} /> Copy both
                   </Button>
                 )
               }
@@ -184,7 +185,7 @@ export function DnsManagePanel({ open, project, onClose, showToast, onProjectCha
                         }}
                         title="Copy this nameserver"
                       >
-                        📋
+                        <Copy size={13} />
                       </button>
                     </div>
                   ))}
@@ -222,7 +223,7 @@ export function DnsManagePanel({ open, project, onClose, showToast, onProjectCha
                       {r.content}
                     </span>
                     <span style={r.found ? { color: '#4ade80', fontWeight: 500 } : { color: 'var(--red)', fontWeight: 500 }}>
-                      {r.found ? '✓ Found' : '✗ Missing'}
+                      {r.found ? 'Found' : 'Missing'}
                     </span>
                   </div>
                 ))}

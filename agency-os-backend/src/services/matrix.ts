@@ -34,6 +34,47 @@ export interface MatrixCell {
   pageId: number | null;
   status: string;            // 'planned' | 'briefed' | 'complete' (or '' if no row yet)
   billingStatus: string;     // 'included' | 'add_on' | 'comp' (or '' if no row yet)
+  metrics: PageSearchMetrics | null;
+}
+
+export interface PageSearchMetrics {
+  period: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number | null;
+  positionChange: number | null;
+  impressionsChange: number | null;
+}
+
+interface StoredPageMetric { page: string; impressions: number; clicks: number; position?: number | null }
+
+export async function pageMetricsHistory(
+  db: D1Database,
+  projectId: number,
+  publishedUrl: string | null,
+  limit = 6,
+): Promise<PageSearchMetrics[]> {
+  const path = normalizePagePath(publishedUrl);
+  if (!path) return [];
+  const snapshots = await db.prepare(`SELECT period, top_pages FROM seo_snapshots WHERE project_id=? AND top_pages IS NOT NULL ORDER BY period DESC LIMIT ?`)
+    .bind(projectId, limit).all<{ period: string; top_pages: string }>();
+  const newestFirst = (snapshots.results ?? []).flatMap((snapshot) => {
+    const metric = pageMetricMap(snapshot.top_pages).get(path);
+    return metric ? [{ period: snapshot.period, metric }] : [];
+  });
+  return newestFirst.map(({ period, metric }, index) => {
+    const previous = newestFirst[index + 1]?.metric;
+    return {
+      period,
+      impressions: metric.impressions,
+      clicks: metric.clicks,
+      ctr: metric.impressions > 0 ? metric.clicks / metric.impressions : 0,
+      position: metric.position ?? null,
+      positionChange: metric.position != null && previous?.position != null ? previous.position - metric.position : null,
+      impressionsChange: previous ? metric.impressions - previous.impressions : null,
+    };
+  });
 }
 
 export interface FoundationMatrixRow extends MatrixCell {
@@ -73,15 +114,36 @@ export async function buildMatrixForProject(
   const services = safeArr(project.services);
   const cities = safeArr(project.service_areas);
 
-  const pagesResult = await db
-    .prepare(
-      `SELECT id, type, service, city, status, billing_status
-       FROM pages
-       WHERE project_id = ?`
-    )
-    .bind(projectId)
-    .all<Pick<Page, 'id' | 'type' | 'service' | 'city' | 'status'> & { billing_status: string | null }>();
+  const [pagesResult, snapshotsResult] = await Promise.all([
+    db.prepare(`SELECT id, type, service, city, status, billing_status, published_url FROM pages WHERE project_id = ?`)
+      .bind(projectId)
+      .all<Pick<Page, 'id' | 'type' | 'service' | 'city' | 'status' | 'published_url'> & { billing_status: string | null }>(),
+    db.prepare(`SELECT period, top_pages FROM seo_snapshots WHERE project_id = ? AND top_pages IS NOT NULL ORDER BY period DESC LIMIT 2`)
+      .bind(projectId)
+      .all<{ period: string; top_pages: string }>(),
+  ]);
   const pages = pagesResult.results ?? [];
+  const snapshots = snapshotsResult.results ?? [];
+  const currentSnapshot = snapshots[0];
+  const previousSnapshot = snapshots[1];
+  const currentMetrics = pageMetricMap(currentSnapshot?.top_pages);
+  const previousMetrics = pageMetricMap(previousSnapshot?.top_pages);
+  const metricsFor = (page?: (typeof pages)[number]): PageSearchMetrics | null => {
+    const path = normalizePagePath(page?.published_url);
+    if (!path) return null;
+    const current = currentMetrics.get(path);
+    if (!current || !currentSnapshot) return null;
+    const previous = previousMetrics.get(path);
+    return {
+      period: currentSnapshot.period,
+      impressions: current.impressions,
+      clicks: current.clicks,
+      ctr: current.impressions > 0 ? current.clicks / current.impressions : 0,
+      position: current.position ?? null,
+      positionChange: current.position != null && previous?.position != null ? previous.position - current.position : null,
+      impressionsChange: previous ? current.impressions - previous.impressions : null,
+    };
+  };
 
   // Index for fast lookups
   const foundationByType = new Map<string, (typeof pages)[number]>();
@@ -112,6 +174,7 @@ export async function buildMatrixForProject(
         pageId: row?.id ?? null,
         status: row?.status ?? '',
         billingStatus: row?.billing_status ?? '',
+        metrics: metricsFor(row),
       };
     });
 
@@ -124,6 +187,7 @@ export async function buildMatrixForProject(
         pageId: p.id,
         status: p.status ?? '',
         billingStatus: p.billing_status ?? '',
+        metrics: metricsFor(p),
       });
     }
   }
@@ -135,6 +199,7 @@ export async function buildMatrixForProject(
       pageId: row?.id ?? null,
       status: row?.status ?? '',
       billingStatus: row?.billing_status ?? '',
+      metrics: metricsFor(row),
     };
   });
 
@@ -148,6 +213,7 @@ export async function buildMatrixForProject(
         pageId: row?.id ?? null,
         status: row?.status ?? '',
         billingStatus: row?.billing_status ?? '',
+        metrics: metricsFor(row),
       });
     }
   }
@@ -157,6 +223,29 @@ export async function buildMatrixForProject(
     servicePages,
     serviceAreaGrid: { services, cities, cells },
   };
+}
+
+function pageMetricMap(raw: string | null | undefined): Map<string, StoredPageMetric> {
+  const map = new Map<string, StoredPageMetric>();
+  if (!raw) return map;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return map;
+    for (const item of parsed as StoredPageMetric[]) {
+      const path = normalizePagePath(item.page);
+      if (path) map.set(path, item);
+    }
+  } catch { /* A malformed snapshot should not break the page matrix. */ }
+  return map;
+}
+
+function normalizePagePath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value, 'https://matrix.local');
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    return decodeURIComponent(path).toLowerCase();
+  } catch { return null; }
 }
 
 function safeArr(raw: string | null | undefined): string[] {

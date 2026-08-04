@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Brief, Page, ShowToast } from '../../lib/types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { Brief, Page, PageSearchMetrics, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
+import { PageInsightsDrawer } from './PageInsightsDrawer';
 
 /**
  * Live page matrix for the Brief Studio.
@@ -24,12 +25,12 @@ import { Spinner } from '../shared/Spinner';
  */
 
 interface MatrixData {
-  foundationPages: Array<{ type: string; label: string; pageId: number | null; status: string; billingStatus: string }>;
-  servicePages: Array<{ service: string; pageId: number | null; status: string; billingStatus: string }>;
+  foundationPages: Array<{ type: string; label: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
+  servicePages: Array<{ service: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
   serviceAreaGrid: {
     services: string[];
     cities: string[];
-    cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string }>;
+    cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
   };
 }
 
@@ -40,14 +41,19 @@ interface BriefStudioMatrixProps {
   reloadToken?: string | number;
   showToast: ShowToast;
   onOpenBrief: (brief: Brief) => void;
+  recommendedPageKeys?: string[];
+  optimizationPageIds?: number[];
 }
 
 export function BriefStudioMatrix({
-  projectId, reloadToken, showToast, onOpenBrief,
+  projectId, reloadToken, showToast, onOpenBrief, recommendedPageKeys = [], optimizationPageIds = [],
 }: BriefStudioMatrixProps) {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [insightPageId, setInsightPageId] = useState<number | null>(null);
+  const recommended = useMemo(() => new Set(recommendedPageKeys), [recommendedPageKeys]);
+  const optimizationPages = useMemo(() => new Set(optimizationPageIds), [optimizationPageIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +83,13 @@ export function BriefStudioMatrix({
     setBusyKey(cellKey);
     try {
       let pageId = pageRow.pageId;
+
+      // Live cells are operational analytics surfaces. Brief creation is an
+      // explicit action inside Page Insights when optimization work exists.
+      if (pageId != null && pageRow.status === 'complete') {
+        setInsightPageId(pageId);
+        return;
+      }
 
       // Materialise the page row if it doesn't exist yet.
       if (pageId == null) {
@@ -141,8 +154,9 @@ export function BriefStudioMatrix({
                 key={key}
                 cellKey={key}
                 title={row.label}
-                status={row.status}
+                status={row.pageId != null && optimizationPages.has(row.pageId) ? 'recommended' : row.status}
                 billing={row.billingStatus}
+                metrics={row.metrics}
                 busy={busyKey === key}
                 onClick={() =>
                   handleCellClick(
@@ -171,8 +185,9 @@ export function BriefStudioMatrix({
                   key={key}
                   cellKey={key}
                   title={row.service}
-                  status={row.status}
+                  status={row.pageId != null && optimizationPages.has(row.pageId) ? 'recommended' : row.status || (recommended.has(`service|${row.service}|`.toLowerCase()) ? 'recommended' : '')}
                   billing={row.billingStatus}
+                  metrics={row.metrics}
                   busy={busyKey === key}
                   onClick={() =>
                     handleCellClick(
@@ -205,6 +220,8 @@ export function BriefStudioMatrix({
             cities={serviceAreaGrid.cities}
             cells={serviceAreaGrid.cells}
             busyKey={busyKey}
+            recommended={recommended}
+            optimizationPages={optimizationPages}
             onCellClick={(svc, city, row) =>
               handleCellClick(
                 `g:${svc}:${city}`,
@@ -215,6 +232,12 @@ export function BriefStudioMatrix({
           />
         )}
       </MatrixSection>
+      <PageInsightsDrawer
+        pageId={insightPageId}
+        showToast={showToast}
+        onClose={() => setInsightPageId(null)}
+        onOpenBrief={(brief) => { setInsightPageId(null); onOpenBrief(brief); }}
+      />
     </>
   );
 }
@@ -248,12 +271,14 @@ function PlaceholderRow({ text }: { text: string }) {
 }
 
 function ServiceAreaGrid({
-  services, cities, cells, busyKey, onCellClick,
+  services, cities, cells, busyKey, recommended, optimizationPages, onCellClick,
 }: {
   services: string[];
   cities: string[];
-  cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string }>;
+  cells: Array<{ service: string; city: string; pageId: number | null; status: string; billingStatus: string; metrics: PageSearchMetrics | null }>;
   busyKey: string | null;
+  recommended: Set<string>;
+  optimizationPages: Set<number>;
   onCellClick: (service: string, city: string, row: { pageId: number | null; status: string; billingStatus: string }) => void;
 }) {
   const gridTemplate = `170px repeat(${cities.length}, minmax(110px, 1fr))`;
@@ -285,8 +310,9 @@ function ServiceAreaGrid({
                   key={key}
                   cellKey={key}
                   title={city}
-                  status={cell?.status ?? ''}
+                  status={cell?.pageId != null && optimizationPages.has(cell.pageId) ? 'recommended' : cell?.status || (recommended.has(`service-area|${service}|${city}`.toLowerCase()) ? 'recommended' : '')}
                   billing={cell?.billingStatus ?? ''}
+                  metrics={cell?.metrics ?? null}
                   busy={busyKey === key}
                   compact
                   onClick={() =>
@@ -306,12 +332,13 @@ function ServiceAreaGrid({
 }
 
 function Cell({
-  cellKey: _cellKey, title, status, billing, compact, busy, onClick,
+  cellKey: _cellKey, title, status, billing, metrics, compact, busy, onClick,
 }: {
   cellKey: string;
   title: string;
   status: string;
   billing: string;
+  metrics?: PageSearchMetrics | null;
   compact?: boolean;
   busy?: boolean;
   onClick: () => void;
@@ -329,10 +356,37 @@ function Cell({
       {billing && billing !== 'included' && (
         <span className="bs-cell-billing">{billingShort(billing)}</span>
       )}
-      <div className="bs-cell-title">{title}</div>
-      <div className="bs-cell-status">{busy ? <><Spinner /> Generating…</> : label}</div>
+      <div className="bs-cell-content">
+        <div className="bs-cell-copy">
+          <div className="bs-cell-title">{title}</div>
+          <div className="bs-cell-status">{busy ? <><Spinner /> Generating…</> : label}</div>
+        </div>
+        {metrics && <PageMetrics metrics={metrics} />}
+      </div>
     </button>
   );
+}
+
+function PageMetrics({ metrics }: { metrics: PageSearchMetrics }) {
+  const movement = metrics.positionChange;
+  return (
+    <span className="bs-cell-metrics" title={`Search Console · ${metrics.period} · ${metrics.impressions.toLocaleString()} impressions · ${metrics.clicks.toLocaleString()} clicks`}>
+      {metrics.position != null && (
+        <span className="bs-cell-rank">
+          Pos. {metrics.position.toFixed(1)}
+          {movement != null && Math.abs(movement) >= 0.05 && (
+            <small className={movement > 0 ? 'up' : 'down'}>{movement > 0 ? '↑' : '↓'}{Math.abs(movement).toFixed(1)}</small>
+          )}
+        </span>
+      )}
+      <span>{formatCompact(metrics.impressions)} impr</span>
+      <span>{formatCompact(metrics.clicks)} clicks</span>
+    </span>
+  );
+}
+
+function formatCompact(value: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
 function cellVariant(status: string): 'empty' | 'briefed' | 'live' | 'recommended' {
@@ -346,11 +400,11 @@ function cellVariant(status: string): 'empty' | 'briefed' | 'live' | 'recommende
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'complete': return '● Live';
-    case 'briefed': return '📋 Briefed';
-    case 'planned': return '+ Generate brief';
-    case 'recommended': return '★ Recommended';
-    default: return '+ Generate brief';
+    case 'complete': return 'Live';
+    case 'briefed': return 'Briefed';
+    case 'planned': return 'Generate brief';
+    case 'recommended': return 'Recommended';
+    default: return 'Generate brief';
   }
 }
 

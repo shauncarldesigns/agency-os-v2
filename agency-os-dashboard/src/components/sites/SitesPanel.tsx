@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Project, Lead, ShowToast, Tab } from '../../lib/types';
+import type { Project, Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
@@ -8,11 +8,10 @@ import { SiteDetailPanel } from './SiteDetailPanel';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { QuickBriefModal } from './QuickBriefModal';
 import { TIER_MRR } from '../../lib/pricing';
-import { ArrowUpDown, BriefcaseBusiness, Gem, Handshake, Sparkles, Zap } from 'lucide-react';
+import { ArrowUpDown, BriefcaseBusiness, Gem, Globe2, Handshake, Sparkles, Zap } from 'lucide-react';
 
 interface SitesPanelProps {
   showToast: ShowToast;
-  onSwitchTab: (tab: Tab) => void;
   /** When App.tsx hands us a project id (e.g. from a fresh Pipeline qualify
    *  on a Tier 3 lead), open its Brief Studio detail on arrival. */
   initialProjectId?: number | null;
@@ -27,7 +26,7 @@ type Sort = 'tier' | 'due' | 'az';
  * mutually exclusive — the operator picks one at a time, no compound
  * filtering. Filter is purely client-side over the already-fetched list.
  */
-type StatusFilter = 'all' | 'active' | 'prospect' | 't3' | 't2' | 't1';
+type StatusFilter = 'all' | 'active' | 'internal' | 't3' | 't2' | 't1';
 
 /**
  * The unified project editor (OperatorInputForm) needs hasMaster + lead.
@@ -42,13 +41,14 @@ interface EditorContext {
 }
 
 export function SitesPanel({
-  showToast, onSwitchTab, initialProjectId, onInitialProjectConsumed,
+  showToast, initialProjectId, onInitialProjectConsumed,
 }: SitesPanelProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<Sort>('tier');
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [detailProjectId, setDetailProjectId] = useState<number | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'briefs' | 'onboarding'>('overview');
   const [editorCtx, setEditorCtx] = useState<EditorContext | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
   // Quick brief modal — keyed on { project, lead } where lead is fetched
@@ -77,6 +77,7 @@ export function SitesPanel({
     if (loading) return;
     const project = projects.find((p) => p.id === initialProjectId);
     if (project && project.tier === 3) {
+      setDetailInitialTab('briefs');
       setDetailProjectId(initialProjectId);
     }
     onInitialProjectConsumed?.();
@@ -133,9 +134,11 @@ export function SitesPanel({
     // Filter first (cheap, narrows the set), then sort the remainder.
     const isActive = (p: Project) => p.status === 'live' || p.status === 'building';
     let list = projects.filter((p) => {
+      const visibleClient = p.is_internal === 1 || ['building', 'live', 'paused'].includes(p.status);
+      if (!visibleClient) return false;
       switch (filter) {
         case 'active':   return isActive(p);
-        case 'prospect': return p.status === 'prospect';
+        case 'internal': return p.is_internal === 1;
         case 't3':       return isActive(p) && p.tier === 3;
         case 't2':       return isActive(p) && p.tier === 2;
         case 't1':       return isActive(p) && p.tier === 1;
@@ -157,8 +160,8 @@ export function SitesPanel({
   const stats = useMemo(() => {
     // Active clients drive every MRR-style stat — projects in 'prospect'
     // status are qualified-but-unsigned and shouldn't inflate the numbers.
-    const active = projects.filter(p => p.status === 'live' || p.status === 'building');
-    const prospects = projects.filter(p => p.status === 'prospect');
+    const active = projects.filter(p => p.is_internal !== 1 && (p.status === 'live' || p.status === 'building'));
+    const internal = projects.filter(p => p.is_internal === 1);
     const t3 = active.filter(p => p.tier === 3);
     const t2 = active.filter(p => p.tier === 2);
     const t1 = active.filter(p => p.tier === 1);
@@ -166,7 +169,7 @@ export function SitesPanel({
     const t2Mrr = t2.length * TIER_MRR[2];
     return {
       total: active.length,
-      prospects: prospects.length,
+      internal: internal.length,
       t3: t3.length,
       t2: t2.length,
       t1: t1.length,
@@ -176,8 +179,8 @@ export function SitesPanel({
   }, [projects]);
 
   const groupedProjects = useMemo(() => ({
-    clients: sorted.filter((project) => project.status !== 'prospect'),
-    prospects: sorted.filter((project) => project.status === 'prospect'),
+    clients: sorted.filter((project) => project.is_internal !== 1),
+    internal: sorted.filter((project) => project.is_internal === 1),
   }), [sorted]);
 
   const editorElement = editorCtx && (
@@ -219,10 +222,13 @@ export function SitesPanel({
       <>
         <SiteDetailPanel
           project={detailProject}
+          initialTab={detailInitialTab}
           briefRefreshToken={briefRefreshToken}
           showToast={showToast}
-          onSwitchTab={onSwitchTab}
-          onBack={() => setDetailProjectId(null)}
+          onBack={() => {
+            setDetailProjectId(null);
+            setDetailInitialTab('overview');
+          }}
           onProjectChanged={load}
           onEditProject={() => openEditor(detailProject)}
           onQuickBrief={() => openQuickBrief(detailProject)}
@@ -245,7 +251,7 @@ export function SitesPanel({
                 <h1 className="text-xl font-semibold tracking-tight text-slate-950">Clients &amp; sites</h1>
                 <p className="mt-0.5 text-sm text-slate-500">
             {filter === 'all'
-              ? 'Manage prospects, active clients, and every site in one place.'
+              ? 'Manage signed clients, internal workspaces, and every active site.'
               : `Showing ${filterLabel(filter).toLowerCase()}`}
             {filter !== 'all' && (
               <button
@@ -281,12 +287,12 @@ export function SitesPanel({
           <StatValue value={stats.total} label="Active clients" detail={`$${(stats.t3Mrr + stats.t2Mrr).toLocaleString()}/mo MRR`} />
         </StatTile>
         <StatTile
-          active={filter === 'prospect'}
-          onClick={() => setFilter((f) => (f === 'prospect' ? 'all' : 'prospect'))}
+          active={filter === 'internal'}
+          onClick={() => setFilter((f) => (f === 'internal' ? 'all' : 'internal'))}
           icon={<BriefcaseBusiness size={17} />}
           tone="amber"
         >
-          <StatValue value={stats.prospects} label="Prospects" detail="Qualified · not signed" />
+          <StatValue value={stats.internal} label="Internal" detail="Excluded from MRR" />
         </StatTile>
         <StatTile
           active={filter === 't3'}
@@ -322,9 +328,9 @@ export function SitesPanel({
       ) : projects.length === 0 ? (
         // True empty state: no projects at all in the DB.
         <EmptyState
-          icon="🌐"
+          icon={<Globe2 size={34} strokeWidth={1.6} />}
           title="No client sites yet"
-          sub="Qualify a Pipeline lead to convert it into a project here. Tier 3 unlocks the Brief Studio; Tier 1/2 land as light-weight records."
+          sub="Convert a signed lead from Email or Text Outreach to create its client workspace here."
         />
       ) : sorted.length === 0 ? (
         // Projects exist but the active filter excludes them all.
@@ -343,15 +349,25 @@ export function SitesPanel({
           {groupedProjects.clients.length > 0 && (
             <ProjectGroup
               title="Clients"
-              description="Active and historical client projects"
+              description="Signed client projects and active sites"
               projects={groupedProjects.clients}
               renderCard={(project) => (
                 <SiteCard
                   key={project.id}
                   project={project}
                   showToast={showToast}
-                  onSwitchTab={onSwitchTab}
-                  onOpenDetail={() => setDetailProjectId(project.id)}
+                  onOpenDetail={() => {
+                    setDetailInitialTab('overview');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenBriefStudio={() => {
+                    setDetailInitialTab('briefs');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenOnboarding={() => {
+                    setDetailInitialTab('onboarding');
+                    setDetailProjectId(project.id);
+                  }}
                   onEditInfo={() => openEditor(project)}
                   onQuickBrief={() => openQuickBrief(project)}
                   onProjectChanged={() => { void load(); }}
@@ -359,18 +375,28 @@ export function SitesPanel({
               )}
             />
           )}
-          {groupedProjects.prospects.length > 0 && (
+          {groupedProjects.internal.length > 0 && (
             <ProjectGroup
-              title="Prospects"
-              description="Qualified opportunities awaiting a decision"
-              projects={groupedProjects.prospects}
+              title="Internal workspaces"
+              description="Testing and agency-owned sites excluded from MRR"
+              projects={groupedProjects.internal}
               renderCard={(project) => (
                 <SiteCard
                   key={project.id}
                   project={project}
                   showToast={showToast}
-                  onSwitchTab={onSwitchTab}
-                  onOpenDetail={() => setDetailProjectId(project.id)}
+                  onOpenDetail={() => {
+                    setDetailInitialTab('overview');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenBriefStudio={() => {
+                    setDetailInitialTab('briefs');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenOnboarding={() => {
+                    setDetailInitialTab('onboarding');
+                    setDetailProjectId(project.id);
+                  }}
                   onEditInfo={() => openEditor(project)}
                   onQuickBrief={() => openQuickBrief(project)}
                   onProjectChanged={() => { void load(); }}
@@ -454,10 +480,10 @@ function ProjectGroup({
   );
 }
 
-function filterLabel(f: 'all' | 'active' | 'prospect' | 't3' | 't2' | 't1'): string {
+function filterLabel(f: StatusFilter): string {
   switch (f) {
     case 'active':   return 'Active Clients';
-    case 'prospect': return 'Prospects';
+    case 'internal': return 'Internal workspaces';
     case 't3':       return 'Tier 3 active';
     case 't2':       return 'Tier 2 active';
     case 't1':       return 'Tier 1 (handed off)';

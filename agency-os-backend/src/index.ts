@@ -26,6 +26,8 @@ import { emailOutreachRouter, publicEmailRouter } from './routes/emailOutreach';
 import { syncClarityEngagement } from './services/clarity';
 import { processDueEmailAutomations } from './services/emailAutomation';
 import { settingsRouter } from './routes/settings';
+import { growthCyclesRouter } from './routes/growth-cycles';
+import { onboardingRouter } from './routes/onboarding';
 import { runScheduledDiscovery } from './services/prospectDiscovery';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -69,6 +71,8 @@ app.route('/api/prospect', prospectRouter);
 // overlapping subrouters mounted at the same prefix).
 app.route('/api/projects', dnsRouter);
 app.route('/api/projects', projectsRouter);
+app.route('/api', growthCyclesRouter);
+app.route('/api', onboardingRouter);
 // v2.1 brief routes span /api/projects/:id/briefs, /api/briefs/:id, and /api/pages/:id/complete
 app.route('/api', briefsRouter);
 app.route('/api', brandAttributesRouter);

@@ -326,9 +326,9 @@ function LeadRow({
                 variant="primary"
                 size="xs"
                 onClick={() => onQualify(lead)}
-                title="Book a demo — creates a Sites prospect project at the chosen tier so Quick Brief is available for demo prep"
+                title="They signed — create the client workspace and carry over the outreach site and brief"
               >
-                → Book demo
+                → Convert to client
               </Button>
           )}
           {lead.enrichment_status === 'pending' && (

@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react';
+
 interface EmptyStateProps {
-  icon: string;
+  icon: ReactNode;
   title: string;
   sub: string;
 }
@@ -7,7 +9,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, sub }: EmptyStateProps) {
   return (
     <div className="empty-state">
-      <div className="empty-state-icon">{icon}</div>
+      <div className="empty-state-icon" aria-hidden="true">{icon}</div>
       <div className="empty-state-title">{title}</div>
       <div className="empty-state-sub">{sub}</div>
     </div>

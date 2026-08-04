@@ -451,6 +451,108 @@ leadsRouter.post('/:id/notes', async (c) => {
   }
 });
 
+// POST /api/leads/:id/convert-to-client
+// Explicit sales handoff shared by email + text outreach. Demo assets stay on
+// the lead during outreach; only a signed deal creates a client project.
+leadsRouter.post('/:id/convert-to-client', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+  const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL')
+    .bind(id).first<Lead>();
+  if (!lead) return c.json(notFound('Lead'), 404);
+  if (lead.project_id) return c.json(conflict('Lead already has a project — open it in Clients & Sites'), 409);
+  if (lead.enrichment_status !== 'enriched') {
+    return c.json(badRequest('Lead must be enriched before conversion'), 400);
+  }
+
+  const body = await c.req.json().catch(() => ({})) as {
+    tier?: number;
+    initialStatus?: 'building' | 'live';
+    contractStart?: string;
+    clientEmail?: string;
+    note?: string;
+  };
+  const tier = Number(body.tier ?? lead.recommended_tier ?? 1) as 1 | 2 | 3;
+  if (![1, 2, 3].includes(tier)) return c.json(badRequest('tier must be 1, 2, or 3'), 400);
+  const initialStatus = body.initialStatus === 'live' ? 'live' : 'building';
+  const contractStart = body.contractStart?.trim() || new Date().toISOString();
+  if (Number.isNaN(Date.parse(contractStart))) {
+    return c.json(badRequest('contractStart must be a valid date'), 400);
+  }
+  const contractMinEnd = tier === 3
+    ? new Date(new Date(contractStart).setMonth(new Date(contractStart).getMonth() + 6)).toISOString()
+    : null;
+  const clientEmail = body.clientEmail?.trim() || lead.email || null;
+  const note = body.note?.trim() || null;
+  const slug = generateProjectSlug(lead.company, lead.city ?? '', lead.state ?? 'WI');
+  const existing = await c.env.DB.prepare('SELECT id FROM projects WHERE slug = ?').bind(slug).first();
+  if (existing) return c.json(conflict('A project for this business and location already exists'), 409);
+
+  try {
+    const projectInsert = c.env.DB.prepare(`
+      INSERT INTO projects (
+        lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
+        services, service_areas, landingsite_url, client_email, pages_planned, monthly_pages_target,
+        contract_start, contract_min_end, merchynt_active, status, reviews_snapshot, is_internal
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    `).bind(
+      lead.id, lead.company, slug, tier, lead.company, lead.industry ?? null,
+      lead.city ?? 'Unknown', lead.state ?? 'WI', lead.phone ?? null, lead.email ?? null,
+      lead.extracted_services ?? null, lead.extracted_service_areas ?? null,
+      lead.site_url_raw ?? null, clientEmail, tier === 3 ? 15 : 5,
+      tier === 3 ? 3 : 0,
+      contractStart, contractMinEnd, tier === 3 ? 1 : 0, initialStatus,
+      lead.google_reviews ?? null,
+    );
+
+    // D1 batch is atomic. Subqueries resolve the just-created project by its
+    // unique slug so the lead link + preserved outreach brief commit together.
+    await c.env.DB.batch([
+      projectInsert,
+      c.env.DB.prepare(`
+        UPDATE leads SET
+          status = 'client',
+          project_id = (SELECT id FROM projects WHERE slug = ?),
+          pipeline_status = 'archived',
+          outcome = 'Converted to client',
+          pipeline_last_action_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(slug, id),
+      c.env.DB.prepare(`
+        INSERT INTO briefs (project_id, kind, content_markdown, status, version, generated_by_model)
+        SELECT id, 'outreach', ?, 'saved', 1, 'pipeline-brief'
+          FROM projects
+         WHERE slug = ? AND ? IS NOT NULL AND trim(?) <> ''
+      `).bind(lead.pipeline_brief, slug, lead.pipeline_brief, lead.pipeline_brief),
+      c.env.DB.prepare(`
+        UPDATE email_automations
+           SET status = 'stopped', stopped_at = datetime('now'), updated_at = datetime('now')
+         WHERE lead_id = ? AND status IN ('active', 'paused')
+      `).bind(id),
+      c.env.DB.prepare(`
+        INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+        VALUES (?, 'client_converted', ?, 'archived', ?, datetime('now'))
+      `).bind(
+        id,
+        lead.pipeline_status,
+        JSON.stringify({ tier, initial_status: initialStatus, contract_start: contractStart, note }),
+      ),
+    ]);
+
+    const [updatedLead, project] = await Promise.all([
+      c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first(),
+      c.env.DB.prepare('SELECT * FROM projects WHERE slug = ?').bind(slug).first(),
+    ]);
+    log('info', 'leads', `Lead ${id} converted to client`, { projectId: (project as { id?: number } | null)?.id, tier });
+    return c.json({ lead: updatedLead, project }, 201);
+  } catch (err) {
+    log('error', 'leads', `POST /leads/${id}/convert-to-client failed`, err);
+    return c.json(serverError(`Client conversion failed: ${(err as Error).message}`), 500);
+  }
+});
+
 // POST /api/leads/:id/qualify
 // The operator-driven qualification step: pick a tier, optionally drop a note,
 // and convert the lead into a Sites project in one round-trip. Replaces the
@@ -536,9 +638,9 @@ export async function createProjectFromLead(env: Env, lead: Lead, tier: 1 | 2 | 
   const insert = await env.DB.prepare(`
     INSERT INTO projects (
       lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
-      services, service_areas, pages_planned,
+      services, service_areas, pages_planned, monthly_pages_target,
       contract_start, contract_min_end, merchynt_active, status, reviews_snapshot
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospect', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospect', ?)
   `).bind(
     lead.id,
     lead.company,
@@ -553,6 +655,7 @@ export async function createProjectFromLead(env: Env, lead: Lead, tier: 1 | 2 | 
     lead.extracted_services ?? null,
     lead.extracted_service_areas ?? null,
     pagesPlanned,
+    tier === 3 ? 3 : 0,
     contractStart,
     contractMinEnd,
     tier === 3 ? 1 : 0,
