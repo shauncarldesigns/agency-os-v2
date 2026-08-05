@@ -590,6 +590,9 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .client-report-section{margin-top:16px;}
 .configuration-card-grid{display:grid;gap:14px;}
 .configuration-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 12px;}
+.configuration-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:14px;}
+.workspace-card .configuration-actions button{margin-top:0;}
+.configuration-dns-status{margin-top:16px;}
 .configuration-field{display:block;min-width:0;}
 .configuration-field.wide{grid-column:1/-1;}
 .configuration-field>span{display:block;margin-bottom:5px;font-size:.62rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);}
