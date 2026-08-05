@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, ExternalLink, FileText, LoaderCircle, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, BarChart3, ExternalLink, FileText, LoaderCircle, RefreshCw, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { FindingCard } from './SeoAuditCard';
 import { api, ApiError } from '../../lib/api';
 import type { Brief, PageInsights, ShowToast } from '../../lib/types';
@@ -13,6 +13,7 @@ export function PageInsightsDrawer({ pageId, showToast, onClose, onOpenBrief }: 
   const [data, setData] = useState<PageInsights | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
+  const [validating, setValidating] = useState(false);
 
   const load = useCallback(async () => {
     if (pageId == null) return;
@@ -42,6 +43,17 @@ export function PageInsightsDrawer({ pageId, showToast, onClose, onOpenBrief }: 
     finally { setBusyItemId(null); }
   }
 
+  async function validateLivePage() {
+    if (!data) return;
+    setValidating(true);
+    try {
+      await api.seoAudits.run(data.page.project_id);
+      await load();
+      showToast('Live-page SEO validation complete', 'success');
+    } catch (err) { showToast(`Could not validate live page: ${err instanceof ApiError ? err.message : (err as Error).message}`, 'error'); }
+    finally { setValidating(false); }
+  }
+
   if (pageId == null) return null;
   const pageTitle = data?.page.title || [data?.page.service, data?.page.city].filter(Boolean).join(' in ') || 'Page insights';
 
@@ -67,7 +79,7 @@ export function PageInsightsDrawer({ pageId, showToast, onClose, onOpenBrief }: 
 
           {data.metrics_history.length > 1 && <section><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><TrendingUp className="h-4 w-4 text-blue-600" /> Recent trend</h3><div className="overflow-hidden rounded-xl border border-slate-200"><div className="grid grid-cols-4 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><span>Month</span><span className="text-right">Position</span><span className="text-right">Impr.</span><span className="text-right">Clicks</span></div>{data.metrics_history.map((metric) => <div key={metric.period} className="grid grid-cols-4 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-600"><span>{periodLabel(metric.period)}</span><span className="text-right font-medium">{metric.position?.toFixed(1) ?? '—'}</span><span className="text-right">{formatNumber(metric.impressions)}</span><span className="text-right">{formatNumber(metric.clicks)}</span></div>)}</div></section>}
 
-          <section><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><AlertTriangle className="h-4 w-4 text-orange-500" /> SEO audit findings</h3>{data.audit_findings.length ? <div className="space-y-3">{data.audit_findings.map((finding) => <FindingCard key={finding.id} finding={finding} />)}</div> : <EmptyCopy text="No active crawl findings are linked to this page." />}</section>
+          <section><div className="mb-3 flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><AlertTriangle className="h-4 w-4 text-orange-500" /> Live-page SEO validation</h3>{data.page.published_url && <button type="button" disabled={validating} onClick={() => void validateLivePage()} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">{validating ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Validate live page</button>}</div>{data.audit_findings.length ? <div className="space-y-3">{data.audit_findings.map((finding) => <FindingCard key={finding.id} finding={finding} />)}</div> : <EmptyCopy text="No active crawl findings are linked to this page. Validate after publishing to confirm the final URL, indexing signals, links, and technical SEO." />}</section>
 
           <section><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><Sparkles className="h-4 w-4 text-orange-500" /> Current action</h3>{openItems.length ? <div className="space-y-3">{openItems.map((item) => <div key={item.id} className="rounded-xl border border-orange-200 bg-orange-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{item.title}</p>{item.description && <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{item.description}</p>}</div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase text-orange-700">{item.status.replace('_', ' ')}</span></div><button type="button" disabled={busyItemId != null} onClick={() => void prepareUpdate(item.id, item.brief_id)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{busyItemId === item.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}{item.brief_id ? 'Open update brief' : 'Generate update brief'}</button></div>)}</div> : <EmptyCopy text="No optimization action is currently open for this page." />}</section>
 

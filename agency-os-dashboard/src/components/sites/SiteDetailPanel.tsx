@@ -18,7 +18,7 @@ import {
   diffAdditions,
 } from '../../lib/briefExtract';
 import { TIER_MRR } from '../../lib/pricing';
-import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, FlaskConical, Globe2, Home, Lock, MapPin, RefreshCw, Settings2, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, Globe2, Home, Lock, MapPin, RefreshCw, Settings2, Zap } from 'lucide-react';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -299,7 +299,7 @@ export function SiteDetailPanel({
 
         <div className="client-workspace-content">
       {workspaceTab === 'onboarding' ? (
-        <OnboardingChecklistPanel project={project} showToast={showToast} />
+        <OnboardingChecklistPanel project={project} discovery={discovery} onOpenDiscovery={() => setDiscoveryOpen(true)} showToast={showToast} />
       ) : workspaceTab === 'briefs' ? <div className="bs-layout">
         <main className="bs-main">
           {loading ? (
@@ -407,8 +407,6 @@ export function SiteDetailPanel({
             project={project}
             lead={lead}
             onQuickBrief={onQuickBrief}
-            discovery={discovery}
-            onOpenDiscovery={() => setDiscoveryOpen(true)}
           />
         </aside>
       </div> : (
@@ -1263,69 +1261,17 @@ function WorkspaceStatus({ label, value, tone }: { label: string; value: string;
 // ============================================================================
 
 function Sidebar({
-  project, lead, onQuickBrief, discovery, onOpenDiscovery,
+  project, lead, onQuickBrief,
 }: {
   project: Project;
   lead: Lead | null;
   onQuickBrief: () => void;
-  discovery: ProjectDiscovery | null;
-  onOpenDiscovery: () => void;
 }) {
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
   const pagespeed = lead?.pagespeed_desktop;
-  const discoveryAnswers = safeJsonObject(discovery?.answers_json);
-  const logoStatus = assetStatus(
-    discoveryAnswers.logo_available,
-    discoveryAnswers.logo_delivery_status,
-    'No logo',
-  );
-  const photosStatus = assetStatus(
-    discoveryAnswers.photos_available,
-    discoveryAnswers.photos_delivery_status,
-    'No photos',
-  );
-
   return (
     <>
-      <div className="bs-side-card">
-        <div className="bs-side-title">Discovery</div>
-        <div className="bs-side-row bs-side-row-status">
-          <span>Planning session</span>
-          <span className={discovery?.status === 'complete' ? 'bs-side-status-ok' : 'bs-side-status-na'}>
-            {discovery?.status === 'complete' ? 'Complete' : discovery ? 'Draft' : 'Not started'}
-          </span>
-        </div>
-        {project.status === 'prospect' && project.is_internal !== 1 && (
-          <div style={{ margin: '8px 0', fontSize: '0.65rem', color: 'var(--yellow)' }}>
-            <FlaskConical size={12} /> Prospect project · opens in test mode
-          </div>
-        )}
-        {discovery?.updated_at && (
-          <div style={{ marginTop: 7, fontSize: '0.6rem', color: 'var(--text3)' }}>
-            Updated {formatRelative(discovery.updated_at)}
-          </div>
-        )}
-        <Button variant="ghost" size="sm" onClick={onOpenDiscovery}>
-          {discovery ? 'Continue discovery' : 'Start discovery'}
-        </Button>
-      </div>
-
-      <div className="bs-side-card">
-        <div className="bs-side-title">Assets</div>
-        <div className="bs-side-row bs-side-row-status">
-          <span>Logo</span>
-          <span className={logoStatus.tone}>{logoStatus.label}</span>
-        </div>
-        <div className="bs-side-row bs-side-row-status">
-          <span>Work photos</span>
-          <span className={photosStatus.tone}>{photosStatus.label}</span>
-        </div>
-        <div style={{ marginTop: 8, fontSize: '0.62rem', lineHeight: 1.45, color: 'var(--text3)' }}>
-          Delivery tracking only. Files continue to arrive by text or email for now.
-        </div>
-      </div>
-
       <div className="bs-side-card">
         <div className="bs-side-title">Quick Actions</div>
         <div className="bs-quick-actions">
@@ -1569,30 +1515,6 @@ function safeJsonArray(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
-}
-
-function safeJsonObject(raw: string | null | undefined): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const value = JSON.parse(raw);
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function assetStatus(
-  available: unknown,
-  delivery: unknown,
-  unavailableLabel: string,
-): { label: string; tone: string } {
-  if (available === false) return { label: unavailableLabel, tone: 'bs-side-status-na' };
-  if (available !== true) return { label: '— not answered', tone: 'bs-side-status-na' };
-  if (delivery === 'Delivered') return { label: 'Delivered', tone: 'bs-side-status-ok' };
-  if (delivery === 'Still waiting') return { label: '◷ Still waiting', tone: 'bs-side-status-na' };
-  return { label: 'Delivery unknown', tone: 'bs-side-status-na' };
 }
 
 function formatRelative(ts: string | null | undefined): string {

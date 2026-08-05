@@ -38,6 +38,7 @@ export function SiteCard({
   const pagesBuilt = project.pages_built ?? 0;
   const growthTotal = project.growth_items_total ?? 0;
   const growthCompleted = project.growth_items_completed ?? 0;
+  const bonusCompleted = project.growth_bonus_completed ?? 0;
   const growthHealth = project.growth_cycle_health ?? 'urgent';
   const growthDueLabel = project.growth_cycle_due_date
     ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
@@ -173,7 +174,7 @@ export function SiteCard({
           />
           <MetricChip
             label={hasBriefStudio ? `${growthPeriodLabel} growth${growthDueLabel ? ` · due ${growthDueLabel}` : ''}` : 'Pages built'}
-            value={hasBriefStudio ? (project.growth_cycle_id ? `${growthCompleted} of ${growthTotal} complete` : 'Plan this month') : String(pagesBuilt)}
+            value={hasBriefStudio ? (project.growth_cycle_id ? `${growthCompleted} of ${growthTotal} complete${bonusCompleted ? ` · +${bonusCompleted} bonus` : ''}` : 'Plan this month') : String(pagesBuilt)}
             tone={hasBriefStudio ? growthHealth : (pagesBuilt > 0 ? 'accent' : 'muted')}
             onClick={hasBriefStudio ? onOpenBriefStudio : undefined}
           />

@@ -15,6 +15,28 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Monthly growth commitments and onboarding placement (2026-08-05)
+
+- A Growth client has three committed page actions per month by default. Page
+  creation, content improvement, technical repair, and conversion improvement
+  can occupy a committed slot; additional work remains available as bonus work
+  and never changes the monthly denominator.
+- Brief Studio shows committed progress first and keeps surplus audit/page
+  recommendations under **Continue working**. Operators can promote a backlog
+  item into an open slot or explicitly replace an untouched planned item;
+  started work cannot be replaced. Client cards report completed bonus work
+  separately.
+- Audit findings fill only unoccupied commitment slots in severity order. The
+  complete crawl backlog remains available, while reruns continue reconciling
+  resolved findings.
+- Generated page briefs end with an unchecked pre-publish SEO release gate.
+  After publication, Page Insights can rerun the live crawl and refresh that
+  page's technical findings.
+- Business Discovery and Asset Collection now sit as compact, matching cards in
+  Onboarding. Discovery completion is an automatic checklist item; the existing
+  manual asset-receipt item remains the operator's final confirmation.
+- Migration: `2026-08-05-growth-commitment-slots.sql`.
+
 ## Website health and SEO crawl operations (2026-08-05)
 
 - The Website workspace now combines live-site identity, PageSpeed/search

@@ -66,7 +66,7 @@ const BANNED_WORDS = [
 
 const SYSTEM_PROMPT = `You are writing a brief that landingsite.ai (an AI page builder) reads to build one page of a small-business website. The master brief (provided in the user message) is the source of truth for the project — voice, audience, services, areas, differentiators, testimonials, conversion goal.
 
-Your output has two parts:
+Your output has three parts:
 
 ═══ PART 1 — SEO BLOCK (structured, literal) ═══
 
@@ -117,6 +117,20 @@ What the letter does NOT do:
 - **No invented facts.** Pull from the master brief only. \`[TBD: ...]\` tokens propagate verbatim.
 - **No empty hedging.** "This is an important page" / "users will find value here" — cut it. Every sentence should carry a specific fact, a specific phrase, or a specific instruction.
 
+═══ PART 3 — PRE-PUBLISH SEO CHECKLIST (structured, mandatory) ═══
+
+After the letter, add a \`## Pre-publish SEO checklist\` heading followed by
+unchecked markdown checkboxes. Make every check specific to this page. Verify
+the final URL/title/description/H1 and search intent; service and location
+language; internal links; recommended schema; canonical and indexability;
+meaningful image alt text; supported claims/reviews/local proof; working
+desktop/mobile CTA; sitemap readiness; and indexing-submission readiness.
+Include a cannibalization check against the other planned pages named in the
+master brief.
+
+Do not mark any checkbox complete. This is the operator's release gate before
+publishing, not a claim that the builder performed the checks.
+
 ═══ ANTI-FLUFF (mandatory, must appear in the letter) ═══
 
 The brief must include a paragraph telling the builder not to use platform-default adjectives. These words signal generic AI marketing copy and must not appear anywhere in the page — not in headlines, body, alt text, button labels, or chrome the builder generates around your supplied copy:
@@ -137,7 +151,7 @@ Also avoid "family-owned-and-operated" as a tagline (it's a fact, not a value pr
 
 ═══ OUTPUT ═══
 
-- Raw markdown. No code fence. No preamble. No closing remarks. Start with \`# Page Brief:\` and end with the final sentence of the letter.
+- Raw markdown. No code fence. No preamble or closing remarks. Start with \`# Page Brief:\` and end with the final unchecked checklist item.
 - The SEO block is structured fields. The letter is continuous prose. Never confuse the two.
 - Do not announce the angle. Do not label "the angle is X" — let the letter's lead make it obvious.
 - Stay within the length budget specified in the user message. If you're running long, you're probably padding.`;
@@ -175,7 +189,7 @@ export function buildPageBriefPrompt(
   );
   lines.push('');
   lines.push(
-    `Now: pick the angle from this business's actual review themes / owner identity / differentiators, write the SEO block with literal fields, then write the letter as continuous prose with the headline and subhead suggestions quoted inline. Include the anti-fluff paragraph. No section headers inside the letter.`
+    `Now: pick the angle from this business's actual review themes / owner identity / differentiators, write the SEO block with literal fields, then write the letter as continuous prose with the headline and subhead suggestions quoted inline. Include the anti-fluff paragraph. No section headers inside the letter. Finish with the page-specific unchecked pre-publish SEO checklist.`
   );
 
   return { system: SYSTEM_PROMPT, user: lines.join('\n') };

@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Monthly growth commitments and compact onboarding
+
+- **Growth-plan fulfillment now treats three page actions as the monthly commitment rather than a hard work limit.** Brief Studio separates committed creation/improvement work from an expandable bonus backlog, protects started commitments from replacement, reports bonus completions without changing the `3 of 3` denominator, and uses SEO audit severity to fill only open monthly slots. New page briefs include a pre-publish SEO checklist, live pages can be revalidated from Page Insights, and Discovery plus asset collection now live as compact, consistent cards within Onboarding instead of Brief Studio. Backend + dashboard + migration (`2026-08-05-growth-commitment-slots.sql`, apply before deploy).
+
 ### Website health and SEO crawl operations
 
 - **The Website workspace now provides an actionable operating view for live-site health.** Operators can refresh PageSpeed, run a bounded technical SEO crawl, review prioritized page-level findings, import already-live pages into Brief Studio when no Page Matrix exists, and turn crawl findings into update briefs without first generating a master brief. Audit reruns reconcile resolved work, the Page Matrix and Page Insights surface current crawl context, and eligible live Tier 3 sites receive a rolling 30-day audit through the existing daily maintenance trigger. Backend + dashboard + migration (`2026-08-04-seo-crawl-audits.sql`, apply before deploy).

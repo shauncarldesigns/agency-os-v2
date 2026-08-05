@@ -11,6 +11,7 @@ const categories = ['created', 'improved', 'google_business', 'proof', 'measured
 const itemStatuses = ['planned', 'in_progress', 'complete', 'blocked'] as const;
 const planningModes = ['auto', 'balanced', 'expansion', 'optimization'] as const;
 const BRIEF_MODEL = 'claude-opus-4-7';
+const PAGE_ACTION_CATEGORIES = ['created', 'improved', 'technical', 'conversion'] as const;
 
 function currentPeriod() { return chicagoToday().slice(0, 7); }
 function dueDate(period: string) {
@@ -155,15 +156,23 @@ PREVIOUS CYCLE: ${JSON.stringify(previousCycle ?? null)}`;
     const generated = await callClaudeJson<{ phase: string; summary: string; items: Array<{ category: string; title: string; description?: string; page_id?: number | null; recommended_page?: { type: string; service: string; city?: string | null } | null; completion_signal?: string | null }> }>(c.env.CLAUDE_API_KEY, prompt, { maxTokens: 1800, temperature: 0.2 });
     const supportedSignals = new Set(['gsc_connected', 'seo_snapshot_available']);
     const validItems = (generated.items ?? []).filter((item) => item.title?.trim() && (item.category === 'created' || (item.category === 'measured' && supportedSignals.has(item.completion_signal ?? '')))).slice(0, 5);
+    const monthlyTarget = Math.max(1, Number(project.monthly_pages_target) || 3);
+    const preservedCommitted = body.replace ? await c.env.DB.prepare(`SELECT COUNT(*) AS count FROM growth_work_items
+      WHERE cycle_id=? AND work_tier='committed' AND category IN ('created','improved','technical','conversion')
+        AND NOT (status='planned' AND brief_id IS NULL AND evidence_url IS NULL AND (category!='created' OR page_id IS NULL))`).bind(cycle!.id).first<{ count: number }>() : null;
+    let committedPageActions = Number(preservedCommitted?.count) || 0;
     const phase = phases.includes(generated.phase as typeof phases[number]) ? generated.phase : 'optimization';
-    const statements = [c.env.DB.prepare('DELETE FROM growth_work_items WHERE cycle_id = ?').bind(cycle!.id)];
+    const statements = [body.replace
+      ? c.env.DB.prepare(`DELETE FROM growth_work_items WHERE cycle_id=? AND status='planned' AND brief_id IS NULL AND evidence_url IS NULL AND (category!='created' OR page_id IS NULL)`).bind(cycle!.id)
+      : c.env.DB.prepare('DELETE FROM growth_work_items WHERE cycle_id = ?').bind(cycle!.id)];
     const validPageIds = new Set(pages.results.map((page) => Number((page as { id: number }).id)));
     const candidateByKey = new Map(pageCandidates.map((candidate) => [`${candidate.type}|${candidate.service}|${candidate.city ?? ''}`.toLowerCase(), candidate]));
     for (const item of validItems) {
       const requested = item.recommended_page;
       const candidate = requested ? candidateByKey.get(`${requested.type}|${requested.service}|${requested.city ?? ''}`.toLowerCase()) : undefined;
       if (item.category === 'created' && !candidate) continue;
-      statements.push(c.env.DB.prepare('INSERT INTO growth_work_items (cycle_id, category, title, description, page_id, recommended_page_type, recommended_service, recommended_city, completion_signal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(cycle!.id, item.category, item.title.trim(), item.description?.trim() || null, item.page_id && validPageIds.has(Number(item.page_id)) ? Number(item.page_id) : null, candidate?.type ?? null, candidate?.service ?? null, candidate?.city ?? null, item.category === 'measured' ? item.completion_signal : null));
+      const workTier = item.category === 'created' && committedPageActions++ < monthlyTarget ? 'committed' : item.category === 'created' ? 'bonus' : 'committed';
+      statements.push(c.env.DB.prepare('INSERT INTO growth_work_items (cycle_id, category, title, description, page_id, recommended_page_type, recommended_service, recommended_city, completion_signal, work_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(cycle!.id, item.category, item.title.trim(), item.description?.trim() || null, item.page_id && validPageIds.has(Number(item.page_id)) ? Number(item.page_id) : null, candidate?.type ?? null, candidate?.service ?? null, candidate?.city ?? null, item.category === 'measured' ? item.completion_signal : null, workTier));
     }
     statements.push(c.env.DB.prepare(`UPDATE growth_cycles SET phase=?, status='planning', generated_at=datetime('now'), generated_by='claude', updated_at=datetime('now') WHERE id=?`).bind(phase, cycle!.id));
     await c.env.DB.batch(statements);
@@ -191,11 +200,12 @@ growthCyclesRouter.post('/growth-cycles/:id/items', async (c) => {
   const cycleId = Number(c.req.param('id'));
   const cycle = await c.env.DB.prepare('SELECT id FROM growth_cycles WHERE id = ?').bind(cycleId).first();
   if (!cycle) return c.json(notFound('Growth cycle'), 404);
-  const body = await c.req.json() as { category?: string; title?: string; description?: string; evidence_url?: string; page_id?: number; recommended_page_type?: string; recommended_service?: string; recommended_city?: string };
+  const body = await c.req.json() as { category?: string; title?: string; description?: string; evidence_url?: string; page_id?: number; recommended_page_type?: string; recommended_service?: string; recommended_city?: string; work_tier?: string };
   if (!categories.includes(body.category as typeof categories[number])) return c.json(badRequest('Invalid category'), 400);
   if (!body.title?.trim()) return c.json(badRequest('Title is required'), 400);
-  const result = await c.env.DB.prepare(`INSERT INTO growth_work_items (cycle_id, category, title, description, evidence_url, page_id, recommended_page_type, recommended_service, recommended_city) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(cycleId, body.category, body.title.trim(), body.description?.trim() || null, body.evidence_url?.trim() || null, body.page_id ?? null, body.recommended_page_type ?? null, body.recommended_service ?? null, body.recommended_city ?? null).run();
+  const workTier = body.work_tier === 'bonus' ? 'bonus' : 'committed';
+  const result = await c.env.DB.prepare(`INSERT INTO growth_work_items (cycle_id, category, title, description, evidence_url, page_id, recommended_page_type, recommended_service, recommended_city, work_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(cycleId, body.category, body.title.trim(), body.description?.trim() || null, body.evidence_url?.trim() || null, body.page_id ?? null, body.recommended_page_type ?? null, body.recommended_service ?? null, body.recommended_city ?? null, workTier).run();
   const item = await c.env.DB.prepare('SELECT * FROM growth_work_items WHERE id = ?').bind(result.meta.last_row_id).first();
   return c.json({ item }, 201);
 });
@@ -211,6 +221,34 @@ growthCyclesRouter.patch('/growth-work-items/:id', async (c) => {
     .bind(body.title?.trim() || current.title, body.description === undefined ? current.description : body.description, body.evidence_url === undefined ? current.evidence_url : body.evidence_url, body.client_visible === undefined ? current.client_visible : (body.client_visible ? 1 : 0), status, status, id).run();
   const item = await c.env.DB.prepare('SELECT * FROM growth_work_items WHERE id = ?').bind(id).first();
   return c.json({ item });
+});
+
+// Promote a backlog item into this month's commitment. If all page-action
+// slots are occupied, the operator must explicitly name an untouched planned
+// item to move back to the bonus queue. Started work is never replaced.
+growthCyclesRouter.post('/growth-work-items/:id/commit', async (c) => {
+  const id = Number(c.req.param('id'));
+  const selected = await c.env.DB.prepare(`SELECT gwi.*, gc.project_id
+    FROM growth_work_items gwi JOIN growth_cycles gc ON gc.id=gwi.cycle_id WHERE gwi.id=?`).bind(id).first<Record<string, unknown>>();
+  if (!selected) return c.json(notFound('Growth work item'), 404);
+  if (!PAGE_ACTION_CATEGORIES.includes(selected.category as typeof PAGE_ACTION_CATEGORIES[number])) return c.json(badRequest('Only page actions can be committed'), 400);
+  const body = await c.req.json().catch(() => ({})) as { replace_item_id?: number };
+  const project = await c.env.DB.prepare('SELECT monthly_pages_target FROM projects WHERE id=?').bind(selected.project_id).first<{ monthly_pages_target: number }>();
+  const target = Math.max(1, Number(project?.monthly_pages_target) || 3);
+  const committed = await c.env.DB.prepare(`SELECT id FROM growth_work_items WHERE cycle_id=? AND work_tier='committed'
+    AND category IN ('created','improved','technical','conversion') AND id!=? ORDER BY created_at,id`).bind(selected.cycle_id, id).all<{ id: number }>();
+  const statements = [];
+  if ((committed.results?.length ?? 0) >= target) {
+    const replaceId = Number(body.replace_item_id);
+    const replacement = await c.env.DB.prepare(`SELECT id,status,brief_id,page_id,category FROM growth_work_items
+      WHERE id=? AND cycle_id=? AND work_tier='committed'`).bind(replaceId, selected.cycle_id).first<Record<string, unknown>>();
+    if (!replacement) return c.json(conflict('Choose a committed page action to replace'), 409);
+    if (replacement.status !== 'planned' || replacement.brief_id || (replacement.category === 'created' && replacement.page_id)) return c.json(conflict('Started work cannot be replaced'), 409);
+    statements.push(c.env.DB.prepare("UPDATE growth_work_items SET work_tier='bonus',updated_at=datetime('now') WHERE id=?").bind(replaceId));
+  }
+  statements.push(c.env.DB.prepare("UPDATE growth_work_items SET work_tier='committed',updated_at=datetime('now') WHERE id=?").bind(id));
+  await c.env.DB.batch(statements);
+  return c.json(await cycleDetail(c.env.DB, Number(selected.cycle_id)));
 });
 
 growthCyclesRouter.post('/growth-work-items/:id/brief', async (c) => {
