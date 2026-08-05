@@ -551,6 +551,7 @@ interface ProjectContext {
   brandAttributes: BrandAttribute[];
   testimonials: Testimonial[];
   discovery: ProjectDiscovery | null;
+  outreachBrief: string | null;
 }
 
 async function loadProjectContext(env: Env, projectId: number): Promise<ProjectContext | null> {
@@ -574,6 +575,10 @@ async function loadProjectContext(env: Env, projectId: number): Promise<ProjectC
     .prepare('SELECT * FROM project_discovery WHERE project_id = ?')
     .bind(projectId)
     .first<ProjectDiscovery>();
+  const outreach = await env.DB
+    .prepare("SELECT content_markdown FROM briefs WHERE project_id=? AND kind='outreach' ORDER BY version DESC,id DESC LIMIT 1")
+    .bind(projectId)
+    .first<{ content_markdown: string }>();
 
   return {
     project,
@@ -581,11 +586,12 @@ async function loadProjectContext(env: Env, projectId: number): Promise<ProjectC
     brandAttributes: ba.results ?? [],
     testimonials: ts.results ?? [],
     discovery,
+    outreachBrief: outreach?.content_markdown ?? lead?.pipeline_brief ?? null,
   };
 }
 
 function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
-  const { project, lead, brandAttributes, testimonials, discovery } = ctx;
+  const { project, lead, brandAttributes, testimonials, discovery, outreachBrief } = ctx;
   const reviews = collectReviews(project, lead);
   const mined = collectMinedData(lead);
   const discoveryAnswers = safeObject(discovery?.answers_json);
@@ -634,6 +640,7 @@ function buildMasterBriefInput(ctx: ProjectContext): MasterBriefInput {
     })),
     scrape_data: project.scrape_data ?? null,
     discovery: discoveryAnswers,
+    outreach_brief: outreachBrief,
   };
 }
 

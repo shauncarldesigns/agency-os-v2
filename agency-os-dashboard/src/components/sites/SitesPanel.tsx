@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Project, Lead, ShowToast } from '../../lib/types';
+import type { Brief, Project, Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Spinner } from '../shared/Spinner';
 import { EmptyState } from '../shared/EmptyState';
@@ -51,9 +51,9 @@ export function SitesPanel({
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'briefs' | 'onboarding'>('overview');
   const [editorCtx, setEditorCtx] = useState<EditorContext | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
-  // Quick brief modal — keyed on { project, lead } where lead is fetched
-  // lazily so we can show the freshest reviews after any re-enrichment.
-  const [quickBriefCtx, setQuickBriefCtx] = useState<{ project: Project; lead: Lead | null } | null>(null);
+  // Historical outreach brief viewer. The saved project artifact is preferred;
+  // the linked lead's cached pipeline brief is a compatibility fallback.
+  const [quickBriefCtx, setQuickBriefCtx] = useState<{ project: Project; lead: Lead | null; outreachBrief: Brief | null } | null>(null);
   const [quickBriefLoading, setQuickBriefLoading] = useState(false);
   const [briefRefreshToken, setBriefRefreshToken] = useState(0);
 
@@ -109,22 +109,20 @@ export function SitesPanel({
     }
   }, [showToast]);
 
-  /**
-   * Open the quick brief modal. Pulls a fresh lead (if linked) so the
-   * reviews block reflects the latest enrichment rather than the snapshot
-   * taken at project-create time. Falls back to project.reviews_snapshot
-   * if the lead is gone or unlinkable.
-   */
+  /** Open the original brief that produced the outreach site. */
   const openQuickBrief = useCallback(async (project: Project) => {
     setQuickBriefLoading(true);
     try {
-      const lead = project.lead_id
-        ? await api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null)
-        : null;
-      setQuickBriefCtx({ project, lead });
+      const [lead, summaries] = await Promise.all([
+        project.lead_id ? api.leads.get(project.lead_id).then((r) => r.lead).catch(() => null) : Promise.resolve(null),
+        api.briefs.listForProject(project.id).then((result) => result.briefs).catch(() => []),
+      ]);
+      const outreachSummary = summaries.find((brief) => brief.kind === 'outreach');
+      const outreachBrief = outreachSummary ? await api.briefs.get(outreachSummary.id).catch(() => null) : null;
+      setQuickBriefCtx({ project, lead, outreachBrief });
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not open quick brief: ${msg}`, 'error');
+      showToast(`Could not open outreach brief: ${msg}`, 'error');
     } finally {
       setQuickBriefLoading(false);
     }
@@ -209,6 +207,7 @@ export function SitesPanel({
       onClose={() => setQuickBriefCtx(null)}
       project={quickBriefCtx.project}
       lead={quickBriefCtx.lead}
+      outreachBrief={quickBriefCtx.outreachBrief}
       showToast={showToast}
     />
   );
@@ -368,7 +367,6 @@ export function SitesPanel({
                     setDetailInitialTab('onboarding');
                     setDetailProjectId(project.id);
                   }}
-                  onEditInfo={() => openEditor(project)}
                   onQuickBrief={() => openQuickBrief(project)}
                   onProjectChanged={() => { void load(); }}
                 />
@@ -397,7 +395,6 @@ export function SitesPanel({
                     setDetailInitialTab('onboarding');
                     setDetailProjectId(project.id);
                   }}
-                  onEditInfo={() => openEditor(project)}
                   onQuickBrief={() => openQuickBrief(project)}
                   onProjectChanged={() => { void load(); }}
                 />

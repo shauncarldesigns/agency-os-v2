@@ -3,7 +3,7 @@ import type { Project, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
 import { TIER_MRR } from '../../lib/pricing';
-import { ArrowRight, Bolt, Check, ExternalLink, FileText, Globe2, LoaderCircle, MapPin, Pencil, X } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, FileText, Globe2, LoaderCircle, MapPin, X } from 'lucide-react';
 
 interface SiteCardProps {
   project: Project;
@@ -15,8 +15,6 @@ interface SiteCardProps {
   onOpenBriefStudio: () => void;
   /** Open the client onboarding checklist. */
   onOpenOnboarding: () => void;
-  /** Open the Edit Project modal (tier change / business info / delete). */
-  onEditInfo: () => void;
   /** Open the Quick Brief modal — business name + reviews verbatim, for the
    *  pre-call landingsite paste. Available on every tier. */
   onQuickBrief: () => void;
@@ -27,7 +25,7 @@ interface SiteCardProps {
 }
 
 export function SiteCard({
-  project, onOpenDetail, onOpenBriefStudio, onOpenOnboarding, onEditInfo, onQuickBrief, onProjectChanged, showToast,
+  project, onOpenDetail, onOpenBriefStudio, onOpenOnboarding, onQuickBrief, onProjectChanged, showToast,
 }: SiteCardProps) {
   const tier = project.tier;
   const liveUrl = project.custom_domain ?? project.landingsite_url;
@@ -208,8 +206,7 @@ export function SiteCard({
               {isProspect && (
                 <ActionButton onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
-              <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
-              <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
+              <ActionButton onClick={onQuickBrief} title="Open the original one-page brief preserved from outreach"><FileText size={14} /> Outreach brief</ActionButton>
             </>
           ) : (
             <>
@@ -219,8 +216,7 @@ export function SiteCard({
               {isProspect && (
                 <ActionButton onClick={onOpenDetail}><FileText size={14} /> Workspace</ActionButton>
               )}
-              <ActionButton onClick={onQuickBrief} title="Business + reviews verbatim, for the pre-call landingsite paste"><Bolt size={14} /> Quick brief</ActionButton>
-              <ActionButton onClick={onEditInfo}><Pencil size={14} /> Edit</ActionButton>
+              <ActionButton onClick={onQuickBrief} title="Open the original one-page brief preserved from outreach"><FileText size={14} /> Outreach brief</ActionButton>
               <span className="col-span-2 flex items-center gap-1 text-xs text-slate-400"><ArrowRight size={13} /> Upgrade to Tier 3 for Brief Studio</span>
             </>
           )}

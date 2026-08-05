@@ -18,7 +18,7 @@ import {
   diffAdditions,
 } from '../../lib/briefExtract';
 import { TIER_MRR } from '../../lib/pricing';
-import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, Globe2, Home, Lock, MapPin, RefreshCw, Settings2, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, Globe2, Home, Lock, MapPin, RefreshCw, Settings2 } from 'lucide-react';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -1279,9 +1279,9 @@ function Sidebar({
             variant="ghost"
             size="sm"
             onClick={onQuickBrief}
-            title="Business + reviews verbatim, for the pre-call landingsite paste"
+            title="Open the original one-page brief preserved from outreach"
           >
-            <Zap size={14} /> Quick brief (for landingsite demo)
+            <FileText size={14} /> Outreach brief
           </Button>
           <Button
             variant="ghost"
