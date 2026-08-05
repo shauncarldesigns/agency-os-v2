@@ -60,7 +60,7 @@ export async function querySearchAnalytics(
   const encodedUrl = encodeURIComponent(siteUrl);
 
   const res = await fetch(
-    `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodedUrl}/searchanalytics/query`,
+    `https://www.googleapis.com/webmasters/v3/sites/${encodedUrl}/searchAnalytics/query`,
     {
       method: 'POST',
       headers: {

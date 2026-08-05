@@ -3,7 +3,6 @@ import type { Env, Project } from '../types';
 import { badRequest, notFound, serverError, log } from '../utils/errors';
 import { querySearchAnalytics, periodRange, previousPeriod, type GscRow } from '../services/gsc';
 import { getPageSpeedReport } from '../services/pagespeed';
-import { getZoneAnalytics } from '../services/cloudflare';
 import { sendEmail } from '../services/email';
 import { callClaude } from '../services/claude';
 import { buildExecSummaryPrompt } from '../prompts/execSummary';
@@ -112,7 +111,7 @@ reportsRouter.get('/:projectId/summary', async (c) => {
   });
 });
 
-// POST /api/reports/:projectId/refresh — pull fresh GSC + PageSpeed + CF data for the *current* period
+// POST /api/reports/:projectId/refresh — pull fresh GSC + PageSpeed data for the selected period
 reportsRouter.post('/:projectId/refresh', async (c) => {
   const projectId = parseInt(c.req.param('projectId'), 10);
   if (isNaN(projectId)) return c.json(badRequest('Invalid projectId'), 400);
@@ -313,17 +312,6 @@ async function refreshSnapshot(env: Env, project: Project, period: string): Prom
     }
   }
 
-  // CF Analytics (only if zone configured)
-  let cf: { visitors: number; pageviews: number } | null = null;
-  if (project.cf_zone_id) {
-    try {
-      const z = await getZoneAnalytics(env.CLOUDFLARE_API_TOKEN, project.cf_zone_id);
-      cf = { visitors: z.visitors, pageviews: z.pageviews };
-    } catch (err) {
-      log('warn', 'reports', `CF fetch failed for ${project.id}`, err);
-    }
-  }
-
   // Top keywords + top pages from GSC rows (compact JSON for storage)
   const topKeywords = gscData?.rows
     ? gscData.rows
@@ -339,9 +327,8 @@ async function refreshSnapshot(env: Env, project: Project, period: string): Prom
   await env.DB.prepare(`
     INSERT INTO seo_snapshots (
       project_id, period, impressions, clicks, avg_position, ctr,
-      pagespeed_desktop, pagespeed_mobile, visitors, pageviews,
-      top_keywords, top_pages
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      pagespeed_desktop, pagespeed_mobile, top_keywords, top_pages
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, period) DO UPDATE SET
       impressions = excluded.impressions,
       clicks = excluded.clicks,
@@ -349,8 +336,6 @@ async function refreshSnapshot(env: Env, project: Project, period: string): Prom
       ctr = excluded.ctr,
       pagespeed_desktop = excluded.pagespeed_desktop,
       pagespeed_mobile = excluded.pagespeed_mobile,
-      visitors = excluded.visitors,
-      pageviews = excluded.pageviews,
       top_keywords = excluded.top_keywords,
       top_pages = excluded.top_pages
   `).bind(
@@ -361,8 +346,6 @@ async function refreshSnapshot(env: Env, project: Project, period: string): Prom
     gscData?.ctr ?? null,
     pagespeed?.desktop ?? null,
     pagespeed?.mobile ?? null,
-    cf?.visitors ?? null,
-    cf?.pageviews ?? null,
     JSON.stringify(topKeywords),
     JSON.stringify(topPages),
   ).run();

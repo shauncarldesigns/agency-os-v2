@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Search Console reporting repair
+
+- **Reporting now calls Google Search Console’s case-sensitive `searchAnalytics` endpoint correctly, restoring impressions, clicks, rankings, keywords, and page data after refresh.** The obsolete Cloudflare zone-analytics request has been removed from report collection because client sites use DNS-only records and do not send traffic through Cloudflare’s proxy; Cloudflare remains responsible for domain and DNS management. Backend.
+
 ### DNS configuration save action and spacing
 
 - **Domain & DNS configuration now saves registrar and domain-owner email independently from Cloudflare operations.** The linked-zone status card and action rows have consistent spacing, primary domains are protected from inline edits after a zone is linked, and DNS refresh uses the shared icon system. Dashboard.
