@@ -86,7 +86,7 @@ export function QualifyLeadModal({
       onClose();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Booking failed: ${msg}`, 'error');
+      showToast(`Conversion failed: ${msg}`, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -99,7 +99,7 @@ export function QualifyLeadModal({
         onClose={submitting ? () => undefined : onClose}
       />
 
-      <div style={{ padding: '18px 20px' }}>
+      <div style={{ padding: '18px 20px', flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
           Use this only after the business agrees to move forward. It creates the client project,
           carries over the outreach site and brief, stops active email automation, and moves the

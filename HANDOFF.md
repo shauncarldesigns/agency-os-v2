@@ -15,6 +15,34 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Text Outreach close path and application diagnostics (2026-08-05)
+
+- Text Outreach no longer offers or sends calendar links. Engagement scores at
+  the former walkthrough threshold now recommend **Call to discuss site**; the
+  call-prep flow records the outcome and exposes **Convert to client** only after
+  an agreement. Calendar-click history remains in D1 for audit compatibility but
+  no longer affects Clarity scoring or current pipeline recommendations.
+- Settings → **Activity & errors** reads from `application_events`. It records
+  successful mutations, failed requests, slow requests, unhandled Worker errors,
+  and scheduled-trigger starts with status/duration and sanitized response error
+  details. It excludes request bodies and credentials, refreshes every 10 seconds
+  while open, supports search plus an errors-only filter, and retains 30 days.
+- Migration: `2026-08-05-application-events.sql`.
+
+## Client workspace activity timeline (2026-08-05)
+
+- Workspace → **Activity** now loads a unified project timeline from existing
+  operational records rather than displaying placeholder copy. Sources include
+  project creation/configuration, scrape and DNS checks, briefs, Page Matrix
+  additions and live milestones, onboarding completions, report history, Search
+  Console snapshots, SEO audit runs, and monthly growth work.
+- Linked client projects also include their conversion/outreach events. Internal
+  workspaces such as Shaun Carl Designs have no `lead_id`, so their history is
+  intentionally populated from project-owned records and does not depend on a
+  prospect record.
+- Endpoint: `GET /api/projects/:id/activity`. It synthesizes and sorts the
+  timeline at read time; no migration or duplicated activity rows are required.
+
 ## Outreach-to-Master Brief continuity (2026-08-05)
 
 - Lead conversion already preserves `leads.pipeline_brief` as a project brief

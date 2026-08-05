@@ -5,7 +5,7 @@ import type {
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
   AgencySettings, SettingsHealth, ProspectCandidate, ProspectInboxSummary,
   GrowthCycle, GrowthWorkItem, GrowthPhase, GrowthWorkCategory, GrowthWorkStatus, GrowthStrategy, OnboardingItem, PageSearchMetrics, PageInsights,
-  SeoAuditRun, SeoAuditFinding,
+  SeoAuditRun, SeoAuditFinding, ApplicationEvent, ProjectActivityEvent,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -217,6 +217,8 @@ export const api = {
     update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults' | 'discovery'>) =>
       apiFetch<{ settings: AgencySettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(settings) }),
     health: () => apiFetch<SettingsHealth>('/api/settings/health'),
+    activity: (level?: 'info' | 'warn' | 'error') =>
+      apiFetch<{ events: ApplicationEvent[] }>(`/api/settings/activity${qs({ level, limit: 200 })}`),
     claritySync: () => apiFetch<{ checked: number; matched: number; updated: number; skipped: number; error?: string }>('/api/settings/clarity-sync', { method: 'POST' }),
     exportLeads: async () => {
       const res = await fetch(`${API_BASE}/api/leads/export`, { credentials: 'include', headers: authHeaders() });
@@ -339,6 +341,8 @@ export const api = {
       apiFetch<{ projects: Project[]; total: number }>(`/api/projects${qs(filters)}`),
     get: (id: number) =>
       apiFetch<{ project: Project; pages: Page[] }>(`/api/projects/${id}`),
+    activity: (id: number) =>
+      apiFetch<{ events: ProjectActivityEvent[] }>(`/api/projects/${id}/activity`),
     create: (data: { leadId?: number; tier?: 1 | 2 | 3; business_name?: string; services?: string[]; service_areas?: string[] }) =>
       apiFetch<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: ProjectUpdate) =>

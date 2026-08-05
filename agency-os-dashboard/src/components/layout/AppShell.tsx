@@ -67,7 +67,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
   'email-outreach': { title: 'Email Outreach', subtitle: 'Call-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
-  pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and book demos' },
+  pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },

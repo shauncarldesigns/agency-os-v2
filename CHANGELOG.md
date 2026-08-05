@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Text Outreach close path and application activity log
+
+- **Text Outreach now moves directly from engagement to a closing call instead of inserting a calendar stage.** The walkthrough recommendation is now “Call to discuss site,” call outcomes no longer prepare HoneyBook links, scheduling follow-ups and calendar conversion analytics are removed from the active interface, and legacy calendar clicks no longer raise engagement scores. Settings adds a persistent Activity & Errors feed for mutations, failed or slow API requests, scheduled triggers, status codes, durations, sanitized error details, search, an errors-only view, and ten-second refresh while open. Logs retain 30 days and never store request bodies or credentials. Backend + dashboard + migration (`2026-08-05-application-events.sql`, apply before deploy).
+- **Client workspace Activity is now a real operational timeline instead of placeholder copy.** It combines project configuration, onboarding, website/DNS, Page Matrix and brief milestones, SEO audit runs, reporting refreshes, report history, growth work, and linked outreach conversion events. Internal clients without prospect records receive the same project-based history. Backend + dashboard.
+
 ### Outreach-to-Master Brief continuity
 
 - **The brief that produced the original Email or Text Outreach site now remains useful after conversion without becoming a competing source of truth.** Client cards replace the obsolete Quick Brief generator with a read-only Outreach Brief artifact, while new or regenerated Master Briefs receive that artifact as lowest-priority continuity context beneath confirmed Discovery, project, lead, and review data. Supported homepage messaging, SEO targets, proof, and design direction can carry forward; outreach-era assumptions and tracking instructions cannot. Client-card editing has also been removed because Configuration is now the single editing surface. Backend + dashboard.

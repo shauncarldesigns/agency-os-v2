@@ -35,7 +35,6 @@ const DEFAULTS = {
     geographicFilters: [] as string[], callingDays: ['tuesday', 'wednesday', 'thursday'],
     callingBlocks: ['morning', 'evening'], recallCooldownDays: 14,
     hotThreshold: 90, walkthroughThreshold: 70, followUpThreshold: 40,
-    bookingUrl: '',
   },
   defaults: {
     tier1Mrr: 0, tier2Mrr: 79, tier3Mrr: 499,
@@ -208,6 +207,37 @@ settingsRouter.post('/clarity-sync', async (c) => {
   try { return c.json(await syncClarityEngagement(c.env)); }
   catch (err) {
     log('error', 'settings', 'POST /settings/clarity-sync failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+settingsRouter.get('/activity', async (c) => {
+  try {
+    const requestedLimit = Number(c.req.query('limit') ?? 100);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(200, Math.max(1, Math.trunc(requestedLimit)))
+      : 100;
+    const level = c.req.query('level');
+    const levelFilter = level === 'info' || level === 'warn' || level === 'error' ? level : null;
+    const result = levelFilter
+      ? await c.env.DB.prepare(`
+          SELECT id, level, source, event_type, message, method, path,
+                 status_code, duration_ms, details_json, created_at
+            FROM application_events
+           WHERE level = ?
+           ORDER BY id DESC
+           LIMIT ?
+        `).bind(levelFilter, limit).all()
+      : await c.env.DB.prepare(`
+          SELECT id, level, source, event_type, message, method, path,
+                 status_code, duration_ms, details_json, created_at
+            FROM application_events
+           ORDER BY id DESC
+           LIMIT ?
+        `).bind(limit).all();
+    return c.json({ events: result.results });
+  } catch (err) {
+    log('error', 'settings', 'GET /settings/activity failed', err);
     return c.json(serverError(), 500);
   }
 });
