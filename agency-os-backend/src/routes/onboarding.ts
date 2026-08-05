@@ -17,13 +17,15 @@ onboardingRouter.get('/projects/:id/onboarding', async (c) => {
     if (!Number.isFinite(projectId)) return c.json(badRequest('Invalid project id'), 400);
     const project = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first<Record<string, unknown>>();
     if (!project) return c.json(notFound('Project'), 404);
-    const [master, manualRows] = await Promise.all([
+    const [master, discovery, manualRows] = await Promise.all([
       c.env.DB.prepare("SELECT id FROM briefs WHERE project_id=? AND kind='master' AND status!='archived' LIMIT 1").bind(projectId).first(),
+      c.env.DB.prepare("SELECT status FROM project_discovery WHERE project_id=? LIMIT 1").bind(projectId).first<{ status: string }>(),
       c.env.DB.prepare('SELECT * FROM project_onboarding_checks WHERE project_id=?').bind(projectId).all<Record<string, unknown>>(),
     ]);
     const manualByKey = new Map(manualRows.results.map((row) => [String(row.item_key), row]));
     const automatic = [
       { key: 'client_created', label: 'Create client workspace', description: 'Client information and workspace are available.', completed: true },
+      { key: 'business_discovery', label: 'Complete business discovery', description: 'Business context, positioning, assets, and launch inputs are ready for strategy and briefs.', completed: discovery?.status === 'complete' },
       { key: 'contract_started', label: 'Record contract start', description: 'The agreement start date establishes the client relationship.', completed: Boolean(project.contract_start) },
       { key: 'domain_obtained', label: 'Obtain and record the domain', description: 'The production domain is recorded for this client.', completed: Boolean(project.domain || project.custom_domain) },
       { key: 'dns_added', label: 'Add domain and DNS', description: 'A Cloudflare zone and required DNS records have been created.', completed: Boolean(project.cf_zone_id) },

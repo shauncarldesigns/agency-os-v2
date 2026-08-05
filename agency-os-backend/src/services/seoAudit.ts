@@ -187,8 +187,15 @@ async function recordResolvedAuditWork(db: D1Database, projectId: number, runId:
 async function createAuditWork(db: D1Database, projectId: number, findings: Finding[]) {
   const cycle = await db.prepare("SELECT id FROM growth_cycles WHERE project_id=? AND period=strftime('%Y-%m','now')").bind(projectId).first<{ id: number }>();
   if (!cycle) return;
+  const project = await db.prepare('SELECT monthly_pages_target FROM projects WHERE id=?').bind(projectId).first<{ monthly_pages_target: number }>();
+  const target = Math.max(1, Number(project?.monthly_pages_target) || 3);
+  const committed = await db.prepare(`SELECT COUNT(*) AS count FROM growth_work_items WHERE cycle_id=? AND work_tier='committed'
+    AND category IN ('created','improved','technical','conversion')`).bind(cycle.id).first<{ count: number }>();
+  let committedCount = Number(committed?.count) || 0;
   const byPage = new Map<number, Finding[]>();
-  for (const finding of findings) if (finding.pageId && finding.severity !== 'opportunity') byPage.set(finding.pageId, [...(byPage.get(finding.pageId) ?? []), finding]);
+  const severityOrder: Record<Severity, number> = { critical: 0, warning: 1, opportunity: 2 };
+  const prioritized = [...findings].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  for (const finding of prioritized) if (finding.pageId && finding.severity !== 'opportunity') byPage.set(finding.pageId, [...(byPage.get(finding.pageId) ?? []), finding]);
   for (const [pageId, pageFindings] of [...byPage.entries()].slice(0, 12)) {
     const marker = `audit-page:${pageId}`;
     const title = pageFindings.length === 1 ? pageFindings[0].title : `${pageFindings.length} SEO issues require attention`;
@@ -200,8 +207,10 @@ async function createAuditWork(db: D1Database, projectId: number, findings: Find
         .bind(category, title, description, existing.id).run();
       continue;
     }
-    await db.prepare(`INSERT INTO growth_work_items (cycle_id, category, title, description, status, evidence_url, page_id, client_visible)
-      VALUES (?, ?, ?, ?, 'planned', ?, ?, 1)`).bind(cycle.id, category, title, description, marker, pageId).run();
+    const workTier = committedCount < target ? 'committed' : 'bonus';
+    if (workTier === 'committed') committedCount += 1;
+    await db.prepare(`INSERT INTO growth_work_items (cycle_id, category, title, description, status, evidence_url, page_id, client_visible, work_tier)
+      VALUES (?, ?, ?, ?, 'planned', ?, ?, 1, ?)`).bind(cycle.id, category, title, description, marker, pageId, workTier).run();
   }
 }
 

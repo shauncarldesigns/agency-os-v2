@@ -364,8 +364,10 @@ export const api = {
         apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/projects/${id}/growth-cycles`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
       update: (id: number, data: Partial<Pick<GrowthCycle, 'phase' | 'status' | 'client_summary' | 'next_priorities'>>) =>
         apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/growth-cycles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-      addItem: (cycleId: number, data: { category: GrowthWorkCategory; title: string; description?: string; evidence_url?: string; page_id?: number; recommended_page_type?: string; recommended_service?: string; recommended_city?: string }) =>
+      addItem: (cycleId: number, data: { category: GrowthWorkCategory; title: string; description?: string; evidence_url?: string; page_id?: number; recommended_page_type?: string; recommended_service?: string; recommended_city?: string; work_tier?: 'committed' | 'bonus' }) =>
         apiFetch<{ item: GrowthWorkItem }>(`/api/growth-cycles/${cycleId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+      commitItem: (id: number, replaceItemId?: number) =>
+        apiFetch<{ cycle: GrowthCycle; items: GrowthWorkItem[] }>(`/api/growth-work-items/${id}/commit`, { method: 'POST', body: JSON.stringify({ replace_item_id: replaceItemId }) }),
       updateItem: (id: number, data: Partial<Pick<GrowthWorkItem, 'title' | 'description' | 'evidence_url' | 'client_visible'>> & { status?: GrowthWorkStatus }) =>
         apiFetch<{ item: GrowthWorkItem }>(`/api/growth-work-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
       generateItemBrief: (id: number) =>

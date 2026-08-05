@@ -39,10 +39,12 @@ projectsRouter.get('/', async (c) => {
       gc.phase AS growth_cycle_phase,
       gc.status AS growth_cycle_status,
       gc.due_date AS growth_cycle_due_date,
-      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id) AS growth_items_total,
-      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND status = 'complete') AS growth_items_completed,
-      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND status = 'blocked') AS growth_items_blocked
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND work_tier='committed' AND category IN ('created','improved','technical','conversion')) AS growth_items_selected,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND work_tier='committed' AND category IN ('created','improved','technical','conversion') AND status = 'complete') AS growth_items_completed,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND work_tier='committed' AND category IN ('created','improved','technical','conversion') AND status = 'blocked') AS growth_items_blocked,
+      (SELECT COUNT(*) FROM growth_work_items WHERE cycle_id = gc.id AND work_tier='bonus' AND category IN ('created','improved','technical','conversion') AND status = 'complete') AS growth_bonus_completed
       ,EXISTS(SELECT 1 FROM briefs ob WHERE ob.project_id=projects.id AND ob.kind='master' AND ob.status!='archived') AS onboarding_has_master
+      ,EXISTS(SELECT 1 FROM project_discovery od WHERE od.project_id=projects.id AND od.status='complete') AS onboarding_discovery_complete
       ,(SELECT COUNT(*) FROM project_onboarding_checks oc WHERE oc.project_id=projects.id AND oc.completed=1) AS onboarding_manual_completed
       FROM projects
       LEFT JOIN growth_cycles gc ON gc.project_id = projects.id AND gc.period = ?
@@ -54,11 +56,13 @@ projectsRouter.get('/', async (c) => {
     const result = await c.env.DB.prepare(query).bind(...params).all();
     const projects = result.results.map((row) => {
       const project = row as Record<string, unknown>;
-      const total = Number(project.growth_items_total || 0);
+      const target = Math.max(1, Number(project.monthly_pages_target) || 3);
+      const total = Number(project.growth_cycle_id || 0) > 0 ? target : 0;
       const completed = Number(project.growth_items_completed || 0);
       const blocked = Number(project.growth_items_blocked || 0);
       const hasCycle = Number(project.growth_cycle_id || 0) > 0;
       const onboardingCompleted = 1
+        + (Number(project.onboarding_discovery_complete || 0) > 0 ? 1 : 0)
         + (project.contract_start ? 1 : 0)
         + (project.domain || project.custom_domain ? 1 : 0)
         + (project.cf_zone_id ? 1 : 0)
@@ -75,9 +79,10 @@ projectsRouter.get('/', async (c) => {
         ...project,
         growth_cycle_due_date: project.growth_cycle_due_date || dueDate,
         growth_cycle_health: health,
+        growth_items_total: total,
         onboarding_completed: onboardingCompleted,
-        onboarding_total: 13,
-        onboarding_percent: Math.round((onboardingCompleted / 13) * 100),
+        onboarding_total: 14,
+        onboarding_percent: Math.round((onboardingCompleted / 14) * 100),
       };
     });
     return c.json({ projects, total: projects.length });

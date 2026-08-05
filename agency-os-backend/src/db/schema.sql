@@ -281,12 +281,14 @@ CREATE TABLE IF NOT EXISTS growth_work_items (
   recommended_service TEXT,
   recommended_city TEXT,
   completion_signal TEXT,
+  work_tier TEXT NOT NULL DEFAULT 'committed' CHECK (work_tier IN ('committed', 'bonus')),
   client_visible INTEGER NOT NULL DEFAULT 1,
   completed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_growth_work_items_cycle_status ON growth_work_items(cycle_id, status);
+CREATE INDEX IF NOT EXISTS idx_growth_work_items_cycle_tier_status ON growth_work_items(cycle_id, work_tier, status);
 
 CREATE TABLE IF NOT EXISTS growth_strategies (
   project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,

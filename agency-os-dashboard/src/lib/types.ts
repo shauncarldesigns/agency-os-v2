@@ -223,8 +223,10 @@ export interface Project {
   growth_cycle_due_date?: string;
   growth_cycle_health?: 'healthy' | 'attention' | 'urgent';
   growth_items_total?: number;
+  growth_items_selected?: number;
   growth_items_completed?: number;
   growth_items_blocked?: number;
+  growth_bonus_completed?: number;
   onboarding_completed?: number;
   onboarding_total?: number;
   onboarding_percent?: number;
@@ -337,6 +339,7 @@ export interface GrowthWorkItem {
   recommended_service: string | null;
   recommended_city: string | null;
   completion_signal: 'gsc_connected' | 'seo_snapshot_available' | null;
+  work_tier: 'committed' | 'bonus';
   client_visible: number;
   completed_at: string | null;
   created_at: string;
