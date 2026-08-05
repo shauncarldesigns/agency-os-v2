@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Outreach-to-Master Brief continuity
+
+- **The brief that produced the original Email or Text Outreach site now remains useful after conversion without becoming a competing source of truth.** Client cards replace the obsolete Quick Brief generator with a read-only Outreach Brief artifact, while new or regenerated Master Briefs receive that artifact as lowest-priority continuity context beneath confirmed Discovery, project, lead, and review data. Supported homepage messaging, SEO targets, proof, and design direction can carry forward; outreach-era assumptions and tracking instructions cannot. Client-card editing has also been removed because Configuration is now the single editing surface. Backend + dashboard.
+
 ### Monthly growth commitments and compact onboarding
 
 - **Growth-plan fulfillment now treats three page actions as the monthly commitment rather than a hard work limit.** Brief Studio separates committed creation/improvement work from an expandable bonus backlog, protects started commitments from replacement, reports bonus completions without changing the `3 of 3` denominator, and uses SEO audit severity to fill only open monthly slots. New page briefs include a pre-publish SEO checklist, live pages can be revalidated from Page Insights, and Discovery plus asset collection now live as compact, consistent cards within Onboarding instead of Brief Studio. Backend + dashboard + migration (`2026-08-05-growth-commitment-slots.sql`, apply before deploy).

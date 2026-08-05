@@ -15,6 +15,23 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Outreach-to-Master Brief continuity (2026-08-05)
+
+- Lead conversion already preserves `leads.pipeline_brief` as a project brief
+  with `kind='outreach'`. Client cards and the workspace now expose that exact
+  artifact as **Outreach brief**; the former name-and-reviews Quick Brief
+  generator has been removed and opening/copying the artifact has no model cost.
+- Master Brief generation reads the saved outreach artifact (falling back to
+  the linked lead's cached pipeline brief for older records) as lowest-priority
+  continuity context. Discovery and confirmed project facts remain authoritative,
+  followed by verified lead/review data. The prompt may retain supported homepage
+  messaging, SEO targets, proof, and visual direction but must discard conflicting
+  assumptions, tracking blocks, and one-page structural limitations.
+- Existing Master Briefs are unchanged until deliberately regenerated. Page
+  Briefs continue to derive only from the authoritative Master Brief.
+- Client cards no longer include Edit; Workspace → Configuration is the single
+  client-editing path.
+
 ## Monthly growth commitments and onboarding placement (2026-08-05)
 
 - A Growth client has three committed page actions per month by default. Page

@@ -59,6 +59,8 @@ export interface MasterBriefInput {
   scrape_data: string | null;
   /** Client-supplied discovery answers. These outrank mined/scraped signals. */
   discovery: Record<string, unknown> | null;
+  /** Original one-page outreach build brief. Continuity context only. */
+  outreach_brief: string | null;
 }
 
 export interface BuiltMasterBriefPrompt {
@@ -185,6 +187,11 @@ to a generic contact-form instruction.
 does and where it does it. Require the primary service or trade plus the target city or service
 area in the H1. Other natural supporting text is allowed, but service + location must remain
 present for SEO. This applies to every page, including Homepage, About, FAQ, and Contact.
+19. The prior Outreach Brief is continuity context, never source-of-truth. Preserve its useful
+homepage angle, supported proof, SEO target, and visual direction only when they remain supported
+by verified discovery, project facts, or lead/review data. Replace anything contradicted by a
+higher-priority source. Never copy outreach-era assumptions, tracking-install instructions, or
+one-page structural limitations into the full-site plan.
 
 QUALITY BAR:
 - Target Audience must be synthesized from the reviews, services performed, and strengths — the actual people hiring this business, not a generic "homeowners and businesses." Name 1-2 real segments, the problem that brings them, and what they worry about, using the language customers use in the reviews. If a brand attribute explicitly names the audience (operator-supplied), prefer it over inference. Do not invent demographics the data doesn't support.
@@ -238,6 +245,17 @@ function buildUserPrompt(input: MasterBriefInput): string {
     lines.push('```');
   } else {
     lines.push('(none — rely on project facts and verified signals; do not invent)');
+  }
+  lines.push('');
+
+  lines.push('## Prior Outreach Brief (CONTINUITY CONTEXT ONLY — lowest priority)');
+  if (input.outreach_brief?.trim()) {
+    lines.push('Use this to understand what produced the original one-page outreach site. Carry forward supported messaging, SEO, proof, and design decisions when they still fit; do not treat it as verified client truth.');
+    lines.push('```markdown');
+    lines.push(input.outreach_brief.length > 12000 ? input.outreach_brief.slice(0, 12000) + '\n…[truncated]' : input.outreach_brief);
+    lines.push('```');
+  } else {
+    lines.push('(none — create the master brief from verified project, discovery, and lead data)');
   }
   lines.push('');
 
