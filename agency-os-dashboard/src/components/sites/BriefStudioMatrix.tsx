@@ -36,6 +36,7 @@ interface MatrixData {
 
 interface BriefStudioMatrixProps {
   projectId: number;
+  hasMaster: boolean;
   /** Bump this from the parent to force a re-fetch (e.g. after the master is regenerated or
    *  the project's services/areas change via the editor modal). Any scalar that changes. */
   reloadToken?: string | number;
@@ -46,7 +47,7 @@ interface BriefStudioMatrixProps {
 }
 
 export function BriefStudioMatrix({
-  projectId, reloadToken, showToast, onOpenBrief, recommendedPageKeys = [], optimizationPageIds = [],
+  projectId, hasMaster, reloadToken, showToast, onOpenBrief, recommendedPageKeys = [], optimizationPageIds = [],
 }: BriefStudioMatrixProps) {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +89,11 @@ export function BriefStudioMatrix({
       // explicit action inside Page Insights when optimization work exists.
       if (pageId != null && pageRow.status === 'complete') {
         setInsightPageId(pageId);
+        return;
+      }
+
+      if (!hasMaster) {
+        showToast('Imported live pages are available without a master brief. Generate a master brief before creating a new page.', 'default');
         return;
       }
 

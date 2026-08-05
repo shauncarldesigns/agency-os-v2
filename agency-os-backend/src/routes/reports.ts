@@ -111,6 +111,36 @@ reportsRouter.get('/:projectId/summary', async (c) => {
   });
 });
 
+// POST /api/reports/:projectId/health — run a lightweight PageSpeed-only check for the live site
+reportsRouter.post('/:projectId/health', async (c) => {
+  const projectId = parseInt(c.req.param('projectId'), 10);
+  if (isNaN(projectId)) return c.json(badRequest('Invalid projectId'), 400);
+
+  const project = await c.env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(projectId).first<Project>();
+  if (!project) return c.json(notFound('Project'), 404);
+
+  const url = project.custom_domain ?? project.landingsite_url;
+  if (!url) return c.json(badRequest('Project has no live website URL'), 400);
+
+  try {
+    const pagespeed = await getPageSpeedReport(c.env.GOOGLE_PLACES_API_KEY, url);
+    const period = currentPeriod();
+    await c.env.DB.prepare(`
+      INSERT INTO seo_snapshots (project_id, period, pagespeed_desktop, pagespeed_mobile)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(project_id, period) DO UPDATE SET
+        pagespeed_desktop = excluded.pagespeed_desktop,
+        pagespeed_mobile = excluded.pagespeed_mobile
+    `).bind(projectId, period, pagespeed.desktop, pagespeed.mobile).run();
+    const snapshot = await c.env.DB.prepare('SELECT * FROM seo_snapshots WHERE project_id = ? AND period = ?')
+      .bind(projectId, period).first<ReportSnapshot>();
+    return c.json({ snapshot });
+  } catch (err) {
+    log('error', 'reports', `site health failed for project ${projectId}`, err);
+    return c.json(serverError(`Site health check failed: ${(err as Error).message}`), 500);
+  }
+});
+
 // POST /api/reports/:projectId/refresh — pull fresh GSC + PageSpeed data for the selected period
 reportsRouter.post('/:projectId/refresh', async (c) => {
   const projectId = parseInt(c.req.param('projectId'), 10);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Project, ProjectDiscovery, Brief, BriefKind, ShowToast, Lead, Page, GrowthWorkItem } from '../../lib/types';
+import type { Project, ProjectDiscovery, Brief, BriefKind, ShowToast, Lead, Page, GrowthWorkItem, ReportSnapshot } from '../../lib/types';
 import { api, ApiError, type DnsStatusResponse, type ProjectUpdate } from '../../lib/api';
 import { Button } from '../shared/Button';
 import { Spinner } from '../shared/Spinner';
@@ -11,6 +11,7 @@ import { DnsManagePanel } from './DnsManagePanel';
 import { ReportsPanel } from '../reports/ReportsPanel';
 import { PageRecommendationQueue } from './PageRecommendationQueue';
 import { OnboardingChecklistPanel } from './OnboardingChecklistPanel';
+import { SeoAuditCard } from './SeoAuditCard';
 import {
   extractServicesFromBrief,
   extractServiceAreasFromBrief,
@@ -382,16 +383,12 @@ export function SiteDetailPanel({
                       to unlock.
                     </span>
                   </div>
-                ) : !master ? (
-                  <div className="bs-matrix-overlay">
-                    <span className="bs-matrix-lock"><Lock size={16} /></span>
-                    <span>Generate the master brief to unlock the matrix</span>
-                  </div>
                 ) : null}
-                {tier === 3 && master ? (
+                {tier === 3 ? (
                   <BriefStudioMatrix
                     projectId={project.id}
-                    reloadToken={`${master.updated_at ?? master.generated_at ?? ''}::${project.updated_at}::${matrixRefreshToken}`}
+                    hasMaster={!!master}
+                    reloadToken={`${master?.updated_at ?? master?.generated_at ?? 'no-master'}::${project.updated_at}::${matrixRefreshToken}`}
                     showToast={showToast}
                     onOpenBrief={(b) => setViewerBriefId(b.id)}
                     recommendedPageKeys={recommendedPageKeys}
@@ -419,6 +416,8 @@ export function SiteDetailPanel({
           tab={workspaceTab}
           project={project}
           lead={lead}
+          pages={pages}
+          pagesPlanned={stats.pagesPlanned}
           hasMaster={!!master}
           onOpenBriefStudio={() => setWorkspaceTab('briefs')}
           onOpenReporting={() => setWorkspaceTab('reporting')}
@@ -724,13 +723,15 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 }
 
 function WorkspaceTabPanel({
-  tab, project, lead, hasMaster, onOpenBriefStudio, onOpenReporting, onOpenSetup, onManageDns,
+  tab, project, lead, pages, pagesPlanned, hasMaster, onOpenBriefStudio, onOpenReporting, onOpenSetup, onManageDns,
   onProjectConfigurationSave, onProjectChanged,
   showToast,
 }: {
   tab: Exclude<WorkspaceTab, 'briefs'>;
   project: Project;
   lead: Lead | null;
+  pages: Page[];
+  pagesPlanned: number;
   hasMaster: boolean;
   onOpenBriefStudio: () => void;
   onOpenReporting: () => void;
@@ -804,19 +805,19 @@ function WorkspaceTabPanel({
 
       {tab === 'website' && (
         <div className="client-workspace-grid">
-          <WorkspaceCard title="Live website">
-            <WorkspaceStatus label="URL" value={liveUrl ?? 'Not added'} tone={liveUrl ? 'ok' : 'warn'} />
-            {liveUrl && <Button variant="ghost" size="sm" onClick={() => window.open(liveUrl, '_blank')}><ExternalLink size={14} /> Open live website</Button>}
-          </WorkspaceCard>
-          <WorkspaceCard title="Domain & DNS">
+          <WorkspaceCard title="Website status">
+            <WorkspaceStatus label="Live URL" value={liveUrl ?? 'Not added'} tone={liveUrl ? 'ok' : 'warn'} />
             <WorkspaceStatus label="Domain" value={project.domain ?? 'Not configured'} />
-            <WorkspaceStatus label="Cloudflare zone" value={project.cf_zone_id ? project.dns_status : 'Not linked'} tone={project.dns_status === 'active' ? 'ok' : 'warn'} />
-            <Button variant="ghost" size="sm" onClick={onOpenSetup}>View domain configuration</Button>
+            <WorkspaceStatus label="DNS" value={project.cf_zone_id ? project.dns_status : 'Not linked'} tone={project.dns_status === 'active' ? 'ok' : 'warn'} />
+            <div className="configuration-actions">
+              {liveUrl && <Button variant="ghost" size="sm" onClick={() => window.open(liveUrl, '_blank')}><ExternalLink size={14} /> Open website</Button>}
+              <Button variant="ghost" size="sm" onClick={onOpenSetup}>Configuration</Button>
+            </div>
           </WorkspaceCard>
-          <WorkspaceCard title="Site health">
-            <WorkspaceStatus label="PageSpeed" value={lead?.pagespeed_desktop != null ? `Desktop ${lead.pagespeed_desktop}` : 'Not run'} />
-            <WorkspaceStatus label="Website scrape" value={project.scrape_completed_at ? 'Complete' : 'Not run'} />
-          </WorkspaceCard>
+          <WebsitePerformanceCard project={project} liveUrl={liveUrl} showToast={showToast} onOpenReporting={onOpenReporting} />
+          <WebsiteInventoryCard pages={pages} pagesPlanned={pagesPlanned} onOpenBriefStudio={onOpenBriefStudio} />
+          <WebsiteAttentionCard project={project} pages={pages} showToast={showToast} onOpenBriefStudio={onOpenBriefStudio} onOpenSetup={onOpenSetup} />
+          <SeoAuditCard project={project} showToast={showToast} onPagesImported={onProjectChanged} />
         </div>
       )}
 
@@ -1111,6 +1112,148 @@ function WorkspaceCard({ title, children }: { title: string; children: React.Rea
   return <section className="workspace-card"><h3>{title}</h3>{children}</section>;
 }
 
+function WebsitePerformanceCard({ project, liveUrl, showToast, onOpenReporting }: {
+  project: Project;
+  liveUrl: string | null;
+  showToast: ShowToast;
+  onOpenReporting: () => void;
+}) {
+  const [snapshot, setSnapshot] = useState<ReportSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [runningHealth, setRunningHealth] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    setLoading(true);
+    try {
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit' }).formatToParts(now);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const summary = await api.reports.summary(project.id, `${year}-${month}`);
+      setSnapshot(summary.current);
+    } catch {
+      setSnapshot(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => { void loadHealth(); }, [loadHealth]);
+
+  async function runHealthCheck() {
+    setRunningHealth(true);
+    try {
+      const result = await api.reports.health(project.id);
+      setSnapshot(result.snapshot);
+      showToast('Site health check complete', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Site health check failed: ${msg}`, 'error');
+    } finally {
+      setRunningHealth(false);
+    }
+  }
+
+  const desktop = snapshot?.pagespeed_desktop;
+  const mobile = snapshot?.pagespeed_mobile;
+
+  return (
+    <WorkspaceCard title="Performance & search">
+      <WorkspaceStatus label="PageSpeed desktop" value={loading ? 'Loading…' : desktop != null ? String(desktop) : 'Not run'} tone={desktop != null ? 'ok' : 'warn'} />
+      <WorkspaceStatus label="PageSpeed mobile" value={loading ? 'Loading…' : mobile != null ? String(mobile) : 'Not run'} tone={mobile != null ? 'ok' : 'warn'} />
+      <WorkspaceStatus label="Search impressions" value={loading ? 'Loading…' : snapshot?.impressions != null ? snapshot.impressions.toLocaleString() : 'Not available'} />
+      <WorkspaceStatus label="Search clicks" value={loading ? 'Loading…' : snapshot?.clicks != null ? snapshot.clicks.toLocaleString() : 'Not available'} />
+      <WorkspaceStatus label="Average position" value={loading ? 'Loading…' : snapshot?.avg_position != null ? snapshot.avg_position.toFixed(1) : 'Not available'} />
+      <div className="configuration-actions">
+        <Button variant="primary" size="sm" disabled={!liveUrl || runningHealth} onClick={runHealthCheck}>{runningHealth ? 'Running…' : 'Run site health'}</Button>
+        <Button variant="ghost" size="sm" onClick={onOpenReporting}>View reporting</Button>
+      </div>
+    </WorkspaceCard>
+  );
+}
+
+function WebsiteInventoryCard({ pages, pagesPlanned, onOpenBriefStudio }: {
+  pages: Page[];
+  pagesPlanned: number;
+  onOpenBriefStudio: () => void;
+}) {
+  const live = pages.filter((page) => page.status === 'complete').length;
+  const briefed = pages.filter((page) => page.status === 'briefed' || page.status === 'in_progress').length;
+  const notStarted = Math.max(0, pagesPlanned - live - briefed);
+  const newestPage = [...pages]
+    .filter((page) => page.status === 'complete')
+    .sort((a, b) => Date.parse(b.marked_complete_at ?? b.built_at ?? b.created_at) - Date.parse(a.marked_complete_at ?? a.built_at ?? a.created_at))[0];
+
+  return (
+    <WorkspaceCard title="Website inventory">
+      <WorkspaceStatus label="Live pages" value={`${live} of ${pagesPlanned}`} tone={live >= pagesPlanned && pagesPlanned > 0 ? 'ok' : undefined} />
+      <WorkspaceStatus label="Briefed or in progress" value={String(briefed)} />
+      <WorkspaceStatus label="Not started" value={String(notStarted)} tone={notStarted > 0 ? 'warn' : 'ok'} />
+      <WorkspaceStatus label="Most recently completed" value={newestPage ? pageDisplayName(newestPage) : 'No pages completed'} />
+      <Button variant="ghost" size="sm" onClick={onOpenBriefStudio}>Open Page Matrix</Button>
+    </WorkspaceCard>
+  );
+}
+
+function WebsiteAttentionCard({ project, pages, showToast, onOpenBriefStudio, onOpenSetup }: {
+  project: Project;
+  pages: Page[];
+  showToast: ShowToast;
+  onOpenBriefStudio: () => void;
+  onOpenSetup: () => void;
+}) {
+  const [items, setItems] = useState<GrowthWorkItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    api.projects.growthCycles.current(project.id)
+      .then((result) => { if (active) setItems(result.items.filter((item) => item.status !== 'complete')); })
+      .catch((err) => { if (active) showToast(`Could not load website priorities: ${err instanceof ApiError ? err.message : (err as Error).message}`, 'error'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [project.id, showToast]);
+
+  const pageItems = items.filter((item) => item.page_id || item.recommended_page_type);
+  const setupIssues = [
+    !project.gsc_property_url ? 'Connect Google Search Console' : null,
+    !project.domain ? 'Add the primary domain' : null,
+    pages.some((page) => page.status === 'briefed' || page.status === 'in_progress') ? 'Complete pages already in production' : null,
+  ].filter((item): item is string => item !== null);
+  const priorities = [...setupIssues, ...pageItems.map((item) => item.title)].slice(0, 3);
+
+  return (
+    <WorkspaceCard title="Needs attention">
+      {loading ? (
+        <p className="workspace-empty-copy"><Spinner /> Loading priorities…</p>
+      ) : priorities.length > 0 ? (
+        <div className="website-attention-list">
+          {priorities.map((priority) => (
+            <div className="website-attention-item" key={priority}><span>{priority}</span></div>
+          ))}
+        </div>
+      ) : (
+        <div className="website-attention-clear"><CheckCircle2 size={18} /><span>No immediate website actions.</span></div>
+      )}
+      <div className="configuration-actions">
+        {pageItems.length > 0 || pages.some((page) => page.status === 'briefed' || page.status === 'in_progress') ? (
+          <Button variant="primary" size="sm" onClick={onOpenBriefStudio}>Review page work</Button>
+        ) : null}
+        {setupIssues.some((issue) => issue.includes('Connect') || issue.includes('domain')) ? (
+          <Button variant="ghost" size="sm" onClick={onOpenSetup}>Open configuration</Button>
+        ) : null}
+      </div>
+    </WorkspaceCard>
+  );
+}
+
+function pageDisplayName(page: Page): string {
+  if (page.title) return page.title;
+  if (page.service && page.city) return `${page.service} — ${page.city}`;
+  if (page.service) return page.service;
+  return page.type.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function WorkspaceStatus({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'warn' }) {
   return <div className="workspace-status"><span>{label}</span><strong className={tone ?? ''}>{value}</strong></div>;
 }
@@ -1131,7 +1274,6 @@ function Sidebar({
   const liveUrl = project.custom_domain ?? project.landingsite_url;
   const reviewCount = lead?.google_review_count ?? 0;
   const pagespeed = lead?.pagespeed_desktop;
-  const scrapeDone = !!project.scrape_completed_at;
   const discoveryAnswers = safeJsonObject(discovery?.answers_json);
   const logoStatus = assetStatus(
     discoveryAnswers.logo_available,
@@ -1222,12 +1364,6 @@ function Sidebar({
           <span>PageSpeed</span>
           <span className={pagespeed != null ? 'bs-side-status-ok' : 'bs-side-status-na'}>
             {pagespeed != null ? `Desktop ${pagespeed}` : 'Not run'}
-          </span>
-        </div>
-        <div className="bs-side-row bs-side-row-status">
-          <span>Website scrape</span>
-          <span className={scrapeDone ? 'bs-side-status-ok' : 'bs-side-status-na'}>
-            {scrapeDone ? 'Done' : 'Not run'}
           </span>
         </div>
       </div>

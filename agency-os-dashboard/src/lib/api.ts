@@ -5,6 +5,7 @@ import type {
   Session, SessionBlock, CallOutcome, Demo, DemoStatus, Callback, CallbackStatus,
   AgencySettings, SettingsHealth, ProspectCandidate, ProspectInboxSummary,
   GrowthCycle, GrowthWorkItem, GrowthPhase, GrowthWorkCategory, GrowthWorkStatus, GrowthStrategy, OnboardingItem, PageSearchMetrics, PageInsights,
+  SeoAuditRun, SeoAuditFinding,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -526,6 +527,8 @@ export const api = {
   reports: {
     summary: (projectId: number, period?: string) =>
       apiFetch<ReportSummary>(`/api/reports/${projectId}/summary${qs({ period })}`),
+    health: (projectId: number) =>
+      apiFetch<{ snapshot: ReportSummary['current'] }>(`/api/reports/${projectId}/health`, { method: 'POST' }),
     refresh: (projectId: number, period?: string) =>
       apiFetch<{ snapshot: unknown }>(`/api/reports/${projectId}/refresh${qs({ period })}`, { method: 'POST' }),
     snapshot: (projectId: number, period?: string) =>
@@ -541,6 +544,11 @@ export const api = {
       apiFetch<{ ok: boolean; id: string; to: string }>(`/api/reports/${projectId}/email`, {
         method: 'POST', body: JSON.stringify(opts),
       }),
+  },
+  seoAudits: {
+    latest: (projectId: number) => apiFetch<{ run: SeoAuditRun | null; findings: SeoAuditFinding[]; unmatchedPages: number }>(`/api/projects/${projectId}/seo-audits/latest`),
+    run: (projectId: number) => apiFetch<{ run: SeoAuditRun; findings: SeoAuditFinding[]; unmatchedPages: number }>(`/api/projects/${projectId}/seo-audits`, { method: 'POST' }),
+    importPages: (projectId: number) => apiFetch<{ imported: number; linked: number; remaining: number }>(`/api/projects/${projectId}/seo-audits/import-pages`, { method: 'POST' }),
   },
   // Calling dashboard (Phase 3+ backend, Phase 4+ frontend).
   dashboard: {

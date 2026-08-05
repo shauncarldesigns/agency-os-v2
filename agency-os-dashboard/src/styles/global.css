@@ -592,6 +592,20 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .configuration-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 12px;}
 .configuration-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:14px;}
 .workspace-card .configuration-actions button{margin-top:0;}
+.website-attention-list{margin-top:2px;border-top:1px solid var(--border);}
+.website-attention-item{padding:9px 0;border-bottom:1px solid var(--border);color:var(--text2);font-size:.72rem;font-weight:600;line-height:1.4;}
+.website-attention-clear{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#15803d;font-size:.72rem;font-weight:600;}
+.workspace-card-kicker{margin:0 0 3px;color:var(--accent);font-size:.62rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;}
+.seo-audit-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+.seo-audit-card-heading h3{margin-bottom:0;}
+.seo-audit-score{display:flex;align-items:baseline;gap:2px;padding:7px 10px;border-radius:10px;background:var(--surface2);}
+.seo-audit-score strong{font-size:1.2rem;}.seo-audit-score span{font-size:.62rem;color:var(--text3);}
+.seo-audit-score.good strong{color:var(--green);}.seo-audit-score.attention strong{color:var(--yellow);}.seo-audit-score.critical strong{color:#dc2626;}
+.seo-audit-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px;}
+.seo-audit-summary>div{padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);}
+.seo-audit-summary span{display:block;color:var(--text3);font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+.seo-audit-summary strong{display:block;margin-top:3px;color:var(--text2);font-size:.76rem;}.seo-audit-summary strong.ok{color:var(--green);}.seo-audit-summary strong.warn{color:var(--yellow);}.seo-audit-summary strong.critical{color:#dc2626;}
+@media(max-width:720px){.seo-audit-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .configuration-dns-status{margin-top:16px;}
 .configuration-field{display:block;min-width:0;}
 .configuration-field.wide{grid-column:1/-1;}

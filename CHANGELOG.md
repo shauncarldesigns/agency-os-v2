@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Website health and SEO crawl operations
+
+- **The Website workspace now provides an actionable operating view for live-site health.** Operators can refresh PageSpeed, run a bounded technical SEO crawl, review prioritized page-level findings, import already-live pages into Brief Studio when no Page Matrix exists, and turn crawl findings into update briefs without first generating a master brief. Audit reruns reconcile resolved work, the Page Matrix and Page Insights surface current crawl context, and eligible live Tier 3 sites receive a rolling 30-day audit through the existing daily maintenance trigger. Backend + dashboard + migration (`2026-08-04-seo-crawl-audits.sql`, apply before deploy).
+
 ### Search Console reporting repair
 
 - **Reporting now calls Google Search Console’s case-sensitive `searchAnalytics` endpoint correctly, restoring impressions, clicks, rankings, keywords, and page data after refresh.** The obsolete Cloudflare zone-analytics request has been removed from report collection because client sites use DNS-only records and do not send traffic through Cloudflare’s proxy; Cloudflare remains responsible for domain and DNS management. Backend.
