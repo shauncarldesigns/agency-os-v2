@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### DNS configuration save action and spacing
+
+- **Domain & DNS configuration now saves registrar and domain-owner email independently from Cloudflare operations.** The linked-zone status card and action rows have consistent spacing, primary domains are protected from inline edits after a zone is linked, and DNS refresh uses the shared icon system. Dashboard.
+
 ### LandingSite configuration cleanup
 
 - **Client workspaces no longer show or accept a LandingSite project ID, because LandingSite does not provide one.** Website configuration retains the actionable LandingSite URL, live domain, Search Console property, and reporting recipient fields. Backend + dashboard.

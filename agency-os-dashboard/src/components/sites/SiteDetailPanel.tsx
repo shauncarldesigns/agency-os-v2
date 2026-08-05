@@ -17,7 +17,7 @@ import {
   diffAdditions,
 } from '../../lib/briefExtract';
 import { TIER_MRR } from '../../lib/pricing';
-import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, FlaskConical, Globe2, Home, Lock, MapPin, Settings2, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, ClipboardCheck, ExternalLink, FileText, FlaskConical, Globe2, Home, Lock, MapPin, RefreshCw, Settings2, Zap } from 'lucide-react';
 
 interface SiteDetailPanelProps {
   project: Project;
@@ -1008,6 +1008,21 @@ function ConfigurationCards({
     }
   }
 
+  async function saveDnsSettings() {
+    setSavingCard('dns-settings');
+    try {
+      await onSaveProject({
+        registrar: dns.registrar.trim() || null,
+        domain_owner_email: dns.domain_owner_email.trim() || null,
+      });
+      showToast('Domain settings saved', 'success');
+    } catch (err) {
+      showToast(`Could not save domain settings: ${(err as Error).message}`, 'error');
+    } finally {
+      setSavingCard(null);
+    }
+  }
+
   return (
     <div className="configuration-card-grid">
       <WorkspaceCard title="Client & contract">
@@ -1041,14 +1056,17 @@ function ConfigurationCards({
 
       <WorkspaceCard title="Domain & DNS">
         <div className="configuration-form-grid">
-          <ConfigField label="Primary domain" wide value={dns.domain} onChange={(value) => setDns((current) => ({ ...current, domain: value }))} />
+          <ConfigField label="Primary domain" wide value={dns.domain} disabled={!!project.cf_zone_id} onChange={(value) => setDns((current) => ({ ...current, domain: value }))} helper={project.cf_zone_id ? 'Managed by the linked Cloudflare zone' : undefined} />
           <ConfigField label="Registrar" value={dns.registrar} onChange={(value) => setDns((current) => ({ ...current, registrar: value }))} />
           <ConfigField label="Domain owner email" type="email" value={dns.domain_owner_email} onChange={(value) => setDns((current) => ({ ...current, domain_owner_email: value }))} />
         </div>
+        <div className="configuration-actions">
+          <Button variant="primary" size="sm" disabled={savingCard === 'dns-settings'} onClick={saveDnsSettings}>{savingCard === 'dns-settings' ? 'Saving…' : 'Save domain settings'}</Button>
+        </div>
         {project.cf_zone_id ? (
-          <><DnsCard project={project} onManageDns={onManageDns} /><Button variant="ghost" size="sm" onClick={onManageDns}>Manage DNS records</Button></>
+          <div className="configuration-dns-status"><DnsCard project={project} onManageDns={onManageDns} /><div className="configuration-actions"><Button variant="ghost" size="sm" onClick={onManageDns}>Manage DNS records</Button></div></div>
         ) : (
-          <Button variant="primary" size="sm" disabled={!dns.domain.trim() || savingCard === 'dns'} onClick={createDnsZone}>{savingCard === 'dns' ? 'Creating zone…' : 'Create Cloudflare zone'}</Button>
+          <div className="configuration-actions"><Button variant="ghost" size="sm" disabled={!dns.domain.trim() || savingCard === 'dns'} onClick={createDnsZone}>{savingCard === 'dns' ? 'Creating zone…' : 'Create Cloudflare zone'}</Button></div>
         )}
       </WorkspaceCard>
 
@@ -1306,7 +1324,7 @@ function DnsCard({ project, onManageDns }: { project: Project; onManageDns: () =
             letterSpacing: 0,
           }}
         >
-          {refreshing ? '…' : '↻ Refresh'}
+          {refreshing ? '…' : <><RefreshCw size={12} /> Refresh</>}
         </button>
       )}
     </div>
