@@ -31,7 +31,7 @@ import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 //
 // Merges the old pipeline/LeadModal content (Overview / Reviews / Pitch Prep
 // / Call Log tabs, Google Maps card, tier + opportunity score banner,
-// outcome/stage/tier editors, Book demo) into the Automated Pipeline's
+// outcome/stage/tier editors, Convert to client) into the Automated Pipeline's
 // Tailwind visual language (rounded-2xl, slate palette, gradient primary).
 //
 // `pipelineContext` adds an Activity tab with the text+site outreach trail.
@@ -45,7 +45,7 @@ interface Props {
   showToast: ShowToast;
   /** Called after any field edit (outcome/stage/tier) so list views can refresh. */
   onLeadUpdated?: () => void;
-  /** When provided, an eligible lead gets the "→ Book demo" footer action. */
+  /** When provided, an eligible lead gets the "→ Convert to client" action. */
   onQualify?: (lead: Lead) => void;
   /** Automated Pipeline context: adds the Activity tab (site sessions +
    *  outreach trail from lead_activity). */
@@ -398,7 +398,7 @@ export function LeadDetailModal({
             {/* Footer.
                 Automated context: the Activity summary card (last action +
                 site sessions) replaces the Close button — the header X
-                closes. Cold-call context keeps Close + Book demo. */}
+                closes. Cold-call context keeps Close + Convert to client. */}
             {pipelineContext ? (
               <div className="border-t border-slate-100 px-5 py-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -745,7 +745,7 @@ function OverviewPane({
           >
             <option value="cold">Cold</option>
             <option value="contacted">Contacted</option>
-            {/* 'qualified'/'client' are set atomically by Book demo / client
+            {/* 'qualified'/'client' are set atomically by conversion / client
                 promotion flows; the dropdown locks once there. */}
             {lead.status === 'qualified' && <option value="qualified">Demo booked (locked)</option>}
             {lead.status === 'client' && <option value="client">Client (locked)</option>}

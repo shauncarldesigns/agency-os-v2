@@ -245,6 +245,15 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectActivityEvent {
+  id: string;
+  kind: string;
+  title: string;
+  detail: string | null;
+  occurredAt: string;
+  tone: 'neutral' | 'info' | 'success' | 'warning' | 'error';
+}
+
 export interface ProjectDiscovery {
   project_id: number;
   status: 'draft' | 'complete';
@@ -555,7 +564,7 @@ export interface AgencySettings {
     sessionSize: number; scoreFloor: number; industryRotation: string[];
     geographicFilters: string[]; callingDays: string[]; callingBlocks: string[];
     recallCooldownDays: number; hotThreshold: number; walkthroughThreshold: number;
-    followUpThreshold: number; bookingUrl: string;
+    followUpThreshold: number;
   };
   defaults: {
     tier1Mrr: number; tier2Mrr: number; tier3Mrr: number; services: string[];
@@ -615,6 +624,20 @@ export type SessionBlock = 'morning' | 'evening';
 export type SessionStatus = 'planned' | 'active' | 'complete';
 export type CallOutcome = 'no_answer' | 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
 export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
+
+export interface ApplicationEvent {
+  id: number;
+  level: 'info' | 'warn' | 'error';
+  source: string;
+  event_type: string;
+  message: string;
+  method: string | null;
+  path: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  details_json: string | null;
+  created_at: string;
+}
 export type CallbackStatus = 'pending' | 'completed' | 'missed';
 
 export type SessionKind = 'auto' | 'hot';

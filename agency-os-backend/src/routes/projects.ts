@@ -3,6 +3,7 @@ import type { Env, Lead, Project } from '../types';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
 import { chicagoToday } from '../services/dayOfWeek';
+import { getProjectActivity } from '../services/projectActivity';
 
 export const projectsRouter = new Hono<{ Bindings: Env }>();
 
@@ -104,6 +105,19 @@ projectsRouter.get('/:id', async (c) => {
     .bind(id).all();
 
   return c.json({ project, pages: pages.results });
+});
+
+projectsRouter.get('/:id/activity', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
+  const exists = await c.env.DB.prepare('SELECT id FROM projects WHERE id = ?').bind(id).first();
+  if (!exists) return c.json(notFound('Project'), 404);
+  try {
+    return c.json({ events: await getProjectActivity(c.env.DB, id) });
+  } catch (err) {
+    log('error', 'projects', `GET /projects/${id}/activity failed`, err);
+    return c.json(serverError(), 500);
+  }
 });
 
 // GET /api/projects/:id/discovery

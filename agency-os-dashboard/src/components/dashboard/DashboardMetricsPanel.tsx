@@ -164,7 +164,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
             <RangeButton active={engagementRange === 'all'} onClick={() => setEngagementRange('all')}>All time</RangeButton>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <EffectivenessCard
             label="Intro text"
             value={data.effectiveness.current.engagementByTouch.intro.rate}
@@ -185,13 +185,6 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
             trend={data.effectiveness.trends.engagementByTouch.finalNudge}
             emptyLabel="No final nudges"
             detail={`${data.effectiveness.current.engagementByTouch.finalNudge.engaged} of ${data.effectiveness.current.engagementByTouch.finalNudge.sent} leads engaged after the final nudge`}
-          />
-          <EffectivenessCard
-            label="Calendar → booked"
-            value={data.effectiveness.current.calendarBookingRate}
-            trend={data.effectiveness.trends.calendarBookingRate}
-            emptyLabel="No calendar opens"
-            detail={`${data.effectiveness.current.calendarBooked} of ${data.effectiveness.current.calendarOpened} calendar-opened leads later booked`}
           />
         </div>
       </section>

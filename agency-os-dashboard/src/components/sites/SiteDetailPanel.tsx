@@ -12,6 +12,7 @@ import { ReportsPanel } from '../reports/ReportsPanel';
 import { PageRecommendationQueue } from './PageRecommendationQueue';
 import { OnboardingChecklistPanel } from './OnboardingChecklistPanel';
 import { SeoAuditCard } from './SeoAuditCard';
+import { ClientActivityTimeline } from './ClientActivityTimeline';
 import {
   extractServicesFromBrief,
   extractServiceAreasFromBrief,
@@ -831,9 +832,7 @@ function WorkspaceTabPanel({
       )}
 
       {tab === 'activity' && (
-        <WorkspaceCard title="Client timeline">
-          <p className="workspace-empty-copy">Conversion events are now logged. The next lift will combine lead activity, brief changes, DNS events, launches, and report sends into this timeline.</p>
-        </WorkspaceCard>
+        <ClientActivityTimeline projectId={project.id} showToast={showToast} />
       )}
     </main>
   );

@@ -30,7 +30,7 @@ export function Modal({ open, onClose, width = 640, children }: ModalProps) {
 
 export function ModalHeader({ title, onClose, children }: { title?: string; onClose: () => void; children?: ReactNode }) {
   return (
-    <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
         {title && <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text)' }}>{title}</span>}
         {children}
@@ -42,7 +42,7 @@ export function ModalHeader({ title, onClose, children }: { title?: string; onCl
 
 export function ModalFooter({ children }: { children: ReactNode }) {
   return (
-    <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+    <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
       {children}
     </div>
   );

@@ -582,7 +582,7 @@ function nextActionPresentation(lead: Lead): SignalPresentation {
   if (lead.followup) return { label: 'Callback', sub: shortDate(lead.followup), tone: 'yellow' };
   if (lead.pipeline_status === 'engaged') {
     if (lead.engagement_grade === 'hot') return { label: 'Call now', sub: 'High engagement', tone: 'red' };
-    if (lead.engagement_grade === 'walkthrough') return { label: 'Offer walkthrough', sub: 'Ready now', tone: 'green' };
+    if (lead.engagement_grade === 'walkthrough') return { label: 'Call to discuss site', sub: 'Ready now', tone: 'green' };
     return { label: 'Send follow-up', sub: 'Engaged lead', tone: 'blue' };
   }
   if (lead.phone_route === 'text' || lead.phone_route === 'unknown') {
@@ -607,7 +607,7 @@ function parseMeta(raw: string | null | undefined): Record<string, unknown> {
 
 function engagementLabel(grade: string): string {
   if (grade === 'hot') return 'Call immediately';
-  if (grade === 'walkthrough') return 'Offer walkthrough';
+  if (grade === 'walkthrough') return 'Call to discuss site';
   if (grade === 'follow_up') return 'Follow up';
   return 'Nurture';
 }

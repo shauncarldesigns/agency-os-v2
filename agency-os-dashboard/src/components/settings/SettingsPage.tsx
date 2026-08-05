@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import {
   Building2, PhoneCall, SlidersHorizontal, PlugZap, Database, CheckCircle2,
   AlertCircle, RefreshCw, Download, Save, ShieldCheck,
-  SearchCheck,
+  SearchCheck, ScrollText, ChevronDown,
 } from 'lucide-react';
 import { api } from '../../lib/api';
-import type { AgencySettings, SettingsHealth, ShowToast } from '../../lib/types';
+import type { AgencySettings, ApplicationEvent, SettingsHealth, ShowToast } from '../../lib/types';
 
-type Section = 'general' | 'outreach' | 'discovery' | 'defaults' | 'integrations' | 'system';
+type Section = 'general' | 'outreach' | 'discovery' | 'defaults' | 'integrations' | 'system' | 'activity';
 
 const sections: Array<{ id: Section; label: string; icon: typeof Building2 }> = [
   { id: 'general', label: 'General', icon: Building2 },
@@ -16,6 +16,7 @@ const sections: Array<{ id: Section; label: string; icon: typeof Building2 }> = 
   { id: 'defaults', label: 'Agency defaults', icon: SlidersHorizontal },
   { id: 'integrations', label: 'Integrations', icon: PlugZap },
   { id: 'system', label: 'System & data', icon: Database },
+  { id: 'activity', label: 'Activity & errors', icon: ScrollText },
 ];
 
 const timezones = ['America/Chicago', 'America/New_York', 'America/Denver', 'America/Los_Angeles'];
@@ -27,8 +28,28 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [activity, setActivity] = useState<ApplicationEvent[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (active !== 'activity') return;
+    void loadActivity();
+    const timer = window.setInterval(() => void loadActivity(true), 10_000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  async function loadActivity(silent = false) {
+    if (!silent) setActivityLoading(true);
+    try {
+      const result = await api.settings.activity();
+      setActivity(result.events);
+    } catch {
+      if (!silent) showToast('Could not load application activity', 'error');
+    } finally {
+      if (!silent) setActivityLoading(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -90,7 +111,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
           <h2 className="text-xl font-bold text-slate-900">Workspace settings</h2>
           <p className="mt-1 text-sm text-slate-500">Manage Agency OS behavior, defaults, and connection health.</p>
         </div>
-        {active !== 'integrations' && active !== 'system' && (
+        {active !== 'integrations' && active !== 'system' && active !== 'activity' && (
           <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
             <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save changes'}
           </button>
@@ -113,6 +134,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
           {active === 'defaults' && <Defaults settings={settings} patch={patch} />}
           {active === 'integrations' && <Integrations health={health} syncing={syncing} onRefresh={load} onSync={syncClarity} />}
           {active === 'system' && <System health={health} onExport={exportLeads} onRefresh={load} />}
+          {active === 'activity' && <ActivityLog events={activity} loading={activityLoading} onRefresh={() => void loadActivity()} />}
         </section>
       </div>
     </div>
@@ -145,7 +167,6 @@ function Outreach({ settings: s, patch }: { settings: AgencySettings; patch: Pat
       <Field label="Leads per session"><NumberInput value={s.outreach.sessionSize} min={1} max={100} onChange={v => patch('outreach', { sessionSize: v })} /></Field>
       <Field label="Minimum opportunity score"><NumberInput value={s.outreach.scoreFloor} min={0} max={100} onChange={v => patch('outreach', { scoreFloor: v })} /></Field>
       <Field label="Recall cooldown (days)"><NumberInput value={s.outreach.recallCooldownDays} min={0} max={90} onChange={v => patch('outreach', { recallCooldownDays: v })} /></Field>
-      <Field label="Booking URL"><Input value={s.outreach.bookingUrl} placeholder="HoneyBook or calendar URL" onChange={v => patch('outreach', { bookingUrl: v })} /></Field>
     </Grid>
     <Divider />
     <h4 className="mb-3 text-sm font-semibold text-slate-800">Calling schedule</h4>
@@ -155,7 +176,7 @@ function Outreach({ settings: s, patch }: { settings: AgencySettings; patch: Pat
     <h4 className="mb-3 text-sm font-semibold text-slate-800">Engagement thresholds</h4>
     <Grid cols={3}>
       <Field label="Hot"><NumberInput value={s.outreach.hotThreshold} min={0} max={100} onChange={v => patch('outreach', { hotThreshold: v })} /></Field>
-      <Field label="Walkthrough"><NumberInput value={s.outreach.walkthroughThreshold} min={0} max={100} onChange={v => patch('outreach', { walkthroughThreshold: v })} /></Field>
+      <Field label="Ready to discuss"><NumberInput value={s.outreach.walkthroughThreshold} min={0} max={100} onChange={v => patch('outreach', { walkthroughThreshold: v })} /></Field>
       <Field label="Follow up"><NumberInput value={s.outreach.followUpThreshold} min={0} max={100} onChange={v => patch('outreach', { followUpThreshold: v })} /></Field>
     </Grid>
     <Divider />
@@ -252,6 +273,48 @@ function System({ health, onExport, onRefresh }: { health: SettingsHealth | null
     </div>
     <Divider />
     <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4"><div><h4 className="text-sm font-semibold text-slate-800">Export lead data</h4><p className="mt-1 text-xs text-slate-500">Download a CSV backup of every lead and enrichment field.</p></div><button onClick={onExport} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" />Export CSV</button></div>
+  </div>;
+}
+
+function ActivityLog({ events, loading, onRefresh }: { events: ApplicationEvent[]; loading: boolean; onRefresh: () => void }) {
+  const [filter, setFilter] = useState<'all' | 'error'>('all');
+  const [query, setQuery] = useState('');
+  const visible = events.filter(event => {
+    if (filter === 'error' && event.level !== 'error' && event.event_type !== 'request_failed') return false;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return [event.source, event.event_type, event.message, event.path]
+      .some(value => value?.toLowerCase().includes(needle));
+  });
+
+  return <div>
+    <div className="flex items-start justify-between gap-3">
+      <Heading title="Activity & errors" sub="Recent application actions and failures. Refreshes automatically every 10 seconds while this page is open." />
+      <button onClick={onRefresh} disabled={loading} title="Refresh activity" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
+    </div>
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="inline-flex w-fit rounded-lg bg-slate-100 p-1">
+        <button onClick={() => setFilter('all')} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${filter === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>All activity</button>
+        <button onClick={() => setFilter('error')} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${filter === 'error' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500'}`}>Errors only</button>
+      </div>
+      <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter by source, action, or path" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 sm:max-w-xs" />
+    </div>
+    <div className="overflow-hidden rounded-xl border border-slate-200">
+      {visible.length === 0 ? <div className="px-5 py-12 text-center text-sm text-slate-400">{loading ? 'Loading activity…' : filter === 'error' ? 'No errors in the recent log.' : 'No application activity recorded yet.'}</div> :
+        <div className="divide-y divide-slate-100">{visible.map(event => {
+          const tone = event.level === 'error' ? 'bg-rose-500' : event.level === 'warn' ? 'bg-amber-500' : 'bg-emerald-500';
+          const dateValue = event.created_at.includes('T') ? event.created_at : `${event.created_at.replace(' ', 'T')}Z`;
+          return <details key={event.id} className="group bg-white open:bg-slate-50">
+            <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-3">
+              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone}`} />
+              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-sm font-semibold text-slate-800">{event.message}</span><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{event.source}</span></div><div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400"><span>{new Date(dateValue).toLocaleString()}</span>{event.status_code != null && <span>HTTP {event.status_code}</span>}{event.duration_ms != null && <span>{event.duration_ms} ms</span>}</div></div>
+              <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-slate-100 px-9 py-3 text-xs text-slate-600"><dl className="grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]"><dt className="font-semibold text-slate-400">Event</dt><dd>{event.event_type}</dd>{event.method && <><dt className="font-semibold text-slate-400">Request</dt><dd className="break-all">{event.method} {event.path}</dd></>}{event.details_json && <><dt className="font-semibold text-slate-400">Details</dt><dd><pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-3 text-[11px] text-slate-100">{event.details_json}</pre></dd></>}</dl></div>
+          </details>;
+        })}</div>}
+    </div>
+    <p className="mt-3 text-xs text-slate-400">The feed stores request metadata and operational details only. Request bodies, API keys, credentials, and client form values are excluded.</p>
   </div>;
 }
 

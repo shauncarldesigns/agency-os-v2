@@ -31,6 +31,7 @@ import { onboardingRouter } from './routes/onboarding';
 import { runScheduledDiscovery } from './services/prospectDiscovery';
 import { seoAuditsRouter } from './routes/seo-audits';
 import { runDueSeoAudits } from './services/seoAudit';
+import { recordApplicationEvent } from './services/applicationEvents';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -60,6 +61,52 @@ app.route('/', redirectRouter);
 app.route('/', publicEmailRouter);
 
 app.use('/api/*', authMiddleware());
+
+// Persist actionable operational history for the Settings activity/error log.
+// Successful reads stay out of the feed unless they are unusually slow; all
+// mutations and failed requests are retained without request bodies or secrets.
+app.use('/api/*', async (c, next) => {
+  const startedAt = Date.now();
+  await next();
+  const durationMs = Date.now() - startedAt;
+  const method = c.req.method;
+  const path = c.req.path;
+  const statusCode = c.res.status;
+  const isMutation = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  const isFailure = statusCode >= 400;
+  const isSlow = durationMs >= 2_000;
+  if (!isMutation && !isFailure && !isSlow) return;
+
+  let responseDetails: Record<string, unknown> | undefined;
+  if (isFailure) {
+    const payload = await c.res.clone().json().catch(() => null) as Record<string, unknown> | null;
+    if (payload) {
+      responseDetails = {
+        error: typeof payload.error === 'string' ? payload.error.slice(0, 500) : undefined,
+        code: typeof payload.code === 'string' ? payload.code.slice(0, 100) : undefined,
+      };
+    }
+  }
+
+  const level = statusCode >= 500 ? 'error' : statusCode >= 400 || isSlow ? 'warn' : 'info';
+  const eventType = isFailure ? 'request_failed' : isSlow ? 'slow_request' : 'mutation';
+  const message = isFailure
+    ? `${method} ${path} failed with ${statusCode}`
+    : isSlow
+      ? `${method} ${path} completed slowly`
+      : `${method} ${path} completed`;
+  c.executionCtx.waitUntil(recordApplicationEvent(c.env.DB, {
+    level,
+    source: path.split('/').filter(Boolean).slice(0, 3).join('/') || 'api',
+    eventType,
+    message,
+    method,
+    path,
+    statusCode,
+    durationMs,
+    details: responseDetails,
+  }));
+});
 
 // Sub-routes that share /api/leads must mount before the bare leads router
 app.route('/api/leads', leadCallsRouter);
@@ -97,8 +144,17 @@ app.route('/api/email', emailOutreachRouter);
 app.route('/api/settings', settingsRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
-app.onError((err, c) => {
+app.onError(async (err, c) => {
   log('error', 'app', 'Unhandled error', err.message);
+  await recordApplicationEvent(c.env.DB, {
+    level: 'error',
+    source: 'worker',
+    eventType: 'unhandled_error',
+    message: err.message || 'Unhandled Worker error',
+    method: c.req.method,
+    path: c.req.path,
+    statusCode: 500,
+  });
   return c.json({ error: 'Internal server error', code: 'SERVER_ERROR' }, 500);
 });
 
@@ -106,7 +162,15 @@ export default {
   fetch: app.fetch,
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     log('info', 'cron', `Scheduled trigger: ${event.cron}`);
+    ctx.waitUntil(recordApplicationEvent(env.DB, {
+      level: 'info', source: 'cron', eventType: 'scheduled_trigger',
+      message: `Scheduled trigger started: ${event.cron}`,
+      details: { cron: event.cron },
+    }));
     if (event.cron === '0 6 * * *') {
+      ctx.waitUntil(env.DB.prepare(
+        "DELETE FROM application_events WHERE created_at < datetime('now', '-30 days')",
+      ).run());
       // Daily 6am — refresh PageSpeed for live Tier 3 sites. On the first
       // of each month, also finalize the prior-month snapshots. Combining
       // these keeps the Worker within Cloudflare's five-trigger limit.
