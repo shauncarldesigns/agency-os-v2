@@ -378,6 +378,38 @@ export interface PageInsights {
   briefs: PageInsightBrief[];
   work_items: PageInsightWorkItem[];
   metrics_history: PageSearchMetrics[];
+  audit_findings: SeoAuditFinding[];
+}
+
+export interface SeoAuditRun {
+  id: number;
+  project_id: number;
+  status: 'running' | 'complete' | 'failed';
+  start_url: string;
+  pages_crawled: number;
+  critical_count: number;
+  warning_count: number;
+  opportunity_count: number;
+  health_score: number | null;
+  robots_status: string | null;
+  sitemap_status: string | null;
+  error_message: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface SeoAuditFinding {
+  id: number;
+  run_id: number;
+  project_id: number;
+  page_id: number | null;
+  page_url: string | null;
+  severity: 'critical' | 'warning' | 'opportunity';
+  rule_key: string;
+  title: string;
+  details: string;
+  fingerprint: string;
+  created_at: string;
 }
 
 export interface OnboardingItem {

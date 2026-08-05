@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-04. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-05. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,28 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Website health and SEO crawl operations (2026-08-05)
+
+- The Website workspace now combines live-site identity, PageSpeed/search
+  snapshots, page inventory, a plain needs-attention list, and a technical SEO
+  audit card. The audit crawls up to 50 same-origin pages and checks discovery,
+  response/redirect health, indexability, titles, descriptions, H1s, canonicals,
+  thin content, image alt text, schema, sitemap coverage, orphaning, duplicate
+  metadata, and expected Page Matrix URLs.
+- Audit history is stored in `seo_audit_runs`, `seo_audit_pages`, and
+  `seo_audit_findings`. Manual runs are available from the Website workspace;
+  the existing daily maintenance trigger also audits a bounded set of live Tier
+  3 sites whose last successful audit is at least 30 days old.
+- Findings reconcile into one actionable growth item per affected page. Resolved
+  findings complete their corresponding work, affected Page Matrix cards surface
+  the current audit state, and operators can generate update briefs from crawl
+  and project context even when an existing site never had a master brief.
+- Existing one-off sites can import the latest crawl inventory into Brief Studio.
+  The import classifies foundation, service, and custom pages, links crawl records,
+  updates page totals, and is idempotent; creating brand-new planned pages still
+  requires the normal master-brief workflow.
+- Migration: `2026-08-04-seo-crawl-audits.sql`.
 
 ## Client workspaces and managed growth operations (2026-08-04)
 

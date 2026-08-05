@@ -235,7 +235,6 @@ growthCyclesRouter.post('/growth-work-items/:id/brief', async (c) => {
       c.env.DB.prepare('SELECT * FROM seo_snapshots WHERE project_id=? ORDER BY period DESC LIMIT 1').bind(item.project_id).first(),
     ]);
     if (!page) return c.json(notFound('Page'), 404);
-    if (!master) return c.json(badRequest('Generate the master brief before an optimization brief'), 400);
 
     const prompt = `Write an actionable update brief for an existing live local-service website page. This is not a replacement page and must not invent performance data. Tell the builder exactly what to retain, change, add, and verify. Include a short success checklist. Use the recommendation and available evidence as the reason for every change.
 
@@ -244,7 +243,7 @@ LIVE PAGE: ${JSON.stringify(page)}
 OPTIMIZATION RECOMMENDATION: ${JSON.stringify({ title: item.title, description: item.description, category: item.category, evidence_url: item.evidence_url })}
 LATEST SEO SNAPSHOT: ${JSON.stringify(snapshot ?? null)}
 CURRENT PAGE BRIEF: ${String(previousBrief?.content_markdown ?? 'No prior page brief is available.')}
-MASTER BRIEF: ${master.content_markdown}`;
+MASTER BRIEF: ${master?.content_markdown ?? 'No master brief exists because this live site was imported. Use the project configuration, live page record, audit evidence, and prior page brief only.'}`;
     const markdown = await callClaude(c.env.CLAUDE_API_KEY, prompt, {
       model: BRIEF_MODEL, maxTokens: 4000, temperature: 0.4, timeoutMs: 90_000,
       systemPrompt: 'You are a senior local SEO and conversion strategist. Produce a concise implementation brief in Markdown for updating an existing page. Separate evidence from assumptions and never fabricate metrics.',

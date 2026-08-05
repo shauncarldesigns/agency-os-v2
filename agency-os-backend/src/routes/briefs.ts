@@ -395,14 +395,17 @@ briefsRouter.get('/pages/:pageId/insights', async (c) => {
     if (!Number.isFinite(pageId)) return c.json(badRequest('Invalid pageId'), 400);
     const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id=?').bind(pageId).first<Page>();
     if (!page) return c.json(notFound('Page'), 404);
-    const [briefs, workItems, metricsHistory] = await Promise.all([
+    const [briefs, workItems, metricsHistory, auditFindings] = await Promise.all([
       c.env.DB.prepare(`SELECT id, project_id, kind, page_id, status, version, generated_by_model, generation_input, generated_at, updated_at, completed_at, supersedes_brief_id
         FROM briefs WHERE page_id=? AND kind='page' ORDER BY version DESC, id DESC`).bind(pageId).all(),
       c.env.DB.prepare(`SELECT gwi.*, gc.period, gc.phase FROM growth_work_items gwi JOIN growth_cycles gc ON gc.id=gwi.cycle_id
         WHERE gwi.page_id=? ORDER BY gc.period DESC, gwi.created_at DESC`).bind(pageId).all(),
       pageMetricsHistory(c.env.DB, page.project_id, page.published_url),
+      c.env.DB.prepare(`SELECT f.* FROM seo_audit_findings f
+        WHERE f.page_id=? AND f.run_id=(SELECT id FROM seo_audit_runs WHERE project_id=? AND status='complete' ORDER BY id DESC LIMIT 1)
+        ORDER BY CASE f.severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END, f.rule_key`).bind(pageId, page.project_id).all(),
     ]);
-    return c.json({ page, briefs: briefs.results, work_items: workItems.results, metrics_history: metricsHistory });
+    return c.json({ page, briefs: briefs.results, work_items: workItems.results, metrics_history: metricsHistory, audit_findings: auditFindings.results });
   } catch (err) {
     log('error', 'briefs', 'GET page insights failed', err);
     return c.json(serverError(`Page insights failed: ${(err as Error).message}`), 500);

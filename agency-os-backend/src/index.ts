@@ -29,6 +29,8 @@ import { settingsRouter } from './routes/settings';
 import { growthCyclesRouter } from './routes/growth-cycles';
 import { onboardingRouter } from './routes/onboarding';
 import { runScheduledDiscovery } from './services/prospectDiscovery';
+import { seoAuditsRouter } from './routes/seo-audits';
+import { runDueSeoAudits } from './services/seoAudit';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,6 +75,7 @@ app.route('/api/projects', dnsRouter);
 app.route('/api/projects', projectsRouter);
 app.route('/api', growthCyclesRouter);
 app.route('/api', onboardingRouter);
+app.route('/api', seoAuditsRouter);
 // v2.1 brief routes span /api/projects/:id/briefs, /api/briefs/:id, and /api/pages/:id/complete
 app.route('/api', briefsRouter);
 app.route('/api', brandAttributesRouter);
@@ -108,6 +111,10 @@ export default {
       // of each month, also finalize the prior-month snapshots. Combining
       // these keeps the Worker within Cloudflare's five-trigger limit.
       ctx.waitUntil(refreshTier3PageSpeed(env));
+      // Crawl only a bounded set of sites that have no successful audit in
+      // the last 30 days. This keeps the existing daily trigger useful
+      // without multiplying subrequests across the full client portfolio.
+      ctx.waitUntil(runDueSeoAudits(env).then(out => log('info', 'cron', 'Scheduled SEO audits', { results: out })));
       if (new Date(event.scheduledTime).getUTCDate() === 1) {
         ctx.waitUntil(refreshTier3Snapshots(env).then(out => log('info', 'cron', `Monthly snapshot run`, { results: out })));
       }
