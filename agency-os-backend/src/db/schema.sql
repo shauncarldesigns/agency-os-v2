@@ -154,7 +154,6 @@ CREATE TABLE IF NOT EXISTS projects (
   scrape_completed_at TEXT,
   scrape_data     TEXT,
   -- landingsite.ai
-  landingsite_project_id TEXT,
   landingsite_url TEXT,
   custom_domain   TEXT,
   -- Reporting integrations (Tier 3)
