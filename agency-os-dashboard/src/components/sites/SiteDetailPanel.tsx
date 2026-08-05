@@ -806,7 +806,6 @@ function WorkspaceTabPanel({
         <div className="client-workspace-grid">
           <WorkspaceCard title="Live website">
             <WorkspaceStatus label="URL" value={liveUrl ?? 'Not added'} tone={liveUrl ? 'ok' : 'warn'} />
-            <WorkspaceStatus label="Landingsite project" value={project.landingsite_project_id ?? 'Not linked'} />
             {liveUrl && <Button variant="ghost" size="sm" onClick={() => window.open(liveUrl, '_blank')}><ExternalLink size={14} /> Open live website</Button>}
           </WorkspaceCard>
           <WorkspaceCard title="Domain & DNS">
@@ -912,7 +911,6 @@ function ConfigurationCards({
   const [website, setWebsite] = useState({
     landingsite_url: project.landingsite_url ?? '',
     custom_domain: project.custom_domain ?? '',
-    landingsite_project_id: project.landingsite_project_id ?? '',
     gsc_property_url: project.gsc_property_url ?? '',
     client_email: project.client_email ?? '',
   });
@@ -940,7 +938,6 @@ function ConfigurationCards({
     setWebsite({
       landingsite_url: project.landingsite_url ?? '',
       custom_domain: project.custom_domain ?? '',
-      landingsite_project_id: project.landingsite_project_id ?? '',
       gsc_property_url: project.gsc_property_url ?? '',
       client_email: project.client_email ?? '',
     });
@@ -980,7 +977,6 @@ function ConfigurationCards({
       await onSaveProject({
         landingsite_url: website.landingsite_url.trim() || null,
         custom_domain: website.custom_domain.trim() || null,
-        landingsite_project_id: website.landingsite_project_id.trim() || null,
         gsc_property_url: website.gsc_property_url.trim() || null,
         client_email: website.client_email.trim() || null,
         registrar: dns.registrar.trim() || null,
@@ -1035,7 +1031,6 @@ function ConfigurationCards({
         <div className="configuration-form-grid">
           <ConfigField label="Landingsite URL" type="url" wide value={website.landingsite_url} onChange={(value) => setWebsite((current) => ({ ...current, landingsite_url: value }))} />
           <ConfigField label="Live website URL" type="url" wide value={website.custom_domain} onChange={(value) => setWebsite((current) => ({ ...current, custom_domain: value }))} />
-          <ConfigField label="Landingsite project ID" wide value={website.landingsite_project_id} onChange={(value) => setWebsite((current) => ({ ...current, landingsite_project_id: value }))} />
           <ConfigField label="Search Console property" wide value={website.gsc_property_url} onChange={(value) => setWebsite((current) => ({ ...current, gsc_property_url: value }))} helper={website.gsc_property_url.trim() ? 'Google Search Console property saved' : 'Example: sc-domain:client.com'} />
           <ConfigField label="Report recipient" type="email" wide value={website.client_email} onChange={(value) => setWebsite((current) => ({ ...current, client_email: value }))} />
         </div>

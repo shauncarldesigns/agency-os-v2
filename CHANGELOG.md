@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### LandingSite configuration cleanup
+
+- **Client workspaces no longer show or accept a LandingSite project ID, because LandingSite does not provide one.** Website configuration retains the actionable LandingSite URL, live domain, Search Console property, and reporting recipient fields. Backend + dashboard.
+
 ### Client workspaces and managed growth operations
 
 - **Clients & Sites now runs each signed account from a dedicated workspace instead of mixing operational settings into Brief Studio.** Workspace navigation separates onboarding, website work, Brief Studio, reporting, activity, and inline configuration; client cards show onboarding progress while internal/test workspaces stay out of MRR and lead statistics. The managed-growth workflow tracks Foundation → Expansion → Optimization, recommends the next pages or optimization work, prevents duplicate brief generation, links versioned update briefs to live pages, and clears completed work immediately. Page Matrix cards now show live Search Console metrics and open a page-insights drawer with trends, recommendations, brief history, and page metadata; planned/live totals react to service and service-area changes. Reporting is contained within each workspace, the legacy report navigation is removed, and legacy emoji UI has been replaced with the shared icon system. Backend + dashboard + migrations (`2026-08-04-client-conversion.sql`, `2026-08-04-growth-monthly-page-target.sql`, `2026-08-04-growth-cycles.sql`, `2026-08-04-growth-strategies.sql`, `2026-08-04-growth-page-recommendations.sql`, `2026-08-04-growth-completion-signals.sql`, `2026-08-04-growth-work-item-briefs.sql`, `2026-08-04-client-onboarding.sql`; apply before deploy).

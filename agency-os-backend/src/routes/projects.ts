@@ -9,7 +9,7 @@ export const projectsRouter = new Hono<{ Bindings: Env }>();
 const PROJECT_FIELDS = [
   'lead_id', 'name', 'tier', 'business_name', 'industry', 'city', 'state', 'phone', 'email',
   'description', 'years_in_business', 'primary_color', 'brand_voice_notes',
-  'services', 'service_areas', 'landingsite_project_id', 'landingsite_url', 'custom_domain',
+  'services', 'service_areas', 'landingsite_url', 'custom_domain',
   'gsc_property_url', 'cf_zone_id', 'client_email',
   'pages_built', 'pages_planned', 'next_pages_due', 'merchynt_active',
   'contract_start', 'contract_min_end', 'status', 'reviews_snapshot',

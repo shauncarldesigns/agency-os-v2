@@ -195,7 +195,6 @@ export interface Project {
   monthly_pages_target: number;
   scrape_completed_at: string | null;
   scrape_data: string | null;
-  landingsite_project_id: string | null;
   landingsite_url: string | null;
   custom_domain: string | null;
   pages_built: number;
