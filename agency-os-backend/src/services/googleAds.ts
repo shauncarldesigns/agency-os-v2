@@ -100,13 +100,17 @@ export async function generateKeywordIdeas(
   keywords: string[],
   geoTargetId: string,
 ): Promise<KeywordIdeaMetrics[]> {
-  const clientId = env.GOOGLE_ADS_CLIENT_ID;
-  const clientSecret = env.GOOGLE_ADS_CLIENT_SECRET;
+  // The Ads integration reuses the same Google Cloud OAuth client as Search
+  // Console — only the refresh token differs (it must carry the adwords
+  // scope). GOOGLE_ADS_CLIENT_ID/SECRET exist as overrides for a future
+  // dedicated client; absent, the GSC pair is authoritative.
+  const clientId = env.GOOGLE_ADS_CLIENT_ID?.trim() || env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = env.GOOGLE_ADS_CLIENT_SECRET?.trim() || env.GOOGLE_OAUTH_CLIENT_SECRET;
   const refreshToken = env.GOOGLE_ADS_REFRESH_TOKEN;
   const developerToken = env.GOOGLE_ADS_DEVELOPER_TOKEN;
   const loginCustomerId = (env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ?? '').replace(/-/g, '');
   if (!clientId || !clientSecret || !refreshToken || !developerToken || !loginCustomerId) {
-    throw new Error('Google Ads is not configured — missing one or more of GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID');
+    throw new Error('Google Ads is not configured — missing one or more of GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID, and an OAuth client (GOOGLE_ADS_CLIENT_ID/SECRET or the GOOGLE_OAUTH_* pair)');
   }
   // Planning services address a client account; default to the MCC id and
   // allow an explicit override for setups where Google rejects manager-level
@@ -167,12 +171,17 @@ export async function generateKeywordIdeas(
     });
 }
 
-/** True when every required Google Ads credential is present. */
+/** True when every required Google Ads credential is present. The OAuth
+ *  client may come from the dedicated GOOGLE_ADS_* pair or fall back to the
+ *  shared GOOGLE_OAUTH_* (Search Console) client. */
 export function isGoogleAdsConfigured(env: Env): boolean {
+  const hasOauthClient = Boolean(
+    (env.GOOGLE_ADS_CLIENT_ID?.trim() || env.GOOGLE_OAUTH_CLIENT_ID?.trim())
+    && (env.GOOGLE_ADS_CLIENT_SECRET?.trim() || env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()),
+  );
   return Boolean(
     env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim()
-    && env.GOOGLE_ADS_CLIENT_ID?.trim()
-    && env.GOOGLE_ADS_CLIENT_SECRET?.trim()
+    && hasOauthClient
     && env.GOOGLE_ADS_REFRESH_TOKEN?.trim()
     && env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.trim(),
   );

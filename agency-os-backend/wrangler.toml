@@ -87,6 +87,8 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 #                              upgrade. Treat "Explorer" as not-configured in the
 #                              health card. Basic Access applied for via
 #                              ads.google.com/aw/apicenter -> Apply for Basic Access.)
-# GOOGLE_ADS_CLIENT_ID
-# GOOGLE_ADS_CLIENT_SECRET
-# GOOGLE_ADS_REFRESH_TOKEN    (must include the .../auth/adwords scope)
+# GOOGLE_ADS_REFRESH_TOKEN    (must include the .../auth/adwords scope; the
+#                              OAuth client id/secret fall back to the shared
+#                              GOOGLE_OAUTH_* Search Console pair — set
+#                              GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET
+#                              only to override with a dedicated client)
