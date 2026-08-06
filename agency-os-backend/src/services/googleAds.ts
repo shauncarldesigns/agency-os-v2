@@ -85,6 +85,31 @@ const MONTH_NUMBERS: Record<string, number> = {
   JULY: 7, AUGUST: 8, SEPTEMBER: 9, OCTOBER: 10, NOVEMBER: 11, DECEMBER: 12,
 };
 
+/**
+ * Pull the specific error enums out of a GoogleAdsFailure response body —
+ * e.g. "authorizationError: DEVELOPER_TOKEN_NOT_APPROVED". The raw JSON is
+ * pretty-printed and long, so naive truncation cuts off exactly the part
+ * an operator needs to act on.
+ */
+function extractAdsErrorCodes(errText: string): string[] {
+  try {
+    const parsed = JSON.parse(errText) as {
+      error?: { details?: Array<{ errors?: Array<{ errorCode?: Record<string, string>; message?: string }> }> };
+    };
+    const out: string[] = [];
+    for (const detail of parsed.error?.details ?? []) {
+      for (const entry of detail.errors ?? []) {
+        for (const [kind, code] of Object.entries(entry.errorCode ?? {})) {
+          out.push(`${kind}: ${code}${entry.message ? ` (${entry.message.slice(0, 140)})` : ''}`);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function toNumber(value: string | number | undefined): number | null {
   if (value === undefined || value === null) return null;
   const n = Number(value);
@@ -143,11 +168,19 @@ export async function generateKeywordIdeas(
 
   if (!res.ok) {
     const errText = await res.text();
-    log('error', 'googleAds', `generateKeywordIdeas failed: ${res.status}`, { err: errText.slice(0, 400) });
-    if (errText.includes('DEVELOPER_TOKEN_NOT_APPROVED') || errText.includes('NOT_ADS_USER')) {
-      throw new AdsAccessPendingError(errText.slice(0, 200));
+    const codes = extractAdsErrorCodes(errText);
+    const summary = codes.length ? codes.join(', ') : errText.replace(/\s+/g, ' ').slice(0, 300);
+    log('error', 'googleAds', `generateKeywordIdeas failed: ${res.status}`, { codes, err: errText.slice(0, 400) });
+    if (errText.includes('DEVELOPER_TOKEN_NOT_APPROVED')) {
+      throw new AdsAccessPendingError(summary);
     }
-    throw new Error(`Google Ads generateKeywordIdeas failed: ${res.status}`);
+    if (errText.includes('NOT_ADS_USER')) {
+      // Different root cause than approval: the OAuth identity itself has no
+      // Google Ads account association — re-mint the refresh token as the
+      // MCC owner rather than waiting on Basic Access.
+      throw new Error(`Google Ads rejected the OAuth user (NOT_ADS_USER) — the Google account that minted GOOGLE_ADS_REFRESH_TOKEN has no Google Ads access. Re-mint the token while signed in as the MCC owner. (${summary})`);
+    }
+    throw new Error(`Google Ads generateKeywordIdeas failed: ${res.status} — ${summary}`);
   }
 
   const data = await res.json() as { results?: RawIdeaResult[] };
