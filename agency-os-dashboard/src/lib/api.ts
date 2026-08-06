@@ -274,8 +274,8 @@ export const api = {
       }),
     convertToClient: (id: number, input: {
       tier: 1 | 2 | 3;
-      initialStatus: 'building' | 'live';
-      contractStart: string;
+      initialStatus: 'prospect' | 'building' | 'live';
+      contractStart?: string;
       clientEmail?: string;
       note?: string;
     }) => apiFetch<{ lead: Lead; project: Project }>(`/api/leads/${id}/convert-to-client`, {

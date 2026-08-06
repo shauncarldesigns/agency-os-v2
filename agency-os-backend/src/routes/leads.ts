@@ -453,7 +453,8 @@ leadsRouter.post('/:id/notes', async (c) => {
 
 // POST /api/leads/:id/convert-to-client
 // Explicit sales handoff shared by email + text outreach. Demo assets stay on
-// the lead during outreach; only a signed deal creates a client project.
+// the lead during outreach. A verbal yes may create a pending-agreement
+// workspace; signed clients start in building/live.
 leadsRouter.post('/:id/convert-to-client', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
@@ -468,19 +469,19 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
 
   const body = await c.req.json().catch(() => ({})) as {
     tier?: number;
-    initialStatus?: 'building' | 'live';
+    initialStatus?: 'prospect' | 'building' | 'live';
     contractStart?: string;
     clientEmail?: string;
     note?: string;
   };
   const tier = Number(body.tier ?? lead.recommended_tier ?? 1) as 1 | 2 | 3;
   if (![1, 2, 3].includes(tier)) return c.json(badRequest('tier must be 1, 2, or 3'), 400);
-  const initialStatus = body.initialStatus === 'live' ? 'live' : 'building';
-  const contractStart = body.contractStart?.trim() || new Date().toISOString();
-  if (Number.isNaN(Date.parse(contractStart))) {
+  const initialStatus = body.initialStatus === 'prospect' ? 'prospect' : body.initialStatus === 'live' ? 'live' : 'building';
+  const contractStart = initialStatus === 'prospect' ? null : body.contractStart?.trim() || new Date().toISOString();
+  if (contractStart && Number.isNaN(Date.parse(contractStart))) {
     return c.json(badRequest('contractStart must be a valid date'), 400);
   }
-  const contractMinEnd = tier === 3
+  const contractMinEnd = tier === 3 && contractStart
     ? new Date(new Date(contractStart).setMonth(new Date(contractStart).getMonth() + 6)).toISOString()
     : null;
   const clientEmail = body.clientEmail?.trim() || lead.email || null;
@@ -512,14 +513,19 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
       projectInsert,
       c.env.DB.prepare(`
         UPDATE leads SET
-          status = 'client',
+          status = ?,
           project_id = (SELECT id FROM projects WHERE slug = ?),
           pipeline_status = 'archived',
-          outcome = 'Converted to client',
+          outcome = ?,
           pipeline_last_action_at = datetime('now'),
           updated_at = datetime('now')
         WHERE id = ?
-      `).bind(slug, id),
+      `).bind(
+        initialStatus === 'prospect' ? 'qualified' : 'client',
+        slug,
+        initialStatus === 'prospect' ? 'Pending agreement' : 'Converted to client',
+        id,
+      ),
       c.env.DB.prepare(`
         INSERT INTO briefs (project_id, kind, content_markdown, status, version, generated_by_model)
         SELECT id, 'outreach', ?, 'saved', 1, 'pipeline-brief'
@@ -533,9 +539,10 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
       `).bind(id),
       c.env.DB.prepare(`
         INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
-        VALUES (?, 'client_converted', ?, 'archived', ?, datetime('now'))
+        VALUES (?, ?, ?, 'archived', ?, datetime('now'))
       `).bind(
         id,
+        initialStatus === 'prospect' ? 'client_pending' : 'client_converted',
         lead.pipeline_status,
         JSON.stringify({ tier, initial_status: initialStatus, contract_start: contractStart, note }),
       ),

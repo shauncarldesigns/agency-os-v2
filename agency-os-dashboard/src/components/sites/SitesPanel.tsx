@@ -8,7 +8,7 @@ import { SiteDetailPanel } from './SiteDetailPanel';
 import { OperatorInputForm } from '../briefs/OperatorInputForm';
 import { QuickBriefModal } from './QuickBriefModal';
 import { TIER_MRR } from '../../lib/pricing';
-import { ArrowUpDown, BriefcaseBusiness, Gem, Globe2, Handshake, Sparkles, Zap } from 'lucide-react';
+import { ArrowUpDown, BriefcaseBusiness, FileSignature, Gem, Globe2, Handshake, Sparkles, Zap } from 'lucide-react';
 
 interface SitesPanelProps {
   showToast: ShowToast;
@@ -26,7 +26,7 @@ type Sort = 'tier' | 'due' | 'az';
  * mutually exclusive — the operator picks one at a time, no compound
  * filtering. Filter is purely client-side over the already-fetched list.
  */
-type StatusFilter = 'all' | 'active' | 'internal' | 't3' | 't2' | 't1';
+type StatusFilter = 'all' | 'pending' | 'active' | 'internal' | 't3' | 't2' | 't1';
 
 /**
  * The unified project editor (OperatorInputForm) needs hasMaster + lead.
@@ -132,9 +132,10 @@ export function SitesPanel({
     // Filter first (cheap, narrows the set), then sort the remainder.
     const isActive = (p: Project) => p.status === 'live' || p.status === 'building';
     let list = projects.filter((p) => {
-      const visibleClient = p.is_internal === 1 || ['building', 'live', 'paused'].includes(p.status);
+      const visibleClient = p.is_internal === 1 || ['prospect', 'building', 'live', 'paused'].includes(p.status);
       if (!visibleClient) return false;
       switch (filter) {
+        case 'pending':  return p.is_internal !== 1 && p.status === 'prospect';
         case 'active':   return isActive(p);
         case 'internal': return p.is_internal === 1;
         case 't3':       return isActive(p) && p.tier === 3;
@@ -159,6 +160,7 @@ export function SitesPanel({
     // Active clients drive every MRR-style stat — projects in 'prospect'
     // status are qualified-but-unsigned and shouldn't inflate the numbers.
     const active = projects.filter(p => p.is_internal !== 1 && (p.status === 'live' || p.status === 'building'));
+    const pending = projects.filter(p => p.is_internal !== 1 && p.status === 'prospect');
     const internal = projects.filter(p => p.is_internal === 1);
     const t3 = active.filter(p => p.tier === 3);
     const t2 = active.filter(p => p.tier === 2);
@@ -167,6 +169,7 @@ export function SitesPanel({
     const t2Mrr = t2.length * TIER_MRR[2];
     return {
       total: active.length,
+      pending: pending.length,
       internal: internal.length,
       t3: t3.length,
       t2: t2.length,
@@ -177,7 +180,8 @@ export function SitesPanel({
   }, [projects]);
 
   const groupedProjects = useMemo(() => ({
-    clients: sorted.filter((project) => project.is_internal !== 1),
+    pending: sorted.filter((project) => project.is_internal !== 1 && project.status === 'prospect'),
+    clients: sorted.filter((project) => project.is_internal !== 1 && project.status !== 'prospect'),
     internal: sorted.filter((project) => project.is_internal === 1),
   }), [sorted]);
 
@@ -276,7 +280,15 @@ export function SitesPanel({
           </label>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-6">
+        <StatTile
+          active={filter === 'pending'}
+          onClick={() => setFilter((f) => (f === 'pending' ? 'all' : 'pending'))}
+          icon={<FileSignature size={17} />}
+          tone="amber"
+        >
+          <StatValue value={stats.pending} label="Agreement pending" detail="Awaiting signature" />
+        </StatTile>
         <StatTile
           active={filter === 'active'}
           onClick={() => setFilter((f) => (f === 'active' ? 'all' : 'active'))}
@@ -329,7 +341,7 @@ export function SitesPanel({
         <EmptyState
           icon={<Globe2 size={34} strokeWidth={1.6} />}
           title="No client sites yet"
-          sub="Convert a signed lead from Email or Text Outreach to create its client workspace here."
+          sub="Advance a lead from Email or Text Outreach to create its agreement-pending workspace here."
         />
       ) : sorted.length === 0 ? (
         // Projects exist but the active filter excludes them all.
@@ -345,6 +357,34 @@ export function SitesPanel({
         </div>
       ) : (
         <div className="space-y-7">
+          {groupedProjects.pending.length > 0 && (
+            <ProjectGroup
+              title="Agreement pending"
+              description="Plan selected and awaiting a signed agreement before onboarding begins"
+              projects={groupedProjects.pending}
+              renderCard={(project) => (
+                <SiteCard
+                  key={project.id}
+                  project={project}
+                  showToast={showToast}
+                  onOpenDetail={() => {
+                    setDetailInitialTab('overview');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenBriefStudio={() => {
+                    setDetailInitialTab('briefs');
+                    setDetailProjectId(project.id);
+                  }}
+                  onOpenOnboarding={() => {
+                    setDetailInitialTab('onboarding');
+                    setDetailProjectId(project.id);
+                  }}
+                  onQuickBrief={() => openQuickBrief(project)}
+                  onProjectChanged={() => { void load(); }}
+                />
+              )}
+            />
+          )}
           {groupedProjects.clients.length > 0 && (
             <ProjectGroup
               title="Clients"
@@ -479,6 +519,7 @@ function ProjectGroup({
 
 function filterLabel(f: StatusFilter): string {
   switch (f) {
+    case 'pending':  return 'Agreement pending';
     case 'active':   return 'Active Clients';
     case 'internal': return 'Internal workspaces';
     case 't3':       return 'Tier 3 active';

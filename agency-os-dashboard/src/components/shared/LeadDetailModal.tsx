@@ -899,7 +899,7 @@ function lineTypeLabel(lineType: string): string {
 
 function engagementGradeLabel(grade: string | null | undefined): string {
   if (grade === 'hot') return 'Call immediately';
-  if (grade === 'walkthrough') return 'Schedule walkthrough';
+  if (grade === 'walkthrough') return 'Ready for sales call';
   if (grade === 'follow_up') return 'Send follow-up';
   return 'Nurture';
 }
@@ -1252,16 +1252,16 @@ function activityRecommendation(input: {
   if (input.score >= 90) {
     return {
       action: 'call',
-      label: '📞 Call Now',
+      label: 'Call now',
       detail: 'Hot intent. Call instead of sending another text.',
       tone: 'border-rose-100 bg-rose-50 text-rose-700',
     };
   }
   if (input.score >= 70) {
     return {
-      action: 'text',
-      label: 'Offer a walkthrough',
-      detail: 'Ask for a 10–15 minute walkthrough this week.',
+      action: 'call',
+      label: 'Open sales call',
+      detail: 'They invested meaningful time in the site. Move into the warm sales conversation.',
       tone: 'border-emerald-100 bg-emerald-50 text-emerald-700',
     };
   }

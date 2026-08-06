@@ -51,7 +51,7 @@ export async function getProjectActivity(db: D1Database, projectId: number): Pro
     db.prepare(`SELECT id, status, completed_at AS occurred_at, started_at, pages_crawled, health_score, critical_count, warning_count, error_message FROM seo_audit_runs WHERE project_id = ?`).bind(projectId).all<ActivityRow & { started_at: string; pages_crawled: number; health_score: number | null; critical_count: number; warning_count: number; error_message: string | null }>(),
     db.prepare(`SELECT wi.id, wi.title, wi.category AS kind, wi.status, COALESCE(wi.completed_at, wi.updated_at) AS occurred_at FROM growth_work_items wi JOIN growth_cycles gc ON gc.id = wi.cycle_id WHERE gc.project_id = ?`).bind(projectId).all<ActivityRow>(),
     project.lead_id
-      ? db.prepare(`SELECT id, action AS kind, meta AS detail, created_at AS occurred_at FROM lead_activity WHERE lead_id = ? AND action IN ('client_converted','brief_generated','url_saved')`).bind(project.lead_id).all<ActivityRow>()
+      ? db.prepare(`SELECT id, action AS kind, meta AS detail, created_at AS occurred_at FROM lead_activity WHERE lead_id = ? AND action IN ('client_pending','client_converted','brief_generated','url_saved','contract_signed')`).bind(project.lead_id).all<ActivityRow>()
       : Promise.resolve({ results: [] as ActivityRow[] }),
   ]);
 
@@ -96,8 +96,8 @@ export async function getProjectActivity(db: D1Database, projectId: number): Pro
     add(event(`growth-${row.id}`, 'growth_work', row.title || 'Growth work updated', row.occurred_at, `${row.kind || 'work'} · ${row.status || 'updated'}`, row.status === 'complete' ? 'success' : 'info'));
   }
   for (const row of leadActivity.results) {
-    const title = row.kind === 'client_converted' ? 'Lead converted to client' : row.kind === 'brief_generated' ? 'Outreach brief generated' : 'Outreach site URL saved';
-    add(event(`lead-${row.id}`, row.kind || 'lead_activity', title, row.occurred_at, null, row.kind === 'client_converted' ? 'success' : 'info'));
+    const title = row.kind === 'client_pending' ? 'Moved to Clients — agreement pending' : row.kind === 'contract_signed' ? 'Agreement marked signed' : row.kind === 'client_converted' ? 'Lead converted to client' : row.kind === 'brief_generated' ? 'Outreach brief generated' : 'Outreach site URL saved';
+    add(event(`lead-${row.id}`, row.kind || 'lead_activity', title, row.occurred_at, null, row.kind === 'client_converted' || row.kind === 'contract_signed' ? 'success' : 'info'));
   }
 
   return events

@@ -157,7 +157,7 @@ export function SiteDetailPanel({
   useEffect(() => { void reload(); }, [reload]);
 
   const tier = (project.tier ?? 1) as 1 | 2 | 3;
-  const mrr = project.is_internal === 1 ? 0 : (TIER_MRR[tier] ?? 0);
+  const mrr = project.is_internal === 1 || project.status === 'prospect' ? 0 : (TIER_MRR[tier] ?? 0);
   const projectServices = useMemo(() => safeJsonArray(project.services), [project.services]);
   const projectAreas = useMemo(() => safeJsonArray(project.service_areas), [project.service_areas]);
 
@@ -269,6 +269,7 @@ export function SiteDetailPanel({
           </span>
           <span className="bs-topbar-sub">
             <MapPin size={13} /> {[project.city, project.state].filter(Boolean).join(', ') || '—'}
+            {project.status === 'prospect' ? ' · Agreement pending' : ''}
             {project.pages_built ? ` · ${project.pages_built} pages built` : ' · 0 pages built'}
           </span>
         </div>
@@ -1030,7 +1031,7 @@ function ConfigurationCards({
           <ConfigField label="Email" type="email" value={client.email} onChange={(value) => setClient((current) => ({ ...current, email: value }))} />
           <ConfigField label="Phone" value={client.phone} onChange={(value) => setClient((current) => ({ ...current, phone: value }))} />
           <label className="configuration-field"><span>Tier</span><select value={client.tier} onChange={(event) => setClient((current) => ({ ...current, tier: Number(event.target.value) as 1 | 2 | 3 }))}><option value={1}>Tier 1</option><option value={2}>Tier 2</option><option value={3}>Tier 3</option></select></label>
-          <label className="configuration-field"><span>Status</span><select value={client.status} onChange={(event) => setClient((current) => ({ ...current, status: event.target.value as Project['status'] }))}><option value="prospect">Prospect / test</option><option value="building">Building</option><option value="live">Live</option><option value="paused">Paused</option><option value="dead">Dead</option></select></label>
+          <label className="configuration-field"><span>Status</span><select value={client.status} onChange={(event) => setClient((current) => ({ ...current, status: event.target.value as Project['status'] }))}><option value="prospect">Agreement pending</option><option value="building">Building</option><option value="live">Live</option><option value="paused">Paused</option><option value="dead">Dead</option></select></label>
           <ConfigField label="Contract start" type="date" value={client.contract_start} onChange={(value) => setClient((current) => ({ ...current, contract_start: value }))} />
           <ConfigField label="Minimum end" type="date" value={client.contract_min_end} onChange={(value) => setClient((current) => ({ ...current, contract_min_end: value }))} />
           <ConfigField label="Services" wide value={client.services} onChange={(value) => setClient((current) => ({ ...current, services: value }))} helper="Separate with commas" />
