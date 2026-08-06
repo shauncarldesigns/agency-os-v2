@@ -148,7 +148,11 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardMetricsPanel showToast={showToast} onSwitchTab={setActiveTab} />
             )}
-            {activeTab === 'research' && <ResearchPage showToast={showToast} />}
+            {activeTab === 'research' && (
+              <div className="main">
+                <ResearchPage showToast={showToast} />
+              </div>
+            )}
             {activeTab === 'email-outreach' && (
               <CallSessionsPage
                 showToast={showToast}
