@@ -54,7 +54,7 @@ CLARITY_PROJECT_ID = "xt0tg8n14n"
 # NOTE: the monthly research refresh has NO cron entry here — the Worker is
 # at Cloudflare's five-trigger limit, so it rides the hourly trigger with a
 # "1st of month, 9am America/Chicago" guard in src/index.ts.
-GOOGLE_ADS_LOGIN_CUSTOMER_ID = ""
+GOOGLE_ADS_LOGIN_CUSTOMER_ID = "1493697645"
 KEYWORD_VOLUME_PROVIDER = "google_ads"
 OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
 OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
@@ -80,8 +80,13 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 # TWILIO_ACCOUNT_SID  (optional — enables phone route classification)
 # TWILIO_AUTH_TOKEN   (optional — enables phone route classification)
 # CLARITY_API_TOKEN   (optional — enables Clarity engagement sync)
-# GOOGLE_ADS_DEVELOPER_TOKEN  (market research keyword volume; needs Basic
-#                              Access approval before real data returns)
+# GOOGLE_ADS_DEVELOPER_TOKEN  (market research keyword volume. Issued 2026-08-06
+#                              at EXPLORER access, which BLOCKS KeywordPlanIdeaService
+#                              outright — calls are refused, not degraded. Basic
+#                              Access is a hard prerequisite, not a data-quality
+#                              upgrade. Treat "Explorer" as not-configured in the
+#                              health card. Basic Access applied for via
+#                              ads.google.com/aw/apicenter -> Apply for Basic Access.)
 # GOOGLE_ADS_CLIENT_ID
 # GOOGLE_ADS_CLIENT_SECRET
 # GOOGLE_ADS_REFRESH_TOKEN    (must include the .../auth/adwords scope)
