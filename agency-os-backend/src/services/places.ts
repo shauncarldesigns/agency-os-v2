@@ -201,6 +201,40 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Resolve a city's center coordinates via Places Text Search (New). A query
+ * like "Green Bay, WI" returns the locality itself as the top result, so no
+ * separate Geocoding API (with its own key enablement) is needed. Used by
+ * market research so the operator never types coordinates by hand.
+ */
+export async function geocodeCity(
+  apiKey: string,
+  cityQuery: string,
+): Promise<{ lat: number; lng: number } | null> {
+  if (!hasUsableGooglePlacesKey(apiKey)) {
+    throw new Error('Google Places is not configured — a valid GOOGLE_PLACES_API_KEY is required to resolve city coordinates.');
+  }
+  const res = await fetch(`${PLACES_BASE}/places:searchText`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'places.location,places.displayName',
+    },
+    body: JSON.stringify({ textQuery: cityQuery, maxResultCount: 1 }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    log('error', 'places', `geocodeCity failed: ${res.status}`, { err: err.slice(0, 200), cityQuery });
+    throw new Error(`City geocoding failed: ${googleErrorMessage(err, `HTTP ${res.status}`)}`);
+  }
+  const data = (await res.json()) as { places?: Array<{ location?: { latitude?: number; longitude?: number } }> };
+  const location = data.places?.[0]?.location;
+  return typeof location?.latitude === 'number' && typeof location?.longitude === 'number'
+    ? { lat: location.latitude, lng: location.longitude }
+    : null;
+}
+
 export async function getPlaceDetails(apiKey: string, placeId: string): Promise<PlaceDetails> {
   if (!hasUsableGooglePlacesKey(apiKey)) {
     throw new Error('Google Places is not configured for the local Worker. Add a valid GOOGLE_PLACES_API_KEY to agency-os-backend/.dev.vars, then restart the backend dev server.');
