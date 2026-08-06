@@ -6,6 +6,7 @@ import type {
   AgencySettings, SettingsHealth, ProspectCandidate, ProspectInboxSummary,
   GrowthCycle, GrowthWorkItem, GrowthPhase, GrowthWorkCategory, GrowthWorkStatus, GrowthStrategy, OnboardingItem, PageSearchMetrics, PageInsights,
   SeoAuditRun, SeoAuditFinding, ApplicationEvent, ProjectActivityEvent,
+  Market, MarketListRow, MarketKeyword, MapPackRow, ResearchRun, ResearchRunSummary,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -212,9 +213,26 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
+  research: {
+    markets: () => apiFetch<{ markets: MarketListRow[] }>('/api/research/markets'),
+    market: (id: number) =>
+      apiFetch<{ market: Market; keywords: MarketKeyword[]; mapPack: Record<string, MapPackRow[]>; runs: ResearchRun[] }>(`/api/research/markets/${id}`),
+    addMarket: (data: { industry: string; location_label: string; geo_target_id: string; latitude: number; longitude: number }) =>
+      apiFetch<{ market: Market }>('/api/research/markets', { method: 'POST', body: JSON.stringify(data) }),
+    updateMarket: (id: number, data: Partial<Pick<Market, 'is_active' | 'location_label' | 'geo_target_id' | 'latitude' | 'longitude'>>) =>
+      apiFetch<{ market: Market }>(`/api/research/markets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteMarket: (id: number) =>
+      apiFetch<{ deleted: boolean }>(`/api/research/markets/${id}`, { method: 'DELETE' }),
+    run: (id: number) =>
+      apiFetch<{ run: ResearchRunSummary | null; stoppedEarly: string | null; error?: string }>(`/api/research/markets/${id}/research`, { method: 'POST' }),
+    runAll: () =>
+      apiFetch<{ processed: number; runs: ResearchRunSummary[]; stoppedEarly: string | null; remainingUnprocessed: number }>('/api/research/run-all', { method: 'POST' }),
+    keywordSeeds: (industry: string) =>
+      apiFetch<{ industry: string; serviceTerm: string; templates: string[]; preview: string[] }>(`/api/research/keyword-seeds/${encodeURIComponent(industry)}`),
+  },
   settings: {
     get: () => apiFetch<{ settings: AgencySettings }>('/api/settings'),
-    update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults' | 'discovery'>) =>
+    update: (settings: Pick<AgencySettings, 'general' | 'outreach' | 'defaults' | 'discovery' | 'research'>) =>
       apiFetch<{ settings: AgencySettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(settings) }),
     health: () => apiFetch<SettingsHealth>('/api/settings/health'),
     activity: (level?: 'info' | 'warn' | 'error') =>

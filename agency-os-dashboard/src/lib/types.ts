@@ -544,6 +544,7 @@ export interface ReportSummary {
 
 export type Tab =
   | 'dashboard'
+  | 'research'
   | 'email-outreach'
   | 'call-center'
   | 'prospect'
@@ -585,7 +586,90 @@ export interface AgencySettings {
     suppressionDays: number;
     expirationDays: number;
   };
+  research: {
+    seedTemplates: string[];
+    industryTerms: Record<string, string>;
+    mapPackKeywordCount: number;
+    mapPackResultLimit: number;
+    batchCap: number;
+    provider: 'google_ads' | 'dataforseo';
+  };
   updatedAt: string | null;
+}
+
+// ============================================================================
+// Market research (added 2026-08-06)
+// ============================================================================
+
+export interface Market {
+  id: number;
+  industry: string;
+  location_label: string;
+  geo_target_id: string;
+  latitude: number;
+  longitude: number;
+  is_active: number;
+  last_researched_at: string | null;
+  created_at: string;
+}
+
+export interface MarketListRow extends Market {
+  headline_keyword: string | null;
+  headline_volume: number | null;
+  keyword_count: number;
+  last_run_status: string | null;
+}
+
+export interface MarketKeyword {
+  id: number;
+  market_id: number;
+  run_id: number | null;
+  keyword: string;
+  monthly_volume: number | null;
+  competition: string | null;
+  competition_index: number | null;
+  cpc_low: number | null;
+  cpc_high: number | null;
+  trend_json: string | null;
+  is_near_me: number;
+  fetched_at: string;
+}
+
+export interface MapPackRow {
+  id: number;
+  market_id: number;
+  run_id: number | null;
+  keyword: string;
+  position: number;
+  place_id: string | null;
+  company: string;
+  has_website: number;
+  website: string | null;
+  google_rating: number | null;
+  review_count: number | null;
+  captured_at: string;
+}
+
+export interface ResearchRun {
+  id: number;
+  market_id: number;
+  trigger: 'manual' | 'scheduled';
+  provider: string;
+  status: 'running' | 'complete' | 'failed' | 'partial';
+  keywords_count: number;
+  error_detail: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface ResearchRunSummary {
+  runId: number;
+  marketId: number;
+  status: 'complete' | 'partial' | 'failed';
+  keywordsStored: number;
+  mapPackKeywords: string[];
+  mapPackRowsStored: number;
+  errorDetail: string | null;
 }
 
 export interface ProspectCandidate {

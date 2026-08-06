@@ -178,6 +178,50 @@ repurpose one for the other.**
   `leads.clarity_ignore_until` can temporarily suppress enrichment while
   known operator test traffic ages out of the rolling three-day export.
 
+## Market Research (added 2026-08-06)
+
+Phase 1 of the demand-data motion: a **Research** page (nav: between Dashboard
+and Lead Finder) answering, per market, "is there demand here and who owns it."
+A market is one **industry × location** pair (`markets` table).
+
+- **Demand is a property of a MARKET, not a lead.** Every plumber in Green Bay
+  shares the volume for "plumber near me" — one API call covers an entire
+  industry's pipeline. Never fetch volume per lead.
+- **Volume comes from the Google Ads API** (`services/googleAds.ts`, REST only —
+  no Google client libraries, they're Workers-hostile) behind the provider
+  interface in `services/keywordVolume.ts`, selected by `KEYWORD_VOLUME_PROVIDER`
+  (`google_ads` now; `dataforseo` reserved, unimplemented). Callers never import
+  a provider directly. **Every number attached to a keyword comes from the
+  provider API — a model-generated volume figure is a defect.**
+- **The Ads API version is pinned in one exported constant**
+  (`GOOGLE_ADS_API_VERSION` in `services/googleAds.ts`). Google sunsets
+  versions abruptly (~1 year of support, monthly cadence); bumps must be a
+  one-line change.
+- **Map pack comes from Outscraper** (`services/mapPack.ts`, maps/search-v3,
+  existing credential). **Every scrape passes explicit market lat/lng** —
+  an unlocated "near me" scrape ranks businesses around the scraper's IP and
+  the recorded position is garbage. Same 8s × 120s polling discipline and
+  subrequest-cap rethrow as `services/outscraper.ts`.
+- Map pack is captured only for the **top N near-me terms** (default 3,
+  config). `market_keywords` upserts on (market_id, keyword);
+  `map_pack_results` is **append-only** (rank history has value).
+- **Subrequest budget:** ~50/market (1 Ads call + 3 scrapes × ~15 polls).
+  Batch runs cap at 15 markets and stop cleanly with `stoppedEarly`, matching
+  enrich-all.
+- **The monthly refresh has NO cron entry** — the Worker is at Cloudflare's
+  five-trigger limit, so it rides the hourly `0 * * * *` trigger with a
+  "1st of month, 9am America/Chicago" guard (`isMonthlyResearchHour` in
+  `src/index.ts`).
+- Config lives in `agency_settings.research_json` (settings precedent);
+  endpoints under `/api/research/*` (`routes/research.ts`). Migration:
+  `2026-08-06-market-research.sql` — **apply before deploying the Worker**;
+  `readSettings` selects `research_json` and every settings read fails
+  without it.
+- Organic SERP rank is out of scope permanently for this motion — targets
+  have no website, so map pack rank via GBP is the only position that exists.
+- Phase 2 (not built, schema must not be bent for it early): lead join,
+  demand in `opportunity_score`, call ammo, demand floors in discovery.
+
 ## Calling Dashboard (added 2026-06-14)
 
 The Dashboard tab is the default landing view. Pre-composes calling sessions
@@ -465,6 +509,15 @@ created by the app, not by hand. Quick Action button in the project sidebar:
   per-lead subrequest budget low enough that bulk-enrich fits the Worker cap.
 - **PageSpeed** uses the Places API key; that key must have **PageSpeed Insights
   API** enabled in its allowed-APIs list, or it 400s with `API_KEY_SERVICE_BLOCKED`.
+- **Google Ads (market research):** secrets `GOOGLE_ADS_DEVELOPER_TOKEN`,
+  `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`
+  (refresh token must carry the `https://www.googleapis.com/auth/adwords` scope);
+  vars `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (MCC id, digits only) and
+  `KEYWORD_VOLUME_PROVIDER` (`google_ads` | `dataforseo`). Optional
+  `GOOGLE_ADS_CUSTOMER_ID` overrides the client account for planning calls if
+  Google rejects manager-level requests. Until the developer token is approved
+  for **Basic Access** it only reaches test accounts — the Settings health card
+  surfaces this state distinctly from a missing credential.
 
 ## Cron triggers (wrangler.toml)
 
@@ -473,7 +526,10 @@ Five crons currently scheduled in `[triggers]`:
 - `0 6 * * *` — daily 6am — refresh PageSpeed for live Tier 3 sites
 - `0 7 1 * *` — monthly 1st 7am — finalize prior-month snapshots + exec summaries
 - `0 8 * * 1` — weekly Monday 8am — intermediate GSC refresh
-- `0 * * * *` — hourly — DNS poll for projects awaiting nameserver delegation
+- `0 * * * *` — hourly — DNS poll for projects awaiting nameserver delegation,
+  scheduled lead discovery, AND (1st of month, 9am Chicago guard) the monthly
+  market research refresh — the Worker is at the five-trigger limit, so new
+  periodic work must ride an existing trigger with a time guard
 - `15 */4 * * *` — every four hours — Clarity engagement enrichment
 
 Dispatched via the `scheduled` handler in `src/index.ts`. Each branch matches

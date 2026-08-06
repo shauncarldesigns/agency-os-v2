@@ -15,6 +15,32 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Market Research Phase 1 (2026-08-06, PR pending at snapshot)
+
+- New **Research** page (nav: Dashboard → Research → Lead Finder): markets are
+  industry × location pairs; each run pulls keyword volume/CPC/competition/
+  12-month trend from Google Ads (provider-swappable) and the live map pack
+  for the top near-me terms from Outscraper at explicit market coordinates.
+  No-website map pack entrants are visually flagged as targets.
+- Settings adds a Market research section (`research_json`) and a Google Ads
+  health card that separates "not configured" from "Basic Access approval
+  pending".
+- **Deploy checklist for this PR:** apply `2026-08-06-market-research.sql` to
+  remote D1 BEFORE the Worker deploys (settings reads select `research_json`),
+  then manual dashboard deploy. Operator-side setup still required before real
+  data flows: developer token from the MCC API Center, Basic Access
+  application (keyword research use case — has lead time), refresh token with
+  the adwords scope, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` var, and at least one
+  (free, non-spending) client account under the MCC for planning calls.
+- **Monthly refresh rides the hourly cron** (1st of month, 9am Chicago guard)
+  because the Worker is at Cloudflare's five-cron-trigger limit.
+- **Phase 2 punch list (deliberately not built):** join demand data to
+  `leads`; demand factor in `opportunity_score` / `services/scoring.ts`; call
+  ammo in the lead modal and Call Center; demand floors in Lead Finder
+  discovery config; DataForSEO provider implementation if Ads Basic Access
+  stalls; map pack rank-over-time visualization (history is already stored
+  append-only).
+
 ## Warm sales close and pending agreements (2026-08-06)
 
 - Engaged Email and Text Outreach leads share the `warm-lead-sales-call`

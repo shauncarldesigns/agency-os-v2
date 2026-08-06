@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react';
 import {
   Building2, PhoneCall, SlidersHorizontal, PlugZap, Database, CheckCircle2,
   AlertCircle, RefreshCw, Download, Save, ShieldCheck,
-  SearchCheck, ScrollText, ChevronDown,
+  SearchCheck, ScrollText, ChevronDown, TrendingUp,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { AgencySettings, ApplicationEvent, SettingsHealth, ShowToast } from '../../lib/types';
 
-type Section = 'general' | 'outreach' | 'discovery' | 'defaults' | 'integrations' | 'system' | 'activity';
+type Section = 'general' | 'outreach' | 'discovery' | 'research' | 'defaults' | 'integrations' | 'system' | 'activity';
 
 const sections: Array<{ id: Section; label: string; icon: typeof Building2 }> = [
   { id: 'general', label: 'General', icon: Building2 },
   { id: 'outreach', label: 'Calling & outreach', icon: PhoneCall },
   { id: 'discovery', label: 'Lead discovery', icon: SearchCheck },
+  { id: 'research', label: 'Market research', icon: TrendingUp },
   { id: 'defaults', label: 'Agency defaults', icon: SlidersHorizontal },
   { id: 'integrations', label: 'Integrations', icon: PlugZap },
   { id: 'system', label: 'System & data', icon: Database },
@@ -62,7 +63,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
     finally { setLoading(false); }
   }
 
-  function patch<K extends 'general' | 'outreach' | 'discovery' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) {
+  function patch<K extends 'general' | 'outreach' | 'discovery' | 'research' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) {
     setSettings((current) => current ? { ...current, [group]: { ...current[group], ...values } } : current);
   }
 
@@ -70,7 +71,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
     if (!settings) return;
     setSaving(true);
     try {
-      const result = await api.settings.update({ general: settings.general, outreach: settings.outreach, discovery: settings.discovery, defaults: settings.defaults });
+      const result = await api.settings.update({ general: settings.general, outreach: settings.outreach, discovery: settings.discovery, research: settings.research, defaults: settings.defaults });
       setSettings(result.settings);
       onProfileChanged(result.settings.general);
       showToast('Settings saved', 'success');
@@ -131,6 +132,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
           {active === 'general' && <General settings={settings} patch={patch} />}
           {active === 'outreach' && <Outreach settings={settings} patch={patch} />}
           {active === 'discovery' && <Discovery settings={settings} patch={patch} />}
+          {active === 'research' && <Research settings={settings} patch={patch} />}
           {active === 'defaults' && <Defaults settings={settings} patch={patch} />}
           {active === 'integrations' && <Integrations health={health} syncing={syncing} onRefresh={load} onSync={syncClarity} />}
           {active === 'system' && <System health={health} onExport={exportLeads} onRefresh={load} />}
@@ -141,7 +143,7 @@ export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowT
   );
 }
 
-type Patch = <K extends 'general' | 'outreach' | 'discovery' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) => void;
+type Patch = <K extends 'general' | 'outreach' | 'discovery' | 'research' | 'defaults'>(group: K, values: Partial<AgencySettings[K]>) => void;
 
 function General({ settings: s, patch }: { settings: AgencySettings; patch: Patch }) {
   return <div>
@@ -218,6 +220,38 @@ function Discovery({ settings: s, patch }: { settings: AgencySettings; patch: Pa
     <Divider />
     <TagEditor label="Search locations" value={d.locations} placeholder="Add city, state" onChange={v => patch('discovery', { locations: v })} />
     <div className="mt-6"><ChoiceGroup label="Allowed home-service industries" options={homeServiceIndustries} value={d.industries} onChange={v => patch('discovery', { industries: v })} /></div>
+  </div>;
+}
+
+function Research({ settings: s, patch }: { settings: AgencySettings; patch: Patch }) {
+  const r = s.research;
+  return <div>
+    <Heading title="Market research" sub="Keyword volume and map pack capture per industry × location market. Runs are manual plus a monthly refresh on the 1st." />
+    <Grid cols={3}>
+      <Field label="Map pack keywords per market"><NumberInput value={r.mapPackKeywordCount} min={1} max={10} onChange={v => patch('research', { mapPackKeywordCount: v })} /></Field>
+      <Field label="Results per map pack"><NumberInput value={r.mapPackResultLimit} min={3} max={20} onChange={v => patch('research', { mapPackResultLimit: v })} /></Field>
+      <Field label="Batch cap (markets per run)"><NumberInput value={r.batchCap} min={1} max={15} onChange={v => patch('research', { batchCap: v })} /></Field>
+    </Grid>
+    <p className="mt-2 text-xs leading-5 text-slate-400">The batch cap keeps a full run inside the Worker's request budget — 15 markets is the safe ceiling. Map pack scrapes only run on the top near-me terms; scraping every keyword is wasted spend.</p>
+    <Divider />
+    <Field label="Keyword volume provider">
+      <Select value={r.provider} options={['google_ads', 'dataforseo']} onChange={v => patch('research', { provider: v as 'google_ads' | 'dataforseo' })} />
+    </Field>
+    <p className="mt-2 text-xs leading-5 text-slate-400">Google Ads needs the four GOOGLE_ADS_* Worker secrets and a developer token approved for Basic Access — check the Integrations tab for status.</p>
+    <Divider />
+    <TagEditor label="Keyword seed templates" value={r.seedTemplates} placeholder="e.g. {service} installation {city}" onChange={v => patch('research', { seedTemplates: v })} />
+    <p className="mt-2 text-xs leading-5 text-slate-400">{'{service}'} and {'{city}'} expand per market. Templates supply the phrasing only — every volume number comes from the provider API.</p>
+    <Divider />
+    <h4 className="mb-1 text-sm font-semibold text-slate-800">Industry search terms</h4>
+    <p className="mb-3 text-xs leading-5 text-slate-500">The everyday term customers actually search for each industry ("Plumbing" → "plumber").</p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {Object.entries(r.industryTerms).map(([industry, term]) => (
+        <label key={industry} className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-slate-500">{industry}</span>
+          <Input value={term} onChange={v => patch('research', { industryTerms: { ...r.industryTerms, [industry]: v } })} />
+        </label>
+      ))}
+    </div>
   </div>;
 }
 

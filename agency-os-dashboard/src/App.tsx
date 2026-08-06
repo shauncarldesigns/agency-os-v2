@@ -3,6 +3,7 @@ import type { AgencySettings, Tab, HeaderStats, NavCounts } from './lib/types';
 import { api, ApiError } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
 import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPanel';
+import { ResearchPage } from './components/research/ResearchPage';
 import { ProspectPanel } from './components/prospect/ProspectPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { SitesPanel } from './components/sites/SitesPanel';
@@ -147,6 +148,7 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardMetricsPanel showToast={showToast} onSwitchTab={setActiveTab} />
             )}
+            {activeTab === 'research' && <ResearchPage showToast={showToast} />}
             {activeTab === 'email-outreach' && (
               <CallSessionsPage
                 showToast={showToast}

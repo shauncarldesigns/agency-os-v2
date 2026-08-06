@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { log, serverError } from '../utils/errors';
 import { syncClarityEngagement } from '../services/clarity';
 import { hasUsableGooglePlacesKey } from '../services/places';
+import { isGoogleAdsConfigured } from '../services/googleAds';
 
 export const settingsRouter = new Hono<{ Bindings: Env }>();
 
@@ -11,6 +12,7 @@ interface SettingsRow {
   outreach_json: string;
   defaults_json: string;
   discovery_json: string;
+  research_json: string;
   updated_at: string;
 }
 
@@ -57,6 +59,46 @@ const DEFAULTS = {
     suppressionDays: 90,
     expirationDays: 30,
   },
+  research: {
+    // Templates expand against the market's industry term and city. Keyword
+    // phrasing may come from templates (or Claude in later phases); every
+    // NUMBER attached to a keyword comes from the provider API.
+    seedTemplates: [
+      '{service} {city}',
+      '{service} near me',
+      'emergency {service} {city}',
+      '{service} company {city}',
+      'best {service} {city}',
+      '24 hour {service}',
+      '{service} repair {city}',
+    ],
+    industryTerms: {
+      'Plumbing': 'plumber',
+      'HVAC': 'hvac',
+      'Electrical': 'electrician',
+      'Roofing': 'roofer',
+      'General Contracting': 'general contractor',
+      'Landscaping': 'landscaper',
+      'Painting': 'painter',
+      'Flooring': 'flooring',
+      'Concrete and Masonry': 'concrete contractor',
+      'Siding': 'siding contractor',
+      'Gutters': 'gutter cleaning',
+      'Garage Doors': 'garage door repair',
+      'Fencing': 'fence contractor',
+      'Remodeling': 'remodeling contractor',
+      'Kitchen and Bathroom Remodeling': 'bathroom remodeling',
+      'Water Damage Restoration': 'water damage restoration',
+      'Pest Control': 'pest control',
+      'Tree Services': 'tree service',
+      'Septic Services': 'septic service',
+      'Drain and Sewer Services': 'drain cleaning',
+    } as Record<string, string>,
+    mapPackKeywordCount: 3,
+    mapPackResultLimit: 5,
+    batchCap: 15,
+    provider: 'google_ads',
+  },
 };
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -70,13 +112,14 @@ function parseObject(raw: string): Record<string, unknown> {
 
 export async function readSettings(db: D1Database) {
   const row = await db.prepare(
-    'SELECT general_json, outreach_json, defaults_json, discovery_json, updated_at FROM agency_settings WHERE id = 1',
+    'SELECT general_json, outreach_json, defaults_json, discovery_json, research_json, updated_at FROM agency_settings WHERE id = 1',
   ).first<SettingsRow>();
   return {
     general: { ...DEFAULTS.general, ...parseObject(row?.general_json ?? '{}') },
     outreach: { ...DEFAULTS.outreach, ...parseObject(row?.outreach_json ?? '{}') },
     defaults: { ...DEFAULTS.defaults, ...parseObject(row?.defaults_json ?? '{}') },
     discovery: { ...DEFAULTS.discovery, ...parseObject(row?.discovery_json ?? '{}') },
+    research: { ...DEFAULTS.research, ...parseObject(row?.research_json ?? '{}') },
     updatedAt: row?.updated_at ?? null,
   };
 }
@@ -97,6 +140,7 @@ settingsRouter.put('/', async (c) => {
     const outreach = { ...current.outreach, ...objectValue(body.outreach) };
     const defaults = { ...current.defaults, ...objectValue(body.defaults) };
     const discovery = { ...current.discovery, ...objectValue(body.discovery) };
+    const research = { ...current.research, ...objectValue(body.research) };
 
     const sessionSize = Number(outreach.sessionSize);
     const scoreFloor = Number(outreach.scoreFloor);
@@ -155,14 +199,48 @@ settingsRouter.put('/', async (c) => {
     discovery.suppressionDays = suppressionDays;
     discovery.expirationDays = expirationDays;
 
+    // Market research config
+    const seedTemplates = Array.isArray(research.seedTemplates)
+      ? research.seedTemplates.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+    if (seedTemplates.length === 0) return c.json({ error: 'Research needs at least one keyword seed template' }, 400);
+    const industryTermsRaw = objectValue(research.industryTerms);
+    const industryTerms: Record<string, string> = {};
+    for (const [key, value] of Object.entries(industryTermsRaw)) {
+      if (typeof value === 'string' && value.trim()) industryTerms[key] = value.trim();
+    }
+    const mapPackKeywordCount = Number(research.mapPackKeywordCount);
+    const mapPackResultLimit = Number(research.mapPackResultLimit);
+    const batchCap = Number(research.batchCap);
+    if (!Number.isInteger(mapPackKeywordCount) || mapPackKeywordCount < 1 || mapPackKeywordCount > 10) {
+      return c.json({ error: 'Map pack keywords per market must be between 1 and 10' }, 400);
+    }
+    if (!Number.isInteger(mapPackResultLimit) || mapPackResultLimit < 3 || mapPackResultLimit > 20) {
+      return c.json({ error: 'Map pack results per keyword must be between 3 and 20' }, 400);
+    }
+    // 15-market ceiling keeps a full run inside the Worker's 1000-subrequest
+    // budget (~50 subrequests per market at the default 3 scrapes).
+    if (!Number.isInteger(batchCap) || batchCap < 1 || batchCap > 15) {
+      return c.json({ error: 'Research batch cap must be between 1 and 15 markets' }, 400);
+    }
+    if (research.provider !== 'google_ads' && research.provider !== 'dataforseo') {
+      return c.json({ error: 'Keyword volume provider must be google_ads or dataforseo' }, 400);
+    }
+    research.seedTemplates = seedTemplates;
+    research.industryTerms = industryTerms;
+    research.mapPackKeywordCount = mapPackKeywordCount;
+    research.mapPackResultLimit = mapPackResultLimit;
+    research.batchCap = batchCap;
+
     await c.env.DB.prepare(`
-      INSERT INTO agency_settings (id, general_json, outreach_json, defaults_json, discovery_json, updated_at)
-      VALUES (1, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO agency_settings (id, general_json, outreach_json, defaults_json, discovery_json, research_json, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET general_json=excluded.general_json,
         outreach_json=excluded.outreach_json, defaults_json=excluded.defaults_json,
         discovery_json=excluded.discovery_json,
+        research_json=excluded.research_json,
         updated_at=datetime('now')
-    `).bind(JSON.stringify(general), JSON.stringify(outreach), JSON.stringify(defaults), JSON.stringify(discovery)).run();
+    `).bind(JSON.stringify(general), JSON.stringify(outreach), JSON.stringify(defaults), JSON.stringify(discovery), JSON.stringify(research)).run();
     return c.json({ settings: await readSettings(c.env.DB) });
   } catch (err) {
     log('error', 'settings', 'PUT /settings failed', err);
@@ -182,10 +260,27 @@ settingsRouter.get('/health', async (c) => {
       c.env.DB.prepare("SELECT COUNT(*) AS n FROM projects WHERE dns_status = 'pending'").first<{ n: number }>(),
     ]);
     const configured = (value: string | undefined) => Boolean(value?.trim());
+    // A developer token that is valid but not yet approved for Basic Access
+    // fails identically to a bad credential from the operator's seat — the
+    // most recent google_ads run's error detail is the disambiguator.
+    // .catch handles the table not existing before the migration is applied.
+    const latestAdsRun = await c.env.DB.prepare(
+      "SELECT status, error_detail FROM research_runs WHERE provider = 'google_ads' ORDER BY started_at DESC, id DESC LIMIT 1",
+    ).first<{ status: string; error_detail: string | null }>().catch(() => null);
+    const adsConfigured = isGoogleAdsConfigured(c.env);
+    const adsAccessPending = adsConfigured
+      && latestAdsRun?.status === 'failed'
+      && Boolean(latestAdsRun.error_detail?.includes('not yet approved'));
+    const googleAdsDetail = !adsConfigured
+      ? 'Set the four GOOGLE_ADS_* secrets plus GOOGLE_ADS_LOGIN_CUSTOMER_ID to enable keyword volume'
+      : adsAccessPending
+        ? 'Credentials are valid, but the developer token is still awaiting Basic Access approval from Google — real keyword data is unavailable until then'
+        : 'Keyword volume and seasonality for market research';
     const integrations = [
       { id: 'anthropic', name: 'Anthropic', configured: configured(c.env.CLAUDE_API_KEY), detail: 'Briefs, review mining, and rebuttals' },
       { id: 'google', name: 'Google Places & PageSpeed', configured: hasUsableGooglePlacesKey(c.env.GOOGLE_PLACES_API_KEY), detail: hasUsableGooglePlacesKey(c.env.GOOGLE_PLACES_API_KEY) ? 'Prospecting and performance data' : 'A valid Google Places API key is required' },
       { id: 'gsc', name: 'Google Search Console', configured: configured(c.env.GOOGLE_OAUTH_REFRESH_TOKEN), detail: 'Client search reporting' },
+      { id: 'google_ads', name: 'Google Ads', configured: adsConfigured && !adsAccessPending, optional: true, detail: googleAdsDetail },
       { id: 'outscraper', name: 'Outscraper', configured: configured(c.env.OUTSCRAPER_API_KEY), optional: true, detail: 'Extended Google review history' },
       { id: 'cloudflare', name: 'Cloudflare DNS', configured: configured(c.env.CLOUDFLARE_API_TOKEN) && configured(c.env.CLOUDFLARE_ACCOUNT_ID), detail: `${dns?.n ?? 0} zones awaiting delegation` },
       { id: 'clarity', name: 'Microsoft Clarity', configured: configured(c.env.CLARITY_API_TOKEN), optional: true, lastSuccessAt: clarity?.at ?? null, detail: 'Engagement context and scoring' },
