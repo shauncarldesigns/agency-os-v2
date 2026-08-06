@@ -509,10 +509,12 @@ created by the app, not by hand. Quick Action button in the project sidebar:
   per-lead subrequest budget low enough that bulk-enrich fits the Worker cap.
 - **PageSpeed** uses the Places API key; that key must have **PageSpeed Insights
   API** enabled in its allowed-APIs list, or it 400s with `API_KEY_SERVICE_BLOCKED`.
-- **Google Ads (market research):** secrets `GOOGLE_ADS_DEVELOPER_TOKEN`,
-  `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`
-  (refresh token must carry the `https://www.googleapis.com/auth/adwords` scope);
-  vars `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (MCC id, digits only) and
+- **Google Ads (market research):** secrets `GOOGLE_ADS_DEVELOPER_TOKEN` and
+  `GOOGLE_ADS_REFRESH_TOKEN` (must carry the
+  `https://www.googleapis.com/auth/adwords` scope). The OAuth client id/secret
+  **fall back to the shared `GOOGLE_OAUTH_*` Search Console pair** — set
+  `GOOGLE_ADS_CLIENT_ID`/`GOOGLE_ADS_CLIENT_SECRET` only to override with a
+  dedicated client. Vars `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (MCC id, digits only) and
   `KEYWORD_VOLUME_PROVIDER` (`google_ads` | `dataforseo`). Optional
   `GOOGLE_ADS_CUSTOMER_ID` overrides the client account for planning calls if
   Google rejects manager-level requests. Until the developer token is approved

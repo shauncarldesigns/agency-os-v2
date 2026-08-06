@@ -237,7 +237,7 @@ function Research({ settings: s, patch }: { settings: AgencySettings; patch: Pat
     <Field label="Keyword volume provider">
       <Select value={r.provider} options={['google_ads', 'dataforseo']} onChange={v => patch('research', { provider: v as 'google_ads' | 'dataforseo' })} />
     </Field>
-    <p className="mt-2 text-xs leading-5 text-slate-400">Google Ads needs the four GOOGLE_ADS_* Worker secrets and a developer token approved for Basic Access — check the Integrations tab for status.</p>
+    <p className="mt-2 text-xs leading-5 text-slate-400">Google Ads needs a developer token approved for Basic Access, an adwords-scope refresh token, and the MCC login customer id; the OAuth client is shared with Search Console. Check the Integrations tab for status.</p>
     <Divider />
     <TagEditor label="Keyword seed templates" value={r.seedTemplates} placeholder="e.g. {service} installation {city}" onChange={v => patch('research', { seedTemplates: v })} />
     <p className="mt-2 text-xs leading-5 text-slate-400">{'{service}'} and {'{city}'} expand per market. Templates supply the phrasing only — every volume number comes from the provider API.</p>

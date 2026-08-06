@@ -272,7 +272,7 @@ settingsRouter.get('/health', async (c) => {
       && latestAdsRun?.status === 'failed'
       && Boolean(latestAdsRun.error_detail?.includes('not yet approved'));
     const googleAdsDetail = !adsConfigured
-      ? 'Set the four GOOGLE_ADS_* secrets plus GOOGLE_ADS_LOGIN_CUSTOMER_ID to enable keyword volume'
+      ? 'Needs GOOGLE_ADS_DEVELOPER_TOKEN, an adwords-scope GOOGLE_ADS_REFRESH_TOKEN, and GOOGLE_ADS_LOGIN_CUSTOMER_ID — the OAuth client is shared with Search Console unless overridden'
       : adsAccessPending
         ? 'Credentials are valid, but the developer token is still awaiting Basic Access approval from Google — real keyword data is unavailable until then'
         : 'Keyword volume and seasonality for market research';
