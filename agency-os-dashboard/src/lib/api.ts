@@ -217,8 +217,10 @@ export const api = {
     markets: () => apiFetch<{ markets: MarketListRow[] }>('/api/research/markets'),
     market: (id: number) =>
       apiFetch<{ market: Market; keywords: MarketKeyword[]; mapPack: Record<string, MapPackRow[]>; runs: ResearchRun[] }>(`/api/research/markets/${id}`),
-    addMarket: (data: { industry: string; location_label: string; geo_target_id: string; latitude: number; longitude: number }) =>
+    addMarket: (data: { industry: string; geo_target_id: string }) =>
       apiFetch<{ market: Market }>('/api/research/markets', { method: 'POST', body: JSON.stringify(data) }),
+    geoTargets: (q: string) =>
+      apiFetch<{ targets: Array<{ criteria_id: string; name: string; canonical_name: string; state: string }> }>(`/api/research/geo-targets?q=${encodeURIComponent(q)}`),
     updateMarket: (id: number, data: Partial<Pick<Market, 'is_active' | 'location_label' | 'geo_target_id' | 'latitude' | 'longitude'>>) =>
       apiFetch<{ market: Market }>(`/api/research/markets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteMarket: (id: number) =>

@@ -19,6 +19,7 @@ import { log, serverError } from '../utils/errors';
 import { getKeywordVolumeProvider, type KeywordVolumeRow } from '../services/keywordVolume';
 import { AdsAccessPendingError } from '../services/googleAds';
 import { captureMapPack } from '../services/mapPack';
+import { geocodeCity } from '../services/places';
 import { readSettings } from './settings';
 
 export const researchRouter = new Hono<{ Bindings: Env }>();
@@ -265,19 +266,57 @@ researchRouter.get('/markets', async (c) => {
   }
 });
 
+// City typeahead for the add-market form, backed by the seeded geo_targets
+// table (Google's geotargets CSV) — the operator picks a name; the criteria
+// ID rides along invisibly.
+researchRouter.get('/geo-targets', async (c) => {
+  try {
+    const q = (c.req.query('q') ?? '').trim();
+    if (q.length < 2) return c.json({ targets: [] });
+    const targets = await c.env.DB.prepare(`
+      SELECT criteria_id, name, canonical_name, state FROM geo_targets
+      WHERE name LIKE ? ORDER BY name ASC LIMIT 12
+    `).bind(`${q}%`).all();
+    return c.json({ targets: targets.results });
+  } catch (err) {
+    log('error', 'research', 'GET /geo-targets failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
 researchRouter.post('/markets', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     const industry = typeof body.industry === 'string' ? body.industry.trim() : '';
-    const locationLabel = typeof body.location_label === 'string' ? body.location_label.trim() : '';
     const geoTargetId = typeof body.geo_target_id === 'string' ? body.geo_target_id.trim() : String(body.geo_target_id ?? '').trim();
-    const latitude = Number(body.latitude);
-    const longitude = Number(body.longitude);
     if (!industry) return c.json({ error: 'Industry is required' }, 400);
-    if (!locationLabel) return c.json({ error: 'Location label is required (e.g. "Green Bay, WI")' }, 400);
-    if (!/^\d+$/.test(geoTargetId)) return c.json({ error: 'Geo target must be a numeric Google Ads city criteria ID' }, 400);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return c.json({ error: 'Latitude must be between -90 and 90' }, 400);
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return c.json({ error: 'Longitude must be between -180 and 180' }, 400);
+    if (!/^\d+$/.test(geoTargetId)) return c.json({ error: 'Pick a city from the list' }, 400);
+
+    const geo = await c.env.DB.prepare(
+      'SELECT criteria_id, name, state FROM geo_targets WHERE criteria_id = ?',
+    ).bind(geoTargetId).first<{ criteria_id: string; name: string; state: string }>();
+
+    // Label comes from the seeded lookup when the ID is known; explicit
+    // label/coords in the body remain honored for API callers and any
+    // future non-seeded geography.
+    const locationLabel = geo
+      ? `${geo.name}, ${geo.state}`
+      : (typeof body.location_label === 'string' ? body.location_label.trim() : '');
+    if (!locationLabel) return c.json({ error: 'Unknown geo target — pick a city from the list' }, 400);
+
+    let latitude = Number(body.latitude);
+    let longitude = Number(body.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      // Resolve city-center coordinates automatically — the operator never
+      // types them. Approximate center is fine for map pack anchoring.
+      const coords = await geocodeCity(c.env.GOOGLE_PLACES_API_KEY, locationLabel);
+      if (!coords) return c.json({ error: `Could not resolve coordinates for ${locationLabel}` }, 502);
+      latitude = coords.lat;
+      longitude = coords.lng;
+    }
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return c.json({ error: 'Coordinates out of range' }, 400);
+    }
 
     const existing = await c.env.DB.prepare(
       'SELECT id FROM markets WHERE industry = ? AND geo_target_id = ?',
@@ -291,6 +330,10 @@ researchRouter.post('/markets', async (c) => {
     return c.json({ market }, 201);
   } catch (err) {
     log('error', 'research', 'POST /markets failed', err);
+    const msg = (err as Error).message;
+    if (msg.includes('geocoding') || msg.includes('Google Places')) {
+      return c.json({ error: msg }, 502);
+    }
     return c.json(serverError(), 500);
   }
 });

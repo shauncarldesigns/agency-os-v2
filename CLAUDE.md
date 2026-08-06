@@ -217,6 +217,14 @@ A market is one **industry × location** pair (`markets` table).
   `2026-08-06-market-research.sql` — **apply before deploying the Worker**;
   `readSettings` selects `research_json` and every settings read fails
   without it.
+- **Markets are added by city name, not by ID.** The `geo_targets` table
+  (migration `2026-08-06-geo-targets-wi.sql`) seeds all active Wisconsin
+  City rows from Google's geotargets CSV; `GET /api/research/geo-targets?q=`
+  backs the typeahead, and `POST /markets` derives the label from the lookup
+  and resolves city-center coordinates via `geocodeCity` in
+  `services/places.ts` (Places Text Search — no separate Geocoding API).
+  To cover a new state, regenerate the INSERT block from a newer CSV
+  (download link on developers.google.com/google-ads/api/data/geotargets).
 - Organic SERP rank is out of scope permanently for this motion — targets
   have no website, so map pack rank via GBP is the only position that exists.
 - Phase 2 (not built, schema must not be bent for it early): lead join,
