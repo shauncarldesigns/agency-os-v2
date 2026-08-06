@@ -30,6 +30,7 @@ import { growthCyclesRouter } from './routes/growth-cycles';
 import { onboardingRouter } from './routes/onboarding';
 import { runScheduledDiscovery } from './services/prospectDiscovery';
 import { seoAuditsRouter } from './routes/seo-audits';
+import { researchRouter, runAllMarketResearch } from './routes/research';
 import { runDueSeoAudits } from './services/seoAudit';
 import { recordApplicationEvent } from './services/applicationEvents';
 
@@ -142,6 +143,8 @@ app.route('/api/recordings', recordingsRouter);
 app.route('/api/pipeline', pipelineRouter);
 app.route('/api/email', emailOutreachRouter);
 app.route('/api/settings', settingsRouter);
+// Market research — demand data per industry × location market.
+app.route('/api/research', researchRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {
@@ -157,6 +160,18 @@ app.onError(async (err, c) => {
   });
   return c.json({ error: 'Internal server error', code: 'SERVER_ERROR' }, 500);
 });
+
+// True on the 1st of the month at 9am America/Chicago. Workers run in UTC;
+// any "what time is it for the operator" question must go through the
+// timezone-aware path (see services/dayOfWeek.ts for the same rule).
+function isMonthlyResearchHour(scheduledTime: number): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', day: 'numeric', hour: 'numeric', hourCycle: 'h23',
+  }).formatToParts(new Date(scheduledTime));
+  const day = Number(parts.find(p => p.type === 'day')?.value);
+  const hour = Number(parts.find(p => p.type === 'hour')?.value);
+  return day === 1 && hour === 9;
+}
 
 export default {
   fetch: app.fetch,
@@ -198,6 +213,16 @@ export default {
           })
           .catch(error => log('error', 'cron', 'Lead discovery run failed', error)),
       ]));
+      // Monthly market research refresh — 1st of the month, 9am operator
+      // time. Rides the hourly trigger because the Worker is already at
+      // Cloudflare's five-cron-trigger limit (see the 0 6 * * * branch).
+      if (isMonthlyResearchHour(event.scheduledTime)) {
+        ctx.waitUntil(
+          runAllMarketResearch(env, 'scheduled')
+            .then(out => log('info', 'cron', 'Monthly market research refresh', { processed: out.processed, stoppedEarly: out.stoppedEarly }))
+            .catch(error => log('error', 'cron', 'Monthly market research refresh failed', error)),
+        );
+      }
     } else if (event.cron === '15 */4 * * *') {
       // Six scheduled exports/day leaves headroom under Clarity's 10/day
       // project quota for manual validation without sacrificing the

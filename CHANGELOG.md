@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Market research — demand and map pack per market (Phase 1)
+
+- **New Research page answers, per industry × city market: is there search demand here, and who currently owns it.** Operators define markets (industry, location, Google Ads geo target ID, map coordinates), then run research manually or via the monthly refresh on the 1st. Each run pulls a ranked keyword list — monthly volume, CPC range, competition, and 12-month seasonality sparkline — from the Google Ads API (behind a swappable provider interface), and captures the live Google map pack for the top “near me” terms via Outscraper at the market's exact coordinates. Ranking businesses without a website are flagged as targets. Settings adds a Market research config section (seed templates, industry search terms, map pack counts, batch cap, provider) and a Google Ads integration health card that distinguishes missing credentials from a developer token still awaiting Basic Access approval. Demand is stored per market, never per lead. Backend + dashboard + migration (`2026-08-06-market-research.sql`, **apply before deploying the Worker** — settings reads fail without it). New Worker secrets `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` / `GOOGLE_ADS_REFRESH_TOKEN` and vars `GOOGLE_ADS_LOGIN_CUSTOMER_ID` / `KEYWORD_VOLUME_PROVIDER`.
+
 ### Warm sales calls and agreement-pending clients
 
 - **Engaged Email and Text Outreach leads now finish in one guided warm-sales-call workflow instead of repeating the initial capture script or ending with more messages.** The staged call adapts to the prospect's needs, keeps calling and recording controls in the header, requires explicit branch choices, and carries the selected Build & Maintain or Growth plan directly into a new agreement-pending client workspace. Clients & Sites adds a dedicated pending-agreement count, filter, and section; these workspaces remain excluded from MRR and onboarding until the agreement is marked signed. Backend + dashboard.

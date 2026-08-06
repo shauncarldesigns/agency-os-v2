@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   MessageSquareText,
+  TrendingUp,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
@@ -46,6 +47,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
     section: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { key: 'research', label: 'Research', icon: TrendingUp },
       { key: 'prospect', label: 'Lead Finder', icon: SearchIcon },
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
       { key: 'email-outreach', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
@@ -65,6 +67,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
+  research: { title: 'Research', subtitle: 'Keyword demand and map pack ownership per market' },
   'email-outreach': { title: 'Email Outreach', subtitle: 'Call-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },

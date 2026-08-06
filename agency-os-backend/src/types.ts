@@ -23,6 +23,15 @@ export interface Env {
   OUTREACH_EMAIL_REPLY_TO?: string;
   OUTREACH_PUBLIC_URL?: string;
   OUTSCRAPER_API_KEY?: string;
+  // Market research — Google Ads keyword volume (added 2026-08-06)
+  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
+  GOOGLE_ADS_CLIENT_ID?: string;
+  GOOGLE_ADS_CLIENT_SECRET?: string;
+  GOOGLE_ADS_REFRESH_TOKEN?: string;
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+  /** Optional client-account override for planning calls; defaults to the MCC id. */
+  GOOGLE_ADS_CUSTOMER_ID?: string;
+  KEYWORD_VOLUME_PROVIDER?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   CLARITY_API_TOKEN?: string;
