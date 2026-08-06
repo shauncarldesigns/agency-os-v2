@@ -9,6 +9,7 @@ import coldCallQuestionMd from '../playbook/scripts/cold-call-question-oriented.
 import coldCallQuickMd from '../playbook/scripts/cold-call-quick-oriented.md';
 import demoTier3Md from '../playbook/scripts/demo-tier3-primary.md';
 import demoTier2Md from '../playbook/scripts/demo-tier2-primary.md';
+import warmLeadSalesCallMd from '../playbook/scripts/warm-lead-sales-call.md';
 
 import wordOfMouthMd from '../playbook/objections/word-of-mouth.md';
 import facebookPageMd from '../playbook/objections/facebook-page.md';
@@ -359,6 +360,7 @@ const SCRIPT_FILES: Record<string, string> = {
   'cold-call-quick-oriented': coldCallQuickMd,
   'demo-tier3-primary': demoTier3Md,
   'demo-tier2-primary': demoTier2Md,
+  'warm-lead-sales-call': warmLeadSalesCallMd,
 };
 
 const OBJECTION_FILES: Record<string, string> = {

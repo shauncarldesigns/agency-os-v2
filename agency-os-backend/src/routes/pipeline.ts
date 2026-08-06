@@ -558,6 +558,28 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       );
     }
 
+    if (action === 'archived' && lead.pipeline_status === 'engaged') {
+      const completedSalesCall = await c.env.DB.prepare(`
+        SELECT 1 AS found
+          FROM lead_activity AS call_activity
+         WHERE call_activity.lead_id = ?
+           AND call_activity.action = 'call_outcome'
+           AND NOT EXISTS (
+             SELECT 1
+               FROM lead_activity AS undo_activity
+              WHERE undo_activity.action = 'undo'
+                AND json_extract(undo_activity.meta, '$.undid_activity_id') = call_activity.id
+           )
+         LIMIT 1
+      `).bind(id).first<{ found: number }>();
+      if (!completedSalesCall) {
+        return c.json(
+          badRequest('An engaged lead requires a recorded sales-call outcome before it can be archived.', 'SALES_CALL_REQUIRED'),
+          400,
+        );
+      }
+    }
+
     const fromStatus = lead.pipeline_status;
     const toStatus = rules.to ?? fromStatus;
     const sets = ["pipeline_last_action_at = datetime('now')", "updated_at = datetime('now')"];
@@ -597,6 +619,22 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     await c.env.DB.prepare(`UPDATE leads SET ${sets.join(', ')} WHERE id = ?`)
       .bind(...params)
       .run();
+
+    if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {
+      const meta = body.meta as Record<string, unknown>;
+      const recordingCallId = Number(meta.recording_call_id);
+      if (Number.isInteger(recordingCallId) && recordingCallId > 0) {
+        const outcome = typeof meta.outcome === 'string'
+          ? meta.outcome.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase())
+          : 'Call completed';
+        const notes = typeof meta.notes === 'string' && meta.notes.trim() ? meta.notes.trim() : null;
+        await c.env.DB.prepare(
+          `UPDATE call_log
+              SET outcome = ?, notes = COALESCE(?, notes)
+            WHERE id = ? AND lead_id = ?`
+        ).bind(outcome, notes, recordingCallId, id).run();
+      }
+    }
 
     await writeActivity(c.env.DB, {
       leadId: id,

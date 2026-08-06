@@ -32,7 +32,7 @@ export function SiteCard({
   const isBuilding = project.status === 'building';
   const isInternal = project.is_internal === 1;
   const isProspect = project.status === 'prospect' && !isInternal;
-  const mrr = isInternal ? 0 : (TIER_MRR[tier] ?? 0);
+  const mrr = isInternal || isProspect ? 0 : (TIER_MRR[tier] ?? 0);
   const pagesBuilt = project.pages_built ?? 0;
   const growthTotal = project.growth_items_total ?? 0;
   const growthCompleted = project.growth_items_completed ?? 0;
@@ -54,7 +54,7 @@ export function SiteCard({
   const subtitle = (() => {
     const where = [project.city, project.state].filter(Boolean).join(', ');
     if (isInternal) return `${where} · Internal workspace`;
-    if (isProspect) return `${where} · Prospect (qualified, not yet signed)`;
+    if (isProspect) return `${where} · Agreement pending`;
     if (project.contract_start) {
       return `${where} · Client since ${formatDate(project.contract_start, { year: 'numeric', month: 'short' })}`;
     }
@@ -69,7 +69,7 @@ export function SiteCard({
         status: 'building',
         contract_start: new Date().toISOString(),
       });
-      showToast(`${project.business_name} marked as active client`, 'success');
+      showToast(`${project.business_name} agreement marked signed — onboarding is active`, 'success');
       onProjectChanged();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -79,14 +79,14 @@ export function SiteCard({
     }
   }
 
-  // Demo happened, prospect declined. Project becomes a 'dead' historical
+  // Agreement was declined. Project becomes a 'dead' historical
   // record and the lead returns to 'contacted' so they can be re-engaged.
   // Destructive enough to warrant a confirm dialog — the project leaves
   // the active Sites view immediately.
   async function handleDemoPassed() {
     if (signing) return;
     const confirmed = window.confirm(
-      `Mark "${project.business_name}" as demo passed?\n\n` +
+      `Mark "${project.business_name}" as agreement declined?\n\n` +
       `The project will be archived as 'dead' (kept for audit), and the lead ` +
       `returns to the calling pipeline as 'contacted' so you can re-engage later.`
     );
@@ -94,7 +94,7 @@ export function SiteCard({
     setSigning(true);
     try {
       await api.projects.demoPassed(project.id);
-      showToast(`${project.business_name} archived — lead returned to pipeline`, 'default');
+      showToast(`${project.business_name} agreement declined — lead returned to pipeline`, 'default');
       onProjectChanged();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -128,7 +128,7 @@ export function SiteCard({
           {isProspect && (
             <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-200"
               title="Qualified for pitch, not yet signed. Excluded from MRR."
-            >Prospect</span>
+            >Agreement pending</span>
           )}
           {isInternal && (
             <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 ring-1 ring-inset ring-slate-200"
@@ -178,10 +178,10 @@ export function SiteCard({
           />
         </div>
 
-        <button type="button" onClick={onOpenOnboarding} className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" title="Open onboarding checklist">
+        {!isProspect ? <button type="button" onClick={onOpenOnboarding} className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" title="Open onboarding checklist">
           <span className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><span>Onboarding</span><span>{onboardingCompleted} of {onboardingTotal}</span></span>
           <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100"><span className={`block h-full rounded-full transition-all ${onboardingPercent === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${onboardingPercent}%` }} /></span>
-        </button>
+        </button> : <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800"><strong>Awaiting signed agreement.</strong> Onboarding and MRR begin after the agreement is marked signed.</div>}
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           {/* Prospects get a dedicated "they signed!" button at the top of
@@ -191,11 +191,11 @@ export function SiteCard({
             <>
               <ActionButton primary className="col-span-2" onClick={handleMarkActive} disabled={signing}
                       title="They signed. Move to active client status — counts toward MRR.">
-                {signing ? <><LoaderCircle size={14} className="animate-spin" /> Marking…</> : <><Check size={14} /> Mark active client</>}
+                {signing ? <><LoaderCircle size={14} className="animate-spin" /> Marking…</> : <><Check size={14} /> Mark agreement signed</>}
               </ActionButton>
               <ActionButton onClick={handleDemoPassed} disabled={signing}
                       title="The demo happened and they declined. Archive the project and send the lead back to the pipeline."
-                      danger><X size={14} /> Demo passed</ActionButton>
+                      danger><X size={14} /> Agreement declined</ActionButton>
             </>
           )}
           {hasBriefStudio ? (

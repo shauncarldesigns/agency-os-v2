@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-05. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-06. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,22 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Warm sales close and pending agreements (2026-08-06)
+
+- Engaged Email and Text Outreach leads share the `warm-lead-sales-call`
+  playbook. Email Capture remains only for the first call; an engaged email lead
+  now opens the staged sales call rather than repeating the capture script.
+- The call header owns Call and Record. A persistent footer owns Back plus the
+  current decision or forward action, culminating in **Advance to client** with
+  the selected Build & Maintain or Growth plan.
+- Advancing creates a project with `status='prospect'`, which is presented in
+  the UI as **Agreement pending**. The linked lead remains qualified, the
+  workspace is excluded from MRR and onboarding, and signing moves the project
+  to building while marking the lead as a client.
+- Clients & Sites has an Agreement Pending stat/filter and a dedicated section
+  above active clients. Project Activity includes pending, signing, and final
+  conversion events. No migration is required.
 
 ## Text Outreach close path and application diagnostics (2026-08-05)
 

@@ -403,7 +403,7 @@ projectsRouter.put('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid project ID'), 400);
 
-  const existing = await c.env.DB.prepare('SELECT id, tier, services, service_areas, pages_planned, pages_built FROM projects WHERE id = ?').bind(id).first<Pick<Project, 'id' | 'tier' | 'services' | 'service_areas' | 'pages_planned' | 'pages_built'>>();
+  const existing = await c.env.DB.prepare('SELECT id, lead_id, status, tier, services, service_areas, pages_planned, pages_built FROM projects WHERE id = ?').bind(id).first<Pick<Project, 'id' | 'lead_id' | 'status' | 'tier' | 'services' | 'service_areas' | 'pages_planned' | 'pages_built'>>();
   if (!existing) return c.json(notFound('Project'), 404);
 
   try {
@@ -435,6 +435,21 @@ projectsRouter.put('/:id', async (c) => {
     const values = [...updates.map(u => u.value), id];
 
     await c.env.DB.prepare(`UPDATE projects SET ${setClause} WHERE id = ?`).bind(...values).run();
+    const signedNow = existing.status === 'prospect'
+      && updates.some((update) => update.key === 'status' && update.value === 'building');
+    if (signedNow && existing.lead_id) {
+      await c.env.DB.batch([
+        c.env.DB.prepare(
+          `UPDATE leads
+              SET status = 'client', outcome = 'Agreement signed', updated_at = datetime('now')
+            WHERE id = ?`
+        ).bind(existing.lead_id),
+        c.env.DB.prepare(
+          `INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+           VALUES (?, 'contract_signed', 'archived', 'archived', ?, datetime('now'))`
+        ).bind(existing.lead_id, JSON.stringify({ project_id: id, contract_start: body.contract_start ?? null })),
+      ]);
+    }
     if (updates.some((update) => update.key === 'status' && ['building', 'live', 'paused'].includes(String(update.value)))) {
       await c.env.DB.prepare(
         `UPDATE project_discovery

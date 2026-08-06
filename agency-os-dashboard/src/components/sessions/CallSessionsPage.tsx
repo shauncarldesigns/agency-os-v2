@@ -46,6 +46,12 @@ import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { Spinner } from '../shared/Spinner';
 import { RecordButton } from '../dashboard/RecordButton';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
+import {
+  mapLeadRow,
+  OpenSalesCallModal,
+  type PipelineLead,
+  type SelectedPlan,
+} from '../leadpipeline/AutomatedPipelinePanel';
 
 interface Props {
   showToast: ShowToast;
@@ -390,24 +396,42 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
       )}
 
       {callModalLeadId !== null && (
-        <CallOutreachModal
-          lead={leads.find((lead) => lead.id === callModalLeadId) ?? null}
-          previousAutomation={
-            automations.find((automation) => automation.lead_id === callModalLeadId) ?? null
-          }
-          onClose={() => setCallModalLeadId(null)}
-          showToast={showToast}
-          onSaved={(emailCaptured) => {
-            if (emailCaptured) setCallModalLeadId(null);
-            void load(true);
-            if (emailCaptured) onStateChanged?.();
-          }}
-          onOutcomeRecorded={() => {
-            setCallModalLeadId(null);
-            void load(true);
-            onStateChanged?.();
-          }}
-        />
+        (() => {
+          const activeLead = leads.find((lead) => lead.id === callModalLeadId) ?? null;
+          const isEngagedEmailLead = activeLead?.pipeline_status === 'engaged'
+            && activeLead.outcome === 'Email Captured';
+          return isEngagedEmailLead && activeLead ? (
+            <EmailEngagedSalesCall
+              lead={activeLead}
+              onClose={() => setCallModalLeadId(null)}
+              showToast={showToast}
+              onChanged={() => {
+                setCallModalLeadId(null);
+                void load(true);
+                onStateChanged?.();
+              }}
+            />
+          ) : (
+            <CallOutreachModal
+              lead={activeLead}
+              previousAutomation={
+                automations.find((automation) => automation.lead_id === callModalLeadId) ?? null
+              }
+              onClose={() => setCallModalLeadId(null)}
+              showToast={showToast}
+              onSaved={(emailCaptured) => {
+                if (emailCaptured) setCallModalLeadId(null);
+                void load(true);
+                if (emailCaptured) onStateChanged?.();
+              }}
+              onOutcomeRecorded={() => {
+                setCallModalLeadId(null);
+                void load(true);
+                onStateChanged?.();
+              }}
+            />
+          );
+        })()
       )}
 
       {buildModalLeadId !== null && (
@@ -435,6 +459,94 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
         />
       )}
     </div>
+  );
+}
+
+function EmailEngagedSalesCall({
+  lead,
+  onClose,
+  showToast,
+  onChanged,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  showToast: ShowToast;
+  onChanged: () => void;
+}) {
+  const pipelineLead: PipelineLead = mapLeadRow(lead);
+
+  async function recordCall(
+    activeLead: PipelineLead,
+    outcome: 'no_answer' | 'voicemail' | 'busy' | 'talk_later' | 'interested',
+    selectedPlan?: SelectedPlan,
+    notes?: string,
+    recordingCallId?: number,
+  ): Promise<boolean> {
+    try {
+      await api.pipeline.action(activeLead.id, {
+        action: 'call_outcome',
+        meta: {
+          outcome,
+          selected_plan: selectedPlan ?? null,
+          notes: notes ?? null,
+          recording_call_id: recordingCallId ?? null,
+          channel: 'email',
+        },
+      });
+      if (outcome !== 'interested') {
+        showToast('Call outcome recorded');
+        onChanged();
+      }
+      return true;
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not record call', 'error');
+      return false;
+    }
+  }
+
+  async function moveToClients(activeLead: PipelineLead, selectedPlan: SelectedPlan) {
+    const tier: 2 | 3 = selectedPlan === 'Growth' ? 3 : 2;
+    try {
+      await api.leads.convertToClient(activeLead.id, {
+        tier,
+        initialStatus: 'prospect',
+        clientEmail: lead.email ?? undefined,
+        note: `${selectedPlan} selected during engaged Email Outreach sales call.`,
+      });
+      showToast(`${activeLead.name} moved to Clients — agreement pending`, 'success');
+      onChanged();
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not create pending client', 'error');
+    }
+  }
+
+  async function archiveLead(activeLead: PipelineLead, notes?: string, recordingCallId?: number) {
+    if (!window.confirm(`Archive ${activeLead.name} as not interested?`)) return;
+    try {
+      await api.pipeline.action(activeLead.id, {
+        action: 'call_outcome',
+        meta: { outcome: 'not_interested', notes: notes ?? null, recording_call_id: recordingCallId ?? null, channel: 'email' },
+      });
+      await api.pipeline.action(activeLead.id, {
+        action: 'archived',
+        meta: { reason: 'not_interested_after_email_engagement_call' },
+      });
+      showToast('Call recorded and lead archived');
+      onChanged();
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not archive lead', 'error');
+    }
+  }
+
+  return (
+    <OpenSalesCallModal
+      lead={pipelineLead}
+      onClose={onClose}
+      onCallOutcome={recordCall}
+      onMoveToClients={moveToClients}
+      onNotInterested={archiveLead}
+      showToast={showToast}
+    />
   );
 }
 

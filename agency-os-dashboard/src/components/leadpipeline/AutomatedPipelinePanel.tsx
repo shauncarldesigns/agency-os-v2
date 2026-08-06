@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Phone,
   MapPin,
@@ -7,6 +7,7 @@ import {
   Search,
   Filter,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   CheckCircle2,
   Link2,
@@ -31,6 +32,8 @@ import { api, TRACKING_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 import { StarRating } from '../shared/StarRating';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
+import { interpolate, type Script } from '../../lib/playbook';
+import { RecordButton } from '../dashboard/RecordButton';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -267,7 +270,7 @@ function actionLabel(action: string | null, status: PipelineStatus): string {
 
 // Full mapper: D1 row → PipelineLead. Called on every list fetch AND
 // every mutation response so the two paths stay consistent.
-function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLead {
+export function mapLeadRow(l: Lead, lastActionAction: string | null = null): PipelineLead {
   const category =
     l.industry ??
     (l.gbp_categories?.split(/[,;]/)[0]?.trim() ?? 'Business');
@@ -514,6 +517,7 @@ function getOutreachRecommendation(input: {
   status: PipelineStatus;
   sessions: number;
   engagementScore: number;
+  replied: boolean;
   lastVisitAt?: string | null;
 }): OutreachRecommendation | null {
   if (input.status !== 'engaged') return null;
@@ -524,6 +528,15 @@ function getOutreachRecommendation(input: {
       detail: 'They replied, but have not opened the homepage yet. Keep the tracked link in this message.',
       tone: 'bg-blue-50 text-blue-700 border-blue-100',
       textVariant: 'reply_link',
+    };
+  }
+  if (input.replied) {
+    return {
+      action: 'call',
+      label: 'Open sales call',
+      detail: 'They replied after seeing the site. Move into the warm sales conversation instead of sending more texts.',
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      textVariant: 'none',
     };
   }
   const score = Math.max(40, input.engagementScore);
@@ -562,6 +575,7 @@ function getEngagedProgress(lead: PipelineLead): {
   tone: string;
 } | null {
   if (lead.status !== 'engaged' || lead.followupStep === 0) return null;
+  if (lead.replied && lead.sessions > 0) return null;
   if (lead.followupStep >= 2) {
     return {
       stateLabel: 'Final follow-up sent',
@@ -634,6 +648,7 @@ function EngagedRecommendationPanel({ lead, compact = false }: { lead: PipelineL
     status: lead.status,
     sessions: lead.sessions,
     engagementScore: lead.engagementScore,
+    replied: lead.replied,
     lastVisitAt: lead.pipelineLastActionAt,
   });
   if (!rec) return null;
@@ -670,9 +685,11 @@ interface ModalShellProps {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  headerActions?: React.ReactNode;
+  wide?: boolean;
 }
 
-function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }: ModalShellProps) {
+function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer, headerActions, wide = false }: ModalShellProps) {
   const [subtitleCopied, setSubtitleCopied] = useState(false);
 
   const handleSubtitleCopy = async () => {
@@ -688,7 +705,7 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4">
-      <div className="w-full sm:max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col">
+      <div className={`w-full ${wide ? 'sm:max-w-5xl' : 'sm:max-w-lg'} max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
@@ -712,12 +729,10 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer }
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {headerActions}
+            <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X className="h-4 w-4" /></button>
+          </div>
         </div>
         <div className="overflow-y-auto flex-1">{children}</div>
         {footer && <div className="border-t border-slate-100 px-5 py-4">{footer}</div>}
@@ -751,6 +766,7 @@ function StatusChip({
     status: lead.status,
     sessions: lead.sessions,
     engagementScore: lead.engagementScore,
+    replied: lead.replied,
     lastVisitAt: lead.pipelineLastActionAt,
   });
   const progress = getEngagedProgress(lead);
@@ -814,6 +830,7 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
     status: lead.status,
     sessions: lead.sessions,
     engagementScore: lead.engagementScore,
+    replied: lead.replied,
     lastVisitAt: lead.pipelineLastActionAt,
   });
   return (
@@ -1209,9 +1226,9 @@ function FollowUpModal({
     status: lead.status,
     sessions: lead.sessions,
     engagementScore: lead.engagementScore,
+    replied: lead.replied,
     lastVisitAt: lead.pipelineLastActionAt,
   });
-
   const nurtureText =
     `Hey ${lead.ownerFirst}, just wanted to bump this back up in case it got buried.\n` +
     `I put together that homepage specifically for ${lead.name}:\n` +
@@ -1334,7 +1351,7 @@ function FollowUpModal({
   );
 }
 
-// ---------- Call prep (engaged) ----------
+// ---------- Open sales call (engaged / final attempt) ----------
 
 type CallOutcome =
   | 'no_answer'
@@ -1343,29 +1360,83 @@ type CallOutcome =
   | 'talk_later'
   | 'interested';
 
-function CallPrepModal({
+export type SelectedPlan = 'Build & Maintain' | 'Growth';
+
+const WARM_CALL_RESPONSES = [
+  { label: 'They only need a website', body: 'That sounds like the Build & Maintain plan. Let’s focus on making the business look credible and giving you a site I can keep updated for you.' },
+  { label: 'They want more clients', body: 'That sounds more like Growth. The website is the foundation, and the monthly work is what keeps improving how often the business gets found.' },
+  { label: 'They need to think', body: 'That makes sense. What part do you feel you still need to think through—the website itself, which plan fits, or the timing?' },
+  { label: 'They need a partner', body: 'Absolutely. Would it help if we scheduled a short follow-up with both of you so I can answer the same questions once?' },
+] as const;
+
+export function OpenSalesCallModal({
   lead,
   onClose,
-  onConvertToClient,
   onCallOutcome,
+  onMoveToClients,
   onNotInterested,
+  showToast,
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onConvertToClient: (lead: PipelineLead) => void;
-  onCallOutcome: (lead: PipelineLead, outcome: CallOutcome) => Promise<boolean>;
-  onNotInterested: (lead: PipelineLead) => void;
+  onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number) => Promise<boolean>;
+  onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan) => Promise<void>;
+  onNotInterested: (lead: PipelineLead, notes?: string, recordingCallId?: number) => Promise<void>;
+  showToast: ShowToast;
 }) {
   const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
+  const [script, setScript] = useState<Script | null>(null);
+  const [scriptError, setScriptError] = useState<string | null>(null);
+  const [stageIndex, setStageIndex] = useState(0);
+  const [stageHistory, setStageHistory] = useState<number[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
+  const [notes, setNotes] = useState('');
+  const [openResponse, setOpenResponse] = useState<string | null>(null);
+  const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
+  const scriptTopRef = useRef<HTMLDivElement | null>(null);
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
   const isLastChanceCall = progress?.action === 'call' || noReplyProgress?.action === 'call';
-  const rec = getOutreachRecommendation({
-    status: lead.status,
-    sessions: lead.sessions,
-    engagementScore: lead.engagementScore,
-    lastVisitAt: lead.pipelineLastActionAt,
-  });
+  const isWarm = lead.status === 'engaged' && lead.sessions > 0;
+
+  useEffect(() => {
+    let active = true;
+    api.playbook.script('warm-lead-sales-call')
+      .then(({ script: loaded }) => { if (active) setScript(loaded); })
+      .catch((err) => { if (active) setScriptError(err instanceof ApiError ? err.message : 'Could not load sales script'); });
+    return () => { active = false; };
+  }, []);
+
+  const activeStage = script?.stages[stageIndex] ?? null;
+
+  useEffect(() => {
+    if (!script) return;
+    requestAnimationFrame(() => {
+      scriptTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [script, stageIndex]);
+
+  const goToStage = (stageId: string) => {
+    if (!script) return;
+    const target = script.stages.findIndex((stage) => stage.id === stageId);
+    if (target < 0 || target === stageIndex) return;
+    setStageHistory((history) => [...history, stageIndex]);
+    setStageIndex(target);
+  };
+
+  const goBack = () => {
+    setStageHistory((history) => {
+      const previous = history[history.length - 1];
+      if (previous == null) return history;
+      setStageIndex(previous);
+      return history.slice(0, -1);
+    });
+  };
+
+  const choosePlan = (plan: SelectedPlan) => {
+    setSelectedPlan(plan);
+    goToStage(plan === 'Growth' ? 'growth' : 'presence');
+  };
 
   const outcomeLabels: Record<CallOutcome, string> = {
     no_answer: 'No answer',
@@ -1377,68 +1448,192 @@ function CallPrepModal({
 
   const chooseOutcome = async (outcome: CallOutcome) => {
     setLoggingOutcome(outcome);
-    const recorded = await onCallOutcome(lead, outcome);
+    const recorded = await onCallOutcome(lead, outcome, selectedPlan ?? undefined, notes.trim() || undefined, recordingCallId ?? undefined);
     setLoggingOutcome(null);
-    if (recorded) onClose();
+    if (!recorded) return;
+    if (outcome === 'interested' && selectedPlan) {
+      await onMoveToClients(lead, selectedPlan);
+      return;
+    }
+    onClose();
+  };
+
+  const decisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-5 text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+  const primaryDecisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-left text-xs font-semibold leading-5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+
+  const renderStageActions = () => {
+    if (!isWarm || !activeStage) return null;
+    if (activeStage.id === 'opening') return (
+      <>
+        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They have not looked yet — follow up later</button>
+        <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They looked at the site <ChevronRight className="h-3.5 w-3.5" /></button>
+      </>
+    );
+    if (activeStage.id === 'needs') return (
+      <>
+        <button type="button" onClick={() => goToStage('unsure')} className={decisionClass}>They are not sure</button>
+        <button type="button" onClick={() => choosePlan('Build & Maintain')} className={primaryDecisionClass}>Professional presence</button>
+        <button type="button" onClick={() => choosePlan('Growth')} className={primaryDecisionClass}>More clients</button>
+      </>
+    );
+    if (activeStage.id === 'presence') return (
+      <>
+        <button type="button" onClick={() => goToStage('unsure')} className={decisionClass}>They are still unsure</button>
+        <button type="button" onClick={() => goToStage('next-steps')} className={primaryDecisionClass}>Continue with Build & Maintain <ChevronRight className="h-3.5 w-3.5" /></button>
+      </>
+    );
+    if (activeStage.id === 'growth') return (
+      <>
+        <button type="button" onClick={() => goToStage('unsure')} className={decisionClass}>They are still unsure</button>
+        <button type="button" onClick={() => goToStage('next-steps')} className={primaryDecisionClass}>Continue with Growth <ChevronRight className="h-3.5 w-3.5" /></button>
+      </>
+    );
+    if (activeStage.id === 'unsure') return (
+      <>
+        <button type="button" onClick={() => choosePlan('Build & Maintain')} className={primaryDecisionClass}>Professional presence</button>
+        <button type="button" onClick={() => choosePlan('Growth')} className={primaryDecisionClass}>More clients and visibility</button>
+      </>
+    );
+    if (activeStage.id === 'next-steps') return <button type="button" onClick={() => goToStage('discovery')} className={primaryDecisionClass}>Schedule discovery <ChevronRight className="h-3.5 w-3.5" /></button>;
+    if (activeStage.id === 'discovery') return <button type="button" onClick={() => goToStage('website-process')} className={primaryDecisionClass}>Discovery scheduled — explain the process <ChevronRight className="h-3.5 w-3.5" /></button>;
+    if (activeStage.id === 'website-process') return <button type="button" onClick={() => goToStage(selectedPlan === 'Growth' ? 'growth-process' : 'full-close')} className={primaryDecisionClass}>Finish the close <ChevronRight className="h-3.5 w-3.5" /></button>;
+    if (activeStage.id === 'growth-process') return <button type="button" onClick={() => goToStage('full-close')} className={primaryDecisionClass}>Finish the close <ChevronRight className="h-3.5 w-3.5" /></button>;
+    if (activeStage.id === 'full-close') return (
+      <button type="button" onClick={() => void chooseOutcome('interested')} disabled={!selectedPlan || loggingOutcome !== null} className={primaryDecisionClass}>
+        {loggingOutcome === 'interested' ? 'Advancing…' : selectedPlan ? `Advance to client · ${selectedPlan}` : 'Select a plan to continue'}
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    );
+    return null;
   };
 
   return (
     <ModalShell
-      title="Call prep"
-      subtitle={lead.name}
+      title="Open sales call"
+      subtitle={`${lead.name} · ${isLastChanceCall ? 'Final attempt' : isWarm ? 'Warm lead' : 'Follow-up'}`}
       onClose={onClose}
-      footer={
-        <div className="flex gap-2">
-          <a
-            href={`tel:${lead.phone}`}
-            className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-          >
-            <PhoneCall className="h-4 w-4" />
-            Call {lead.phone}
+      wide
+      headerActions={
+        <>
+          <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+            <PhoneCall className="h-3.5 w-3.5" /> Call {lead.phone}
           </a>
-          <button
-            onClick={() => onConvertToClient(lead)}
-            title="They signed — create the client workspace"
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-medium text-white shadow-sm shadow-slate-900/10 hover:bg-slate-800"
-          >
-            Convert to client
-          </button>
+          <RecordButton
+            leadId={lead.id}
+            showToast={showToast}
+            resetKey={lead.id}
+            onRecorded={(_url, callId) => setRecordingCallId(callId)}
+          />
+        </>
+      }
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            {isWarm && stageHistory.length > 0 && (
+              <button type="button" onClick={goBack} className={decisionClass}><ChevronLeft className="h-3.5 w-3.5" /> Back</button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {renderStageActions()}
+          </div>
         </div>
       }
     >
-      <div className="px-5 py-4">
-        <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs text-rose-700">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold">
-              Recommended: {isLastChanceCall ? 'Call — last chance' : rec?.label ?? 'Call Now'}
-            </span>
-            <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
+      <div className="grid min-h-[560px] lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="border-b border-slate-200 px-5 py-5 lg:border-b-0 lg:border-r">
+          <div ref={scriptTopRef} />
+          <div className={`mb-5 rounded-xl border px-3 py-2.5 text-xs ${isWarm ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-100 bg-rose-50 text-rose-700'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold">{isWarm ? (lead.engagementScore >= 90 ? 'Call now' : 'Ready for sales call') : 'Final call attempt'}</span>
+              <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
+            </div>
+            <p className="mt-1 opacity-80">
+              {isWarm
+                ? 'Use their reaction to the site to identify the right plan, then move directly into closing steps.'
+                : 'The outreach sequence is complete. Record this call before the lead can leave the active workflow.'}
+            </p>
           </div>
-          <p className="mt-1 opacity-80">
-            {isLastChanceCall
-              ? 'The text sequence is complete. Call once to confirm whether they are interested before letting the lead age into archive.'
-              : rec?.detail ?? 'They interacted with the demo. Call while the site is fresh.'}
-          </p>
+
+          {isWarm ? (
+            <>
+              {scriptError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{scriptError}</div>}
+              {!script && !scriptError && <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>}
+              {activeStage && (
+                <section>
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call</p>
+                      <h3 className="mt-1 text-xl font-semibold text-slate-900">{activeStage.label}</h3>
+                    </div>
+                    {selectedPlan && <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">{selectedPlan}</span>}
+                  </div>
+                  <div className="border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+                    {interpolate(activeStage.body, {
+                      company: lead.name,
+                      contact_name: lead.ownerFirst,
+                      city: lead.city,
+                      trade: lead.category,
+                    }).split(/\n{2,}/).map((paragraph) => <p key={paragraph} className="mb-4 last:mb-0">{paragraph}</p>)}
+                  </div>
+                  {activeStage.note && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">{activeStage.note}</div>}
+                </section>
+              )}
+            </>
+          ) : (
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Last-attempt call</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-900">Confirm interest before closing the outreach loop.</h3>
+              <div className="mt-5 border-l-2 border-rose-200 pl-5 text-[15px] leading-7 text-slate-700">
+                <p>“Hey {lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for {lead.name} before I close this out.”</p>
+                <p className="mt-4">“Did you get a chance to take a look, and is it worth having a quick conversation about?”</p>
+              </div>
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, continue into the warm sales conversation. If they are not interested or do not answer, record that outcome below.</div>
+            </section>
+          )}
         </div>
 
-        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
-            <PhoneCall className="h-3.5 w-3.5" />
-            After the call, what happened?
+        <aside className="bg-slate-50/70 px-5 py-5">
+          {isWarm && (
+            <>
+              {selectedPlan && (
+                <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Selected direction</p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-800">{selectedPlan}</p>
+                </div>
+              )}
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Objection responses</p>
+              <div className="mt-3 space-y-2">
+                {WARM_CALL_RESPONSES.map((response) => (
+                  <div key={response.label} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <button type="button" onClick={() => setOpenResponse(openResponse === response.label ? null : response.label)} className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-xs font-semibold text-slate-700">{response.label}<ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition ${openResponse === response.label ? 'rotate-180' : ''}`} /></button>
+                    {openResponse === response.label && <p className="border-t border-slate-100 px-3 py-3 text-xs leading-5 text-slate-600">{response.body}</p>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className={`${isWarm ? 'mt-6' : ''} rounded-xl border border-slate-200 bg-white p-3.5`}>
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call context</p><p className="mt-1 text-xs text-slate-400">Useful details while talking.</p></div>
+              <div className="text-right"><p className="text-lg font-bold leading-none text-slate-900">{lead.reviews}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reviews</p></div>
+            </div>
+            <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>{lead.rating ? lead.rating.toFixed(1) : 'No rating'}</strong> Google reputation</div>
+            {lead.rawUrl && <a href={lead.rawUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-700">Open their website <ChevronRight className="h-3.5 w-3.5" /></a>}
+            <label className="mt-4 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call notes</label>
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="What they liked, changes requested, timing, concerns…" className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
           </div>
-          <p className="mt-1 text-[11px] text-blue-600">
-            Record the outcome. Convert the lead only after they agree to move forward.
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {(Object.keys(outcomeLabels) as CallOutcome[]).map((outcome) => (
+
+          <section className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-700"><PhoneCall className="h-3.5 w-3.5" />After the call</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(Object.keys(outcomeLabels) as CallOutcome[]).filter((outcome) => outcome !== 'interested').map((outcome) => (
               <button
                 key={outcome}
                 onClick={() => void chooseOutcome(outcome)}
                 disabled={loggingOutcome !== null}
                 className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition disabled:opacity-50 ${
-                  outcome === 'interested'
-                    ? 'col-span-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                  'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
                 }`}
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -1447,35 +1642,14 @@ function CallPrepModal({
               </button>
             ))}
             <button
-              onClick={() => onNotInterested(lead)}
+              onClick={() => void onNotInterested(lead, notes.trim() || undefined, recordingCallId ?? undefined)}
               className="col-span-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               Not interested — archive
             </button>
           </div>
-        </div>
-
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Suggested opener
-        </h4>
-        <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm leading-relaxed text-slate-700">
-          Hey {lead.ownerFirst}, it's Shaun. I wanted to follow up on the homepage I put together
-          for {lead.name} and hear what you thought. Did I catch you at a bad time?
-        </div>
-
-        <h4 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          On the call
-        </h4>
-        <ul className="space-y-1.5 text-sm text-slate-600">
-          <li className="flex gap-2">
-            <span className="text-slate-300">·</span>
-            If they're busy: “No problem at all. When would be a better time for me to give you a quick call?”
-          </li>
-          <li className="flex gap-2">
-            <span className="text-slate-300">·</span>
-            If they're free: “What stood out to you?”
-          </li>
-        </ul>
+          </section>
+        </aside>
       </div>
     </ModalShell>
   );
@@ -1528,6 +1702,7 @@ function BoardCard({
     status: lead.status,
     sessions: lead.sessions,
     engagementScore: lead.engagementScore,
+    replied: lead.replied,
     lastVisitAt: lead.pipelineLastActionAt,
   });
   const progress = getEngagedProgress(lead);
@@ -1699,6 +1874,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         status: lead.status,
         sessions: lead.sessions,
         engagementScore: lead.engagementScore,
+        replied: lead.replied,
         lastVisitAt: lead.pipelineLastActionAt,
       });
       setModal({ type: rec?.action === 'text' ? 'followup' : 'call', lead });
@@ -1777,11 +1953,14 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const recordCallOutcome = async (
     lead: PipelineLead,
     outcome: CallOutcome,
+    selectedPlan?: SelectedPlan,
+    notes?: string,
+    recordingCallId?: number,
   ): Promise<boolean> => {
     try {
       const { lead: updated } = await api.pipeline.action(lead.id, {
         action: 'call_outcome',
-        meta: { outcome },
+        meta: { outcome, selected_plan: selectedPlan ?? null, notes: notes ?? null, recording_call_id: recordingCallId ?? null },
       });
       applyMutation(updated, 'call_outcome');
       return true;
@@ -1797,11 +1976,23 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
   };
 
-  const archiveNotInterested = (lead: PipelineLead) => {
+  const archiveNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number) => {
     if (!window.confirm(`Archive ${lead.name} as not interested?`)) return;
-    void runAction(lead.id, 'archived', 'Archived as not interested', {
-      reason: 'not_interested_after_call',
-    });
+    try {
+      await api.pipeline.action(lead.id, {
+        action: 'call_outcome',
+        meta: { outcome: 'not_interested', notes: notes ?? null, recording_call_id: recordingCallId ?? null },
+      });
+      const { lead: updated } = await api.pipeline.action(lead.id, {
+        action: 'archived',
+        meta: { reason: 'not_interested_after_call' },
+      });
+      applyMutation(updated, 'archived');
+      setModal(null);
+      showToast('Call recorded and lead archived');
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Could not archive lead', 'error');
+    }
   };
 
   const markReplied = (lead: PipelineLead) => {
@@ -1817,13 +2008,20 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     );
   };
 
-  const openConvertToClient = async (lead: PipelineLead) => {
+  const moveToClients = async (lead: PipelineLead, selectedPlan: SelectedPlan) => {
+    const tier: 2 | 3 = selectedPlan === 'Growth' ? 3 : 2;
     try {
-      const res = await api.leads.get(lead.id);
-      setQualifyLead(res.lead);
+      const { project } = await api.leads.convertToClient(lead.id, {
+        tier,
+        initialStatus: 'prospect',
+        note: `${selectedPlan} selected during warm sales call.`,
+      });
+      setLeads((current) => current.filter((item) => item.id !== lead.id));
+      setModal(null);
+      showToast(`${lead.name} moved to Clients — agreement pending`, 'success');
+      onQualified?.(project, tier);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not open client conversion';
-      showToast(msg, 'error');
+      showToast(err instanceof ApiError ? err.message : 'Could not create pending client', 'error');
     }
   };
 
@@ -2110,15 +2308,13 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         />
       )}
       {modal?.type === 'call' && (
-        <CallPrepModal
+        <OpenSalesCallModal
           lead={modal.lead}
           onClose={() => setModal(null)}
           onCallOutcome={recordCallOutcome}
+          onMoveToClients={moveToClients}
           onNotInterested={archiveNotInterested}
-          onConvertToClient={(lead) => {
-            setModal(null);
-            void openConvertToClient(lead);
-          }}
+          showToast={showToast}
         />
       )}
       {modal?.type === 'detail' && (

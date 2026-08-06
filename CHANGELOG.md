@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Warm sales calls and agreement-pending clients
+
+- **Engaged Email and Text Outreach leads now finish in one guided warm-sales-call workflow instead of repeating the initial capture script or ending with more messages.** The staged call adapts to the prospect's needs, keeps calling and recording controls in the header, requires explicit branch choices, and carries the selected Build & Maintain or Growth plan directly into a new agreement-pending client workspace. Clients & Sites adds a dedicated pending-agreement count, filter, and section; these workspaces remain excluded from MRR and onboarding until the agreement is marked signed. Backend + dashboard.
+
 ### Text Outreach close path and application activity log
 
 - **Text Outreach now moves directly from engagement to a closing call instead of inserting a calendar stage.** The walkthrough recommendation is now “Call to discuss site,” call outcomes no longer prepare HoneyBook links, scheduling follow-ups and calendar conversion analytics are removed from the active interface, and legacy calendar clicks no longer raise engagement scores. Settings adds a persistent Activity & Errors feed for mutations, failed or slow API requests, scheduled triggers, status codes, durations, sanitized error details, search, an errors-only view, and ten-second refresh while open. Logs retain 30 days and never store request bodies or credentials. Backend + dashboard + migration (`2026-08-05-application-events.sql`, apply before deploy).
