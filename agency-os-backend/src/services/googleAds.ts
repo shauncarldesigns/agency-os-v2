@@ -18,7 +18,7 @@ import type { Env } from '../types';
 // Google moved to a monthly release cadence with ~1 year of support per
 // major version and abrupt sunsets — a retired version fails with no grace
 // period. Bumping this constant must be the ONLY change needed.
-export const GOOGLE_ADS_API_VERSION = 'v21';
+export const GOOGLE_ADS_API_VERSION = 'v24';
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
