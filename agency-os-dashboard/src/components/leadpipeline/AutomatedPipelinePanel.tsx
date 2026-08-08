@@ -1439,6 +1439,10 @@ export function OpenSalesCallModal({
   const [emailCapturedDone, setEmailCapturedDone] = useState(false);
   const [introEmailSent, setIntroEmailSent] = useState(false);
   const [showResendComposer, setShowResendComposer] = useState(false);
+  // After the intro email fires mid-call, the warm script opens on an
+  // "email track" bridge stage — walk them to their inbox and onto the site
+  // before asking for their reaction.
+  const [emailBridgeDone, setEmailBridgeDone] = useState(false);
 
   const captureEmailAndSwitch = async () => {
     const nextEmail = recoverEmail.trim();
@@ -1546,11 +1550,19 @@ export function OpenSalesCallModal({
   const decisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-5 text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
   const primaryDecisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-left text-xs font-semibold leading-5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 
+  const showEmailBridge = isWarm && introEmailSent && !emailBridgeDone;
+
   const renderStageActions = () => {
     if (!isWarm) return (
       <button type="button" onClick={() => setWarmOverride(true)} className={primaryDecisionClass}>
-        They’re interested — open the sales script <ChevronRight className="h-3.5 w-3.5" />
+        {introEmailSent ? 'Continue the call — walk them to the email' : 'They’re interested — open the sales script'} <ChevronRight className="h-3.5 w-3.5" />
       </button>
+    );
+    if (showEmailBridge) return (
+      <>
+        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They’ll look later — follow up later</button>
+        <button type="button" onClick={() => setEmailBridgeDone(true)} className={primaryDecisionClass}>They can see the site — get their reaction <ChevronRight className="h-3.5 w-3.5" /></button>
+      </>
     );
     if (!activeStage) return null;
     if (activeStage.id === 'opening') return (
@@ -1646,7 +1658,35 @@ export function OpenSalesCallModal({
             </p>
           </div>
 
-          {isWarm ? (
+          {isWarm && showEmailBridge ? (
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call · email track</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-900">GET THEM TO THE INBOX</h3>
+              <div className="mt-5 border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+                <p>“Alright — it’s on its way. You’ll see an email from Shaun Gehrke at Shaun Carl Designs, subject line ‘I built something for {lead.name}.’”</p>
+                <p className="mt-4">“If you’re near your email, open it up and tap the link — that’s the homepage I built for you. I’ll stay on while you pull it up.”</p>
+              </div>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+                <p className="font-semibold text-slate-700">While the email lands — keep it easy:</p>
+                <p className="mt-1.5">“While that comes through — how long have you been running {lead.name}?”</p>
+                <p className="mt-1.5">“Busy season treating you alright{lead.city ? ` out in ${lead.city}` : ''}?”</p>
+                <p className="mt-1.5">“Don’t see it yet? Give it a few seconds — and peek at spam or promotions just in case.”</p>
+              </div>
+              {cleanSiteUrl(lead.rawUrl, lead.url) && (
+                <a
+                  href={cleanSiteUrl(lead.rawUrl, lead.url) ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                >
+                  <Link2 className="h-3.5 w-3.5" /> Open the site on your side — walk it together
+                </a>
+              )}
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                Open the site on your own screen (button above — it’s the untracked link, so it won’t count as their visit) so you’re both looking at the same thing when they land on it. Wait until they say they can see it before moving on. If they can’t get to their email right now, record “Follow up later” — the email sequence takes over from here.
+              </div>
+            </section>
+          ) : isWarm ? (
             <>
               {scriptError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{scriptError}</div>}
               {!script && !scriptError && <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>}
@@ -1731,7 +1771,7 @@ export function OpenSalesCallModal({
               {emailCapturedDone ? (
                 introEmailSent ? (
                   <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
-                    <strong>Intro email sent.</strong> Have them check their inbox for the site link while you talk. Follow-ups continue from the Email Outreach queue. Finish the call as normal.
+                    <strong>Intro email sent.</strong> Use the blue button below to continue the call on the email track — it walks them to their inbox and onto the site with you.
                   </div>
                 ) : (
                   <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] leading-4 text-rose-700">
