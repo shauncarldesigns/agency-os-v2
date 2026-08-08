@@ -629,6 +629,14 @@ function getNoReplyProgress(lead: PipelineLead): {
   };
 }
 
+// A sent_no_reply lead whose text sequence is exhausted — the only move left
+// is the last-chance call. Surfaced as its own board column + filter pill so
+// the texting queue in Sent — no reply stays clean. Purely derived; the lead's
+// pipeline_status stays sent_no_reply.
+function isLastChanceNoReply(lead: PipelineLead): boolean {
+  return getNoReplyProgress(lead)?.action === 'call';
+}
+
 function NoReplyProgressPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
   const progress = getNoReplyProgress(lead);
   if (!progress) return null;
@@ -1657,13 +1665,14 @@ export function OpenSalesCallModal({
 
 // ---------- Page ----------
 
-type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'engaged';
+type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'awaiting_build', label: 'Awaiting build' },
   { key: 'ready_to_send', label: 'Ready to send' },
   { key: 'sent_no_reply', label: 'Sent — no reply' },
+  { key: 'last_chance', label: 'Last chance — call' },
   { key: 'engaged', label: 'Engaged' },
 ];
 
@@ -1673,13 +1682,45 @@ type ModalState = { type: ModalType; lead: PipelineLead } | null;
 type ViewMode = 'grid' | 'board';
 const VIEW_KEY = 'agency-os-pipeline-view';
 
-// Kanban columns — the four active stages, in flow order. booked/archived
-// stay off the board until they get real UI.
-const BOARD_COLUMNS: Array<{ status: PipelineStatus; label: string }> = [
-  { status: 'awaiting_build', label: 'Awaiting build' },
-  { status: 'ready_to_send', label: 'Ready to send' },
-  { status: 'sent_no_reply', label: 'Sent — no reply' },
-  { status: 'engaged', label: 'Engaged' },
+// Kanban columns — the active stages in flow order, plus one DERIVED column:
+// "No engagement — last chance" splits out sent_no_reply leads whose text
+// sequence is exhausted (next action = call) so the texting queue stays
+// clean. Membership is a predicate, not a status; drops still route through
+// handleBoardDrop with the column's underlying status. booked/archived stay
+// off the board until they get real UI.
+const BOARD_COLUMNS: Array<{
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  iconBg: string;
+  dropStatus: PipelineStatus;
+  match: (lead: PipelineLead) => boolean;
+}> = [
+  {
+    key: 'awaiting_build', label: 'Awaiting build',
+    icon: STATUS_CONFIG.awaiting_build.icon, iconBg: STATUS_CONFIG.awaiting_build.iconBg,
+    dropStatus: 'awaiting_build', match: (l) => l.status === 'awaiting_build',
+  },
+  {
+    key: 'ready_to_send', label: 'Ready to send',
+    icon: STATUS_CONFIG.ready_to_send.icon, iconBg: STATUS_CONFIG.ready_to_send.iconBg,
+    dropStatus: 'ready_to_send', match: (l) => l.status === 'ready_to_send',
+  },
+  {
+    key: 'sent_no_reply', label: 'Sent — no reply',
+    icon: STATUS_CONFIG.sent_no_reply.icon, iconBg: STATUS_CONFIG.sent_no_reply.iconBg,
+    dropStatus: 'sent_no_reply', match: (l) => l.status === 'sent_no_reply' && !isLastChanceNoReply(l),
+  },
+  {
+    key: 'last_chance', label: 'No engagement — last chance',
+    icon: PhoneCall, iconBg: 'bg-gradient-to-br from-rose-500 to-red-600',
+    dropStatus: 'sent_no_reply', match: isLastChanceNoReply,
+  },
+  {
+    key: 'engaged', label: 'Engaged',
+    icon: STATUS_CONFIG.engaged.icon, iconBg: STATUS_CONFIG.engaged.iconBg,
+    dropStatus: 'engaged', match: (l) => l.status === 'engaged',
+  },
 ];
 
 // Compact card for the board view. Draggable; the stage action + View lead
@@ -2072,14 +2113,20 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   );
 
   const filtered = useMemo(
-    () => visibleLeads.filter((l) => filter === 'all' || l.status === filter),
+    () => visibleLeads.filter((l) => {
+      if (filter === 'all') return true;
+      if (filter === 'last_chance') return isLastChanceNoReply(l);
+      if (filter === 'sent_no_reply') return l.status === 'sent_no_reply' && !isLastChanceNoReply(l);
+      return l.status === filter;
+    }),
     [visibleLeads, filter],
   );
 
   const counts = useMemo(
     () =>
       visibleLeads.reduce<Record<string, number>>((acc, l) => {
-        acc[l.status] = (acc[l.status] || 0) + 1;
+        const key = isLastChanceNoReply(l) ? 'last_chance' : l.status;
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {}),
     [visibleLeads],
@@ -2211,24 +2258,23 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
              transitions. */
           <div className="flex items-start gap-3 overflow-x-auto pb-4">
             {BOARD_COLUMNS.map((col) => {
-              const cfg = STATUS_CONFIG[col.status];
-              const ColIcon = cfg.icon;
-              const items = visibleLeads.filter((l) => l.status === col.status);
+              const ColIcon = col.icon;
+              const items = visibleLeads.filter(col.match);
               return (
                 <div
-                  key={col.status}
+                  key={col.key}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
                     const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                    if (!isNaN(id)) handleBoardDrop(id, col.status);
+                    if (!isNaN(id)) handleBoardDrop(id, col.dropStatus);
                   }}
                   className="w-72 shrink-0 rounded-2xl bg-slate-100/80 p-2.5"
                 >
                   <div className="mb-2 flex items-center justify-between px-1.5 pt-1">
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                       <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full ${cfg.iconBg}`}
+                        className={`flex h-5 w-5 items-center justify-center rounded-full ${col.iconBg}`}
                       >
                         <ColIcon className="h-3 w-3 text-white" strokeWidth={2.5} />
                       </span>

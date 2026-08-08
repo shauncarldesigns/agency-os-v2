@@ -9,6 +9,14 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Text Outreach: "No engagement — last chance" board column (dashboard)
+
+- **Sent — no reply leads whose text sequence is exhausted now split into
+  their own board column** ("No engagement — last chance", rose phone icon)
+  and grid filter pill ("Last chance — call"), so the texting queue stays
+  clean. Purely derived from `noReplyStep` — the lead's `pipeline_status`
+  stays `sent_no_reply`; no backend or schema change.
+
 ### Email capture call: call button moved to the modal header (dashboard)
 
 - **The "Open call" email-capture modal's call button now sits in the
