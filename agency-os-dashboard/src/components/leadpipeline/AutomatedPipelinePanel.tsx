@@ -1437,6 +1437,7 @@ export function OpenSalesCallModal({
   const [recoverEmail, setRecoverEmail] = useState('');
   const [capturingEmail, setCapturingEmail] = useState(false);
   const [emailCapturedDone, setEmailCapturedDone] = useState(false);
+  const [introEmailSent, setIntroEmailSent] = useState(false);
   const [showResendComposer, setShowResendComposer] = useState(false);
 
   const captureEmailAndSwitch = async () => {
@@ -1460,7 +1461,17 @@ export function OpenSalesCallModal({
       // Texting demonstrably didn't reach them — route the phone to the call
       // motion so the lead leaves the Text Outreach queue for good.
       await api.leads.updatePhoneRoute(lead.id, 'call');
-      showToast('Email captured — the intro email sends from the Email Outreach queue');
+      // Fire the intro email NOW — the prospect is on the phone and can
+      // check their inbox while the operator talks. send_now advances the
+      // automation past its review window into the normal follow-up flow.
+      try {
+        const { automation } = await api.emailOutreach.automation(lead.id);
+        await api.emailOutreach.automationAction(automation.id, 'send_now');
+        setIntroEmailSent(true);
+        showToast('Email captured — intro email sent. Have them check their inbox.');
+      } catch {
+        showToast('Email captured, but the intro email could not send right now — review it on the Email Outreach page.', 'error');
+      }
       setEmailCapturedDone(true);
       // Refresh the board behind the modal; the modal itself stays open so
       // the operator can finish the conversation.
@@ -1718,12 +1729,18 @@ export function OpenSalesCallModal({
             <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-amber-800"><Mail className="h-3.5 w-3.5" />Texts not landing?</div>
               {emailCapturedDone ? (
-                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
-                  <strong>Email captured.</strong> This lead is now in the Email Outreach queue and the intro email sends from there. Finish the call as normal — the outcome buttons still work.
-                </div>
+                introEmailSent ? (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
+                    <strong>Intro email sent.</strong> Have them check their inbox for the site link while you talk. Follow-ups continue from the Email Outreach queue. Finish the call as normal.
+                  </div>
+                ) : (
+                  <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] leading-4 text-rose-700">
+                    <strong>Email captured, but the intro email did not send.</strong> The lead is in the Email Outreach queue — open it there to review and send. You can finish the call as normal.
+                  </div>
+                )
               ) : (
                 <>
-                  <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email and switch this lead to email outreach. Either way you stay in this call.</p>
+                  <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email to send the site by email immediately. Either way you stay in this call.</p>
                   <button
                     type="button"
                     onClick={() => setShowResendComposer(true)}
@@ -1745,11 +1762,11 @@ export function OpenSalesCallModal({
                       disabled={capturingEmail || !recoverEmail.trim()}
                       className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
                     >
-                      {capturingEmail ? 'Switching…' : 'Switch to email'}
+                      {capturingEmail ? 'Sending…' : 'Capture & email the site'}
                     </button>
                   </div>
                   <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
-                    Capturing an email moves this lead to the Email Outreach queue and sends the intro email from there — engagement is then attributed to email, not text.
+                    Sends the intro email with the site link right away, and moves this lead to the Email Outreach queue for follow-ups — engagement is then attributed to email, not text.
                   </p>
                 </>
               )}
