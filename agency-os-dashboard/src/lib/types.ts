@@ -684,7 +684,15 @@ export interface ProspectCandidate {
 
 export interface ProspectInboxSummary {
   pending: number; newToday: number; approvedThisWeek: number; rejected: number;
-  lastRun: { id: number; status: string; industry: string; search_location: string; started_at: string; new_candidates: number; error_message: string | null } | null;
+  lastRun: {
+    id: number; status: string; trigger_type: 'scheduled' | 'manual'; industry: string; search_location: string;
+    started_at: string; results_found: number; new_candidates: number; refreshed_candidates: number;
+    skipped_existing: number; skipped_ineligible: number; error_message: string | null;
+  } | null;
+  schedule: {
+    enabled: boolean; localRunHour: number; timezone: string;
+    upcoming: Array<{ industry: string; location: string; date: string | null; weekday: string | null }>;
+  } | null;
 }
 
 export interface SettingsHealth {

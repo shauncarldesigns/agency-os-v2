@@ -9,6 +9,20 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Lead Finder: last-search stats + next scheduled search (dashboard)
+
+- **The Prospect inbox now shows a "Last search" panel** — a segmented
+  composition bar breaking down where every result went (new / refreshed /
+  already in pipeline / ineligible) with a "+N new candidates" or "nothing
+  new" headline, and the error message when a run failed. Answers "why did
+  the run add nothing?" without querying the database.
+- **A "Coming up" schedule lists the next 3 automated runs** (industry ·
+  location + day, next one highlighted) using the same rotation math as the
+  cron: completed scheduled runs modulo the industry×location combinations,
+  run days from the discovery settings in the operator's timezone.
+- `GET /api/prospect/inbox-summary` returns the full last-run stat columns
+  and a computed `schedule.upcoming` list.
+
 ### Pipeline UX: tracking-block card only for pre-brief sites + Email label
 
 - **The lead modal's "Confirmed visitor tracking" card now appears only for
