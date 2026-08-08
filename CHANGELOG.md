@@ -9,6 +9,13 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email capture call: call button moved to the modal header (dashboard)
+
+- **The "Open call" email-capture modal's call button now sits in the
+  header next to the record button** (matching the sales-call modal)
+  instead of a full-width footer bar, so the script and outcome buttons
+  get the full height of the modal.
+
 ### Lead Finder: last-search stats + next scheduled search (dashboard)
 
 - **The Prospect inbox now shows a "Last search" panel** — a segmented
