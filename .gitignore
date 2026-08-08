@@ -37,6 +37,6 @@ wrangler.local.toml
 # Local archives / unpacked spec drops
 files.zip
 
-# Agent-local config
-.claude/launch.json
-**/.claude/launch.json
+# .claude/launch.json is committed on purpose: it defines the in-session dev
+# servers (backend 8788, dashboard 5174) every Claude session runs for the
+# operator. No secrets belong in it.

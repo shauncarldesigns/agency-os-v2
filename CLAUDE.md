@@ -629,14 +629,47 @@ Soft signals layered on top:
   brief markdown mentions that aren't on the project. One-click "Add to matrix"
   patches `project.services` / `project.service_areas`.
 
+## Local development — Claude runs the stack in-session (added 2026-08-08)
+
+**The operator does NOT run dev servers themselves — Claude starts and owns
+them inside the session.** Never tell the operator to run `npm run dev` or
+`wrangler dev`; if a server is down, restart it. Build-local-first, then ship
+to prod via PR is the normal development loop.
+
+- Server definitions live in `.claude/launch.json` (committed; no secrets):
+  `backend` = `npx wrangler dev --local --port 8788` in `agency-os-backend`;
+  `dashboard` = Vite on **5174 with `--host 127.0.0.1`** in
+  `agency-os-dashboard`. The operator watches **http://127.0.0.1:5174** — the
+  explicit host flag matters because Vite otherwise binds only `::1` and that
+  URL refuses connections. Start both via the preview tools (never raw Bash).
+- **Worktree bootstrap** (session worktrees lack gitignored files). From the
+  main checkout (`/Users/shaungehrke/claude projects/agency-os-v2`), copy
+  `agency-os-backend/.dev.vars` and `agency-os-dashboard/.env.development.local`
+  into the worktree, run `npm ci` in both packages, and copy the local D1 state
+  (`agency-os-backend/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*`) so
+  the worktree DB has the full schema — migration files alone can't rebuild it
+  (the base schema predates them).
+- **Local D1 is the dev database.** Demo seeds under
+  `agency-os-backend/src/db/seeds/` are **LOCAL-ONLY** — never apply them
+  `--remote`. D1 execute quirks: no `BEGIN TRANSACTION`, and a low
+  compound-SELECT limit (build multi-row seed inserts with `json_each()`, not
+  `UNION ALL` chains).
+- Local auth comes from `.dev.vars` (`DASHBOARD_API_KEY`, `AUTH_MODE`
+  override); the dashboard's matching key is in `.env.development.local`.
+  Worker CORS allows only port 5174 + `DASHBOARD_ORIGIN` — override
+  `DASHBOARD_ORIGIN` in the worktree `.dev.vars` if serving another port.
+- Session servers die with the session. Anything the operator should keep
+  using must land on `main` (PR) so the next session can re-serve it.
+
 ## Verifying changes
 
-- Backend: `cd agency-os-backend && npx tsc --noEmit`. Live test by hitting the
-  Worker (auth header `X-API-Key` = dashboard's `VITE_API_KEY`); watch with
+- Backend: `cd agency-os-backend && npx tsc --noEmit`. Live test against the
+  in-session Worker on `127.0.0.1:8788` (auth header `X-API-Key` = the
+  `.dev.vars` `DASHBOARD_API_KEY`), or hit prod and watch with
   `npx wrangler tail`.
 - Dashboard: `cd agency-os-dashboard && npm run build` for type + bundle check.
-  No local API in development mode by default — point `VITE_API_URL` at the live
-  Worker via `.env.development.local`.
+  Visual verification happens against the in-session stack at
+  `127.0.0.1:5174` (see Local development above).
 
 ## Conventions
 

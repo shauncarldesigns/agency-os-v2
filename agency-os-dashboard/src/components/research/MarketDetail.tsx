@@ -86,12 +86,14 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
     }
   }
 
-  if (loading) return <div className="flex min-h-[300px] items-center justify-center text-sm text-slate-400">Loading market…</div>;
+  if (loading) return <div className="page-container flex min-h-[300px] items-center justify-center text-sm text-slate-400">Loading market…</div>;
   if (!detail) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-        <p className="text-sm text-slate-500">Market could not be loaded.</p>
-        <button onClick={onBack} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">Back to markets</button>
+      <div className="page-container">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-sm text-slate-500">Market could not be loaded.</p>
+          <button onClick={onBack} className="mt-3 text-sm font-semibold text-blue-600 hover:underline">Back to markets</button>
+        </div>
       </div>
     );
   }
@@ -100,34 +102,32 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
   const mapPackKeywords = Object.keys(mapPack);
 
   return (
-    <>
+    <div className="page-container">
       {running && <RunOverlay industry={market.industry} location={market.location_label} />}
 
-      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Back to markets"><ArrowLeft className="h-4 w-4" /></button>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight text-slate-950">{market.industry}</h1>
-              <p className="mt-0.5 flex items-center gap-1 text-sm text-slate-500">
-                <MapPin className="h-3.5 w-3.5" />{market.location_label}
-                {market.is_active === 0 && <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Paused</span>}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => void toggleActive()} disabled={toggling} title={market.is_active === 1 ? 'Pause — skip in batch runs and the monthly refresh' : 'Resume'} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-              {market.is_active === 1 ? <><Pause className="h-3.5 w-3.5" /> Pause</> : <><Play className="h-3.5 w-3.5" /> Resume</>}
-            </button>
-            <button onClick={() => void removeMarket()} title="Delete market" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={() => void run()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
-              {running ? <Spinner /> : <Play className="h-4 w-4" />} {running ? 'Researching…' : 'Run research'}
-            </button>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Back to markets"><ArrowLeft className="h-4 w-4" /></button>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{market.industry}</h2>
+            <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+              <MapPin className="h-3.5 w-3.5" />{market.location_label}
+              {market.is_active === 0 && <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Paused</span>}
+            </p>
           </div>
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button onClick={() => void toggleActive()} disabled={toggling} title={market.is_active === 1 ? 'Pause — skip in batch runs and the monthly refresh' : 'Resume'} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50">
+            {market.is_active === 1 ? <><Pause className="h-3.5 w-3.5" /> Pause</> : <><Play className="h-3.5 w-3.5" /> Resume</>}
+          </button>
+          <button onClick={() => void removeMarket()} title="Delete market" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-sm hover:bg-rose-50">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={() => void run()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
+            {running ? <Spinner /> : <Play className="h-4 w-4" />} {running ? 'Researching…' : 'Run research'}
+          </button>
+        </div>
+      </div>
 
       {keywords.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
@@ -243,7 +243,7 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-06. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-08. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,23 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## In-session local dev + Research polish (2026-08-08)
+
+- **Development model changed:** Claude sessions run the dev stack (backend
+  8788, dashboard 127.0.0.1:5174) via the committed `.claude/launch.json`;
+  the operator only opens the browser. Bootstrap + local→prod loop documented
+  in CLAUDE.md "Local development". Session servers die with the session —
+  restart them on request.
+- Research page + market detail refit to the `page-container` standard.
+- Local-only demo seed for the Research page:
+  `agency-os-backend/src/db/seeds/market-research-demo.sql` (three fictional
+  markets; sentinel geo ids `999000x`; rerunnable). Was briefly applied to
+  prod by mistake and fully removed the same day — prod has only the two real
+  Green Bay markets.
+- Google Ads token still awaiting Basic Access — real research runs fail with
+  DEVELOPER_TOKEN_NOT_APPROVED; the demo seed exists so the UI is reviewable
+  meanwhile.
 
 ## Market Research Phase 1 (2026-08-06, PR pending at snapshot)
 
