@@ -26,14 +26,17 @@ function timeLabel(value?: string | null) {
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-// `date` is YYYY-MM-DD in the operator's timezone; parse parts directly so the
+// Dates are YYYY-MM-DD in the operator's timezone; parse parts directly so the
 // browser's timezone can't shift the calendar day.
-function nextRunLabel(next: NonNullable<ProspectInboxSummary['nextScheduled']>) {
-  if (!next.date) return 'No run day scheduled';
-  const [year, month, day] = next.date.split('-').map(Number);
-  const dayLabel = new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const hour12 = ((next.localRunHour + 11) % 12) + 1;
-  return `${dayLabel} at ${hour12}:00 ${next.localRunHour < 12 ? 'AM' : 'PM'}`;
+function runDateLabel(date: string | null) {
+  if (!date) return 'Unscheduled';
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function runHourLabel(localRunHour: number) {
+  const hour12 = ((localRunHour + 11) % 12) + 1;
+  return `${hour12}:00 ${localRunHour < 12 ? 'AM' : 'PM'}`;
 }
 
 export function CandidateInbox({
@@ -79,51 +82,87 @@ export function CandidateInbox({
           ))}
         </div>
 
-        <div className="mt-3 grid gap-2 sm:gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><SearchCheck size={13} /> Last search</div>
-            {summary?.lastRun ? (
+        <div className="mt-3 grid overflow-hidden rounded-xl border border-slate-200 bg-white lg:grid-cols-[1.4fr_1fr]">
+          <div className="p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><SearchCheck size={13} /> Last search</div>
+              {summary?.lastRun && (
+                <span className="text-xs text-slate-500">
+                  {timeLabel(summary.lastRun.started_at)} · {summary.lastRun.trigger_type === 'scheduled' ? 'automatic' : 'manual'}
+                </span>
+              )}
+            </div>
+            {!summary?.lastRun ? (
+              <p className="mt-3 text-sm text-slate-500">No searches yet — run discovery or wait for the schedule.</p>
+            ) : (
               <>
-                <div className="mt-1 text-sm font-semibold text-slate-900">
-                  {summary.lastRun.industry} · {summary.lastRun.search_location}
-                  <span className="ml-2 font-normal text-slate-500">{timeLabel(summary.lastRun.started_at)} · {summary.lastRun.trigger_type === 'scheduled' ? 'auto' : 'manual'}</span>
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="text-sm font-semibold text-slate-900">{summary.lastRun.industry} · {summary.lastRun.search_location}</span>
+                  {summary.lastRun.status !== 'failed' && (
+                    <span className={`text-sm font-bold ${summary.lastRun.new_candidates > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                      {summary.lastRun.new_candidates > 0 ? `+${summary.lastRun.new_candidates} new candidate${summary.lastRun.new_candidates === 1 ? '' : 's'}` : 'nothing new'}
+                    </span>
+                  )}
                 </div>
                 {summary.lastRun.status === 'failed' ? (
-                  <p className="mt-2 text-xs font-medium text-rose-600">Failed: {summary.lastRun.error_message ?? 'unknown error'}</p>
+                  <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">Run failed: {summary.lastRun.error_message ?? 'unknown error'}</p>
                 ) : (
-                  <dl className="mt-2 divide-y divide-slate-200/70 text-xs">
-                    {[
-                      { label: 'Results found', value: summary.lastRun.results_found },
-                      { label: 'Already in your leads', value: summary.lastRun.skipped_existing },
-                      { label: 'Ineligible (has website / no phone / closed)', value: summary.lastRun.skipped_ineligible },
-                      { label: 'Refreshed existing candidates', value: summary.lastRun.refreshed_candidates },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex items-center justify-between py-1">
-                        <dt className="text-slate-500">{label}</dt>
-                        <dd className="font-semibold tabular-nums text-slate-700">{value}</dd>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between py-1">
-                      <dt className="font-semibold text-slate-800">New candidates</dt>
-                      <dd className={`font-bold tabular-nums ${summary.lastRun.new_candidates > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>{summary.lastRun.new_candidates}</dd>
-                    </div>
-                  </dl>
+                  (() => {
+                    const run = summary.lastRun;
+                    const accounted = run.new_candidates + run.refreshed_candidates + run.skipped_existing + run.skipped_ineligible;
+                    const total = Math.max(run.results_found, accounted);
+                    const segments = [
+                      { label: 'New', value: run.new_candidates, dot: 'bg-emerald-500' },
+                      { label: 'Refreshed', value: run.refreshed_candidates, dot: 'bg-blue-500' },
+                      { label: 'Already in pipeline', value: run.skipped_existing, dot: 'bg-amber-400' },
+                      { label: 'Ineligible — has website, no phone, or closed', value: run.skipped_ineligible, dot: 'bg-slate-300' },
+                      { label: 'Not processed', value: total - accounted, dot: 'bg-slate-100' },
+                    ].filter((segment) => segment.value > 0);
+                    return total === 0 ? (
+                      <p className="mt-3 text-xs text-slate-500">Google returned no businesses for this search.</p>
+                    ) : (
+                      <>
+                        <div className="mt-3 flex h-2.5 w-full gap-px overflow-hidden rounded-full bg-slate-100">
+                          {segments.map((segment) => (
+                            <div key={segment.label} className={segment.dot} style={{ width: `${(segment.value / total) * 100}%` }} title={`${segment.label}: ${segment.value}`} />
+                          ))}
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+                          <span className="font-semibold text-slate-700">{total} found</span>
+                          {segments.map((segment) => (
+                            <span key={segment.label} className="inline-flex items-center gap-1.5">
+                              <span className={`h-2 w-2 rounded-full ${segment.dot}`} />
+                              {segment.label} <span className="font-semibold tabular-nums text-slate-700">{segment.value}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()
                 )}
               </>
-            ) : (
-              <p className="mt-1 text-sm text-slate-500">Not run yet</p>
             )}
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><CalendarClock size={13} /> Next scheduled search</div>
-            {summary?.nextScheduled?.enabled && summary.nextScheduled.industry ? (
-              <>
-                <div className="mt-1 text-sm font-semibold text-slate-900">{summary.nextScheduled.industry} · {summary.nextScheduled.location}</div>
-                <p className="mt-2 text-xs text-slate-500">{nextRunLabel(summary.nextScheduled)}</p>
-              </>
+          <div className="border-t border-slate-200 bg-slate-50/60 p-4 lg:border-l lg:border-t-0">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><CalendarClock size={13} /> Coming up</div>
+              {summary?.schedule?.enabled && summary.schedule.upcoming.some((run) => run.date) && (
+                <span className="text-xs text-slate-500">at {runHourLabel(summary.schedule.localRunHour)}</span>
+              )}
+            </div>
+            {summary?.schedule?.enabled && summary.schedule.upcoming.length ? (
+              <ul className="mt-2.5 space-y-2">
+                {summary.schedule.upcoming.map((run, index) => (
+                  <li key={`${run.industry}-${run.location}-${index}`} className="flex items-center gap-2.5">
+                    <span className={`w-24 shrink-0 text-xs font-semibold ${index === 0 ? 'text-blue-600' : 'text-slate-500'}`}>{runDateLabel(run.date)}</span>
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${index === 0 ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                    <span className={`truncate text-xs ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{run.industry} · {run.location}</span>
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <p className="mt-1 text-sm text-slate-500">
-                {summary?.nextScheduled && !summary.nextScheduled.enabled ? 'Schedule disabled — enable it in Settings' : 'No industries or locations configured'}
+              <p className="mt-3 text-sm text-slate-500">
+                {summary?.schedule && !summary.schedule.enabled ? 'Automatic discovery is off — enable it in Settings.' : 'No industries or locations configured.'}
               </p>
             )}
           </div>

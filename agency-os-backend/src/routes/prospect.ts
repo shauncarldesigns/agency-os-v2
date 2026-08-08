@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, serverError, log } from '../utils/errors';
 import { searchPlaces, getPlaceDetails, type PlaceResult } from '../services/places';
-import { approveCandidates, discoverCandidates, previewNextScheduledSearch, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
+import { approveCandidates, discoverCandidates, previewDiscoverySchedule, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
 import { readSettings } from './settings';
 
 export const prospectRouter = new Hono<{ Bindings: Env }>();
@@ -103,7 +103,7 @@ prospectRouter.get('/inbox-summary', async (c) => {
       pending: Number(row.pending ?? 0), newToday: Number(row.newToday ?? 0),
       approvedThisWeek: Number(row.approvedThisWeek ?? 0), rejected: Number(row.rejected ?? 0),
       lastRun: lastRun.results[0] ?? null,
-      nextScheduled: previewNextScheduledSearch(discovery, timezone, completed),
+      schedule: previewDiscoverySchedule(discovery, timezone, completed),
     });
   } catch (err) {
     log('error', 'prospect', 'GET /prospect/inbox-summary failed', err);

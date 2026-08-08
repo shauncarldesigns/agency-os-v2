@@ -247,50 +247,61 @@ export function discoveryCombinations(discovery: DiscoverySettings): Array<{ ind
   return discovery.industries.flatMap((industry) => discovery.locations.map((location) => ({ industry, location })));
 }
 
-export interface NextScheduledSearch {
-  enabled: boolean;
-  industry: string | null;
-  location: string | null;
+export interface UpcomingScheduledSearch {
+  industry: string;
+  location: string;
   date: string | null; // YYYY-MM-DD in the operator's timezone
   weekday: string | null;
+}
+
+export interface DiscoverySchedulePreview {
+  enabled: boolean;
   localRunHour: number;
   timezone: string;
+  upcoming: UpcomingScheduledSearch[];
 }
 
 // Mirrors the cron's selection math (completed scheduled runs % combinations)
-// so the UI shows exactly what the next run will search and when.
-export function previewNextScheduledSearch(
+// so the UI shows exactly what the next runs will search and when. Later
+// entries assume each earlier run completes — a failed run repeats its combo.
+export function previewDiscoverySchedule(
   discovery: DiscoverySettings,
   timezone: string,
   completedScheduledRuns: number,
+  count = 3,
   now: number = Date.now(),
-): NextScheduledSearch {
-  const base: NextScheduledSearch = {
-    enabled: discovery.enabled, industry: null, location: null,
-    date: null, weekday: null, localRunHour: discovery.localRunHour, timezone,
+): DiscoverySchedulePreview {
+  const preview: DiscoverySchedulePreview = {
+    enabled: discovery.enabled, localRunHour: discovery.localRunHour, timezone, upcoming: [],
   };
-  if (!discovery.enabled) return base;
+  if (!discovery.enabled) return preview;
   const combinations = discoveryCombinations(discovery);
-  if (!combinations.length) return base;
-  const selected = combinations[completedScheduledRuns % combinations.length];
-  base.industry = selected.industry;
-  base.location = selected.location;
-  for (let offset = 0; offset <= 7; offset++) {
-    const candidate = new Date(now + offset * 86_400_000);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone, weekday: 'long', hour: 'numeric', hourCycle: 'h23',
-    }).formatToParts(candidate);
-    const weekday = parts.find((part) => part.type === 'weekday')?.value.toLowerCase() ?? '';
-    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? -1);
-    if (!discovery.runDays.includes(weekday)) continue;
-    if (offset === 0 && hour >= discovery.localRunHour) continue;
-    base.weekday = weekday;
-    base.date = new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(candidate);
-    break;
+  if (!combinations.length) return preview;
+
+  const runDates: Array<{ date: string; weekday: string }> = [];
+  if (discovery.runDays.length) {
+    for (let offset = 0; offset <= 28 && runDates.length < count; offset++) {
+      const candidate = new Date(now + offset * 86_400_000);
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone, weekday: 'long', hour: 'numeric', hourCycle: 'h23',
+      }).formatToParts(candidate);
+      const weekday = parts.find((part) => part.type === 'weekday')?.value.toLowerCase() ?? '';
+      const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? -1);
+      if (!discovery.runDays.includes(weekday)) continue;
+      if (offset === 0 && hour >= discovery.localRunHour) continue;
+      runDates.push({
+        date: new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(candidate),
+        weekday,
+      });
+    }
   }
-  return base;
+  for (let i = 0; i < count; i++) {
+    const combo = combinations[(completedScheduledRuns + i) % combinations.length];
+    preview.upcoming.push({ ...combo, date: runDates[i]?.date ?? null, weekday: runDates[i]?.weekday ?? null });
+  }
+  return preview;
 }
 
 export async function runScheduledDiscovery(env: Env, scheduledTime: number): Promise<DiscoveryRunResult> {

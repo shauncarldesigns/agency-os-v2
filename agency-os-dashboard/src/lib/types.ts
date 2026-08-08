@@ -689,9 +689,9 @@ export interface ProspectInboxSummary {
     started_at: string; results_found: number; new_candidates: number; refreshed_candidates: number;
     skipped_existing: number; skipped_ineligible: number; error_message: string | null;
   } | null;
-  nextScheduled: {
-    enabled: boolean; industry: string | null; location: string | null;
-    date: string | null; weekday: string | null; localRunHour: number; timezone: string;
+  schedule: {
+    enabled: boolean; localRunHour: number; timezone: string;
+    upcoming: Array<{ industry: string; location: string; date: string | null; weekday: string | null }>;
   } | null;
 }
 
