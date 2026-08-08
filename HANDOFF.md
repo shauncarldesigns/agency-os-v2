@@ -15,6 +15,26 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Outreach visibility + UI fixes (2026-08-08 evening, PRs #226–#228, all deployed)
+
+- **Discovery cron debugged — nothing was broken.** Friday's (Aug 7) scheduled
+  run completed: 50 results, all already-known/ineligible, 0 new (the first
+  rotation combo duplicated the Aug 3 manual Plumbing/Green Bay search;
+  manual runs don't advance the rotation cursor). Next runs advance through
+  the 10-combo cycle Mon/Wed/Fri 8am.
+- **PR #226:** Lead Finder Prospect inbox shows a Last search panel
+  (composition bar: new/refreshed/already-in-pipeline/ineligible) and a
+  Coming up list of the next 3 scheduled runs (`schedule.upcoming` on
+  `GET /api/prospect/inbox-summary`, same rotation math as the cron).
+- **PR #227:** email-capture call modal's call button moved to the header
+  (matches sales-call modal); footer bar removed.
+- **PR #228:** Text Outreach board gained a derived "No engagement — last
+  chance" column + "Last chance — call" grid pill for sent_no_reply leads
+  with `noReplyStep >= 2`. Frontend-only; `pipeline_status` untouched.
+- Research page markets still have `last_researched_at = NULL` — monthly
+  refresh won't fire until Sept 1; run manually if data is wanted sooner
+  (blocked on Google Ads Basic Access anyway, see below).
+
 ## In-session local dev + Research polish (2026-08-08)
 
 - **Development model changed:** Claude sessions run the dev stack (backend
