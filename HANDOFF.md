@@ -15,7 +15,15 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
-## Outreach visibility + UI fixes (2026-08-08 evening, PRs #226–#228, all deployed)
+## Outreach visibility + UI fixes (2026-08-08 evening, PRs #226–#229, all deployed)
+
+- **PR #229:** last-chance call modal gained (a) a mid-call pivot into the
+  warm sales script with a trimmed "Get their reaction" opening, and (b) a
+  "Texts not landing?" channel recovery: resend the tracked link (nested
+  composer — the call modal stays open) or capture an email mid-call, which
+  schedules the email automation, flips `phone_route` to `call` (lead moves
+  to the Email Outreach queue), and shifts attribution to email via the
+  derived channel logic. No backend changes.
 
 - **Discovery cron debugged — nothing was broken.** Friday's (Aug 7) scheduled
   run completed: 50 results, all already-known/ineligible, 0 new (the first
