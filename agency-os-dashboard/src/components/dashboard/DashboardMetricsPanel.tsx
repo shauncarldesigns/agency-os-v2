@@ -112,7 +112,7 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
       <NeedsActionSection
         leads={data.needsAction}
         onOpenText={() => onSwitchTab?.('automated-pipeline')}
-        onOpenCall={() => onSwitchTab?.('email-outreach')}
+        onOpenEmail={() => onSwitchTab?.('email-outreach')}
       />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -199,15 +199,18 @@ export function DashboardMetricsPanel({ showToast, onSwitchTab }: DashboardMetri
 function NeedsActionSection({
   leads,
   onOpenText,
-  onOpenCall,
+  onOpenEmail,
 }: {
   leads: PipelineHotLead[];
   onOpenText: () => void;
-  onOpenCall: () => void;
+  onOpenEmail: () => void;
 }) {
   const visibleLeads = leads.slice(0, 4);
   const textCount = leads.filter((lead) => lead.outreach_channel === 'text').length;
-  const callCount = leads.filter((lead) => lead.outreach_channel === 'call').length;
+  // outreach_channel 'call' marks leads that came through the email motion
+  // (see the CASE in routes/dashboard.ts) — the follow-up lives on the
+  // Email Outreach page, so the button is labeled Email.
+  const emailCount = leads.filter((lead) => lead.outreach_channel === 'call').length;
   return (
     <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60">
       <div className="mb-2.5 flex items-center justify-between gap-3">
@@ -225,12 +228,12 @@ function NeedsActionSection({
               Text {textCount} <ArrowUpRight className="h-3.5 w-3.5" />
             </button>
           )}
-          {callCount > 0 && (
+          {emailCount > 0 && (
             <button
-              onClick={onOpenCall}
+              onClick={onOpenEmail}
               className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100"
             >
-              Call {callCount} <ArrowUpRight className="h-3.5 w-3.5" />
+              Email {emailCount} <ArrowUpRight className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

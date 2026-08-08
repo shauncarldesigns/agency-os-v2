@@ -9,6 +9,17 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Pipeline UX: tracking-block card only for pre-brief sites + Email label
+
+- **The lead modal's "Confirmed visitor tracking" card now appears only for
+  sites whose cached brief predates the brief-embedded tracking snippet**
+  (detected by the `outreach_token` confirmation code in `pipeline_brief`).
+  Sites built from current briefs already carry the block, so the card was a
+  duplicate instruction; its copy now says it's a retrofit for older sites.
+- **Dashboard "Needs action" header relabels "Call N" to "Email N"** — the
+  button routes to the Email Outreach page and counts email-motion leads, so
+  the Call label was misleading. Dashboard deploy needed.
+
 ### Research page design-system compliance + in-session local dev
 
 - **Research page and market detail now follow the app's page skeleton** —
