@@ -1395,7 +1395,7 @@ export function OpenSalesCallModal({
   onCallOutcome,
   onMoveToClients,
   onNotInterested,
-  onResendText,
+  onFollowUpSent,
   onEmailCaptured,
   showToast,
 }: {
@@ -1407,7 +1407,7 @@ export function OpenSalesCallModal({
   // Channel-recovery hooks — provided only by the Text Outreach page, where
   // "the texts never landed" is a real failure mode. The email-outreach page
   // reuses this modal and omits them, which hides the recovery section.
-  onResendText?: (lead: PipelineLead) => void;
+  onFollowUpSent?: (leadId: number, messageBody: string) => Promise<void>;
   onEmailCaptured?: () => void;
   showToast: ShowToast;
 }) {
@@ -1431,9 +1431,13 @@ export function OpenSalesCallModal({
   const isWarm = warmOverride || (lead.status === 'engaged' && lead.sessions > 0);
   // Channel recovery: the texts may never have landed (wrong line type,
   // unread inbox). The operator can resend the tracked link or capture an
-  // email and hand the lead to the email-outreach motion mid-call.
+  // email and hand the lead to the email-outreach motion mid-call. Both
+  // paths keep THIS modal open — the operator is mid-conversation and must
+  // not lose the lead they're selling.
   const [recoverEmail, setRecoverEmail] = useState('');
   const [capturingEmail, setCapturingEmail] = useState(false);
+  const [emailCapturedDone, setEmailCapturedDone] = useState(false);
+  const [showResendComposer, setShowResendComposer] = useState(false);
 
   const captureEmailAndSwitch = async () => {
     const nextEmail = recoverEmail.trim();
@@ -1456,7 +1460,10 @@ export function OpenSalesCallModal({
       // Texting demonstrably didn't reach them — route the phone to the call
       // motion so the lead leaves the Text Outreach queue for good.
       await api.leads.updatePhoneRoute(lead.id, 'call');
-      showToast('Email captured — moved to Email Outreach; the intro email sends from that queue');
+      showToast('Email captured — the intro email sends from the Email Outreach queue');
+      setEmailCapturedDone(true);
+      // Refresh the board behind the modal; the modal itself stays open so
+      // the operator can finish the conversation.
       onEmailCaptured?.();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -1707,37 +1714,45 @@ export function OpenSalesCallModal({
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="What they liked, changes requested, timing, concerns…" className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
           </div>
 
-          {lead.status === 'sent_no_reply' && onResendText && onEmailCaptured && (
+          {lead.status === 'sent_no_reply' && onFollowUpSent && onEmailCaptured && (
             <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-amber-800"><Mail className="h-3.5 w-3.5" />Texts not landing?</div>
-              <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email and switch this lead to email outreach.</p>
-              <button
-                type="button"
-                onClick={() => onResendText(lead)}
-                className="mt-2.5 w-full rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-amber-800 transition hover:bg-amber-100"
-              >
-                Resend the site link by text
-              </button>
-              <div className="mt-2 flex gap-1.5">
-                <input
-                  type="email"
-                  value={recoverEmail}
-                  onChange={(event) => setRecoverEmail(event.target.value)}
-                  placeholder="owner@business.com"
-                  className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                />
-                <button
-                  type="button"
-                  onClick={() => void captureEmailAndSwitch()}
-                  disabled={capturingEmail || !recoverEmail.trim()}
-                  className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {capturingEmail ? 'Switching…' : 'Switch to email'}
-                </button>
-              </div>
-              <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
-                Capturing an email moves this lead to the Email Outreach queue and sends the intro email from there — engagement is then attributed to email, not text.
-              </p>
+              {emailCapturedDone ? (
+                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
+                  <strong>Email captured.</strong> This lead is now in the Email Outreach queue and the intro email sends from there. Finish the call as normal — the outcome buttons still work.
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email and switch this lead to email outreach. Either way you stay in this call.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowResendComposer(true)}
+                    className="mt-2.5 w-full rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-amber-800 transition hover:bg-amber-100"
+                  >
+                    Resend the site link by text
+                  </button>
+                  <div className="mt-2 flex gap-1.5">
+                    <input
+                      type="email"
+                      value={recoverEmail}
+                      onChange={(event) => setRecoverEmail(event.target.value)}
+                      placeholder="owner@business.com"
+                      className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void captureEmailAndSwitch()}
+                      disabled={capturingEmail || !recoverEmail.trim()}
+                      className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {capturingEmail ? 'Switching…' : 'Switch to email'}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
+                    Capturing an email moves this lead to the Email Outreach queue and sends the intro email from there — engagement is then attributed to email, not text.
+                  </p>
+                </>
+              )}
             </section>
           )}
 
@@ -1768,6 +1783,18 @@ export function OpenSalesCallModal({
           </section>
         </aside>
       </div>
+      {/* Nested resend composer — overlays the call modal instead of
+          replacing it, so closing it returns to the call in progress. */}
+      {showResendComposer && onFollowUpSent && (
+        <FollowUpModal
+          lead={lead}
+          onClose={() => setShowResendComposer(false)}
+          onSent={async (leadId, messageBody) => {
+            await onFollowUpSent(leadId, messageBody);
+            setShowResendComposer(false);
+          }}
+        />
+      )}
     </ModalShell>
   );
 }
@@ -2469,11 +2496,8 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           onCallOutcome={recordCallOutcome}
           onMoveToClients={moveToClients}
           onNotInterested={archiveNotInterested}
-          onResendText={(lead) => setModal({ type: 'followup', lead })}
-          onEmailCaptured={() => {
-            setModal(null);
-            void loadLeads();
-          }}
+          onFollowUpSent={markFollowedUp}
+          onEmailCaptured={() => void loadLeads()}
           showToast={showToast}
         />
       )}
