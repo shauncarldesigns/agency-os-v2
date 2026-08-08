@@ -9,6 +9,28 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Last-chance call: channel recovery — resend text or switch to email (dashboard)
+
+- **The last-chance call modal gains a "Texts not landing?" section** for
+  sent_no_reply leads: resend the tracked site link by text (opens the
+  follow-up composer), or capture an email mid-call and switch the lead to
+  the email-outreach motion. Email capture reuses the canonical shape
+  (email + ready_to_send + Email Captured → backend schedules the email
+  automation, intro email sends from the Email Outreach queue) and flips
+  `phone_route` to `call`, so the lead leaves the Text Outreach queue and
+  **all engagement from then on attributes to email, not text** (channel is
+  derived from the email automation/send rows).
+
+### Last-chance call: mid-call pivot into the warm sales script (dashboard)
+
+- **The last-attempt call modal gains a "They're interested — open the sales
+  script" button** that switches into the warm-lead sales script mid-call.
+  The opening stage swaps to a trimmed "Get their reaction" version (the
+  intro already happened on this call); every later stage, the objection
+  responses, and the plan/close flow are the standard warm script. UI-only
+  pivot — lead status still changes via the tracked link or the recorded
+  outcome.
+
 ### Text Outreach: "No engagement — last chance" board column (dashboard)
 
 - **Sent — no reply leads whose text sequence is exhausted now split into
