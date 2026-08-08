@@ -694,6 +694,16 @@ function CallOutreachModal({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {lead.phone ? (
+              <a
+                href={`tel:${lead.phone}`}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+              >
+                <PhoneCall className="h-3.5 w-3.5" /> Call {lead.phone}
+              </a>
+            ) : (
+              <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400">No phone number</span>
+            )}
             <RecordButton
               leadId={lead.id}
               showToast={showToast}
@@ -835,25 +845,6 @@ function CallOutreachModal({
           </section>}
         </div>
 
-        <footer className="border-t border-slate-100 px-5 py-4">
-          {lead.phone ? (
-            <a
-              href={`tel:${lead.phone}`}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20"
-            >
-              <PhoneCall className="h-4 w-4" />
-              Call {lead.phone}
-            </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="w-full rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-400"
-            >
-              No phone number available
-            </button>
-          )}
-        </footer>
       </div>
     </div>
   );
