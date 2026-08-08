@@ -1370,6 +1370,17 @@ type CallOutcome =
 
 export type SelectedPlan = 'Build & Maintain' | 'Growth';
 
+// Adapted opening for the mid-call pivot from the last-chance script: the
+// intro and "did you get a chance to look" have already happened on this
+// call, so the stage keeps only the reaction questions.
+const OVERRIDE_OPENING_BODY = `“Perfect — while I’ve got you, what stood out to you when you looked at it?”
+
+“What would you want changed or added if it were actually going to become your website?”
+
+“Absolutely. What I sent was really just a starting point based on what I could find online. We would customize all of that around your business.”`;
+
+const OVERRIDE_OPENING_NOTE = 'They already heard the intro on this call — skip straight to their reaction. If they have not opened the site yet, text them the link and let them pull it up while you talk.';
+
 const WARM_CALL_RESPONSES = [
   { label: 'They only need a website', body: 'That sounds like the Build & Maintain plan. Let’s focus on making the business look credible and giving you a site I can keep updated for you.' },
   { label: 'They want more clients', body: 'That sounds more like Growth. The website is the foundation, and the monthly work is what keeps improving how often the business gets found.' },
@@ -1405,7 +1416,11 @@ export function OpenSalesCallModal({
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
   const isLastChanceCall = progress?.action === 'call' || noReplyProgress?.action === 'call';
-  const isWarm = lead.status === 'engaged' && lead.sessions > 0;
+  // Mid-call pivot: a last-chance lead can turn interested on the phone. The
+  // override opens the warm sales script UI without touching lead status —
+  // status still flips via the tracked link or the close-out outcome.
+  const [warmOverride, setWarmOverride] = useState(false);
+  const isWarm = warmOverride || (lead.status === 'engaged' && lead.sessions > 0);
 
   useEffect(() => {
     let active = true;
@@ -1470,7 +1485,12 @@ export function OpenSalesCallModal({
   const primaryDecisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-left text-xs font-semibold leading-5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 
   const renderStageActions = () => {
-    if (!isWarm || !activeStage) return null;
+    if (!isWarm) return (
+      <button type="button" onClick={() => setWarmOverride(true)} className={primaryDecisionClass}>
+        They’re interested — open the sales script <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    );
+    if (!activeStage) return null;
     if (activeStage.id === 'opening') return (
       <>
         <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They have not looked yet — follow up later</button>
@@ -1552,13 +1572,15 @@ export function OpenSalesCallModal({
           <div ref={scriptTopRef} />
           <div className={`mb-5 rounded-xl border px-3 py-2.5 text-xs ${isWarm ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-100 bg-rose-50 text-rose-700'}`}>
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{isWarm ? (lead.engagementScore >= 90 ? 'Call now' : 'Ready for sales call') : 'Final call attempt'}</span>
+              <span className="font-semibold">{warmOverride ? 'Interested on the call' : isWarm ? (lead.engagementScore >= 90 ? 'Call now' : 'Ready for sales call') : 'Final call attempt'}</span>
               <span>{lead.sessions} session{lead.sessions === 1 ? '' : 's'} · score {lead.engagementScore}</span>
             </div>
             <p className="mt-1 opacity-80">
-              {isWarm
-                ? 'Use their reaction to the site to identify the right plan, then move directly into closing steps.'
-                : 'The outreach sequence is complete. Record this call before the lead can leave the active workflow.'}
+              {warmOverride
+                ? 'They showed interest during the last-chance call. Work the plan conversation and close.'
+                : isWarm
+                  ? 'Use their reaction to the site to identify the right plan, then move directly into closing steps.'
+                  : 'The outreach sequence is complete. Record this call before the lead can leave the active workflow.'}
             </p>
           </div>
 
@@ -1566,26 +1588,35 @@ export function OpenSalesCallModal({
             <>
               {scriptError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{scriptError}</div>}
               {!script && !scriptError && <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>}
-              {activeStage && (
-                <section>
-                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call</p>
-                      <h3 className="mt-1 text-xl font-semibold text-slate-900">{activeStage.label}</h3>
+              {activeStage && (() => {
+                // Mid-call pivot: the intro already happened via the
+                // last-chance opener, so the opening stage swaps to the
+                // trimmed reaction-only version.
+                const overrideOpening = warmOverride && activeStage.id === 'opening';
+                const stageLabel = overrideOpening ? 'GET THEIR REACTION' : activeStage.label;
+                const stageBody = overrideOpening ? OVERRIDE_OPENING_BODY : activeStage.body;
+                const stageNote = overrideOpening ? OVERRIDE_OPENING_NOTE : activeStage.note;
+                return (
+                  <section>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call{overrideOpening ? ' · continued from last-chance opener' : ''}</p>
+                        <h3 className="mt-1 text-xl font-semibold text-slate-900">{stageLabel}</h3>
+                      </div>
+                      {selectedPlan && <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">{selectedPlan}</span>}
                     </div>
-                    {selectedPlan && <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">{selectedPlan}</span>}
-                  </div>
-                  <div className="border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
-                    {interpolate(activeStage.body, {
-                      company: lead.name,
-                      contact_name: lead.ownerFirst,
-                      city: lead.city,
-                      trade: lead.category,
-                    }).split(/\n{2,}/).map((paragraph) => <p key={paragraph} className="mb-4 last:mb-0">{paragraph}</p>)}
-                  </div>
-                  {activeStage.note && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">{activeStage.note}</div>}
-                </section>
-              )}
+                    <div className="border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+                      {interpolate(stageBody, {
+                        company: lead.name,
+                        contact_name: lead.ownerFirst,
+                        city: lead.city,
+                        trade: lead.category,
+                      }).split(/\n{2,}/).map((paragraph) => <p key={paragraph} className="mb-4 last:mb-0">{paragraph}</p>)}
+                    </div>
+                    {stageNote && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">{stageNote}</div>}
+                  </section>
+                );
+              })()}
             </>
           ) : (
             <section>
@@ -1595,7 +1626,7 @@ export function OpenSalesCallModal({
                 <p>“Hey {lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for {lead.name} before I close this out.”</p>
                 <p className="mt-4">“Did you get a chance to take a look, and is it worth having a quick conversation about?”</p>
               </div>
-              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, continue into the warm sales conversation. If they are not interested or do not answer, record that outcome below.</div>
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, use <strong>“They’re interested — open the sales script”</strong> below to continue into the warm sales conversation. If they are not interested or do not answer, record that outcome in the sidebar.</div>
             </section>
           )}
         </div>

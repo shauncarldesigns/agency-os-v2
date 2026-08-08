@@ -9,6 +9,16 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Last-chance call: mid-call pivot into the warm sales script (dashboard)
+
+- **The last-attempt call modal gains a "They're interested — open the sales
+  script" button** that switches into the warm-lead sales script mid-call.
+  The opening stage swaps to a trimmed "Get their reaction" version (the
+  intro already happened on this call); every later stage, the objection
+  responses, and the plan/close flow are the standard warm script. UI-only
+  pivot — lead status still changes via the tracked link or the recorded
+  outcome.
+
 ### Text Outreach: "No engagement — last chance" board column (dashboard)
 
 - **Sent — no reply leads whose text sequence is exhausted now split into
