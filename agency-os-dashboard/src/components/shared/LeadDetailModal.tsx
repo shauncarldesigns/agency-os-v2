@@ -1159,6 +1159,12 @@ function ActivityPane({
     }
   };
 
+  // Briefs generated since PR #196 embed the full tracking snippet (identified
+  // by its outreach_token confirmation code), so those sites get the block at
+  // build time and the retrofit card would be a duplicate instruction. Only
+  // older sites — built from briefs that predate the embedded block — need it.
+  const briefLacksTrackingBlock = !(lead.pipeline_brief ?? '').includes('outreach_token');
+
   // The last-action + sessions summary lives in the modal footer's Activity
   // card (always visible in pipeline context) — this tab is the trail.
   const reasons = parseList<string>(lead.engagement_reasons);
@@ -1172,12 +1178,13 @@ function ActivityPane({
   });
   return (
     <div className="space-y-4">
-      {lead.site_url && (
+      {lead.site_url && briefLacksTrackingBlock && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
           <div>
             <p className="text-sm font-semibold text-slate-800">Confirmed visitor tracking</p>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">
-              Paste this updated block into the site header to screen bots and confirm real visits.
+              This site predates the brief-embedded tracking block. Paste this updated block into
+              the site header to screen bots and confirm real visits.
             </p>
           </div>
           <button
