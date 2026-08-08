@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, serverError, log } from '../utils/errors';
 import { searchPlaces, getPlaceDetails, type PlaceResult } from '../services/places';
-import { approveCandidates, discoverCandidates, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
+import { approveCandidates, discoverCandidates, previewNextScheduledSearch, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
 import { readSettings } from './settings';
 
 export const prospectRouter = new Hono<{ Bindings: Env }>();
@@ -82,21 +82,28 @@ prospectRouter.get('/candidates', async (c) => {
 
 prospectRouter.get('/inbox-summary', async (c) => {
   try {
-    const [counts, lastRun] = await c.env.DB.batch([
+    const [counts, lastRun, scheduledCompleted] = await c.env.DB.batch([
       c.env.DB.prepare(`SELECT
         SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN status='pending' AND date(first_seen_at)=date('now') THEN 1 ELSE 0 END) AS newToday,
         SUM(CASE WHEN status='approved' AND approved_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS approvedThisWeek,
         SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejected
         FROM prospect_candidates`),
-      c.env.DB.prepare(`SELECT id, status, industry, search_location, started_at, new_candidates, error_message
+      c.env.DB.prepare(`SELECT id, status, trigger_type, industry, search_location, started_at,
+        results_found, new_candidates, refreshed_candidates, skipped_existing, skipped_ineligible, error_message
         FROM prospect_search_runs ORDER BY started_at DESC LIMIT 1`),
+      c.env.DB.prepare("SELECT COUNT(*) AS n FROM prospect_search_runs WHERE trigger_type='scheduled' AND status='completed'"),
     ]);
     const row = (counts.results[0] ?? {}) as Record<string, number | null>;
+    const settings = await readSettings(c.env.DB);
+    const discovery = settings.discovery as unknown as DiscoverySettings;
+    const timezone = String((settings.general as Record<string, unknown>).timezone || 'America/Chicago');
+    const completed = Number((scheduledCompleted.results[0] as { n: number } | undefined)?.n ?? 0);
     return c.json({
       pending: Number(row.pending ?? 0), newToday: Number(row.newToday ?? 0),
       approvedThisWeek: Number(row.approvedThisWeek ?? 0), rejected: Number(row.rejected ?? 0),
       lastRun: lastRun.results[0] ?? null,
+      nextScheduled: previewNextScheduledSearch(discovery, timezone, completed),
     });
   } catch (err) {
     log('error', 'prospect', 'GET /prospect/inbox-summary failed', err);

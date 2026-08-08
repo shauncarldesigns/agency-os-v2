@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Check, CheckCircle2, Clock3, ExternalLink, Inbox, MapPin, Phone, Play, RotateCw, Star, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, CheckCircle2, Clock3, ExternalLink, Inbox, MapPin, Phone, Play, RotateCw, SearchCheck, Star, Trash2 } from 'lucide-react';
 import type { ProspectCandidate, ProspectInboxSummary } from '../../lib/types';
 import { googleMapsUrl } from '../../lib/format';
 import { Spinner } from '../shared/Spinner';
@@ -26,6 +26,16 @@ function timeLabel(value?: string | null) {
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+// `date` is YYYY-MM-DD in the operator's timezone; parse parts directly so the
+// browser's timezone can't shift the calendar day.
+function nextRunLabel(next: NonNullable<ProspectInboxSummary['nextScheduled']>) {
+  if (!next.date) return 'No run day scheduled';
+  const [year, month, day] = next.date.split('-').map(Number);
+  const dayLabel = new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const hour12 = ((next.localRunHour + 11) % 12) + 1;
+  return `${dayLabel} at ${hour12}:00 ${next.localRunHour < 12 ? 'AM' : 'PM'}`;
+}
+
 export function CandidateInbox({
   candidates, summary, loading, running, acting, selected,
   onToggle, onSelectAll, onRun, onApprove, onReject, onRefresh,
@@ -49,9 +59,6 @@ export function CandidateInbox({
                 <p className="text-xs text-slate-500">Review website-free home-service leads before they enter the pipeline.</p>
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
-              Last discovery: {summary?.lastRun ? `${summary.lastRun.industry} in ${summary.lastRun.search_location} · ${timeLabel(summary.lastRun.started_at)}` : 'Not run yet'}
-            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={onRefresh} disabled={loading || acting || running} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
@@ -70,6 +77,56 @@ export function CandidateInbox({
               <div className="mt-1 text-xl font-semibold tracking-tight text-slate-900">{value}</div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><SearchCheck size={13} /> Last search</div>
+            {summary?.lastRun ? (
+              <>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {summary.lastRun.industry} · {summary.lastRun.search_location}
+                  <span className="ml-2 font-normal text-slate-500">{timeLabel(summary.lastRun.started_at)} · {summary.lastRun.trigger_type === 'scheduled' ? 'auto' : 'manual'}</span>
+                </div>
+                {summary.lastRun.status === 'failed' ? (
+                  <p className="mt-2 text-xs font-medium text-rose-600">Failed: {summary.lastRun.error_message ?? 'unknown error'}</p>
+                ) : (
+                  <dl className="mt-2 divide-y divide-slate-200/70 text-xs">
+                    {[
+                      { label: 'Results found', value: summary.lastRun.results_found },
+                      { label: 'Already in your leads', value: summary.lastRun.skipped_existing },
+                      { label: 'Ineligible (has website / no phone / closed)', value: summary.lastRun.skipped_ineligible },
+                      { label: 'Refreshed existing candidates', value: summary.lastRun.refreshed_candidates },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between py-1">
+                        <dt className="text-slate-500">{label}</dt>
+                        <dd className="font-semibold tabular-nums text-slate-700">{value}</dd>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between py-1">
+                      <dt className="font-semibold text-slate-800">New candidates</dt>
+                      <dd className={`font-bold tabular-nums ${summary.lastRun.new_candidates > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>{summary.lastRun.new_candidates}</dd>
+                    </div>
+                  </dl>
+                )}
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-slate-500">Not run yet</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><CalendarClock size={13} /> Next scheduled search</div>
+            {summary?.nextScheduled?.enabled && summary.nextScheduled.industry ? (
+              <>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{summary.nextScheduled.industry} · {summary.nextScheduled.location}</div>
+                <p className="mt-2 text-xs text-slate-500">{nextRunLabel(summary.nextScheduled)}</p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-slate-500">
+                {summary?.nextScheduled && !summary.nextScheduled.enabled ? 'Schedule disabled — enable it in Settings' : 'No industries or locations configured'}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
