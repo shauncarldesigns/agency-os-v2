@@ -25,6 +25,7 @@ import {
   Archive,
   Eye,
   MessageCircleReply,
+  Mail,
   type LucideIcon,
 } from 'lucide-react';
 import type { Lead, Project, ShowToast } from '../../lib/types';
@@ -1394,6 +1395,8 @@ export function OpenSalesCallModal({
   onCallOutcome,
   onMoveToClients,
   onNotInterested,
+  onResendText,
+  onEmailCaptured,
   showToast,
 }: {
   lead: PipelineLead;
@@ -1401,6 +1404,11 @@ export function OpenSalesCallModal({
   onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number) => Promise<boolean>;
   onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan) => Promise<void>;
   onNotInterested: (lead: PipelineLead, notes?: string, recordingCallId?: number) => Promise<void>;
+  // Channel-recovery hooks — provided only by the Text Outreach page, where
+  // "the texts never landed" is a real failure mode. The email-outreach page
+  // reuses this modal and omits them, which hides the recovery section.
+  onResendText?: (lead: PipelineLead) => void;
+  onEmailCaptured?: () => void;
   showToast: ShowToast;
 }) {
   const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
@@ -1421,6 +1429,42 @@ export function OpenSalesCallModal({
   // status still flips via the tracked link or the close-out outcome.
   const [warmOverride, setWarmOverride] = useState(false);
   const isWarm = warmOverride || (lead.status === 'engaged' && lead.sessions > 0);
+  // Channel recovery: the texts may never have landed (wrong line type,
+  // unread inbox). The operator can resend the tracked link or capture an
+  // email and hand the lead to the email-outreach motion mid-call.
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [capturingEmail, setCapturingEmail] = useState(false);
+
+  const captureEmailAndSwitch = async () => {
+    const nextEmail = recoverEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      showToast('Enter a valid email address', 'error');
+      return;
+    }
+    setCapturingEmail(true);
+    try {
+      // Email + ready_to_send + Email Captured is the canonical capture shape:
+      // the backend logs email_captured and schedules the email automation
+      // (the intro email sends from the Email Outreach queue). Attribution
+      // derives from those email rows, so this call is what flips the lead's
+      // channel to email.
+      await api.leads.update(lead.id, {
+        email: nextEmail,
+        pipeline_status: 'ready_to_send',
+        outcome: 'Email Captured',
+      });
+      // Texting demonstrably didn't reach them — route the phone to the call
+      // motion so the lead leaves the Text Outreach queue for good.
+      await api.leads.updatePhoneRoute(lead.id, 'call');
+      showToast('Email captured — moved to Email Outreach; the intro email sends from that queue');
+      onEmailCaptured?.();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not capture email: ${msg}`, 'error');
+    } finally {
+      setCapturingEmail(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -1662,6 +1706,40 @@ export function OpenSalesCallModal({
             <label className="mt-4 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call notes</label>
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="What they liked, changes requested, timing, concerns…" className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
           </div>
+
+          {lead.status === 'sent_no_reply' && onResendText && onEmailCaptured && (
+            <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-800"><Mail className="h-3.5 w-3.5" />Texts not landing?</div>
+              <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email and switch this lead to email outreach.</p>
+              <button
+                type="button"
+                onClick={() => onResendText(lead)}
+                className="mt-2.5 w-full rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-amber-800 transition hover:bg-amber-100"
+              >
+                Resend the site link by text
+              </button>
+              <div className="mt-2 flex gap-1.5">
+                <input
+                  type="email"
+                  value={recoverEmail}
+                  onChange={(event) => setRecoverEmail(event.target.value)}
+                  placeholder="owner@business.com"
+                  className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => void captureEmailAndSwitch()}
+                  disabled={capturingEmail || !recoverEmail.trim()}
+                  className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {capturingEmail ? 'Switching…' : 'Switch to email'}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
+                Capturing an email moves this lead to the Email Outreach queue and sends the intro email from there — engagement is then attributed to email, not text.
+              </p>
+            </section>
+          )}
 
           <section className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-700"><PhoneCall className="h-3.5 w-3.5" />After the call</div>
@@ -2391,6 +2469,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           onCallOutcome={recordCallOutcome}
           onMoveToClients={moveToClients}
           onNotInterested={archiveNotInterested}
+          onResendText={(lead) => setModal({ type: 'followup', lead })}
+          onEmailCaptured={() => {
+            setModal(null);
+            void loadLeads();
+          }}
           showToast={showToast}
         />
       )}
