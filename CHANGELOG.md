@@ -9,6 +9,18 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Research page design-system compliance + in-session local dev
+
+- **Research page and market detail now follow the app's page skeleton** —
+  wrapped in `page-container` (72rem centered, standard padding) with the
+  standard flex header row instead of a one-off full-bleed hero card.
+  Dashboard deploy needed.
+- **Local development is now in-session by default.** `.claude/launch.json`
+  is committed (backend Worker on 8788, dashboard on `127.0.0.1:5174`) so
+  Claude sessions run the dev stack for the operator; CLAUDE.md documents the
+  worktree bootstrap and the build-local-then-ship-to-prod loop. Added
+  local-only Research demo seed (`src/db/seeds/market-research-demo.sql`).
+
 ### Research: add markets by city name
 
 - **Adding a market no longer requires looking up Google's geo target CSV or typing coordinates.** The add-market form is now industry + a city typeahead over a seeded lookup of all 562 active Wisconsin city geo targets (from Google's `geotargets-2026-07-16` dataset); the criteria ID rides along invisibly and city-center coordinates are resolved server-side via the existing Google Places key. Backend + dashboard + migration (`2026-08-06-geo-targets-wi.sql`, apply before deploy).
