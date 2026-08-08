@@ -31,6 +31,16 @@ Backend structure: `src/routes/` (API endpoints), `src/services/`
 
 These caused repeated pain; internalize them.
 
+### Shipping gate — the operator says when, every time
+The loop is: **build locally → operator tests at 127.0.0.1:5174 → operator
+explicitly says ship → PR merge → deploy.** Finishing a change is NOT the
+signal to ship it. Opening a PR for review is fine; **merging it, deploying
+the Worker/dashboard, or applying remote migrations before the operator's
+go-ahead is not** — a session did this once (merged + deployed immediately
+after a change) and the operator had no chance to test. "Make this change"
+means build it locally and wait; only "merge it", "ship it", "deploy" or
+equivalent releases the gate. One go-ahead covers one ship, not the session.
+
 ### Worker — auto-deploys via CI
 - `.github/workflows/deploy-worker.yml` deploys on push to `main` touching
   `agency-os-backend/**` (+ manual dispatch). Typechecks, then `wrangler deploy`.
@@ -634,7 +644,9 @@ Soft signals layered on top:
 **The operator does NOT run dev servers themselves — Claude starts and owns
 them inside the session.** Never tell the operator to run `npm run dev` or
 `wrangler dev`; if a server is down, restart it. Build-local-first, then ship
-to prod via PR is the normal development loop.
+to prod via PR is the normal development loop — but shipping waits for the
+operator's explicit go-ahead after they've tested locally (see "Shipping
+gate" under Deploy mechanics).
 
 - Server definitions live in `.claude/launch.json` (committed; no secrets):
   `backend` = `npx wrangler dev --local --port 8788` in `agency-os-backend`;
@@ -674,7 +686,9 @@ to prod via PR is the normal development loop.
 ## Conventions
 
 - TypeScript throughout; run `npx tsc --noEmit` in the relevant package before committing.
-- Only commit/deploy when asked. Prefer PRs over direct pushes to `main`.
+- Only commit/deploy when asked — and "asked" means an explicit ship
+  instruction for THIS change, not the existence of a finished change (see
+  Shipping gate). Prefer PRs over direct pushes to `main`.
 - One PR per logical change. Bundle related follow-ups onto the same branch if the
   parent PR hasn't merged yet; otherwise branch off `main` for a clean follow-up.
 - When PR descriptions say "deploy after merge," the dashboard step is manual —
