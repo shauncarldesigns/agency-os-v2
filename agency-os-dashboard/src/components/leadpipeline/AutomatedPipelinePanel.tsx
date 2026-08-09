@@ -1437,7 +1437,12 @@ export function OpenSalesCallModal({
   const [recoverEmail, setRecoverEmail] = useState('');
   const [capturingEmail, setCapturingEmail] = useState(false);
   const [emailCapturedDone, setEmailCapturedDone] = useState(false);
+  const [introEmailSent, setIntroEmailSent] = useState(false);
   const [showResendComposer, setShowResendComposer] = useState(false);
+  // After the intro email fires mid-call, the warm script opens on an
+  // "email track" bridge stage — walk them to their inbox and onto the site
+  // before asking for their reaction.
+  const [emailBridgeDone, setEmailBridgeDone] = useState(false);
 
   const captureEmailAndSwitch = async () => {
     const nextEmail = recoverEmail.trim();
@@ -1460,7 +1465,21 @@ export function OpenSalesCallModal({
       // Texting demonstrably didn't reach them — route the phone to the call
       // motion so the lead leaves the Text Outreach queue for good.
       await api.leads.updatePhoneRoute(lead.id, 'call');
-      showToast('Email captured — the intro email sends from the Email Outreach queue');
+      // Fire the intro email NOW — the prospect is on the phone and can
+      // check their inbox while the operator talks. send_now advances the
+      // automation past its review window into the normal follow-up flow.
+      try {
+        const { automation } = await api.emailOutreach.automation(lead.id);
+        await api.emailOutreach.automationAction(automation.id, 'send_now');
+        setIntroEmailSent(true);
+        // Jump straight onto the email track — the operator is mid-sentence
+        // ("just sent it — check your inbox") and shouldn't need a click to
+        // get the script for that moment.
+        setWarmOverride(true);
+        showToast('Email captured — intro email sent. Have them check their inbox.');
+      } catch {
+        showToast('Email captured, but the intro email could not send right now — review it on the Email Outreach page.', 'error');
+      }
       setEmailCapturedDone(true);
       // Refresh the board behind the modal; the modal itself stays open so
       // the operator can finish the conversation.
@@ -1535,11 +1554,19 @@ export function OpenSalesCallModal({
   const decisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-5 text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
   const primaryDecisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-left text-xs font-semibold leading-5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 
+  const showEmailBridge = isWarm && introEmailSent && !emailBridgeDone;
+
   const renderStageActions = () => {
     if (!isWarm) return (
       <button type="button" onClick={() => setWarmOverride(true)} className={primaryDecisionClass}>
         They’re interested — open the sales script <ChevronRight className="h-3.5 w-3.5" />
       </button>
+    );
+    if (showEmailBridge) return (
+      <>
+        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They’ll look later — follow up later</button>
+        <button type="button" onClick={() => setEmailBridgeDone(true)} className={primaryDecisionClass}>They can see the site — get their reaction <ChevronRight className="h-3.5 w-3.5" /></button>
+      </>
     );
     if (!activeStage) return null;
     if (activeStage.id === 'opening') return (
@@ -1635,7 +1662,35 @@ export function OpenSalesCallModal({
             </p>
           </div>
 
-          {isWarm ? (
+          {isWarm && showEmailBridge ? (
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call · email track</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-900">GET THEM TO THE INBOX</h3>
+              <div className="mt-5 border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+                <p>“Alright — it’s on its way. You’ll see an email from Shaun Gehrke at Shaun Carl Designs, subject line ‘I built something for {lead.name}.’”</p>
+                <p className="mt-4">“If you’re near your email, open it up and tap the link — that’s the homepage I built for you. I’ll stay on while you pull it up.”</p>
+              </div>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+                <p className="font-semibold text-slate-700">While the email lands — keep it easy:</p>
+                <p className="mt-1.5">“While that comes through — how long have you been running {lead.name}?”</p>
+                <p className="mt-1.5">“Busy season treating you alright{lead.city ? ` out in ${lead.city}` : ''}?”</p>
+                <p className="mt-1.5">“Don’t see it yet? Give it a few seconds — and peek at spam or promotions just in case.”</p>
+              </div>
+              {cleanSiteUrl(lead.rawUrl, lead.url) && (
+                <a
+                  href={cleanSiteUrl(lead.rawUrl, lead.url) ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                >
+                  <Link2 className="h-3.5 w-3.5" /> Open the site on your side — walk it together
+                </a>
+              )}
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                Open the site on your own screen (button above — it’s the untracked link, so it won’t count as their visit) so you’re both looking at the same thing when they land on it. Wait until they say they can see it before moving on. If they can’t get to their email right now, record “Follow up later” — the email sequence takes over from here.
+              </div>
+            </section>
+          ) : isWarm ? (
             <>
               {scriptError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{scriptError}</div>}
               {!script && !scriptError && <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>}
@@ -1678,6 +1733,46 @@ export function OpenSalesCallModal({
                 <p className="mt-4">“Did you get a chance to take a look, and is it worth having a quick conversation about?”</p>
               </div>
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, use <strong>“They’re interested — open the sales script”</strong> below to continue into the warm sales conversation. If they are not interested or do not answer, record that outcome in the sidebar.</div>
+
+              {lead.status === 'sent_no_reply' && onFollowUpSent && onEmailCaptured && (
+                // A successful capture auto-pivots onto the warm email track,
+                // so the only post-capture state this pane can show is the
+                // send failure.
+                emailCapturedDone ? (
+                  <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Email captured — send failed</p>
+                    <p className="mt-1">The intro email did not send. The lead is in the Email Outreach queue — review and send it there. You can finish the call as normal.</p>
+                  </div>
+                ) : (
+                  <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-slate-500" />
+                      <span className="text-sm font-semibold text-slate-900">Capture email</span>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="email"
+                        value={recoverEmail}
+                        onChange={(event) => setRecoverEmail(event.target.value)}
+                        placeholder="owner@business.com"
+                        className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void captureEmailAndSwitch()}
+                        disabled={capturingEmail || !recoverEmail.trim()}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {capturingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        {capturingEmail ? 'Sending…' : 'Capture & email the site'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      Sends the intro email with the site link right away, and moves this lead to the Email Outreach queue for follow-ups — engagement is then attributed to email, not text.
+                    </p>
+                  </section>
+                )
+              )}
             </section>
           )}
         </div>
@@ -1714,16 +1809,26 @@ export function OpenSalesCallModal({
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="What they liked, changes requested, timing, concerns…" className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
           </div>
 
-          {lead.status === 'sent_no_reply' && onFollowUpSent && onEmailCaptured && (
+          {lead.status === 'sent_no_reply' && onFollowUpSent && onEmailCaptured && !(emailCapturedDone && !isWarm) && (
             <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-amber-800"><Mail className="h-3.5 w-3.5" />Texts not landing?</div>
               {emailCapturedDone ? (
-                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
-                  <strong>Email captured.</strong> This lead is now in the Email Outreach queue and the intro email sends from there. Finish the call as normal — the outcome buttons still work.
-                </div>
+                // Warm mode only — in the last-attempt view the status lives
+                // in the left pane next to the capture card's old spot.
+                introEmailSent ? (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] leading-4 text-emerald-800">
+                    <strong>Intro email sent.</strong> Walk them to their inbox — the email-track stage on the left has the script.
+                  </div>
+                ) : (
+                  <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] leading-4 text-rose-700">
+                    <strong>Email captured, but the intro email did not send.</strong> The lead is in the Email Outreach queue — open it there to review and send. You can finish the call as normal.
+                  </div>
+                )
               ) : (
                 <>
-                  <p className="mt-1 text-[11px] leading-4 text-amber-700">If they never saw the texts, resend the site now — or capture their email and switch this lead to email outreach. Either way you stay in this call.</p>
+                  <p className="mt-1 text-[11px] leading-4 text-amber-700">
+                    If they never saw the texts, resend the site now{isWarm ? ' — or capture their email to send the site by email immediately' : ' — or capture their email on the left to send the site by email immediately'}. Either way you stay in this call.
+                  </p>
                   <button
                     type="button"
                     onClick={() => setShowResendComposer(true)}
@@ -1731,26 +1836,30 @@ export function OpenSalesCallModal({
                   >
                     Resend the site link by text
                   </button>
-                  <div className="mt-2 flex gap-1.5">
-                    <input
-                      type="email"
-                      value={recoverEmail}
-                      onChange={(event) => setRecoverEmail(event.target.value)}
-                      placeholder="owner@business.com"
-                      className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void captureEmailAndSwitch()}
-                      disabled={capturingEmail || !recoverEmail.trim()}
-                      className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
-                    >
-                      {capturingEmail ? 'Switching…' : 'Switch to email'}
-                    </button>
-                  </div>
-                  <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
-                    Capturing an email moves this lead to the Email Outreach queue and sends the intro email from there — engagement is then attributed to email, not text.
-                  </p>
+                  {isWarm && (
+                    <>
+                      <div className="mt-2 flex gap-1.5">
+                        <input
+                          type="email"
+                          value={recoverEmail}
+                          onChange={(event) => setRecoverEmail(event.target.value)}
+                          placeholder="owner@business.com"
+                          className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void captureEmailAndSwitch()}
+                          disabled={capturingEmail || !recoverEmail.trim()}
+                          className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                        >
+                          {capturingEmail ? 'Sending…' : 'Capture & email the site'}
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[10px] leading-4 text-amber-700/80">
+                        Sends the intro email with the site link right away, and moves this lead to the Email Outreach queue for follow-ups — engagement is then attributed to email, not text.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
             </section>

@@ -9,6 +9,21 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Last-chance call: email capture now sends the intro email immediately (dashboard)
+
+- **Capturing an email in the last-chance call fires the intro email right
+  away** (via the automation's existing `send_now` action) instead of
+  waiting out the 10-minute review window — the prospect can check their
+  inbox while still on the phone. The automation then continues into the
+  normal follow-up flow. If the immediate send fails, the modal says so and
+  the email stays queued for review on the Email Outreach page.
+- **A "Get them to the inbox" email-track stage opens the warm script after
+  the send**: the email's actual sender + subject line, hold-the-air small
+  talk while the email lands, an untracked open-the-site-on-your-side link
+  so the operator walks the site with them, and a choice between advancing
+  to "Get their reaction" or recording "follow up later" (the email
+  sequence takes over).
+
 ### Last-chance call: channel recovery — resend text or switch to email (dashboard)
 
 - **The last-chance call modal gains a "Texts not landing?" section** for
