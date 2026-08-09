@@ -15,7 +15,15 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
-## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#230, all deployed)
+## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#231, all deployed)
+
+- **PR #231:** archive button on every active Text Outreach card (was gated
+  behind the stale check), and archiving now requires a note — stored in the
+  archive activity meta and mirrored onto the lead's timestamped notes.
+  Jerry's Household Plumbing (lead 13, prod) replied STOP: reply-engagement
+  undone and lead archived directly in prod D1 with reason `replied_stop`.
+  For STOP replies: archive directly, do NOT tap "They replied" first
+  (engaged leads require a sales-call outcome before archiving).
 
 - **PR #230:** mid-call email capture now sends the intro email immediately
   (automation `send_now`) and auto-advances the modal onto a new
