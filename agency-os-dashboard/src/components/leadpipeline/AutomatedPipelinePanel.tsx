@@ -810,12 +810,16 @@ function StatusChip({
         {actionLabel}
         <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
-      {isStaleLead(lead) && (
+      {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
         <button
           onClick={() => onArchive(lead)}
-          title="Archive stale lead"
+          title="Archive — not interested or asked to stop"
           aria-label={`Archive ${lead.name}`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
+            isStaleLead(lead)
+              ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+              : 'border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
+          }`}
         >
           <Archive className="h-3.5 w-3.5" />
         </button>
@@ -2056,12 +2060,16 @@ function BoardCard({
           <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
         </button>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {isStaleLead(lead) && (
+          {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
             <button
               onClick={() => onArchive(lead)}
-              title="Archive stale lead"
+              title="Archive — not interested or asked to stop"
               aria-label={`Archive ${lead.name}`}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                isStaleLead(lead)
+                  ? 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'
+                  : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+              }`}
             >
               <Archive className="h-3.5 w-3.5" />
             </button>
@@ -2259,7 +2267,9 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const archiveLead = (lead: PipelineLead) => {
     if (!window.confirm(`Archive ${lead.name}? It will leave the active Text Outreach board.`)) return;
-    void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
+    void runAction(lead.id, 'archived', 'Lead archived', {
+      reason: isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
+    });
   };
 
   const archiveNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number) => {
