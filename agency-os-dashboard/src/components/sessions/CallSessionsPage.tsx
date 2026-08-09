@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Globe,
   Copy,
   Eye,
   Filter,
@@ -116,6 +117,10 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
   });
   const [industryFilter, setIndustryFilter] = useState(ALL);
   const [cityFilter, setCityFilter] = useState(ALL);
+  // Site-built filter: leads arriving from Text Outreach (VoIP numbers that
+  // don't take texts) often already have their site — the operator calls
+  // those first since the build step is done.
+  const [siteFilter, setSiteFilter] = useState(ALL);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -174,13 +179,15 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
         ].some((value) => value?.toLowerCase().includes(query));
         const industryMatch = industryFilter === ALL || item.industry === industryFilter;
         const cityMatch = cityFilter === ALL || formatPlace(item.city, item.state) === cityFilter;
-        return searchMatch && industryMatch && cityMatch;
+        const hasSite = Boolean(item.siteUrl || item.rawSiteUrl);
+        const siteMatch = siteFilter === ALL || (siteFilter === 'built' ? hasSite : !hasSite);
+        return searchMatch && industryMatch && cityMatch && siteMatch;
       }),
     }));
-  }, [columns, industryFilter, cityFilter, searchQuery]);
+  }, [columns, industryFilter, cityFilter, siteFilter, searchQuery]);
 
   const totalVisible = filteredColumns.reduce((sum, column) => sum + column.items.length, 0);
-  const hasFilters = searchQuery.trim().length > 0 || industryFilter !== ALL || cityFilter !== ALL;
+  const hasFilters = searchQuery.trim().length > 0 || industryFilter !== ALL || cityFilter !== ALL || siteFilter !== ALL;
   const filteredAutomationLeads = useMemo(() => {
     const automatedLeadIds = new Set(automations.map((automation) => automation.lead_id));
     const query = searchQuery.trim().toLowerCase();
@@ -198,9 +205,11 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
       ].some((value) => value?.toLowerCase().includes(query))) return false;
       if (industryFilter !== ALL && lead.industry !== industryFilter) return false;
       if (cityFilter !== ALL && formatPlace(lead.city, lead.state) !== cityFilter) return false;
+      const hasSite = Boolean(lead.site_url || lead.site_url_raw);
+      if (siteFilter !== ALL && (siteFilter === 'built' ? !hasSite : hasSite)) return false;
       return true;
     });
-  }, [leads, automations, industryFilter, cityFilter, searchQuery]);
+  }, [leads, automations, industryFilter, cityFilter, siteFilter, searchQuery]);
 
   function setViewPersist(next: CallOutreachView) {
     setView(next);
@@ -263,6 +272,16 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
             label="City"
             options={filterOptions.cities.map((value) => ({ value, label: value }))}
           />
+          <BoardSelect
+            icon={Globe}
+            value={siteFilter}
+            onChange={setSiteFilter}
+            label="Sites"
+            options={[
+              { value: 'built', label: 'Site built' },
+              { value: 'none', label: 'No site yet' },
+            ]}
+          />
           {hasFilters && (
             <button
               type="button"
@@ -270,6 +289,7 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
                 setSearchQuery('');
                 setIndustryFilter(ALL);
                 setCityFilter(ALL);
+                setSiteFilter(ALL);
               }}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-200/60 hover:bg-slate-50"
             >
