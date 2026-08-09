@@ -1472,6 +1472,10 @@ export function OpenSalesCallModal({
         const { automation } = await api.emailOutreach.automation(lead.id);
         await api.emailOutreach.automationAction(automation.id, 'send_now');
         setIntroEmailSent(true);
+        // Jump straight onto the email track — the operator is mid-sentence
+        // ("just sent it — check your inbox") and shouldn't need a click to
+        // get the script for that moment.
+        setWarmOverride(true);
         showToast('Email captured — intro email sent. Have them check their inbox.');
       } catch {
         showToast('Email captured, but the intro email could not send right now — review it on the Email Outreach page.', 'error');
@@ -1555,7 +1559,7 @@ export function OpenSalesCallModal({
   const renderStageActions = () => {
     if (!isWarm) return (
       <button type="button" onClick={() => setWarmOverride(true)} className={primaryDecisionClass}>
-        {introEmailSent ? 'Continue the call — walk them to the email' : 'They’re interested — open the sales script'} <ChevronRight className="h-3.5 w-3.5" />
+        They’re interested — open the sales script <ChevronRight className="h-3.5 w-3.5" />
       </button>
     );
     if (showEmailBridge) return (
@@ -1731,18 +1735,14 @@ export function OpenSalesCallModal({
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, use <strong>“They’re interested — open the sales script”</strong> below to continue into the warm sales conversation. If they are not interested or do not answer, record that outcome in the sidebar.</div>
 
               {lead.status === 'sent_no_reply' && onFollowUpSent && onEmailCaptured && (
+                // A successful capture auto-pivots onto the warm email track,
+                // so the only post-capture state this pane can show is the
+                // send failure.
                 emailCapturedDone ? (
-                  introEmailSent ? (
-                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Intro email sent</p>
-                      <p className="mt-1">Have them check their inbox for the site link. Use <strong>“Continue the call — walk them to the email”</strong> below to guide them onto the site.</p>
-                    </div>
-                  ) : (
-                    <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Email captured — send failed</p>
-                      <p className="mt-1">The intro email did not send. The lead is in the Email Outreach queue — review and send it there. You can finish the call as normal.</p>
-                    </div>
-                  )
+                  <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Email captured — send failed</p>
+                    <p className="mt-1">The intro email did not send. The lead is in the Email Outreach queue — review and send it there. You can finish the call as normal.</p>
+                  </div>
                 ) : (
                   <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex items-center gap-2">
