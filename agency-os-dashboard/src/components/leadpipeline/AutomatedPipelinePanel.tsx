@@ -810,12 +810,16 @@ function StatusChip({
         {actionLabel}
         <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
-      {isStaleLead(lead) && (
+      {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
         <button
           onClick={() => onArchive(lead)}
-          title="Archive stale lead"
+          title="Archive — not interested or asked to stop"
           aria-label={`Archive ${lead.name}`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
+            isStaleLead(lead)
+              ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+              : 'border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
+          }`}
         >
           <Archive className="h-3.5 w-3.5" />
         </button>
@@ -1908,6 +1912,64 @@ export function OpenSalesCallModal({
   );
 }
 
+// Archiving requires a note — the operator reviews archived leads later and
+// needs to see why each one left the board (STOP reply, wrong number, …).
+function ArchiveNoteModal({
+  lead,
+  onClose,
+  onConfirm,
+}: {
+  lead: PipelineLead;
+  onClose: () => void;
+  onConfirm: (note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  return (
+    <div
+      className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-900">Archive {lead.name}</h3>
+        <p className="mt-1 text-xs text-slate-500">Add a note about what happened — it's saved on the lead so you can see why it was archived when you review later.</p>
+        <textarea
+          autoFocus
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={3}
+          placeholder="e.g. Replied STOP to the intro text"
+          className="mt-3 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const trimmed = note.trim();
+              if (!trimmed) return;
+              setSaving(true);
+              void onConfirm(trimmed).finally(() => setSaving(false));
+            }}
+            disabled={!note.trim() || saving}
+            className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+          >
+            {saving ? 'Archiving…' : 'Archive lead'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Page ----------
 
 type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
@@ -2056,12 +2118,16 @@ function BoardCard({
           <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
         </button>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {isStaleLead(lead) && (
+          {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
             <button
               onClick={() => onArchive(lead)}
-              title="Archive stale lead"
+              title="Archive — not interested or asked to stop"
               aria-label={`Archive ${lead.name}`}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                isStaleLead(lead)
+                  ? 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'
+                  : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'
+              }`}
             >
               <Archive className="h-3.5 w-3.5" />
             </button>
@@ -2117,6 +2183,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [cityFilter, setCityFilter] = useState('all');
   const [modal, setModal] = useState<ModalState>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<PipelineLead | null>(null);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
@@ -2257,9 +2324,24 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     }
   };
 
-  const archiveLead = (lead: PipelineLead) => {
-    if (!window.confirm(`Archive ${lead.name}? It will leave the active Text Outreach board.`)) return;
-    void runAction(lead.id, 'archived', 'Lead archived', { reason: 'stale_outreach' });
+  const archiveLead = (lead: PipelineLead) => setArchiveTarget(lead);
+
+  const confirmArchive = async (note: string) => {
+    const lead = archiveTarget;
+    if (!lead) return;
+    await runAction(lead.id, 'archived', 'Lead archived', {
+      reason: isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
+      note,
+    });
+    // Mirror the note onto the lead record itself, where it's visible when
+    // reviewing archived leads in the detail modal. Non-fatal if it fails —
+    // the note also lives in the archive activity's meta.
+    try {
+      await api.leads.appendNote(lead.id, `Archived: ${note}`);
+    } catch {
+      // activity meta still carries the note
+    }
+    setArchiveTarget(null);
   };
 
   const archiveNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number) => {
@@ -2621,6 +2703,14 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
             setQualifyLead(lead);
           }}
           pipelineContext
+        />
+      )}
+
+      {archiveTarget && (
+        <ArchiveNoteModal
+          lead={archiveTarget}
+          onClose={() => setArchiveTarget(null)}
+          onConfirm={confirmArchive}
         />
       )}
 

@@ -9,6 +9,15 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Text Outreach: archive any active lead immediately (dashboard)
+
+- **The archive button on Text Outreach cards (board + grid) now shows for
+  every sent_no_reply / engaged lead**, not just stale ones — for "STOP"
+  replies and immediate not-interested outcomes. Stale leads keep the amber
+  styling; fresh ones get a neutral icon with a rose hover. Same confirm +
+  undo flow; engaged leads still require a recorded sales-call outcome
+  (server rule unchanged).
+
 ### Last-chance call: email capture now sends the intro email immediately (dashboard)
 
 - **Capturing an email in the last-chance call fires the intro email right
