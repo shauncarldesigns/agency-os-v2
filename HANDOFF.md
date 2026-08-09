@@ -15,7 +15,13 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
-## Outreach visibility + UI fixes (2026-08-08 evening, PRs #226–#229, all deployed)
+## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#230, all deployed)
+
+- **PR #230:** mid-call email capture now sends the intro email immediately
+  (automation `send_now`) and auto-advances the modal onto a new
+  "Get them to the inbox" email-track stage (sender + subject script,
+  hold-the-air small talk, untracked walk-the-site-together link) before
+  "Get their reaction". Capture UI moved into the left script pane.
 
 - **PR #229:** last-chance call modal gained (a) a mid-call pivot into the
   warm sales script with a trimmed "Get their reaction" opening, and (b) a
