@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Bot, CirclePause, CirclePlay, Copy,
-  ChevronDown, ChevronUp, ExternalLink, FileWarning, Loader2,
+  ChevronDown, ChevronUp, ExternalLink, FileWarning,
   RefreshCw, RotateCcw, ShieldCheck, Square, Wifi, WifiOff, X,
 } from 'lucide-react';
 import { api, ApiError, type BuilderJob, type BuilderStatus } from '../../lib/api';
@@ -38,9 +38,11 @@ const stamp = (value?: string | null) => {
 const tone: Record<string, string> = {
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
   building: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+  preparing: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   running: 'bg-blue-50 text-blue-700 ring-blue-600/20',
   starting: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   waiting: 'bg-slate-100 text-slate-600 ring-slate-500/20',
+  brief_queued: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   retry: 'bg-amber-50 text-amber-700 ring-amber-600/20',
   skipped: 'bg-amber-50 text-amber-700 ring-amber-600/20',
   paused: 'bg-amber-50 text-amber-700 ring-amber-600/20',
@@ -59,7 +61,7 @@ const Badge = ({ value }: { value: string }) => (
 );
 
 const BUILD_STEPS = [
-  'Opening LandingSite.ai', 'Checking login', 'Creating new project', 'Pasting brief',
+  'Preparing brief', 'Opening LandingSite.ai', 'Checking login', 'Creating new project', 'Pasting brief',
   'Starting generation', 'Waiting for website', 'Capturing demo URL', 'Saving URL', 'Completing job',
 ];
 
@@ -68,7 +70,11 @@ const isEligibilitySkip = (job: BuilderJob) => job.failure_reason?.startsWith('E
 function JobRow({ job, showToast }: { job: BuilderJob; showToast: ShowToast }) {
   const [expanded, setExpanded] = useState(false);
   const resultUrl = job.site_url_raw || job.demo_url;
-  const displayStatus = isEligibilitySkip(job) ? 'skipped' : job.status;
+  const displayStatus = isEligibilitySkip(job)
+    ? 'skipped'
+    : !job.has_brief && (job.status === 'waiting' || job.status === 'retry')
+      ? 'brief_queued'
+      : job.status;
   const copy = async (value: string) => {
     await navigator.clipboard.writeText(value);
     showToast('URL copied');
@@ -82,7 +88,7 @@ function JobRow({ job, showToast }: { job: BuilderJob; showToast: ShowToast }) {
         </button>
       </td>
       <td className="px-4 py-3"><Badge value={displayStatus} /></td>
-      <td className="px-4 py-3 text-slate-600">{Math.max(job.attempt_count, 1)}/3</td>
+      <td className="px-4 py-3 text-slate-600">{job.attempt_count ? `${job.attempt_count}/3` : '—'}</td>
       <td className="px-4 py-3 text-slate-600">{duration(job.duration_ms)}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -111,7 +117,6 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const [excludedLeadIds, setExcludedLeadIds] = useState<Set<number>>(() => new Set());
   const [batchOpen, setBatchOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
-  const [preparing, setPreparing] = useState<{ current: number; total: number; company: string } | null>(null);
   const [, setClock] = useState(0);
 
   const load = useCallback(async (quiet = false, runId = selectedRunId) => {
@@ -149,16 +154,9 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
         setSelectedRunId(null);
         const selectedBatch = data.nextBatchLeads.slice(0, batchSize).filter(lead => !excludedLeadIds.has(lead.id));
         if (!selectedBatch.length) throw new Error('Select at least one lead for this Builder batch.');
-        const missing = selectedBatch.filter(lead => !lead.has_brief);
-        for (let index = 0; index < missing.length; index++) {
-          const lead = missing[index];
-          setPreparing({ current: index + 1, total: missing.length, company: lead.company });
-          await api.pipeline.generateBrief(lead.id);
-        }
-        setPreparing(null);
         const result = await api.builder.start(selectedBatch.map(lead => lead.id), batchSize);
         setExcludedLeadIds(new Set());
-        showToast(`Builder batch started — ${result.queued} queued`, 'success');
+        showToast(`Builder batch started — ${result.queued} queued. You can leave this page.`, 'success');
       } else if (action === 'retry') {
         const result = await api.builder.retryFailed(data.run?.id);
         showToast(`${result.retried} failed build${result.retried === 1 ? '' : 's'} queued`, 'success');
@@ -171,7 +169,6 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       await load(false, null);
       onChanged();
     } catch (error) {
-      setPreparing(null);
       showToast(error instanceof ApiError ? error.message : 'Builder action failed', 'error');
     } finally {
       setBusy(false);
@@ -181,19 +178,24 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   if (!data) return <div className="page-container"><p className="text-sm text-slate-500">Loading Builder Employee…</p></div>;
 
   const effectiveState = data.control.effective_state;
-  const employeeState = effectiveState === 'building' ? 'running' : effectiveState;
+  const employeeState = effectiveState === 'building' || effectiveState === 'preparing' ? 'running' : effectiveState;
   const batchCandidates = data.nextBatchLeads.slice(0, batchSize);
   const selectedBatch = batchCandidates.filter(lead => !excludedLeadIds.has(lead.id));
   const nextBatchCount = selectedBatch.length;
   const nextBatchMissingBriefs = selectedBatch.filter(lead => !lead.has_brief).length;
   const removedBatchCount = batchCandidates.length - nextBatchCount;
   const remaining = counts.queued + (counts.building ? 1 : 0);
+  const briefsPending = data.jobs.filter(job => (job.status === 'waiting' || job.status === 'retry') && !job.has_brief).length;
   const completed = counts.completed;
   const total = data.run?.total_jobs ?? data.jobs.length;
   const progress = total ? Math.round(((completed + counts.failed + counts.skipped) / total) * 100) : 0;
   const currentStepIndex = Math.max(0, BUILD_STEPS.findIndex(step => data.control.current_step?.toLowerCase().includes(step.toLowerCase())));
   const currentProgress = data.control.current_step ? Math.max(8, Math.round(((currentStepIndex + 1) / BUILD_STEPS.length) * 100)) : 0;
   const elapsed = counts.building?.started_at ? Date.now() - (sqlDate(counts.building.started_at)?.getTime() ?? Date.now()) : null;
+  const isPreparingBrief = effectiveState === 'preparing';
+  const currentCompany = isPreparingBrief
+    ? data.control.worker_message?.replace(/^Preparing brief for /, '').replace(/\.$/, '')
+    : counts.building?.business_name;
   const startBlockedReason = data.control.active_run_id
     ? 'A Builder run is already active.'
     : data.awaitingBuild === 0
@@ -229,8 +231,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
             </select>
           </label>}
           {!data.control.active_run_id && <button disabled={busy || !!startBlockedReason} onClick={() => void act('start')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
-            {preparing ? <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" /> : <CirclePlay className="mr-1.5 inline h-4 w-4" />}
-            {preparing ? `Preparing ${preparing.current}/${preparing.total}` : nextBatchMissingBriefs ? `Prepare ${nextBatchMissingBriefs} Brief${nextBatchMissingBriefs === 1 ? '' : 's'} & Start ${nextBatchCount}` : `Start ${nextBatchCount}-Site Batch`}
+            <CirclePlay className="mr-1.5 inline h-4 w-4" />Start {nextBatchCount}-Site Batch
           </button>}
           {!!data.control.active_run_id && !data.control.paused && <button disabled={busy} onClick={() => void act('pause')} className="rounded-xl border px-4 py-2 text-sm font-medium"><CirclePause className="mr-1.5 inline h-4 w-4" />Pause after current</button>}
           {!!data.control.active_run_id && !!data.control.paused && <button disabled={busy} onClick={() => void act('resume')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"><CirclePlay className="mr-1.5 inline h-4 w-4" />Resume</button>}
@@ -239,9 +240,9 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
           <button type="button" disabled={busy} onClick={() => void load(false)} className="rounded-xl border border-slate-200 p-2.5 text-slate-500" title="Refresh"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>
-      {preparing && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Generating the LandingSite brief for <strong>{preparing.company}</strong>. The Builder will start after every missing brief is ready.</div>}
-      {!preparing && !data.control.active_run_id && data.awaitingBuild > batchSize && <p className="mt-3 text-xs text-slate-500">This run will process {batchSize} of {data.awaitingBuild} awaiting leads. The remaining {data.awaitingBuild - batchSize} stay in Awaiting Build for the next batch.</p>}
-      {!preparing && startBlockedReason && !data.control.active_run_id && <p className="mt-4 text-sm text-slate-500">{startBlockedReason}</p>}
+      {!data.control.active_run_id && nextBatchMissingBriefs > 0 && <p className="mt-3 text-xs text-slate-500">{nextBatchMissingBriefs} missing brief{nextBatchMissingBriefs === 1 ? '' : 's'} will be prepared by the Builder Employee after the run starts. You can leave this page while it works.</p>}
+      {!data.control.active_run_id && data.awaitingBuild > batchSize && <p className="mt-3 text-xs text-slate-500">This run will process {batchSize} of {data.awaitingBuild} awaiting leads. The remaining {data.awaitingBuild - batchSize} stay in Awaiting Build for the next batch.</p>}
+      {startBlockedReason && !data.control.active_run_id && <p className="mt-4 text-sm text-slate-500">{startBlockedReason}</p>}
       {!data.health.workerOnline && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
         <AlertTriangle className="mr-2 inline h-4 w-4" />
         The browser employee normally starts automatically when the Builder Mac signs in. If it remains offline, open Terminal in <code className="rounded bg-amber-100 px-1 py-0.5">builder-worker</code> and run <code className="rounded bg-amber-100 px-1 py-0.5">npm run service:restart</code>.
@@ -282,7 +283,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
 
     <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {[
-        ['Awaiting Build', data.awaitingBuild], ['Ready to Queue', data.readyToQueue], ['Queued', counts.queued], ['Completed', counts.completed],
+        ['Awaiting Build', data.awaitingBuild], ['Briefs Pending', briefsPending], ['Queued', counts.queued], ['Completed', counts.completed],
         ['Failed', counts.failed], ['Safety Skipped', counts.skipped], ['Remaining', remaining], ['Average Build', duration(data.metrics.averageMs)], ['Median Build', duration(data.metrics.medianMs)],
         ['Completed 24h', data.metrics.completedToday], ['Failed 24h', data.metrics.failedToday],
       ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p></div>)}
@@ -303,16 +304,16 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
 
     {(data.control.active_run_id || counts.building) && <section className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Currently Building</p><h3 className="mt-1 text-xl font-semibold text-slate-900">{counts.building?.business_name ?? 'Waiting for next website'}</h3><p className="mt-1 text-sm text-slate-600">{data.control.current_step ?? 'Waiting for browser worker'}</p></div>
-        <div className="text-right"><p className="text-xs uppercase tracking-wide text-slate-400">Elapsed</p><p className="mt-1 text-lg font-semibold text-slate-800">{duration(elapsed)}</p><p className="text-xs text-slate-400">Attempt {counts.building?.attempt_count ?? 0}/3</p></div>
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-blue-500">{isPreparingBrief ? 'Preparing Brief' : 'Currently Building'}</p><h3 className="mt-1 text-xl font-semibold text-slate-900">{currentCompany ?? 'Waiting for next website'}</h3><p className="mt-1 text-sm text-slate-600">{data.control.current_step ?? 'Waiting for browser worker'}</p></div>
+        <div className="text-right"><p className="text-xs uppercase tracking-wide text-slate-400">Elapsed</p><p className="mt-1 text-lg font-semibold text-slate-800">{duration(elapsed)}</p>{!isPreparingBrief && <p className="text-xs text-slate-400">Attempt {counts.building?.attempt_count ?? 0}/3</p>}</div>
       </div>
       {data.resume.canResume && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
         <p className="text-sm text-amber-900"><strong>This build appears interrupted.</strong> Resume reuses the project already open in LandingSite.ai and does not create another website.</p>
         <button type="button" disabled={busy} onClick={() => void act('resumeBuild')} className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"><RotateCcw className="mr-1.5 inline h-4 w-4" />Resume build</button>
       </div>}
-      <div className="mt-5"><div className="mb-1.5 flex justify-between text-xs text-slate-500"><span>Current website</span><span>{currentProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${currentProgress}%` }} /></div></div>
+      <div className="mt-5"><div className="mb-1.5 flex justify-between text-xs text-slate-500"><span>{isPreparingBrief ? 'Brief preparation' : 'Current website'}</span><span>{currentProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${currentProgress}%` }} /></div></div>
       <div className="mt-4"><div className="mb-1.5 flex justify-between text-xs text-slate-500"><span>Run #{data.run?.id}</span><span>{progress}% · {completed + counts.failed}/{total}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} /></div></div>
-      {data.control.stop_requested === 1 && <p className="mt-4 text-sm font-medium text-amber-700">Safe stop requested—the active website will finish before the queue stops.</p>}
+      {data.control.stop_requested === 1 && <p className="mt-4 text-sm font-medium text-amber-700">Safe stop requested—the active brief or website will finish before the queue stops.</p>}
     </section>}
 
     {selectedRunId && selectedRunId !== data.control.active_run_id && <div className="flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800"><span>Viewing historical run #{selectedRunId}</span><button type="button" className="font-semibold" onClick={() => { setSelectedRunId(null); void load(false, null); }}>Return to latest run</button></div>}

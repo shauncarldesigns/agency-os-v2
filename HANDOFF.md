@@ -33,8 +33,12 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   progress, queue results, URL/error/artifact details, live activity, median
   and 24-hour metrics, and historical-run inspection/retry. New runs are
   capped server-side at 60 sites; the operator can select 20, 40, or 60, and
-  only missing briefs inside that exact batch are generated. Next-batch review
-  and Safety exclusions are compact, collapsed-by-default drawers.
+  only missing briefs inside that exact batch are generated. Brief preparation
+  is durable employee work, not a React loop: Start records the run immediately,
+  the local employee calls the application-owned generation endpoint, and the
+  dashboard can be closed or revisited without interrupting it. Pause/stop wait
+  for the active brief or website to reach a safe point. Next-batch review and
+  Safety exclusions are compact, collapsed-by-default drawers.
 - A guarded **Resume build** action recovers an orphaned `building` lease after
   a Mac/worker restart. It is offered only when the employee is idle, offline,
   or errored, releases the stale lock without consuming another attempt, and

@@ -515,6 +515,22 @@ created by the app, not by hand. Quick Action button in the project sidebar:
   60s while `dns_status='pending'`, stops automatically once active. Cheaper
   than a global poll because it only fires when the operator is looking.
 
+## Builder Employee (added 2026-08-10)
+
+`builder-worker/` is an explicitly started, one-at-a-time Playwright employee.
+Start Builder records a durable `builder_runs`/`builder_jobs` snapshot before
+any brief generation begins. Missing `pipeline_brief` values are prepared as
+employee queue work through the authenticated `/api/builder-worker/prepare-brief`
+endpoint, which reuses the application-owned pipeline brief service; React does
+not generate briefs and the browser employee never authors or edits prompts.
+This lets the operator leave the Builder page while preparation continues.
+
+Pause and stop are safe-point controls: an active brief request or LandingSite
+build finishes before the queue pauses/stops. Brief generation retries up to
+three times per lead and an exhausted lead fails individually without stopping
+the bulk run. Unstarted jobs are released when a run is stopped so their leads
+can be selected again later.
+
 ## Models & APIs
 
 - **Brief generation model:** `BRIEF_MODEL` in `routes/briefs.ts` = `claude-opus-4-7`.

@@ -667,176 +667,142 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
   }
 });
 
+class BriefGenerationError extends Error {}
+
+// Application-owned brief generation shared by the operator endpoint and the
+// persistent Builder employee. The employee coordinates the request; prompt
+// construction, model calls, review enrichment, and caching remain here.
+export async function ensurePipelineBrief(
+  env: Env,
+  id: number,
+  regenerate = false,
+): Promise<Lead | null> {
+  const lead = await env.DB.prepare(
+    'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+  ).bind(id).first<Lead>();
+  if (!lead) return null;
+  if (lead.pipeline_brief && !regenerate) return lead;
+
+  const prompt = buildPipelineBriefPrompt({
+    lead_id: lead.id,
+    company: lead.company,
+    industry: lead.industry,
+    city: lead.city,
+    state: lead.state,
+    address: lead.address,
+    phone: lead.phone,
+    hours: lead.gbp_hours,
+    google_rating: lead.google_rating,
+    google_review_count: lead.google_review_count,
+    extracted_services: lead.extracted_services,
+    extracted_service_areas: lead.extracted_service_areas,
+    extracted_strengths: lead.extracted_strengths,
+    extracted_local_landmarks: lead.extracted_local_landmarks,
+    pitch_quotes: lead.pitch_quotes,
+    owner_names: lead.owner_names,
+    opportunity_reasoning: lead.opportunity_reasoning,
+  });
+
+  const storedReviews = (() => {
+    try {
+      const value = JSON.parse(lead.google_reviews ?? '[]');
+      return Array.isArray(value) ? value.length : 0;
+    } catch {
+      return 0;
+    }
+  })();
+  const listedReviews = lead.google_review_count ?? 0;
+  const reviewRefreshTask: Promise<string | null> =
+    env.OUTSCRAPER_API_KEY && lead.place_id && listedReviews > storedReviews
+      ? (async () => {
+          try {
+            const extra = await fetchOutscraperReviews(env.OUTSCRAPER_API_KEY!, lead.place_id!, 50);
+            if (extra.length === 0) return null;
+            const existing: GoogleReview[] = (() => {
+              try {
+                const value = JSON.parse(lead.google_reviews ?? '[]');
+                return Array.isArray(value) ? value : [];
+              } catch {
+                return [];
+              }
+            })();
+            const merged = JSON.stringify(mergeReviews(existing, extra));
+            await env.DB.prepare(
+              `UPDATE leads SET google_reviews = ?, reviews_fetched_at = datetime('now') WHERE id = ?`,
+            ).bind(merged, id).run();
+            log('info', 'pipeline', `Lead ${id} review backfill for brief`, {
+              before: storedReviews,
+              after: JSON.parse(merged).length,
+            });
+            return merged;
+          } catch (err) {
+            log('warn', 'pipeline', `Review backfill failed for lead ${id}; using stored set`, err);
+            return null;
+          }
+        })()
+      : Promise.resolve(null);
+
+  let briefText: string;
+  let refreshedReviews: string | null;
+  try {
+    [briefText, refreshedReviews] = await Promise.all([
+      callClaude(env.CLAUDE_API_KEY, prompt.user, {
+        model: BRIEF_MODEL,
+        systemPrompt: prompt.system,
+        cacheSystem: true,
+        maxTokens: 1500,
+        temperature: 0.6,
+        timeoutMs: 45_000,
+      }),
+      reviewRefreshTask,
+    ]);
+  } catch (err) {
+    log('error', 'pipeline', `Brief generation failed for lead ${id}`, err);
+    const message = err instanceof Error ? err.message : 'Brief generation failed';
+    throw new BriefGenerationError(`Brief generation failed: ${message}`);
+  }
+
+  briefText = briefText.trim();
+  if (!briefText) throw new BriefGenerationError('Claude returned an empty brief');
+  const strayReviews = briefText.search(/^\s*(#+\s*)?CUSTOMER REVIEWS/m);
+  if (strayReviews !== -1) briefText = briefText.slice(0, strayReviews).replace(/[\s-]+$/, '');
+  briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;
+  briefText = `${briefText}\n\n${formatClarityInstallBlock(env, lead)}`;
+  const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
+  if (reviewsBlock) briefText = `${briefText}\n\n${reviewsBlock}`;
+
+  await env.DB.prepare(
+    `UPDATE leads SET pipeline_brief = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).bind(briefText, id).run();
+  await writeActivity(env.DB, {
+    leadId: id,
+    action: 'brief_generated',
+    meta: { model: BRIEF_MODEL, regenerated: regenerate },
+  });
+  const updated = await env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
+    .bind(id).first<Lead>();
+  log('info', 'pipeline', `Lead ${id} brief generated`, {
+    chars: briefText.length,
+    regenerated: regenerate,
+  });
+  return updated;
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/brief
 // ---------------------------------------------------------------------------
-// Generates a landingsite.ai-ready brief for the lead, caches it on
-// `leads.pipeline_brief`, and returns the updated row. Idempotent by
-// default — a second call returns the cached brief without re-billing
-// Claude. Pass { regenerate: true } to force a fresh generation.
-//
-// Uses Haiku 4.5 because these briefs are prep material for the operator,
-// not final copy — quality is fine at Haiku and cost stays low even if
-// the operator regenerates a few times per lead.
 pipelineRouter.post('/leads/:id/brief', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+  const body = (await c.req.json().catch(() => ({}))) as { regenerate?: boolean };
   try {
-    const id = parseInt(c.req.param('id'), 10);
-    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
-    const body = (await c.req.json().catch(() => ({}))) as { regenerate?: boolean };
-
-    const lead = await c.env.DB.prepare(
-      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
-    )
-      .bind(id)
-      .first<Lead>();
+    const lead = await ensurePipelineBrief(c.env, id, !!body.regenerate);
     if (!lead) return c.json(notFound('Lead'), 404);
-
-    if (lead.pipeline_brief && !body.regenerate) {
-      return c.json({ lead });
-    }
-
-    const prompt = buildPipelineBriefPrompt({
-      lead_id: lead.id,
-      company: lead.company,
-      industry: lead.industry,
-      city: lead.city,
-      state: lead.state,
-      address: lead.address,
-      phone: lead.phone,
-      hours: lead.gbp_hours,
-      google_rating: lead.google_rating,
-      google_review_count: lead.google_review_count,
-      extracted_services: lead.extracted_services,
-      extracted_service_areas: lead.extracted_service_areas,
-      extracted_strengths: lead.extracted_strengths,
-      extracted_local_landmarks: lead.extracted_local_landmarks,
-      pitch_quotes: lead.pitch_quotes,
-      owner_names: lead.owner_names,
-      opportunity_reasoning: lead.opportunity_reasoning,
-    });
-
-    // Google Places caps stored reviews at 5 unless Outscraper backfilled
-    // during enrichment. When Google lists more reviews than we hold, pull
-    // the full set now — in PARALLEL with the Claude call, since the
-    // verbatim block is appended server-side and doesn't feed the prompt.
-    // Any failure falls back to whatever is stored; never blocks the brief.
-    const storedReviews = (() => {
-      try {
-        const v = JSON.parse(lead.google_reviews ?? '[]');
-        return Array.isArray(v) ? v.length : 0;
-      } catch {
-        return 0;
-      }
-    })();
-    const listedReviews = lead.google_review_count ?? 0;
-    const reviewRefreshTask: Promise<string | null> =
-      c.env.OUTSCRAPER_API_KEY && lead.place_id && listedReviews > storedReviews
-        ? (async () => {
-            try {
-              const extra = await fetchOutscraperReviews(
-                c.env.OUTSCRAPER_API_KEY!,
-                lead.place_id!,
-                50,
-              );
-              if (extra.length === 0) return null;
-              const existing: GoogleReview[] = (() => {
-                try {
-                  const v = JSON.parse(lead.google_reviews ?? '[]');
-                  return Array.isArray(v) ? v : [];
-                } catch {
-                  return [];
-                }
-              })();
-              const merged = JSON.stringify(mergeReviews(existing, extra));
-              await c.env.DB.prepare(
-                `UPDATE leads
-                   SET google_reviews = ?, reviews_fetched_at = datetime('now')
-                   WHERE id = ?`,
-              )
-                .bind(merged, id)
-                .run();
-              log('info', 'pipeline', `Lead ${id} review backfill for brief`, {
-                before: storedReviews,
-                after: JSON.parse(merged).length,
-              });
-              return merged;
-            } catch (err) {
-              log('warn', 'pipeline', `Review backfill failed for lead ${id}; using stored set`, err);
-              return null;
-            }
-          })()
-        : Promise.resolve(null);
-
-    let briefText: string;
-    let refreshedReviews: string | null;
-    try {
-      [briefText, refreshedReviews] = await Promise.all([
-        callClaude(c.env.CLAUDE_API_KEY, prompt.user, {
-          model: BRIEF_MODEL,
-          systemPrompt: prompt.system,
-          cacheSystem: true, // system prompt is stable; ephemeral cache pays off across leads in one session
-          maxTokens: 1500,
-          temperature: 0.6,
-          timeoutMs: 45_000,
-        }),
-        reviewRefreshTask,
-      ]);
-    } catch (err) {
-      log('error', 'pipeline', `Brief generation failed for lead ${id}`, err);
-      const message = err instanceof Error ? err.message : 'Brief generation failed';
-      return c.json(
-        { error: `Brief generation failed: ${message}`, code: 'CLAUDE_ERROR' },
-        502,
-      );
-    }
-
-    briefText = briefText.trim();
-    if (!briefText) {
-      return c.json({ error: 'Claude returned an empty brief', code: 'CLAUDE_ERROR' }, 502);
-    }
-
-    // Despite the prompt rule, the model sometimes reproduces the review
-    // set itself under its own CUSTOMER REVIEWS header, which would then
-    // duplicate the appended block. Truncate at any model-authored reviews
-    // header — the authored brief legitimately ends at CONSTRAINTS.
-    const strayReviews = briefText.search(/^\s*(#+\s*)?CUSTOMER REVIEWS/m);
-    if (strayReviews !== -1) {
-      briefText = briefText.slice(0, strayReviews).replace(/[\s-]+$/, '');
-    }
-
-    // Append verbatim contact details, then the full verbatim review set,
-    // below the authored brief so landingsite has exact values to build with.
-    briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;
-    briefText = `${briefText}\n\n${formatClarityInstallBlock(c.env, lead)}`;
-    const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
-    if (reviewsBlock) {
-      briefText = `${briefText}\n\n${reviewsBlock}`;
-    }
-
-    await c.env.DB.prepare(
-      `UPDATE leads
-         SET pipeline_brief = ?,
-             updated_at = datetime('now')
-         WHERE id = ?`,
-    )
-      .bind(briefText, id)
-      .run();
-
-    await writeActivity(c.env.DB, {
-      leadId: id,
-      action: 'brief_generated',
-      meta: { model: BRIEF_MODEL, regenerated: !!body.regenerate },
-    });
-
-    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
-      .bind(id)
-      .first<Lead>();
-    log('info', 'pipeline', `Lead ${id} brief generated`, {
-      chars: briefText.length,
-      regenerated: !!body.regenerate,
-    });
-    return c.json({ lead: updated });
+    return c.json({ lead });
   } catch (err) {
+    if (err instanceof BriefGenerationError) {
+      return c.json({ error: err.message, code: 'CLAUDE_ERROR' }, 502);
+    }
     log('error', 'pipeline', 'POST /leads/:id/brief failed', err);
     return c.json(serverError(), 500);
   }
