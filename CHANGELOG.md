@@ -9,6 +9,14 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Pipeline briefs: hero H1-first rule repeated in hero copy (backend)
+
+- **Generated pipeline briefs now repeat the "no eyebrow/kicker/pill badge
+  above the H1" prohibition verbatim inside the HERO COPY section**, not
+  just in CONSTRAINTS — landingsite.ai was ignoring the rule when it only
+  appeared once at the bottom of the brief. Regenerate a lead's brief to
+  pick up the change.
+
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
 - **Awaiting Build leads can now flow through a single-process Playwright
