@@ -30,6 +30,9 @@ when a manual deploy was needed.
   Outreach automation** when the lead has an email and built demo. Test-mode
   failures cannot mutate real leads, STOP suppresses SMS, and not-interest closes
   the thread without an automated rebuttal.
+- **Communications now uses the dashboard's Tailwind button system throughout**
+  and adds a labeled Attach control plus real MMS image previews and sends for
+  JPEG, PNG, and GIF files (up to 10 images and 5 MB combined).
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 

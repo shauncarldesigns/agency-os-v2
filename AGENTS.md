@@ -302,8 +302,11 @@ Communications is the Twilio-backed SMS inbox and outbound employee. It reuses
 the Text Outreach pipeline's `ready_to_send`, `intro_sent`, tracked URL, and
 lead IDs; it does not own a second cadence. D1 tables
 `messaging_control`, `messaging_conversations`, `messaging_messages`,
-`messaging_ai_audit`, and `messaging_scripts` store employee state, threads,
-delivery state, controlled-response audit, and operator-approved scripts.
+`messaging_ai_audit`, `messaging_scripts`, and `messaging_attachments` store
+employee state, threads, delivery state, controlled-response audit,
+operator-approved scripts, and outbound MMS metadata. Attachment bytes stream
+to the existing `RECORDINGS` R2 bucket; Twilio fetches them through the
+unguessable-token public GET/HEAD route `/webhooks/twilio/media/:token`.
 Messaging scripts reuse canonical copy already present in Text Outreach and the
 Call Center playbook; `messaging_scripts.source_reference` records the source.
 Do not create a separate Communications copywriting system or silently replace
@@ -319,7 +322,12 @@ Secrets/config: `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_PHONE_NUMBER`,
 `TEST_SMS_NUMBER_1`/`TEST_SMS_NUMBER_2`, and `TWILIO_A2P_REGISTERED=true`, in
 addition to the existing Twilio Account SID/Auth Token. Migrations, applied in
 order: `2026-08-10-messaging-employee.sql`, then
-`2026-08-10-messaging-playbook-scripts.sql` (manual apply before backend deploy).
+`2026-08-10-messaging-playbook-scripts.sql`, then
+`2026-08-10-messaging-attachments.sql` (manual apply before backend deploy).
+
+Communications UI controls use the existing Tailwind design system rather than
+unscoped button class names. Manual messages can include up to 10 JPEG, PNG, or
+GIF attachments with a 5 MB combined limit; retry preserves the same media.
 
 SMS is mobile-only. Invalid numbers and Twilio permanent-delivery failures are
 suppressed. Landline, fixed-VoIP, and non-fixed-VoIP Lookup results route away

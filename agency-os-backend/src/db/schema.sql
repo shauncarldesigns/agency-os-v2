@@ -134,11 +134,18 @@ CREATE TABLE IF NOT EXISTS messaging_messages (
   direction TEXT NOT NULL, sender TEXT NOT NULL, recipient TEXT NOT NULL, body TEXT NOT NULL,
   twilio_sid TEXT, twilio_status TEXT NOT NULL DEFAULT 'queued', twilio_error_code TEXT,
   twilio_error_description TEXT, sent_by TEXT NOT NULL, intent TEXT, idempotency_key TEXT,
-  outreach_action TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  outreach_action TEXT, attachments_json TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messaging_message_twilio_sid ON messaging_messages(twilio_sid) WHERE twilio_sid IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messaging_message_idempotency ON messaging_messages(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS messaging_attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL REFERENCES messaging_conversations(id),
+  message_id INTEGER REFERENCES messaging_messages(id), public_token TEXT NOT NULL UNIQUE,
+  r2_key TEXT NOT NULL UNIQUE, file_name TEXT NOT NULL, content_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_messaging_attachments_conversation ON messaging_attachments(conversation_id,created_at);
 CREATE TABLE IF NOT EXISTS messaging_ai_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL REFERENCES messaging_conversations(id),
   inbound_message_id INTEGER NOT NULL REFERENCES messaging_messages(id), intent TEXT NOT NULL,

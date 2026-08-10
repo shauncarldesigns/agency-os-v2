@@ -97,6 +97,50 @@ assert.equal(deletedDetail.response.status,404);
 const keptDetail=await request(`/api/messaging/conversations/${resetKeep.payload.conversationId}`);
 assert.equal(keptDetail.response.status,200,'Resetting one test conversation must preserve other test conversations');
 
+const attachmentConversation=await request('/api/messaging/simulate',{
+  method:'POST',body:{scenario:'inbound',body:'Can you send a screenshot?',testPhone:`+1555${String(Date.now()+5).slice(-7)}`},
+});
+const pngBytes=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64'));
+const uploadForm=new FormData();
+uploadForm.append('file',new Blob([pngBytes],{type:'image/png'}),'demo-preview.png');
+const uploadResponse=await fetch(`${base}/api/messaging/conversations/${attachmentConversation.payload.conversationId}/attachments`,{
+  method:'POST',headers:{'X-API-Key':apiKey},body:uploadForm,
+});
+const upload=await uploadResponse.json();
+assert.equal(uploadResponse.status,200);
+assert.equal(upload.attachment.content_type,'image/png');
+const mediaHead=await fetch(`${base}${upload.attachment.preview_url}`,{method:'HEAD'});
+assert.equal(mediaHead.status,200);
+assert.equal(mediaHead.headers.get('content-type'),'image/png');
+const mediaGet=await fetch(`${base}${upload.attachment.preview_url}`);
+assert.equal(mediaGet.status,200);
+assert.deepEqual(new Uint8Array(await mediaGet.arrayBuffer()),pngBytes);
+const sendMms=await request(`/api/messaging/conversations/${attachmentConversation.payload.conversationId}/send`,{
+  method:'POST',body:{body:'Here is the preview.',attachmentIds:[upload.attachment.id]},
+});
+assert.equal(sendMms.response.status,200);
+assert.equal(sendMms.payload.message.twilio_status,'delivered');
+const mmsDetail=await request(`/api/messaging/conversations/${attachmentConversation.payload.conversationId}`);
+const mmsMessage=mmsDetail.payload.messages.find(message=>message.id===sendMms.payload.message.id);
+assert.equal(JSON.parse(mmsMessage.attachments_json)[0].file_name,'demo-preview.png');
+
+const deleteForm=new FormData();
+deleteForm.append('file',new Blob([pngBytes],{type:'image/png'}),'delete-me.png');
+const deleteUploadResponse=await fetch(`${base}/api/messaging/conversations/${attachmentConversation.payload.conversationId}/attachments`,{
+  method:'POST',headers:{'X-API-Key':apiKey},body:deleteForm,
+});
+const deleteUpload=await deleteUploadResponse.json();
+const deleteAttachment=await request(`/api/messaging/attachments/${deleteUpload.attachment.id}`,{method:'DELETE'});
+assert.equal(deleteAttachment.response.status,200);
+assert.equal((await fetch(`${base}${deleteUpload.attachment.preview_url}`)).status,404);
+
+const invalidForm=new FormData();
+invalidForm.append('file',new Blob(['not an image'],{type:'text/plain'}),'notes.txt');
+const invalidUpload=await fetch(`${base}/api/messaging/conversations/${attachmentConversation.payload.conversationId}/attachments`,{
+  method:'POST',headers:{'X-API-Key':apiKey},body:invalidForm,
+});
+assert.equal(invalidUpload.status,400);
+
 const unsignedInbound=await fetch(`${base}/webhooks/twilio/sms/inbound`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'From=%2B15555550100&To=%2B15555550101&Body=Hello&MessageSid=SM-unsigned'});
 assert.equal(unsignedInbound.status,403);
 const unsignedStatus=await fetch(`${base}/webhooks/twilio/sms/status`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'MessageSid=SM-unsigned&MessageStatus=delivered'});
@@ -163,6 +207,9 @@ console.log(JSON.stringify({
   notInterestedConversation:'closed-without-rebuttal',
   unsafeReset:'blocked',
   singularReset:'preserved-other-conversations',
+  mmsAttachment:'uploaded-served-sent',
+  pendingAttachmentDelete:'removed-from-r2',
+  invalidAttachment:'blocked',
   unsignedWebhooks:'blocked',
   activeAutoReply:'sent',
   humanTakeoverReply:'blocked',

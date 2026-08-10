@@ -15,11 +15,14 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
-## Messaging Employee (2026-08-10, local implementation — not deployed)
+## Messaging Employee (2026-08-10, PR open — not deployed)
 
 - Dedicated branch: `codex/messaging-employee`. Canonical continuation plan,
   file allowlist, test evidence, Twilio setup, rebase warning, and deployment
   order: `spec/messaging-employee-v1.md`.
+- Clean release commit `d2b31f7` is on the remote branch and PR #246 is open:
+  `https://github.com/shauncarldesigns/agency-os-v2/pull/246`. The shared local
+  branch is intentionally dirty/diverged; the remote PR branch is authoritative.
 - Added Communications inbox, employee controls, mock/live test mode, simulator,
   script approvals, human takeover, Needs Shaun filtering, signed inbound/status
   webhooks, Twilio delivery state, and idempotent sequential initial sends.
@@ -42,6 +45,11 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   routing activity. The Communications reset control now deletes only its
   selected test thread; both singular and global test cleanup endpoints are
   guarded by Test + Mock mode and explicit confirmation tokens.
+- Communications controls now use the existing Tailwind design system, with
+  fully labeled Start, Pause, Stop, Process ready queue, Attach, and Send
+  buttons. The composer supports JPEG/PNG/GIF MMS attachments (10 files, 5 MB
+  combined), previews, removal, R2-backed Twilio GET/HEAD media delivery, and
+  media-preserving transient retries. Browser and integration checks pass.
 - Invalid/bad SMS numbers and landline/VoIP routes suppress texting and schedule
   the existing Email Outreach automation when email + demo URL are available.
 - A disposable service-level fixture proves the permanent-failure path suppresses
@@ -50,9 +58,10 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   records and runs as part of `npm run test:messaging`. Test-conversation
   delivery failures are explicitly blocked from mutating linked leads, and
   Production mode is rejected unless transport is Live Twilio.
-- Migrations `2026-08-10-messaging-employee.sql` and
-  `2026-08-10-messaging-playbook-scripts.sql` are not yet applied remotely and
-  must be applied in that order.
+- Migrations `2026-08-10-messaging-employee.sql`,
+  `2026-08-10-messaging-playbook-scripts.sql`, and
+  `2026-08-10-messaging-attachments.sql` are not yet applied remotely and must
+  be applied in that order.
   Twilio Messaging Service/sender/test-number/A2P config is not yet installed;
   production therefore remains locked. Backend/dashboard compile locally.
 - A detached clean-worktree rehearsal applied Messaging to current

@@ -24,17 +24,18 @@ async function conversationFor(env: Env, phone: string, isTest: boolean, leadId?
   return row!;
 }
 
-async function sendProvider(env: Env, to: string, body: string, ctl: Control) {
+async function sendProvider(env: Env, to: string, body: string, ctl: Control, mediaUrls:string[]=[] ) {
   if (ctl.transport === 'mock') return { sid:`MOCK-${crypto.randomUUID()}`, status:'delivered' };
   if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_MESSAGING_SERVICE_SID) throw new Error('Twilio Messaging Service is not configured');
   const form = new URLSearchParams({ To:to, Body:body, MessagingServiceSid:env.TWILIO_MESSAGING_SERVICE_SID, StatusCallback:`${env.OUTREACH_PUBLIC_URL || 'https://api.shauncarldesigns.com'}/webhooks/twilio/sms/status` });
+  for(const mediaUrl of mediaUrls)form.append('MediaUrl',mediaUrl);
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`, { method:'POST', headers:{ Authorization:`Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`, 'Content-Type':'application/x-www-form-urlencoded' }, body:form });
   const json = await res.json() as { sid?:string; status?:string; message?:string; code?:number };
   if (!res.ok || !json.sid) throw new Error(`${json.code || res.status}: ${json.message || `Twilio HTTP ${res.status}`}`);
   return { sid:json.sid, status:json.status || 'queued' };
 }
 
-async function persistOutbound(env: Env, conversation: Conversation, recipient:string, body:string, sentBy:'ai'|'shaun'|'system', idempotencyKey?:string, outreachAction?:string) {
+async function persistOutbound(env: Env, conversation: Conversation, recipient:string, body:string, sentBy:'ai'|'shaun'|'system', idempotencyKey?:string, outreachAction?:string, attachments:Record<string,unknown>[]=[] ) {
   const ctl = await control(env); if (!ctl) throw new Error('Messaging migration has not been applied');
   if (ctl.status === 'paused' && sentBy !== 'shaun') throw new Error('Messaging Employee is paused');
   if (conversation.status === 'closed') throw new Error('This conversation is SMS opted out');
@@ -52,9 +53,10 @@ async function persistOutbound(env: Env, conversation: Conversation, recipient:s
     const existing = await env.DB.prepare('SELECT * FROM messaging_messages WHERE idempotency_key=?').bind(idempotencyKey).first();
     if (existing) return existing;
   }
-  const out = await env.DB.prepare(`INSERT INTO messaging_messages(conversation_id,direction,sender,recipient,body,twilio_status,sent_by,idempotency_key,outreach_action) VALUES(?,'outbound',?,?,?,'sending',?,?,?)`).bind(conversation.id,env.TWILIO_PHONE_NUMBER||env.TWILIO_MESSAGING_SERVICE_SID||'Messaging Service',actualRecipient,body,sentBy,idempotencyKey||null,outreachAction||null).run();
+  const out = await env.DB.prepare(`INSERT INTO messaging_messages(conversation_id,direction,sender,recipient,body,twilio_status,sent_by,idempotency_key,outreach_action,attachments_json) VALUES(?,'outbound',?,?,?,'sending',?,?,?,?)`).bind(conversation.id,env.TWILIO_PHONE_NUMBER||env.TWILIO_MESSAGING_SERVICE_SID||'Messaging Service',actualRecipient,body,sentBy,idempotencyKey||null,outreachAction||null,attachments.length?JSON.stringify(attachments):null).run();
+  if(attachments.length)await env.DB.prepare(`UPDATE messaging_attachments SET message_id=? WHERE conversation_id=? AND id IN (${attachments.map(()=>'?').join(',')}) AND message_id IS NULL`).bind(out.meta.last_row_id,conversation.id,...attachments.map(a=>a.id)).run();
   try {
-    const sent = await sendProvider(env, actualRecipient, body, ctl);
+    const sent = await sendProvider(env, actualRecipient, body, ctl,attachments.map(a=>String(a.public_url)));
     await env.DB.prepare(`UPDATE messaging_messages SET twilio_sid=?,twilio_status=?,updated_at=datetime('now') WHERE id=?`).bind(sent.sid,sent.status,out.meta.last_row_id).run();
     await env.DB.prepare(`UPDATE messaging_conversations SET last_message_at=datetime('now'),updated_at=datetime('now') WHERE id=?`).bind(conversation.id).run();
     return env.DB.prepare('SELECT * FROM messaging_messages WHERE id=?').bind(out.meta.last_row_id).first();
@@ -104,14 +106,19 @@ messagingRouter.get('/conversations', async c => {
 messagingRouter.get('/conversations/:id', async c => {
   const id=Number(c.req.param('id')); const conversation=await c.env.DB.prepare(`SELECT conversation.*,lead.company,lead.contact,lead.pipeline_status,lead.engagement_score,lead.engagement_grade,lead.site_url,lead.site_url_raw,lead.email,lead.sms_suppressed,lead.sms_suppression_reason FROM messaging_conversations conversation LEFT JOIN leads lead ON lead.id=conversation.lead_id WHERE conversation.id=?`).bind(id).first();
   if(!conversation)return c.json(notFound('Conversation'),404);
-  const messages=await c.env.DB.prepare('SELECT * FROM messaging_messages WHERE conversation_id=? ORDER BY created_at,id').bind(id).all();
+  const messages=await c.env.DB.prepare('SELECT * FROM messaging_messages WHERE conversation_id=? ORDER BY created_at,id').bind(id).all<Record<string,unknown>>();
   await c.env.DB.prepare('UPDATE messaging_conversations SET unread_count=0 WHERE id=?').bind(id).run();
-  return c.json({conversation,messages:messages.results||[]});
+  const hydratedMessages=(messages.results||[]).map(message=>{if(!message.attachments_json)return message;try{const attachments=(JSON.parse(String(message.attachments_json)) as Record<string,unknown>[]).map(attachment=>({...attachment,preview_url:`/webhooks/twilio/media/${attachment.public_token}`}));return {...message,attachments_json:JSON.stringify(attachments)};}catch{return message;}});
+  return c.json({conversation,messages:hydratedMessages});
 });
 
 messagingRouter.post('/conversations/:id/send', async c => {
-  try { const id=Number(c.req.param('id')); const body=await c.req.json() as {body?:string}; const conv=await c.env.DB.prepare('SELECT * FROM messaging_conversations WHERE id=?').bind(id).first<Conversation>(); if(!conv)return c.json(notFound('Conversation'),404); if(!body.body?.trim())return c.json(badRequest('Message body is required'),400); const message=await persistOutbound(c.env,conv,conv.phone_number,body.body.trim(),'shaun'); return c.json({message}); } catch(err){const message=(err as Error).message;if(/opted out|SMS is suppressed|Test mode requires/i.test(message))return c.json(badRequest(message),400);return c.json(serverError(message),500);}
+  try { const id=Number(c.req.param('id')); const body=await c.req.json() as {body?:string;attachmentIds?:number[]}; const conv=await c.env.DB.prepare('SELECT * FROM messaging_conversations WHERE id=?').bind(id).first<Conversation>(); if(!conv)return c.json(notFound('Conversation'),404);const ids=[...new Set((body.attachmentIds||[]).filter(Number.isInteger))].slice(0,10);if(!body.body?.trim()&&!ids.length)return c.json(badRequest('Message text or an attachment is required'),400);const origin=(c.env.OUTREACH_PUBLIC_URL||new URL(c.req.url).origin).replace(/\/$/,'');let attachments:Record<string,unknown>[]=[];if(ids.length){const rows=await c.env.DB.prepare(`SELECT * FROM messaging_attachments WHERE conversation_id=? AND message_id IS NULL AND id IN (${ids.map(()=>'?').join(',')})`).bind(id,...ids).all<Record<string,unknown>>();attachments=(rows.results||[]).map(a=>({...a,public_url:`${origin}/webhooks/twilio/media/${a.public_token}`,preview_url:`/webhooks/twilio/media/${a.public_token}`}));if(attachments.length!==ids.length)return c.json(badRequest('One or more attachments are unavailable'),400);}const message=await persistOutbound(c.env,conv,conv.phone_number,body.body?.trim()||'','shaun',undefined,undefined,attachments); return c.json({message}); } catch(err){const message=(err as Error).message;if(/opted out|SMS is suppressed|Test mode requires/i.test(message))return c.json(badRequest(message),400);return c.json(serverError(message),500);}
 });
+
+messagingRouter.post('/conversations/:id/attachments',async c=>{const conversationId=Number(c.req.param('id'));const conv=await c.env.DB.prepare('SELECT id,status FROM messaging_conversations WHERE id=?').bind(conversationId).first<{id:number;status:string}>();if(!conv)return c.json(notFound('Conversation'),404);if(conv.status==='closed')return c.json(badRequest('This conversation is SMS opted out'),400);const body=await c.req.parseBody({all:false}).catch(()=>null);const file=body?.file as File|undefined;if(!file)return c.json(badRequest('Choose an image to attach'),400);const allowed=new Set(['image/jpeg','image/jpg','image/png','image/gif']);if(!allowed.has(file.type))return c.json(badRequest('MMS attachments must be JPEG, PNG, or GIF'),400);if(file.size>5*1024*1024)return c.json(badRequest('MMS attachments must be 5 MB or smaller'),413);const pending=await c.env.DB.prepare('SELECT COUNT(*) count,COALESCE(SUM(size_bytes),0) total_bytes FROM messaging_attachments WHERE conversation_id=? AND message_id IS NULL').bind(conversationId).first<{count:number;total_bytes:number}>();if((pending?.count||0)>=10)return c.json(badRequest('A message can include up to 10 attachments'),400);if((pending?.total_bytes||0)+file.size>5*1024*1024)return c.json(badRequest('Combined MMS attachments must be 5 MB or smaller'),413);const ext=file.type.includes('png')?'png':file.type.includes('gif')?'gif':'jpg';const base=file.name.replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9_-]/g,'-').replace(/-+/g,'-').slice(0,15)||'attachment';const fileName=`${base}.${ext}`.slice(0,20);const token=crypto.randomUUID().replaceAll('-','');const key=`messaging/${token}/${fileName}`;await c.env.RECORDINGS.put(key,file.stream(),{httpMetadata:{contentType:file.type,contentDisposition:`inline; filename="${fileName}"`}});const inserted=await c.env.DB.prepare('INSERT INTO messaging_attachments(conversation_id,public_token,r2_key,file_name,content_type,size_bytes) VALUES(?,?,?,?,?,?)').bind(conversationId,token,key,fileName,file.type,file.size).run();return c.json({attachment:{id:inserted.meta.last_row_id,file_name:fileName,content_type:file.type,size_bytes:file.size,preview_url:`/webhooks/twilio/media/${token}`}});});
+
+messagingRouter.delete('/attachments/:id',async c=>{const id=Number(c.req.param('id'));const row=await c.env.DB.prepare('SELECT r2_key FROM messaging_attachments WHERE id=? AND message_id IS NULL').bind(id).first<{r2_key:string}>();if(!row)return c.json(notFound('Attachment'),404);await c.env.RECORDINGS.delete(row.r2_key);await c.env.DB.prepare('DELETE FROM messaging_attachments WHERE id=? AND message_id IS NULL').bind(id).run();return c.json({ok:true});});
 
 messagingRouter.post('/messages/:id/retry',async c=>{
   try{
@@ -121,7 +128,9 @@ messagingRouter.post('/messages/:id/retry',async c=>{
     if(row.direction!=='outbound'||!['failed','undelivered'].includes(row.twilio_status))return c.json(badRequest('Only failed outbound messages can be retried'),400);
     if(isPermanentSmsFailure(row.twilio_error_code,row.twilio_error_description))return c.json(badRequest('This is a permanent SMS failure. Keep the lead suppressed and use Email Outreach when eligible.'),400);
     const conv:Conversation={id:row.conversation_id,lead_id:row.lead_id,phone_number:row.phone_number,ai_mode:row.ai_mode,status:row.conversation_status,needs_human:row.needs_human,is_test:row.is_test};
-    const message=await persistOutbound(c.env,conv,conv.phone_number,row.body,'shaun',`${c.env.ENV||'local'}:retry:${id}:${crypto.randomUUID()}`,row.outreach_action||'manual_retry');
+    let attachments:Record<string,unknown>[]=[];
+    try{attachments=row.attachments_json?JSON.parse(row.attachments_json):[];}catch{attachments=[];}
+    const message=await persistOutbound(c.env,conv,conv.phone_number,row.body,'shaun',`${c.env.ENV||'local'}:retry:${id}:${crypto.randomUUID()}`,row.outreach_action||'manual_retry',attachments);
     await c.env.DB.prepare("UPDATE messaging_messages SET twilio_status='retried',updated_at=datetime('now') WHERE id=?").bind(id).run();
     return c.json({message});
   }catch(err){return c.json(serverError((err as Error).message),500);}
@@ -171,8 +180,11 @@ messagingRouter.delete('/test-data',async c=>{
   if(!ctl||ctl.mode!=='test'||ctl.transport!=='mock')return c.json(badRequest('Test data can only be reset in Test mode with Mock transport'),400);
   if(body.confirm!=='RESET_TEST_MESSAGING')return c.json(badRequest('Explicit test reset confirmation is required'),400);
   const count=await c.env.DB.prepare('SELECT COUNT(*) count FROM messaging_conversations WHERE is_test=1').first<{count:number}>();
+  const attachmentKeys=await c.env.DB.prepare('SELECT r2_key FROM messaging_attachments WHERE conversation_id IN (SELECT id FROM messaging_conversations WHERE is_test=1)').all<{r2_key:string}>();
+  await Promise.all((attachmentKeys.results||[]).map(attachment=>c.env.RECORDINGS.delete(attachment.r2_key)));
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM messaging_ai_audit WHERE conversation_id IN (SELECT id FROM messaging_conversations WHERE is_test=1)'),
+    c.env.DB.prepare('DELETE FROM messaging_attachments WHERE conversation_id IN (SELECT id FROM messaging_conversations WHERE is_test=1)'),
     c.env.DB.prepare('DELETE FROM messaging_messages WHERE conversation_id IN (SELECT id FROM messaging_conversations WHERE is_test=1)'),
     c.env.DB.prepare('DELETE FROM messaging_conversations WHERE is_test=1'),
   ]);
@@ -189,8 +201,11 @@ messagingRouter.delete('/conversations/:id/test-data',async c=>{
   const conversation=await c.env.DB.prepare('SELECT id,is_test FROM messaging_conversations WHERE id=?').bind(conversationId).first<{id:number;is_test:number}>();
   if(!conversation)return c.json({error:'Conversation not found'},404);
   if(conversation.is_test!==1)return c.json(badRequest('Production conversations cannot be reset'),400);
+  const attachmentKeys=await c.env.DB.prepare('SELECT r2_key FROM messaging_attachments WHERE conversation_id=?').bind(conversationId).all<{r2_key:string}>();
+  await Promise.all((attachmentKeys.results||[]).map(attachment=>c.env.RECORDINGS.delete(attachment.r2_key)));
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM messaging_ai_audit WHERE conversation_id=?').bind(conversationId),
+    c.env.DB.prepare('DELETE FROM messaging_attachments WHERE conversation_id=?').bind(conversationId),
     c.env.DB.prepare('DELETE FROM messaging_messages WHERE conversation_id=?').bind(conversationId),
     c.env.DB.prepare('DELETE FROM messaging_conversations WHERE id=? AND is_test=1').bind(conversationId),
   ]);
@@ -232,3 +247,5 @@ async function processInbound(env:Env,conv:Conversation,body:string,sid:string,f
 publicMessagingRouter.post('/webhooks/twilio/sms/inbound',async c=>{const raw=await c.req.text();const params=new URLSearchParams(raw);if(!c.env.TWILIO_AUTH_TOKEN||!await twilioSignatureValid(c.req.raw,c.env.TWILIO_AUTH_TOKEN,params))return c.text('Forbidden',403);const from=normalizePhone(params.get('From')||'');const sid=params.get('MessageSid')||'';const body=params.get('Body')||'';const lead=await c.env.DB.prepare('SELECT * FROM leads WHERE phone_e164=? OR phone=? LIMIT 1').bind(from,params.get('From')).first<Lead>();const conv=await conversationFor(c.env,from,false,lead?.id);c.executionCtx.waitUntil(processInbound(c.env,conv,body,sid,from,params.get('To')||''));return c.text('<Response></Response>',200,{'Content-Type':'text/xml'});});
 
 publicMessagingRouter.post('/webhooks/twilio/sms/status',async c=>{const raw=await c.req.text();const params=new URLSearchParams(raw);if(!c.env.TWILIO_AUTH_TOKEN||!await twilioSignatureValid(c.req.raw,c.env.TWILIO_AUTH_TOKEN,params))return c.text('Forbidden',403);await applySmsDeliveryStatus(c.env,params.get('MessageSid')||'',params.get('MessageStatus')||'unknown',params.get('ErrorCode'),params.get('ErrorMessage'));return c.text('<Response></Response>',200,{'Content-Type':'text/xml'});});
+
+publicMessagingRouter.on(['GET','HEAD'],'/webhooks/twilio/media/:token',async c=>{const token=c.req.param('token');if(!/^[a-f0-9]{32}$/.test(token))return c.text('Not found',404);const row=await c.env.DB.prepare('SELECT r2_key,file_name,content_type FROM messaging_attachments WHERE public_token=?').bind(token).first<{r2_key:string;file_name:string;content_type:string}>();if(!row)return c.text('Not found',404);const object=c.req.method==='HEAD'?await c.env.RECORDINGS.head(row.r2_key):await c.env.RECORDINGS.get(row.r2_key);if(!object)return c.text('Not found',404);const headers=new Headers({'Content-Type':row.content_type,'Content-Disposition':`inline; filename="${row.file_name}"`,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});if(c.req.method==='HEAD')return new Response(null,{headers});return new Response((object as R2ObjectBody).body,{headers});});

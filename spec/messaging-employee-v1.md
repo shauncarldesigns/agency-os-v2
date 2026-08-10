@@ -5,13 +5,12 @@ _Last updated: 2026-08-10_
 ## Branch and handoff
 
 - Working branch: `codex/messaging-employee`
-- Status: local implementation and mock-mode validation in progress; not committed,
-  migrated remotely, deployed, or connected to Twilio.
-- This branch was cut from `dcf4027` because the shared worktree contained
-  unrelated Builder changes. `origin/main` had advanced to `04c6da9` when the
-  branch was created. Before committing or opening the Messaging PR, preserve
-  the Messaging changes, move the branch onto current `origin/main`, resolve
-  integration changes, then rerun the verification checklist below.
+- Status: clean release commit `d2b31f7` is pushed and PR #246 is open at
+  `https://github.com/shauncarldesigns/agency-os-v2/pull/246`; remote migrations,
+  deployment, and live Twilio configuration remain intentionally pending.
+- The remote PR branch is authoritative. The shared local branch remains
+  dirty/diverged because it also contains unrelated Builder work; use a clean
+  worktree from `origin/codex/messaging-employee` for follow-up commits.
 - Never stage the unrelated `builder-worker/src/index.mjs` or
   `agency-os-backend/src/prompts/pipelineBrief.ts` changes as part of the
   Messaging commit unless their owner explicitly asks to combine them.
@@ -43,8 +42,9 @@ closes the conversation and suppresses the lead.
 
 ### Backend and data
 
-- Migrations: `agency-os-backend/src/db/migrations/2026-08-10-messaging-employee.sql`
-  and `2026-08-10-messaging-playbook-scripts.sql`, applied in that order.
+- Migrations: `agency-os-backend/src/db/migrations/2026-08-10-messaging-employee.sql`,
+  `2026-08-10-messaging-playbook-scripts.sql`, and
+  `2026-08-10-messaging-attachments.sql`, applied in that order.
 - Canonical schema synchronized in `agency-os-backend/src/db/schema.sql`.
 - Added lead suppression fields and messaging tables:
   `messaging_control`, `messaging_conversations`, `messaging_messages`,
@@ -85,6 +85,9 @@ closes the conversation and suppresses the lead.
   landline, and VoIP failures reject retry and keep the email-routing guidance.
 - Manual composer, Take Over/Return to AI, Needs Shaun controls, suppression,
   lead context, tracked demo link, setup checklist, script editor, and simulator.
+- All primary operator actions use the app's existing Tailwind design-system
+  utilities. The manual composer has labeled Attach and Send buttons and sends
+  real JPEG/PNG/GIF MMS media through R2 (up to 10 files, 5 MB combined).
 - Production selection is rejected until the server reports required Twilio and
   A2P configuration complete, and Production can never be paired with Mock
   transport.
@@ -134,7 +137,9 @@ Validated through the actual dashboard UI:
   retry, permanent retry blocking, opt-out closure, blocked sends after opt-out,
   reset-confirmation protection, Active/AUTO approved replies, Human Takeover,
   Paused behavior, singular conversation reset, rejection of unsigned public
-  webhooks, and restoration of the temporarily approved test script.
+  webhooks, restoration of the temporarily approved test script, MMS upload and
+  send, public GET/HEAD media delivery, pending-file deletion, and invalid-file
+  rejection.
 - The complete Messaging patch was reconstructed on a clean detached worktree
   at current `origin/main` (`04c6da9`). Backend typecheck, rule/routing tests,
   dashboard build, and the full API integration runner all pass on that base.
@@ -207,12 +212,14 @@ threading, human takeover, approved auto-reply, and STOP.
 ### 5. Commit, migration, deployment, and verification
 
 1. Stage only the Messaging allowlist below plus intentional docs.
-2. Commit on `codex/messaging-employee`, push, and open one PR.
+2. Continue the existing `codex/messaging-employee` branch and PR #246.
 3. Merge the PR to `main`; Worker deploys automatically.
-4. Apply both D1 migrations manually, in order, only after the merged backend is ready:
+4. Apply all three D1 migrations manually, in order, only after the merged backend is ready:
    `cd agency-os-backend && npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/2026-08-10-messaging-employee.sql`
    then
    `npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/2026-08-10-messaging-playbook-scripts.sql`
+   then
+   `npx wrangler d1 execute agency-os-v2 --remote --file=src/db/migrations/2026-08-10-messaging-attachments.sql`
 5. Confirm Worker deploy success and call `/api/messaging/status`.
 6. Manually deploy the dashboard:
    `cd agency-os-dashboard && npm run deploy`
@@ -230,6 +237,7 @@ threading, human takeover, approved auto-reply, and STOP.
 - `agency-os-backend/src/db/schema.sql`
 - `agency-os-backend/src/db/migrations/2026-08-10-messaging-employee.sql`
 - `agency-os-backend/src/db/migrations/2026-08-10-messaging-playbook-scripts.sql`
+- `agency-os-backend/src/db/migrations/2026-08-10-messaging-attachments.sql`
 - `agency-os-backend/src/index.ts`
 - `agency-os-backend/package.json`
 - `agency-os-backend/scripts/test-messaging-integration.mjs`
