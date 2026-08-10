@@ -141,7 +141,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
     building: data?.jobs.find(job => job.status === 'building'),
   }), [data]);
 
-  const act = async (action: 'start' | 'pause' | 'resume' | 'stop' | 'retry') => {
+  const act = async (action: 'start' | 'pause' | 'resume' | 'stop' | 'retry' | 'resumeBuild') => {
     if (busy || !data) return;
     setBusy(true);
     try {
@@ -162,6 +162,9 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       } else if (action === 'retry') {
         const result = await api.builder.retryFailed(data.run?.id);
         showToast(`${result.retried} failed build${result.retried === 1 ? '' : 's'} queued`, 'success');
+      } else if (action === 'resumeBuild') {
+        const result = await api.builder.resumeStuck();
+        showToast(`Resuming ${result.businessName} from its open LandingSite project`, 'success');
       } else {
         await api.builder.control(action);
       }
@@ -303,6 +306,10 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
         <div><p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Currently Building</p><h3 className="mt-1 text-xl font-semibold text-slate-900">{counts.building?.business_name ?? 'Waiting for next website'}</h3><p className="mt-1 text-sm text-slate-600">{data.control.current_step ?? 'Waiting for browser worker'}</p></div>
         <div className="text-right"><p className="text-xs uppercase tracking-wide text-slate-400">Elapsed</p><p className="mt-1 text-lg font-semibold text-slate-800">{duration(elapsed)}</p><p className="text-xs text-slate-400">Attempt {counts.building?.attempt_count ?? 0}/3</p></div>
       </div>
+      {data.resume.canResume && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <p className="text-sm text-amber-900"><strong>This build appears interrupted.</strong> Resume reuses the project already open in LandingSite.ai and does not create another website.</p>
+        <button type="button" disabled={busy} onClick={() => void act('resumeBuild')} className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"><RotateCcw className="mr-1.5 inline h-4 w-4" />Resume build</button>
+      </div>}
       <div className="mt-5"><div className="mb-1.5 flex justify-between text-xs text-slate-500"><span>Current website</span><span>{currentProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${currentProgress}%` }} /></div></div>
       <div className="mt-4"><div className="mb-1.5 flex justify-between text-xs text-slate-500"><span>Run #{data.run?.id}</span><span>{progress}% · {completed + counts.failed}/{total}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} /></div></div>
       {data.control.stop_requested === 1 && <p className="mt-4 text-sm font-medium text-amber-700">Safe stop requested—the active website will finish before the queue stops.</p>}

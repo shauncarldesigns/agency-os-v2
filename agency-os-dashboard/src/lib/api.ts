@@ -212,6 +212,7 @@ export interface BuilderStatus {
   runHistory: BuilderRunSummary[];
   metrics: { averageMs:number|null;medianMs:number|null;sampleSize:number;completedToday:number;failedToday:number };
   health: { apiConnected:boolean;workerOnline:boolean;landingSiteAuthenticated:boolean;readyToStart:boolean };
+  resume: { canResume:boolean;jobId:number|null;businessName:string|null;reason:string|null };
 }
 
 // DNS endpoint response shapes. Mirror what routes/dns.ts returns.
@@ -822,6 +823,7 @@ export const api = {
       method: 'POST', body: JSON.stringify({ action }),
     }),
     retryFailed: (runId?: number) => apiFetch<{ retried: number }>('/api/builder/retry-failed', { method: 'POST', body: JSON.stringify({ runId }) }),
+    resumeStuck: () => apiFetch<{ ok:true;jobId:number;businessName:string }>('/api/builder/resume-stuck', { method: 'POST' }),
   },
   emailOutreach: {
     send: (

@@ -34,6 +34,7 @@ const BUILDER_ELIGIBLE_LEAD = `
 `;
 
 const ELIGIBILITY_GUARD_PREFIX = 'Eligibility guard:';
+const RESUME_EXISTING_MARKER = 'Operator resume requested: reuse existing LandingSite editor';
 
 function exclusionReason(lead: EligibilityRow): string {
   if (lead.project_id) return `Existing project #${lead.project_id}`;
@@ -104,8 +105,10 @@ builderWorkerRouter.post('/claim', async (c) => {
   await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',lock_token=NULL,lease_expires_at=NULL,failure_reason='Worker lease expired',updated_at=datetime('now') WHERE run_id=? AND status='building' AND lease_expires_at<datetime('now')`).bind(control.active_run_id).run();
   const blocked = await c.env.DB.prepare(`SELECT j.*,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND NOT (${BUILDER_ELIGIBLE_LEAD})`).bind(control.active_run_id).all<Job & EligibilityRow>();
   for (const row of blocked.results) await blockIneligibleJob(c.env.DB, row, exclusionReason(row));
-  const candidate = await c.env.DB.prepare(`SELECT j.id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND j.attempt_count<3 AND ${BUILDER_ELIGIBLE_LEAD} ORDER BY j.id LIMIT 1`).bind(control.active_run_id).first<{id:number}>();
+  const candidate = await c.env.DB.prepare(`SELECT j.id,j.failure_reason FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND j.attempt_count<3 AND ${BUILDER_ELIGIBLE_LEAD} ORDER BY j.id LIMIT 1`).bind(control.active_run_id).first<{id:number;failure_reason:string|null}>();
   if (!candidate) { await finishRunIfDrained(c.env.DB, control.active_run_id); return c.json({ job: null }); }
+  const resumeExisting = candidate.failure_reason?.startsWith(RESUME_EXISTING_MARKER) ?? false;
+  const resumeEditorUrl = resumeExisting ? candidate.failure_reason?.slice(RESUME_EXISTING_MARKER.length).replace(/^\s*\|\s*/, '') || null : null;
   const lockToken = crypto.randomUUID();
   const claimed = await c.env.DB.prepare(`UPDATE builder_jobs SET status='building',attempt_count=attempt_count+1,lock_token=?,locked_at=datetime('now'),lease_expires_at=datetime('now','+20 minutes'),started_at=COALESCE(started_at,datetime('now')),failure_reason=NULL,updated_at=datetime('now') WHERE id=? AND status IN ('waiting','retry')`).bind(lockToken,candidate.id).run();
   if (!claimed.meta.changes) return c.json({ job:null });
@@ -115,7 +118,7 @@ builderWorkerRouter.post('/claim', async (c) => {
   ]);
   const job = await c.env.DB.prepare(`SELECT j.id,j.lead_id leadId,j.run_id runId,j.attempt_count attempt,l.company businessName,l.pipeline_brief prompt FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.id=?`).bind(candidate.id).first();
   await writeBuilderEvent(c.env.DB, { runId: control.active_run_id, jobId: candidate.id, eventType: 'job_claimed', state: 'building', step: 'Opening LandingSite.ai', message: `Build started for ${(job as {businessName?:string}|null)?.businessName ?? `lead ${candidate.id}`}` });
-  return c.json({ job:{...job,lockToken} });
+  return c.json({ job:{...job,lockToken,resumeExisting,resumeEditorUrl} });
 });
 
 builderWorkerRouter.post('/heartbeat', async (c) => {
@@ -174,13 +177,14 @@ builderAdminRouter.get('/status', async c => {
     ? await c.env.DB.prepare(`SELECT * FROM builder_runs WHERE id=?`).bind(selectedRunId).first<{id:number}>()
     : await c.env.DB.prepare(`SELECT * FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
   const displayRunId = displayRun?.id;
-  const [awaiting,ready,missingBriefLeads,nextBatchLeads,safetyExcluded,jobs,durations,today,runHistory,events]=await Promise.all([
+  const [awaiting,ready,missingBriefLeads,nextBatchLeads,safetyExcluded,jobs,activeBuildingJob,durations,today,runHistory,events]=await Promise.all([
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD}`).first(),
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!=''`).first(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND (l.pipeline_brief IS NULL OR trim(l.pipeline_brief)='') ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 500`).all(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route,l.status crm_status,l.outcome,CASE WHEN l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 60`).all(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.pipeline_status='awaiting_build' AND l.deleted_at IS NULL AND NOT (${BUILDER_ELIGIBLE_LEAD}) ORDER BY l.updated_at DESC,l.id LIMIT 100`).all<EligibilityRow>(),
     displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
+    activeRunId?c.env.DB.prepare(`SELECT j.id,l.company business_name FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status='building' ORDER BY j.id LIMIT 1`).bind(activeRunId).first<{id:number;business_name:string}>():null,
     c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),
     c.env.DB.prepare(`SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completedToday,SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failedToday FROM builder_jobs WHERE ended_at>=datetime('now','-24 hours')`).first(),
     c.env.DB.prepare(`SELECT r.*,SUM(CASE WHEN j.status='completed' THEN 1 ELSE 0 END) completed_jobs,SUM(CASE WHEN j.status='failed' THEN 1 ELSE 0 END) failed_jobs,SUM(CASE WHEN j.status IN ('waiting','retry','building') THEN 1 ELSE 0 END) remaining_jobs,ROUND(AVG(CASE WHEN j.status='completed' THEN j.duration_ms END)) average_ms FROM builder_runs r LEFT JOIN builder_jobs j ON j.run_id=r.id GROUP BY r.id ORDER BY r.id DESC LIMIT 12`).all(),
@@ -191,6 +195,17 @@ builderAdminRouter.get('/status', async c => {
   const middle = Math.floor(durationValues.length/2);
   const medianMs = durationValues.length ? (durationValues.length%2 ? durationValues[middle] : Math.round((durationValues[middle-1]+durationValues[middle])/2)) : null;
   const effectiveState=(control as {effective_state?:string}|null)?.effective_state??'offline';
+  const buildingJob = activeBuildingJob;
+  const canResume = !!buildingJob && ['idle','offline','error'].includes(effectiveState);
+  const resumeReason = !buildingJob
+    ? null
+    : effectiveState === 'login_required'
+      ? 'Sign in to LandingSite.ai first; the employee will continue automatically.'
+      : effectiveState === 'building'
+        ? 'The browser employee is actively working on this website.'
+        : canResume
+          ? 'The queue says Building, but the browser employee is no longer working on it.'
+          : 'Wait for the current browser activity to finish.';
   return c.json({
     awaitingBuild:(awaiting as {count:number}|null)?.count??0,
     readyToQueue:(ready as {count:number}|null)?.count??0,
@@ -204,6 +219,7 @@ builderAdminRouter.get('/status', async c => {
     runHistory:runHistory.results,
     metrics:{averageMs,medianMs,sampleSize:durationValues.length,completedToday:(today as {completedToday:number|null}|null)?.completedToday??0,failedToday:(today as {failedToday:number|null}|null)?.failedToday??0},
     health:{apiConnected:true,workerOnline:effectiveState!=='offline',landingSiteAuthenticated:effectiveState!=='login_required',readyToStart:effectiveState!=='offline'&&effectiveState!=='login_required'},
+    resume:{canResume,jobId:buildingJob?.id??null,businessName:buildingJob?.business_name??null,reason:resumeReason},
   });
 });
 
@@ -249,6 +265,29 @@ builderAdminRouter.post('/control', async c => {
   }
   else return c.json({error:'Invalid action'},400);
   return c.json({ok:true});
+});
+
+builderAdminRouter.post('/resume-stuck', async c => {
+  const control=await c.env.DB.prepare(`SELECT active_run_id,worker_state,worker_message,CASE WHEN last_worker_seen_at IS NULL OR last_worker_seen_at<datetime('now','-2 minutes') THEN 'offline' ELSE worker_state END effective_state FROM builder_control WHERE id=1`).first<{active_run_id:number|null;worker_state:string;worker_message:string|null;effective_state:string}>();
+  if(!control?.active_run_id) return c.json({error:'No active Builder run'},409);
+  const job=await c.env.DB.prepare(`SELECT j.id,j.run_id,j.lead_id,j.attempt_count,l.company business_name FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status='building' ORDER BY j.id LIMIT 1`).bind(control.active_run_id).first<{id:number;run_id:number;lead_id:number;attempt_count:number;business_name:string}>();
+  if(!job) return c.json({error:'No website is currently marked Building'},409);
+  if(!['idle','offline','error'].includes(control.effective_state)) {
+    const message=control.effective_state==='login_required'
+      ? 'LandingSite.ai login is required. Sign in and the active build will continue automatically.'
+      : 'The browser employee is still actively working on this website.';
+    return c.json({error:message},409);
+  }
+  const editorMatch=control.worker_message?.match(/LandingSite editor:\s*(https:\/\/app\.landingsite\.ai\/chat\/[^\s]+)/i);
+  const resumeMarker=editorMatch ? `${RESUME_EXISTING_MARKER} | ${editorMatch[1]}` : RESUME_EXISTING_MARKER;
+  const released=await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',attempt_count=CASE WHEN attempt_count>0 THEN attempt_count-1 ELSE 0 END,failure_reason=?,ended_at=NULL,duration_ms=NULL,lock_token=NULL,locked_at=NULL,lease_expires_at=NULL,updated_at=datetime('now') WHERE id=? AND status='building'`).bind(resumeMarker,job.id).run();
+  if(!released.meta.changes) return c.json({error:'The build changed state before it could be resumed. Refresh and try again.'},409);
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE builder_runs SET status='running',ended_at=NULL,error_reason=NULL WHERE id=?`).bind(job.run_id),
+    c.env.DB.prepare(`UPDATE builder_control SET paused=0,stop_requested=0,worker_state='running',current_step='Resume requested',worker_message='Waiting for browser employee to reuse the existing LandingSite editor.',updated_at=datetime('now') WHERE id=1 AND active_run_id=?`).bind(job.run_id),
+  ]);
+  await writeBuilderEvent(c.env.DB,{runId:job.run_id,jobId:job.id,eventType:'job_resume_requested',state:'retry',step:'Resume requested',message:`Reusing the existing LandingSite project for ${job.business_name}.`,metadata:{leadId:job.lead_id}});
+  return c.json({ok:true,jobId:job.id,businessName:job.business_name});
 });
 
 builderAdminRouter.post('/retry-failed', async c => {
