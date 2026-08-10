@@ -128,21 +128,20 @@ async function captureDemoUrl(page, buildStartedUrl, onEditorReady) {
   await page.waitForURL(url => url.href !== buildStartedUrl, { timeout: 2 * 60_000 });
   console.log(`LandingSite: editor loaded at ${page.url()}; frames=${page.frames().map(frame => frame.url()).join(', ')}`);
   await onEditorReady?.(page.url());
-  let preview;
+  let demoUrl;
   const previewDeadline = Date.now() + 15 * 60_000;
-  while (!preview && Date.now() < previewDeadline) {
+  while (!demoUrl && Date.now() < previewDeadline) {
     for (const frame of page.frames()) {
-      const candidate = frame.getByRole('link', { name: /preview website/i }).first();
-      if (await candidate.isVisible().catch(() => false)) {
-        preview = candidate;
-        break;
-      }
+      const hrefCandidate = frame.locator('a[href^="https://"][href*=".agcy.dev"]').first();
+      demoUrl = await hrefCandidate.getAttribute('href').catch(() => null);
+      if (demoUrl) break;
+      const namedCandidate = frame.getByRole('link', { name: /preview\s*website/i }).first();
+      demoUrl = await namedCandidate.getAttribute('href').catch(() => null);
+      if (demoUrl) break;
     }
-    if (!preview) await page.waitForTimeout(500);
+    if (!demoUrl) await page.waitForTimeout(500);
   }
-  if (!preview) throw new Error('LandingSite Preview Website control did not appear.');
-  const demoUrl = await preview.getAttribute('href');
-  if (!demoUrl) throw new Error('LandingSite Preview Website link has no URL.');
+  if (!demoUrl) throw new Error('LandingSite Preview Website link did not appear.');
   const parsed = new URL(demoUrl);
   if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.agcy.dev')) {
     throw new Error(`Unexpected LandingSite preview URL: ${demoUrl}`);
