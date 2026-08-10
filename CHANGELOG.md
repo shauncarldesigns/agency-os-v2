@@ -19,6 +19,12 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Builder eligibility now fails closed across dashboard counts, brief
+  preparation, queue creation, worker claims, retries, and URL completion.**
+  Not-interested or qualified/demo-booked leads, existing projects, existing
+  websites, and previously saved demo URLs are excluded and surfaced in a
+  dashboard Safety exclusions list instead of being built. The exact next
+  batch is previewed with checkboxes, and only reviewed lead IDs can be queued.
 - **Builder runs are now capped at an operator-selected batch of 5, 10, or
   20 sites (default 20)**. Only briefs needed by that batch are prepared; all
   remaining Awaiting Build leads stay queued for a later run.

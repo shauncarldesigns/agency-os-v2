@@ -4,6 +4,48 @@ import { completePipelineBuild } from './pipeline';
 
 type WorkerState = 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
 interface Job { id: number; lead_id: number; run_id: number; status: string; attempt_count: number; lock_token: string | null }
+interface EligibilityRow {
+  id: number;
+  company: string;
+  status: string;
+  pipeline_status: string;
+  outcome: string | null;
+  has_website: number | null;
+  site_url: string | null;
+  site_url_raw: string | null;
+  project_id: number | null;
+  demo_id: number | null;
+}
+
+// Builder eligibility is deliberately stricter than the pipeline column.
+// Old leads received awaiting_build as a migration default, so that flag alone
+// is not proof that sales still wants a demo. Keep this predicate in every
+// status, queue, claim, retry, and result path.
+const BUILDER_ELIGIBLE_LEAD = `
+  l.pipeline_status='awaiting_build'
+  AND l.status IN ('cold','contacted')
+  AND l.deleted_at IS NULL
+  AND COALESCE(l.has_website,0)=0
+  AND COALESCE(trim(l.site_url),'')=''
+  AND COALESCE(trim(l.site_url_raw),'')=''
+  AND lower(COALESCE(l.outcome,'')) NOT LIKE '%not interested%'
+  AND NOT EXISTS (SELECT 1 FROM projects bp WHERE bp.lead_id=l.id)
+  AND NOT EXISTS (SELECT 1 FROM demos bd WHERE bd.lead_id=l.id AND bd.status IN ('booked','held','rescheduled'))
+`;
+
+const ELIGIBILITY_GUARD_PREFIX = 'Eligibility guard:';
+
+function exclusionReason(lead: EligibilityRow): string {
+  if (lead.project_id) return `Existing project #${lead.project_id}`;
+  if (lead.demo_id) return `Demo already booked (#${lead.demo_id})`;
+  if (lead.status === 'not_interested') return 'CRM stage is Not interested';
+  if (lead.status === 'qualified') return 'CRM stage is Demo booked / qualified';
+  if (!['cold', 'contacted'].includes(lead.status)) return `CRM stage is ${lead.status}`;
+  if (lead.outcome?.toLowerCase().includes('not interested')) return 'Latest outcome is Not Interested';
+  if (lead.site_url_raw || lead.site_url) return 'A demo URL is already saved';
+  if (lead.has_website) return 'Lead already has a website';
+  return 'Lead no longer meets Builder safety rules';
+}
 
 async function writeBuilderEvent(
   db: D1Database,
@@ -40,6 +82,12 @@ async function finishRunIfDrained(db: D1Database, runId: number): Promise<void> 
   ]);
 }
 
+async function blockIneligibleJob(db: D1Database, job: Job, reason: string): Promise<void> {
+  const message = `${ELIGIBILITY_GUARD_PREFIX} ${reason}`;
+  await db.prepare(`UPDATE builder_jobs SET status='failed',failure_reason=?,ended_at=datetime('now'),duration_ms=CASE WHEN started_at IS NULL THEN NULL ELSE CAST((julianday('now')-julianday(started_at))*86400000 AS INTEGER) END,lock_token=NULL,lease_expires_at=NULL,updated_at=datetime('now') WHERE id=?`).bind(message, job.id).run();
+  await writeBuilderEvent(db, { runId: job.run_id, jobId: job.id, eventType: 'job_skipped_ineligible', state: 'failed', step: 'Eligibility guard', message });
+}
+
 export const builderWorkerRouter = new Hono<{ Bindings: Env }>();
 builderWorkerRouter.use('*', async (c, next) => {
   const token = c.req.header('Authorization')?.replace(/^Bearer\s+/i, '') ?? '';
@@ -54,7 +102,9 @@ builderWorkerRouter.post('/claim', async (c) => {
     return c.json({ paused: !!control?.paused, stopped: !!control?.stop_requested, job: null });
   }
   await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',lock_token=NULL,lease_expires_at=NULL,failure_reason='Worker lease expired',updated_at=datetime('now') WHERE run_id=? AND status='building' AND lease_expires_at<datetime('now')`).bind(control.active_run_id).run();
-  const candidate = await c.env.DB.prepare(`SELECT id FROM builder_jobs WHERE run_id=? AND status IN ('waiting','retry') AND attempt_count<3 ORDER BY id LIMIT 1`).bind(control.active_run_id).first<{id:number}>();
+  const blocked = await c.env.DB.prepare(`SELECT j.*,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND NOT (${BUILDER_ELIGIBLE_LEAD})`).bind(control.active_run_id).all<Job & EligibilityRow>();
+  for (const row of blocked.results) await blockIneligibleJob(c.env.DB, row, exclusionReason(row));
+  const candidate = await c.env.DB.prepare(`SELECT j.id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND j.attempt_count<3 AND ${BUILDER_ELIGIBLE_LEAD} ORDER BY j.id LIMIT 1`).bind(control.active_run_id).first<{id:number}>();
   if (!candidate) { await finishRunIfDrained(c.env.DB, control.active_run_id); return c.json({ job: null }); }
   const lockToken = crypto.randomUUID();
   const claimed = await c.env.DB.prepare(`UPDATE builder_jobs SET status='building',attempt_count=attempt_count+1,lock_token=?,locked_at=datetime('now'),lease_expires_at=datetime('now','+20 minutes'),started_at=COALESCE(started_at,datetime('now')),failure_reason=NULL,updated_at=datetime('now') WHERE id=? AND status IN ('waiting','retry')`).bind(lockToken,candidate.id).run();
@@ -86,8 +136,14 @@ builderWorkerRouter.post('/result', async (c) => {
   if (!job || job.status !== 'building') return c.json({error:'Job lock is no longer valid'},409);
   if (b.success) {
     const url=b.demoUrl?.trim()??''; try { const p=new URL(url); if(!/^https?:$/.test(p.protocol)) throw new Error(); } catch { return c.json({error:'Valid demoUrl required'},400); }
-    const lead=await c.env.DB.prepare(`SELECT * FROM leads WHERE id=?`).bind(job.lead_id).first<Lead>();
-    if(!lead || lead.pipeline_status!=='awaiting_build') return c.json({error:'Lead no longer awaits build'},409);
+    const lead=await c.env.DB.prepare(`SELECT l.* FROM leads l WHERE l.id=? AND ${BUILDER_ELIGIBLE_LEAD}`).bind(job.lead_id).first<Lead>();
+    if(!lead) {
+      const state=await c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.id=?`).bind(job.lead_id).first<EligibilityRow>();
+      const reason=state ? exclusionReason(state) : 'Lead was removed';
+      await blockIneligibleJob(c.env.DB,job,reason);
+      await finishRunIfDrained(c.env.DB,job.run_id);
+      return c.json({success:false,leadId:job.lead_id,reason:`${ELIGIBILITY_GUARD_PREFIX} ${reason}`});
+    }
     await completePipelineBuild(c.env,lead,url);
     await c.env.DB.prepare(`UPDATE builder_jobs SET status='completed',demo_url=?,ended_at=datetime('now'),duration_ms=CAST((julianday('now')-julianday(started_at))*86400000 AS INTEGER),lock_token=NULL,lease_expires_at=NULL,artifact_path=?,updated_at=datetime('now') WHERE id=?`).bind(url,b.artifactPath?.slice(0,1000)??null,job.id).run();
     await writeBuilderEvent(c.env.DB, { runId: job.run_id, jobId: job.id, eventType: 'job_completed', state: 'completed', step: 'Completing job', message: url, metadata: { demoUrl: url } });
@@ -118,11 +174,12 @@ builderAdminRouter.get('/status', async c => {
     ? await c.env.DB.prepare(`SELECT * FROM builder_runs WHERE id=?`).bind(selectedRunId).first<{id:number}>()
     : await c.env.DB.prepare(`SELECT * FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
   const displayRunId = displayRun?.id;
-  const [awaiting,ready,missingBriefLeads,nextBatchLeads,jobs,durations,today,runHistory,events]=await Promise.all([
-    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
-    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
-    c.env.DB.prepare(`SELECT id,company,email,phone_route FROM leads WHERE pipeline_status='awaiting_build' AND (pipeline_brief IS NULL OR trim(pipeline_brief)='') AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT 500`).all(),
-    c.env.DB.prepare(`SELECT id,company,email,phone_route,CASE WHEN pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads WHERE pipeline_status='awaiting_build' AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT 20`).all(),
+  const [awaiting,ready,missingBriefLeads,nextBatchLeads,safetyExcluded,jobs,durations,today,runHistory,events]=await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD}`).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!=''`).first(),
+    c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND (l.pipeline_brief IS NULL OR trim(l.pipeline_brief)='') ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 500`).all(),
+    c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route,l.status crm_status,l.outcome,CASE WHEN l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 20`).all(),
+    c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.pipeline_status='awaiting_build' AND l.deleted_at IS NULL AND NOT (${BUILDER_ELIGIBLE_LEAD}) ORDER BY l.updated_at DESC,l.id LIMIT 100`).all<EligibilityRow>(),
     displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
     c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),
     c.env.DB.prepare(`SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completedToday,SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failedToday FROM builder_jobs WHERE ended_at>=datetime('now','-24 hours')`).first(),
@@ -139,6 +196,7 @@ builderAdminRouter.get('/status', async c => {
     readyToQueue:(ready as {count:number}|null)?.count??0,
     missingBriefLeads:missingBriefLeads.results,
     nextBatchLeads:nextBatchLeads.results,
+    safetyExcluded:safetyExcluded.results.map(lead=>({id:lead.id,company:lead.company,crmStatus:lead.status,outcome:lead.outcome,reason:exclusionReason(lead)})),
     control,
     run:displayRun??null,
     jobs:jobs.results,
@@ -150,14 +208,21 @@ builderAdminRouter.get('/status', async c => {
 });
 
 builderAdminRouter.post('/start', async c => {
-  const body=(await c.req.json().catch(()=>({}))) as {batchSize?:number};
+  const body=(await c.req.json().catch(()=>({}))) as {batchSize?:number;leadIds?:number[]};
   const requestedBatchSize=body.batchSize??20;
   if(!Number.isInteger(requestedBatchSize)||requestedBatchSize<1||requestedBatchSize>20) return c.json({error:'batchSize must be an integer from 1 to 20'},400);
+  const reviewedLeadIds=body.leadIds === undefined ? null : [...new Set(body.leadIds)];
+  if(reviewedLeadIds && (!reviewedLeadIds.length||reviewedLeadIds.length>20||reviewedLeadIds.some(id=>!Number.isInteger(id)||id<1))) return c.json({error:'leadIds must contain 1 to 20 unique lead IDs'},400);
   const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
   if(control?.active_run_id) return c.json({error:'A Builder run is already active'},409);
   const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status) VALUES('starting') RETURNING id`).first<{id:number}>();
   if(!created) return c.json({error:'Could not create Builder run'},500);
-  await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT id,?,'waiting' FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT ?`).bind(created.id,requestedBatchSize).run();
+  if(reviewedLeadIds) {
+    const placeholders=reviewedLeadIds.map(()=>'?').join(',');
+    await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT l.id,?,'waiting' FROM leads l WHERE l.id IN (${placeholders}) AND ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id`).bind(created.id,...reviewedLeadIds).run();
+  } else {
+    await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT l.id,?,'waiting' FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT ?`).bind(created.id,requestedBatchSize).run();
+  }
   const total=await c.env.DB.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id=?`).bind(created.id).first<{count:number}>();
   if(!total?.count){await c.env.DB.prepare(`UPDATE builder_runs SET status='completed',ended_at=datetime('now') WHERE id=?`).bind(created.id).run();return c.json({runId:created.id,queued:0});}
   await c.env.DB.batch([
@@ -190,7 +255,7 @@ builderAdminRouter.post('/retry-failed', async c => {
   const body=(await c.req.json().catch(()=>({}))) as {runId?:number};
   const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
   if(control?.active_run_id) {
-    const result=await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',attempt_count=0,failure_reason=NULL,ended_at=NULL,duration_ms=NULL,updated_at=datetime('now') WHERE run_id=? AND status='failed'`).bind(control.active_run_id).run();
+    const result=await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',attempt_count=0,failure_reason=NULL,ended_at=NULL,duration_ms=NULL,updated_at=datetime('now') WHERE run_id=? AND status='failed' AND failure_reason NOT LIKE ? AND lead_id IN (SELECT l.id FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD})`).bind(control.active_run_id,`${ELIGIBILITY_GUARD_PREFIX}%`).run();
     await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=0,worker_state='running',updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='running',ended_at=NULL,error_reason=NULL WHERE id=?`).bind(control.active_run_id)]);
     return c.json({retried:result.meta.changes});
   }
@@ -198,7 +263,7 @@ builderAdminRouter.post('/retry-failed', async c => {
     ? await c.env.DB.prepare(`SELECT id FROM builder_runs WHERE id=?`).bind(body.runId).first<{id:number}>()
     : await c.env.DB.prepare(`SELECT id FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
   if(!prior) return c.json({error:'No failed builds to retry'},409);
-  const failed=await c.env.DB.prepare(`SELECT lead_id FROM builder_jobs WHERE run_id=? AND status='failed'`).bind(prior.id).all<{lead_id:number}>();
+  const failed=await c.env.DB.prepare(`SELECT j.lead_id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status='failed' AND j.failure_reason NOT LIKE ? AND ${BUILDER_ELIGIBLE_LEAD}`).bind(prior.id,`${ELIGIBILITY_GUARD_PREFIX}%`).all<{lead_id:number}>();
   if(!failed.results.length) return c.json({error:'No failed builds to retry'},409);
   const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status,total_jobs) VALUES('starting',?) RETURNING id`).bind(failed.results.length).first<{id:number}>();
   if(!created) return c.json({error:'Could not create retry run'},500);

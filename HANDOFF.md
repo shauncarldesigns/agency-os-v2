@@ -34,6 +34,14 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   and 24-hour metrics, and historical-run inspection/retry. New runs are
   capped server-side at 20 sites; the operator can select 5, 10, or 20, and
   only missing briefs inside that exact batch are generated.
+- Builder eligibility is fail-closed and must be applied at status display,
+  brief selection, queue insertion, job claim, retry, and successful result.
+  Eligible leads are undeleted `cold`/`contacted` records in
+  `awaiting_build`, with no existing website/demo URL, no project, no booked
+  demo, and no Not Interested outcome. Dashboard Safety exclusions expose
+  stale Awaiting Build flags without allowing those leads into a run. The
+  dashboard previews the exact next batch with checkboxes and submits those
+  lead IDs; the backend revalidates the reviewed IDs before insertion.
 - Email Outreach is now build-first. Email-bearing, no-site leads enter
   **Awaiting Build** before **To Call**; leads without a usable email fall back
   to the call lane. Builder completion saves the tracking URL and schedules
