@@ -79,7 +79,7 @@ async function finishRunIfDrained(db: D1Database, runId: number): Promise<void> 
   await writeBuilderEvent(db, { runId, eventType: 'run_completed', state: 'completed', step: 'Queue complete', message: 'All queued websites have finished.' });
   await db.batch([
     db.prepare(`UPDATE builder_runs SET status='completed', ended_at=datetime('now') WHERE id=? AND status IN ('starting','running','paused')`).bind(runId),
-    db.prepare(`UPDATE builder_control SET active_run_id=NULL, worker_state='idle', current_step=NULL, updated_at=datetime('now') WHERE id=1 AND active_run_id=?`).bind(runId),
+    db.prepare(`UPDATE builder_control SET active_run_id=NULL, worker_state='idle', current_step=NULL, worker_message=NULL, updated_at=datetime('now') WHERE id=1 AND active_run_id=?`).bind(runId),
   ]);
 }
 
@@ -99,7 +99,7 @@ builderWorkerRouter.use('*', async (c, next) => {
 builderWorkerRouter.post('/claim', async (c) => {
   const control = await c.env.DB.prepare(`SELECT paused, stop_requested, active_run_id FROM builder_control WHERE id=1`).first<{paused:number;stop_requested:number;active_run_id:number|null}>();
   if (!control?.active_run_id || control.paused || control.stop_requested) {
-    await c.env.DB.prepare(`UPDATE builder_control SET last_worker_seen_at=datetime('now'),worker_state=?,current_step=CASE WHEN ?='idle' THEN NULL ELSE current_step END,updated_at=datetime('now') WHERE id=1`).bind(control?.paused ? 'paused' : 'idle', control?.paused ? 'paused' : 'idle').run();
+    await c.env.DB.prepare(`UPDATE builder_control SET last_worker_seen_at=datetime('now'),worker_state=?,current_step=CASE WHEN ?='idle' THEN NULL ELSE current_step END,worker_message=CASE WHEN ?='idle' THEN NULL ELSE worker_message END,updated_at=datetime('now') WHERE id=1`).bind(control?.paused ? 'paused' : 'idle', control?.paused ? 'paused' : 'idle', control?.paused ? 'paused' : 'idle').run();
     return c.json({ paused: !!control?.paused, stopped: !!control?.stop_requested, job: null });
   }
   await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',lock_token=NULL,lease_expires_at=NULL,failure_reason='Worker lease expired',updated_at=datetime('now') WHERE run_id=? AND status='building' AND lease_expires_at<datetime('now')`).bind(control.active_run_id).run();
@@ -114,7 +114,7 @@ builderWorkerRouter.post('/claim', async (c) => {
   if (!claimed.meta.changes) return c.json({ job:null });
   await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE builder_runs SET status='running' WHERE id=? AND status='starting'`).bind(control.active_run_id),
-    c.env.DB.prepare(`UPDATE builder_control SET worker_state='building',current_step='Opening LandingSite.ai',last_worker_seen_at=datetime('now'),updated_at=datetime('now') WHERE id=1`),
+    c.env.DB.prepare(`UPDATE builder_control SET worker_state='building',current_step='Opening LandingSite.ai',worker_message=NULL,last_worker_seen_at=datetime('now'),updated_at=datetime('now') WHERE id=1`),
   ]);
   const job = await c.env.DB.prepare(`SELECT j.id,j.lead_id leadId,j.run_id runId,j.attempt_count attempt,l.company businessName,l.pipeline_brief prompt FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.id=?`).bind(candidate.id).first();
   await writeBuilderEvent(c.env.DB, { runId: control.active_run_id, jobId: candidate.id, eventType: 'job_claimed', state: 'building', step: 'Opening LandingSite.ai', message: `Build started for ${(job as {businessName?:string}|null)?.businessName ?? `lead ${candidate.id}`}` });
