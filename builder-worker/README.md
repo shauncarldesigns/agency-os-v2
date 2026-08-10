@@ -34,6 +34,11 @@ The worker fills the two creation fields exactly as LandingSite presents them:
 It waits on visible LandingSite state and retries recoverable failures up to
 three attempts.
 
+When LandingSite finishes the editor build, the worker reads the validated
+`https://*.agcy.dev` URL directly from the **Preview Website** anchor. It does
+not click the link or open a preview tab. Any preview tabs left by an older
+worker version are closed when the next job starts.
+
 ## Artifact policy
 
 - Successful builds store no video, trace, screenshot, or ZIP artifact.

@@ -19,6 +19,12 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Builder batches now support 20, 40, or 60 sites**, while continuing to
+  process one website at a time. The next-batch review is a compact drawer
+  with remove/restore controls, and Safety exclusions are collapsed by default.
+- **The Builder now reads the validated `*.agcy.dev` URL directly from the
+  Preview Website anchor** instead of clicking it, opening a tab, and polling
+  the preview page. Legacy preview tabs are cleaned up when the next job starts.
 - **Successful Builder jobs no longer retain Playwright video or trace ZIPs.**
   Failures keep a small JSON error log plus screenshot; heavyweight traces are
   opt-in for targeted debugging, with 30-day artifact retention by default.
@@ -27,9 +33,9 @@ when a manual deploy was needed.
   Not-interested or qualified/demo-booked leads, existing projects, existing
   websites, and previously saved demo URLs are excluded and surfaced in a
   dashboard Safety exclusions list instead of being built. The exact next
-  batch is previewed with checkboxes, and only reviewed lead IDs can be queued.
-- **Builder runs are now capped at an operator-selected batch of 5, 10, or
-  20 sites (default 20)**. Only briefs needed by that batch are prepared; all
+  batch is previewed in a compact drawer, and only reviewed lead IDs can be queued.
+- **Builder runs are now capped at an operator-selected batch of 20, 40, or
+  60 sites (default 20)**. Only briefs needed by that batch are prepared; all
   remaining Awaiting Build leads stay queued for a later run.
 - **Builder Employee now installs as an always-on macOS login service**,
   restarts after crashes, prevents duplicate local workers, and exposes local

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Bot, CirclePause, CirclePlay, Copy,
-  ExternalLink, FileWarning, Loader2, RefreshCw, RotateCcw,
-  ShieldCheck, Square, Wifi, WifiOff,
+  ChevronDown, ChevronUp, ExternalLink, FileWarning, Loader2,
+  RefreshCw, RotateCcw, ShieldCheck, Square, Wifi, WifiOff, X,
 } from 'lucide-react';
 import { api, ApiError, type BuilderJob, type BuilderStatus } from '../../lib/api';
 import type { ShowToast } from '../../lib/types';
@@ -60,8 +60,7 @@ const Badge = ({ value }: { value: string }) => (
 
 const BUILD_STEPS = [
   'Opening LandingSite.ai', 'Checking login', 'Creating new project', 'Pasting brief',
-  'Starting generation', 'Waiting for website', 'Opening website preview',
-  'Waiting for preview to become ready', 'Validating website preview', 'Saving URL', 'Completing job',
+  'Starting generation', 'Waiting for website', 'Capturing demo URL', 'Saving URL', 'Completing job',
 ];
 
 const isEligibilitySkip = (job: BuilderJob) => job.failure_reason?.startsWith('Eligibility guard:') ?? false;
@@ -110,6 +109,8 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [batchSize, setBatchSize] = useState(20);
   const [excludedLeadIds, setExcludedLeadIds] = useState<Set<number>>(() => new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [preparing, setPreparing] = useState<{ current: number; total: number; company: string } | null>(null);
   const [, setClock] = useState(0);
 
@@ -182,6 +183,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const selectedBatch = batchCandidates.filter(lead => !excludedLeadIds.has(lead.id));
   const nextBatchCount = selectedBatch.length;
   const nextBatchMissingBriefs = selectedBatch.filter(lead => !lead.has_brief).length;
+  const removedBatchCount = batchCandidates.length - nextBatchCount;
   const remaining = counts.queued + (counts.building ? 1 : 0);
   const completed = counts.completed;
   const total = data.run?.total_jobs ?? data.jobs.length;
@@ -218,9 +220,9 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
           {!data.control.active_run_id && <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <span className="font-medium">Batch</span>
             <select value={batchSize} disabled={busy} onChange={event => setBatchSize(Number(event.target.value))} className="bg-transparent font-semibold text-slate-900 outline-none">
-              <option value={5}>5 sites</option>
-              <option value={10}>10 sites</option>
               <option value={20}>20 sites</option>
+              <option value={40}>40 sites</option>
+              <option value={60}>60 sites</option>
             </select>
           </label>}
           {!data.control.active_run_id && <button disabled={busy || !!startBlockedReason} onClick={() => void act('start')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
@@ -245,18 +247,25 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       {data.control.worker_message && data.control.effective_state !== 'login_required' && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{data.control.worker_message}</div>}
     </section>
 
-    {!data.control.active_run_id && batchCandidates.length > 0 && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 className="font-semibold text-slate-900">Review next batch</h3><p className="text-xs text-slate-500">Only checked leads will have briefs prepared and be sent to LandingSite. Every lead is checked again when the worker claims it.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{nextBatchCount} selected</span></div>
-      <div className="divide-y divide-slate-100">
-        {batchCandidates.map(lead => {
-          const checked = !excludedLeadIds.has(lead.id);
-          return <label key={lead.id} className="flex cursor-pointer flex-wrap items-center gap-3 px-5 py-3 hover:bg-slate-50">
-            <input type="checkbox" checked={checked} disabled={busy} onChange={() => setExcludedLeadIds(current => { const next=new Set(current); if(next.has(lead.id)) next.delete(lead.id); else next.add(lead.id); return next; })} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
-            <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{lead.company}</p><p className="text-xs text-slate-500">Lead #{lead.id} · {lead.crm_status.replaceAll('_',' ')} · {lead.phone_route ?? 'route unknown'}{lead.email ? ` · ${lead.email}` : ''}</p></div>
+    {!data.control.active_run_id && batchCandidates.length > 0 && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button type="button" aria-expanded={batchOpen} onClick={() => setBatchOpen(value => !value)} className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-slate-50">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><CirclePlay className="h-4 w-4" /></span>
+          <div className="min-w-0"><h3 className="text-sm font-semibold text-slate-900">Next batch</h3><p className="truncate text-xs text-slate-500">{nextBatchCount} selected · {nextBatchMissingBriefs} brief{nextBatchMissingBriefs === 1 ? '' : 's'} needed{removedBatchCount ? ` · ${removedBatchCount} removed` : ''}</p></div>
+        </div>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">{batchOpen ? 'Hide' : 'Manage'}{batchOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
+      </button>
+      {batchOpen && <div className="border-t border-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-5 py-2.5 text-xs text-slate-500"><span>Remove any lead you do not want in this run. Eligibility is checked again before building.</span>{removedBatchCount > 0 && <button type="button" disabled={busy} onClick={() => setExcludedLeadIds(new Set())} className="font-semibold text-blue-700 hover:text-blue-800">Restore all</button>}</div>
+        <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+          {selectedBatch.map(lead => <div key={lead.id} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-slate-50">
+            <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{lead.company}</p><p className="truncate text-xs text-slate-500">Lead #{lead.id} · {lead.crm_status.replaceAll('_',' ')} · {lead.phone_route ?? 'route unknown'}{lead.email ? ` · ${lead.email}` : ''}</p></div>
             <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${lead.has_brief ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{lead.has_brief ? 'Brief ready' : 'Brief needed'}</span>
-          </label>;
-        })}
-      </div>
+            <button type="button" disabled={busy} title={`Remove ${lead.company} from this batch`} onClick={() => setExcludedLeadIds(current => new Set(current).add(lead.id))} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-rose-600"><X className="h-4 w-4" /></button>
+          </div>)}
+          {!selectedBatch.length && <div className="px-5 py-8 text-center text-sm text-slate-500">No leads selected. Restore the batch to continue.</div>}
+        </div>
+      </div>}
     </section>}
 
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -276,12 +285,17 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p></div>)}
     </section>
 
-    {data.safetyExcluded.length > 0 && <section className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/40">
-      <div className="border-b border-amber-200 px-5 py-4"><h3 className="font-semibold text-amber-950">Safety exclusions</h3><p className="text-xs text-amber-800">These records still say Awaiting Build, but the Builder will not queue them because CRM, demo, project, website, or saved-URL state takes precedence.</p></div>
-      <div className="divide-y divide-amber-100">
-        {data.safetyExcluded.slice(0, 20).map(lead => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm"><div><span className="font-semibold text-slate-900">{lead.company}</span><span className="ml-2 text-xs text-slate-500">Lead #{lead.id} · {lead.crmStatus.replaceAll('_', ' ')}</span></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">{lead.reason}</span></div>)}
-        {data.safetyExcluded.length > 20 && <p className="px-5 py-3 text-xs text-amber-800">And {data.safetyExcluded.length - 20} more protected leads.</p>}
-      </div>
+    {data.safetyExcluded.length > 0 && <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white">
+      <button type="button" aria-expanded={safetyOpen} onClick={() => setSafetyOpen(value => !value)} className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-amber-50/50">
+        <div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><ShieldCheck className="h-4 w-4" /></span><div><h3 className="text-sm font-semibold text-slate-900">Safety exclusions</h3><p className="text-xs text-slate-500">{data.safetyExcluded.length} protected lead{data.safetyExcluded.length === 1 ? '' : 's'} blocked from the Builder</p></div></div>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800">{safetyOpen ? 'Hide details' : 'View details'}{safetyOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
+      </button>
+      {safetyOpen && <div className="border-t border-amber-200">
+        <p className="bg-amber-50/50 px-5 py-2.5 text-xs text-amber-900">These records still say Awaiting Build, but CRM, demo, project, website, or saved-URL state takes precedence.</p>
+        <div className="max-h-72 divide-y divide-amber-100 overflow-y-auto">
+          {data.safetyExcluded.map(lead => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm"><div><span className="font-semibold text-slate-900">{lead.company}</span><span className="ml-2 text-xs text-slate-500">Lead #{lead.id} · {lead.crmStatus.replaceAll('_', ' ')}</span></div><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">{lead.reason}</span></div>)}
+        </div>
+      </div>}
     </section>}
 
     {(data.control.active_run_id || counts.building) && <section className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5">

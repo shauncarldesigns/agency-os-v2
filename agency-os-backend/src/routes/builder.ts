@@ -178,7 +178,7 @@ builderAdminRouter.get('/status', async c => {
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD}`).first(),
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!=''`).first(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND (l.pipeline_brief IS NULL OR trim(l.pipeline_brief)='') ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 500`).all(),
-    c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route,l.status crm_status,l.outcome,CASE WHEN l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 20`).all(),
+    c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route,l.status crm_status,l.outcome,CASE WHEN l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 60`).all(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.pipeline_status='awaiting_build' AND l.deleted_at IS NULL AND NOT (${BUILDER_ELIGIBLE_LEAD}) ORDER BY l.updated_at DESC,l.id LIMIT 100`).all<EligibilityRow>(),
     displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
     c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),
@@ -210,9 +210,9 @@ builderAdminRouter.get('/status', async c => {
 builderAdminRouter.post('/start', async c => {
   const body=(await c.req.json().catch(()=>({}))) as {batchSize?:number;leadIds?:number[]};
   const requestedBatchSize=body.batchSize??20;
-  if(!Number.isInteger(requestedBatchSize)||requestedBatchSize<1||requestedBatchSize>20) return c.json({error:'batchSize must be an integer from 1 to 20'},400);
+  if(!Number.isInteger(requestedBatchSize)||requestedBatchSize<20||requestedBatchSize>60||requestedBatchSize%20!==0) return c.json({error:'batchSize must be 20, 40, or 60'},400);
   const reviewedLeadIds=body.leadIds === undefined ? null : [...new Set(body.leadIds)];
-  if(reviewedLeadIds && (!reviewedLeadIds.length||reviewedLeadIds.length>20||reviewedLeadIds.some(id=>!Number.isInteger(id)||id<1))) return c.json({error:'leadIds must contain 1 to 20 unique lead IDs'},400);
+  if(reviewedLeadIds && (!reviewedLeadIds.length||reviewedLeadIds.length>60||reviewedLeadIds.some(id=>!Number.isInteger(id)||id<1))) return c.json({error:'leadIds must contain 1 to 60 unique lead IDs'},400);
   const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
   if(control?.active_run_id) return c.json({error:'A Builder run is already active'},409);
   const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status) VALUES('starting') RETURNING id`).first<{id:number}>();

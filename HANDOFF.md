@@ -22,8 +22,8 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   login, restarts after crashes, and prevents duplicate local processes. It
   uses a dedicated persistent Chrome profile, fills
   LandingSite's Business Name + Business Description fields, captures the
-  `*.agcy.dev` preview anchor, validates the deployed preview, and returns the
-  raw URL to Agency OS.
+  validated `*.agcy.dev` `href` directly from the Preview Website anchor, and
+  returns it without opening or polling a separate preview tab.
 - D1 `builder_runs`, `builder_jobs`, `builder_events`, and `builder_control`
   provide durable queue state, leases/retries, safe-point pause/stop, worker
   health, live steps, failure diagnostics, and run history. Migration:
@@ -32,16 +32,17 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   state, health/readiness, automatic missing-brief preparation, current-build
   progress, queue results, URL/error/artifact details, live activity, median
   and 24-hour metrics, and historical-run inspection/retry. New runs are
-  capped server-side at 20 sites; the operator can select 5, 10, or 20, and
-  only missing briefs inside that exact batch are generated.
+  capped server-side at 60 sites; the operator can select 20, 40, or 60, and
+  only missing briefs inside that exact batch are generated. Next-batch review
+  and Safety exclusions are compact, collapsed-by-default drawers.
 - Builder eligibility is fail-closed and must be applied at status display,
   brief selection, queue insertion, job claim, retry, and successful result.
   Eligible leads are undeleted `cold`/`contacted` records in
   `awaiting_build`, with no existing website/demo URL, no project, no booked
   demo, and no Not Interested outcome. Dashboard Safety exclusions expose
   stale Awaiting Build flags without allowing those leads into a run. The
-  dashboard previews the exact next batch with checkboxes and submits those
-  lead IDs; the backend revalidates the reviewed IDs before insertion.
+  dashboard previews the exact next batch with remove/restore controls and
+  submits those lead IDs; the backend revalidates the reviewed IDs before insertion.
 - Artifact policy: successes retain nothing; failures retain JSON + screenshot.
   Video recording is disabled. Failure traces require explicit
   `BUILDER_TRACE_ON_FAILURE=true`; artifacts expire after 30 days by default.
