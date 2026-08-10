@@ -195,7 +195,8 @@ export interface BuilderStatus {
   awaitingBuild: number;
   readyToQueue: number;
   missingBriefLeads: Array<{id:number;company:string;email:string|null;phone_route:string|null}>;
-  nextBatchLeads: Array<{id:number;company:string;email:string|null;phone_route:string|null;has_brief:number}>;
+  nextBatchLeads: Array<{id:number;company:string;email:string|null;phone_route:string|null;crm_status:string;outcome:string|null;has_brief:number}>;
+  safetyExcluded: Array<{id:number;company:string;crmStatus:string;outcome:string|null;reason:string}>;
   control: {
     paused: number;
     stop_requested: number;
@@ -814,8 +815,8 @@ export const api = {
   },
   builder: {
     status: (runId?: number) => apiFetch<BuilderStatus>(`/api/builder/status${runId ? `?runId=${runId}` : ''}`),
-    start: (batchSize = 20) => apiFetch<{ runId: number; queued: number }>('/api/builder/start', {
-      method: 'POST', body: JSON.stringify({ batchSize }),
+    start: (leadIds: number[], batchSize = 20) => apiFetch<{ runId: number; queued: number }>('/api/builder/start', {
+      method: 'POST', body: JSON.stringify({ leadIds, batchSize }),
     }),
     control: (action: 'pause'|'resume'|'stop') => apiFetch<{ ok: true }>('/api/builder/control', {
       method: 'POST', body: JSON.stringify({ action }),

@@ -42,6 +42,7 @@ const tone: Record<string, string> = {
   starting: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   waiting: 'bg-slate-100 text-slate-600 ring-slate-500/20',
   retry: 'bg-amber-50 text-amber-700 ring-amber-600/20',
+  skipped: 'bg-amber-50 text-amber-700 ring-amber-600/20',
   paused: 'bg-amber-50 text-amber-700 ring-amber-600/20',
   failed: 'bg-rose-50 text-rose-700 ring-rose-600/20',
   error: 'bg-rose-50 text-rose-700 ring-rose-600/20',
@@ -63,9 +64,12 @@ const BUILD_STEPS = [
   'Waiting for preview to become ready', 'Validating website preview', 'Saving URL', 'Completing job',
 ];
 
+const isEligibilitySkip = (job: BuilderJob) => job.failure_reason?.startsWith('Eligibility guard:') ?? false;
+
 function JobRow({ job, showToast }: { job: BuilderJob; showToast: ShowToast }) {
   const [expanded, setExpanded] = useState(false);
   const resultUrl = job.site_url_raw || job.demo_url;
+  const displayStatus = isEligibilitySkip(job) ? 'skipped' : job.status;
   const copy = async (value: string) => {
     await navigator.clipboard.writeText(value);
     showToast('URL copied');
@@ -78,7 +82,7 @@ function JobRow({ job, showToast }: { job: BuilderJob; showToast: ShowToast }) {
           {job.email && <span className="mt-0.5 block text-xs text-slate-400">{job.email}</span>}
         </button>
       </td>
-      <td className="px-4 py-3"><Badge value={job.status} /></td>
+      <td className="px-4 py-3"><Badge value={displayStatus} /></td>
       <td className="px-4 py-3 text-slate-600">{Math.max(job.attempt_count, 1)}/3</td>
       <td className="px-4 py-3 text-slate-600">{duration(job.duration_ms)}</td>
       <td className="px-4 py-3">
@@ -105,6 +109,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [batchSize, setBatchSize] = useState(20);
+  const [excludedLeadIds, setExcludedLeadIds] = useState<Set<number>>(() => new Set());
   const [preparing, setPreparing] = useState<{ current: number; total: number; company: string } | null>(null);
   const [, setClock] = useState(0);
 
@@ -130,7 +135,8 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const counts = useMemo(() => ({
     queued: data?.jobs.filter(job => job.status === 'waiting' || job.status === 'retry').length ?? 0,
     completed: data?.jobs.filter(job => job.status === 'completed').length ?? 0,
-    failed: data?.jobs.filter(job => job.status === 'failed').length ?? 0,
+    failed: data?.jobs.filter(job => job.status === 'failed' && !isEligibilitySkip(job)).length ?? 0,
+    skipped: data?.jobs.filter(isEligibilitySkip).length ?? 0,
     building: data?.jobs.find(job => job.status === 'building'),
   }), [data]);
 
@@ -140,7 +146,8 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
     try {
       if (action === 'start') {
         setSelectedRunId(null);
-        const selectedBatch = data.nextBatchLeads.slice(0, batchSize);
+        const selectedBatch = data.nextBatchLeads.slice(0, batchSize).filter(lead => !excludedLeadIds.has(lead.id));
+        if (!selectedBatch.length) throw new Error('Select at least one lead for this Builder batch.');
         const missing = selectedBatch.filter(lead => !lead.has_brief);
         for (let index = 0; index < missing.length; index++) {
           const lead = missing[index];
@@ -148,7 +155,8 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
           await api.pipeline.generateBrief(lead.id);
         }
         setPreparing(null);
-        const result = await api.builder.start(batchSize);
+        const result = await api.builder.start(selectedBatch.map(lead => lead.id), batchSize);
+        setExcludedLeadIds(new Set());
         showToast(`Builder batch started — ${result.queued} queued`, 'success');
       } else if (action === 'retry') {
         const result = await api.builder.retryFailed(data.run?.id);
@@ -170,12 +178,14 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
 
   const effectiveState = data.control.effective_state;
   const employeeState = effectiveState === 'building' ? 'running' : effectiveState;
-  const nextBatchCount = Math.min(batchSize, data.awaitingBuild);
-  const nextBatchMissingBriefs = data.nextBatchLeads.slice(0, batchSize).filter(lead => !lead.has_brief).length;
+  const batchCandidates = data.nextBatchLeads.slice(0, batchSize);
+  const selectedBatch = batchCandidates.filter(lead => !excludedLeadIds.has(lead.id));
+  const nextBatchCount = selectedBatch.length;
+  const nextBatchMissingBriefs = selectedBatch.filter(lead => !lead.has_brief).length;
   const remaining = counts.queued + (counts.building ? 1 : 0);
   const completed = counts.completed;
   const total = data.run?.total_jobs ?? data.jobs.length;
-  const progress = total ? Math.round(((completed + counts.failed) / total) * 100) : 0;
+  const progress = total ? Math.round(((completed + counts.failed + counts.skipped) / total) * 100) : 0;
   const currentStepIndex = Math.max(0, BUILD_STEPS.findIndex(step => data.control.current_step?.toLowerCase().includes(step.toLowerCase())));
   const currentProgress = data.control.current_step ? Math.max(8, Math.round(((currentStepIndex + 1) / BUILD_STEPS.length) * 100)) : 0;
   const elapsed = counts.building?.started_at ? Date.now() - (sqlDate(counts.building.started_at)?.getTime() ?? Date.now()) : null;
@@ -183,6 +193,8 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
     ? 'A Builder run is already active.'
     : data.awaitingBuild === 0
       ? 'No eligible leads are awaiting a website build.'
+      : nextBatchCount === 0
+        ? 'Select at least one lead for this Builder batch.'
       : !data.health.workerOnline
         ? 'Start the Builder worker before beginning a run.'
         : !data.health.landingSiteAuthenticated
@@ -233,6 +245,20 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       {data.control.worker_message && data.control.effective_state !== 'login_required' && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{data.control.worker_message}</div>}
     </section>
 
+    {!data.control.active_run_id && batchCandidates.length > 0 && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 className="font-semibold text-slate-900">Review next batch</h3><p className="text-xs text-slate-500">Only checked leads will have briefs prepared and be sent to LandingSite. Every lead is checked again when the worker claims it.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{nextBatchCount} selected</span></div>
+      <div className="divide-y divide-slate-100">
+        {batchCandidates.map(lead => {
+          const checked = !excludedLeadIds.has(lead.id);
+          return <label key={lead.id} className="flex cursor-pointer flex-wrap items-center gap-3 px-5 py-3 hover:bg-slate-50">
+            <input type="checkbox" checked={checked} disabled={busy} onChange={() => setExcludedLeadIds(current => { const next=new Set(current); if(next.has(lead.id)) next.delete(lead.id); else next.add(lead.id); return next; })} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+            <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{lead.company}</p><p className="text-xs text-slate-500">Lead #{lead.id} · {lead.crm_status.replaceAll('_',' ')} · {lead.phone_route ?? 'route unknown'}{lead.email ? ` · ${lead.email}` : ''}</p></div>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${lead.has_brief ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{lead.has_brief ? 'Brief ready' : 'Brief needed'}</span>
+          </label>;
+        })}
+      </div>
+    </section>}
+
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[
         { label: 'Agency OS API', good: data.health.apiConnected, text: data.health.apiConnected ? 'Connected' : 'Unavailable' },
@@ -245,10 +271,18 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
     <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {[
         ['Awaiting Build', data.awaitingBuild], ['Ready to Queue', data.readyToQueue], ['Queued', counts.queued], ['Completed', counts.completed],
-        ['Failed', counts.failed], ['Remaining', remaining], ['Average Build', duration(data.metrics.averageMs)], ['Median Build', duration(data.metrics.medianMs)],
+        ['Failed', counts.failed], ['Safety Skipped', counts.skipped], ['Remaining', remaining], ['Average Build', duration(data.metrics.averageMs)], ['Median Build', duration(data.metrics.medianMs)],
         ['Completed 24h', data.metrics.completedToday], ['Failed 24h', data.metrics.failedToday],
       ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p></div>)}
     </section>
+
+    {data.safetyExcluded.length > 0 && <section className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/40">
+      <div className="border-b border-amber-200 px-5 py-4"><h3 className="font-semibold text-amber-950">Safety exclusions</h3><p className="text-xs text-amber-800">These records still say Awaiting Build, but the Builder will not queue them because CRM, demo, project, website, or saved-URL state takes precedence.</p></div>
+      <div className="divide-y divide-amber-100">
+        {data.safetyExcluded.slice(0, 20).map(lead => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm"><div><span className="font-semibold text-slate-900">{lead.company}</span><span className="ml-2 text-xs text-slate-500">Lead #{lead.id} · {lead.crmStatus.replaceAll('_', ' ')}</span></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">{lead.reason}</span></div>)}
+        {data.safetyExcluded.length > 20 && <p className="px-5 py-3 text-xs text-amber-800">And {data.safetyExcluded.length - 20} more protected leads.</p>}
+      </div>
+    </section>}
 
     {(data.control.active_run_id || counts.building) && <section className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
