@@ -9,6 +9,13 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email Outreach: filter by site built (dashboard)
+
+- **A "Site built / No site yet" filter joins the industry and city filters
+  on the Email Outreach page** (board and automation views) — for leads
+  rerouted from Text Outreach whose sites are already built, so the operator
+  can call the build-complete leads first.
+
 ### Text Outreach: archive any active lead immediately (dashboard)
 
 - **The archive button on Text Outreach cards (board + grid) now shows for
