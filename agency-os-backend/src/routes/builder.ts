@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
 import { completePipelineBuild } from './pipeline';
+import { builderEligibleLeadSql } from '../services/outreachEligibility';
 
 type WorkerState = 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
 interface Job { id: number; lead_id: number; run_id: number; status: string; attempt_count: number; lock_token: string | null }
@@ -10,6 +11,8 @@ interface EligibilityRow {
   status: string;
   pipeline_status: string;
   outcome: string | null;
+  phone_route: string | null;
+  enrichment_status: string | null;
   has_website: number | null;
   site_url: string | null;
   site_url_raw: string | null;
@@ -17,21 +20,10 @@ interface EligibilityRow {
   demo_id: number | null;
 }
 
-// Builder eligibility is deliberately stricter than the pipeline column.
-// Old leads received awaiting_build as a migration default, so that flag alone
-// is not proof that sales still wants a demo. Keep this predicate in every
-// status, queue, claim, retry, and result path.
-const BUILDER_ELIGIBLE_LEAD = `
-  l.pipeline_status='awaiting_build'
-  AND l.status IN ('cold','contacted')
-  AND l.deleted_at IS NULL
-  AND COALESCE(l.has_website,0)=0
-  AND COALESCE(trim(l.site_url),'')=''
-  AND COALESCE(trim(l.site_url_raw),'')=''
-  AND lower(COALESCE(l.outcome,'')) NOT LIKE '%not interested%'
-  AND NOT EXISTS (SELECT 1 FROM projects bp WHERE bp.lead_id=l.id)
-  AND NOT EXISTS (SELECT 1 FROM demos bd WHERE bd.lead_id=l.id AND bd.status IN ('booked','held','rescheduled'))
-`;
+// Builder eligibility is the union of the Email and Text Outreach audiences,
+// narrowed to their Awaiting Build cards. Old leads received awaiting_build as
+// a migration default, so the status flag alone is never sufficient.
+const BUILDER_ELIGIBLE_LEAD = builderEligibleLeadSql('l');
 
 const ELIGIBILITY_GUARD_PREFIX = 'Eligibility guard:';
 const RESUME_EXISTING_MARKER = 'Operator resume requested: reuse existing LandingSite editor';
@@ -43,6 +35,9 @@ function exclusionReason(lead: EligibilityRow): string {
   if (lead.status === 'qualified') return 'CRM stage is Demo booked / qualified';
   if (!['cold', 'contacted'].includes(lead.status)) return `CRM stage is ${lead.status}`;
   if (lead.outcome?.toLowerCase().includes('not interested')) return 'Latest outcome is Not Interested';
+  if (lead.enrichment_status !== 'enriched') return 'Lead enrichment is not complete';
+  if (lead.phone_route === 'review') return 'Phone route requires review before Email or Text Outreach';
+  if (!['call', 'text', 'unknown', null].includes(lead.phone_route)) return `Phone route is ${lead.phone_route}`;
   if (lead.site_url_raw || lead.site_url) return 'A demo URL is already saved';
   if (lead.has_website) return 'Lead already has a website';
   return 'Lead no longer meets Builder safety rules';
@@ -103,7 +98,7 @@ builderWorkerRouter.post('/claim', async (c) => {
     return c.json({ paused: !!control?.paused, stopped: !!control?.stop_requested, job: null });
   }
   await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',lock_token=NULL,lease_expires_at=NULL,failure_reason='Worker lease expired',updated_at=datetime('now') WHERE run_id=? AND status='building' AND lease_expires_at<datetime('now')`).bind(control.active_run_id).run();
-  const blocked = await c.env.DB.prepare(`SELECT j.*,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND NOT (${BUILDER_ELIGIBLE_LEAD})`).bind(control.active_run_id).all<Job & EligibilityRow>();
+  const blocked = await c.env.DB.prepare(`SELECT j.*,l.company,l.status,l.pipeline_status,l.outcome,l.phone_route,l.enrichment_status,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND NOT (${BUILDER_ELIGIBLE_LEAD})`).bind(control.active_run_id).all<Job & EligibilityRow>();
   for (const row of blocked.results) await blockIneligibleJob(c.env.DB, row, exclusionReason(row));
   const candidate = await c.env.DB.prepare(`SELECT j.id,j.failure_reason FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status IN ('waiting','retry') AND j.attempt_count<3 AND ${BUILDER_ELIGIBLE_LEAD} ORDER BY j.id LIMIT 1`).bind(control.active_run_id).first<{id:number;failure_reason:string|null}>();
   if (!candidate) { await finishRunIfDrained(c.env.DB, control.active_run_id); return c.json({ job: null }); }
@@ -141,7 +136,7 @@ builderWorkerRouter.post('/result', async (c) => {
     const url=b.demoUrl?.trim()??''; try { const p=new URL(url); if(!/^https?:$/.test(p.protocol)) throw new Error(); } catch { return c.json({error:'Valid demoUrl required'},400); }
     const lead=await c.env.DB.prepare(`SELECT l.* FROM leads l WHERE l.id=? AND ${BUILDER_ELIGIBLE_LEAD}`).bind(job.lead_id).first<Lead>();
     if(!lead) {
-      const state=await c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.id=?`).bind(job.lead_id).first<EligibilityRow>();
+      const state=await c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.phone_route,l.enrichment_status,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.id=?`).bind(job.lead_id).first<EligibilityRow>();
       const reason=state ? exclusionReason(state) : 'Lead was removed';
       await blockIneligibleJob(c.env.DB,job,reason);
       await finishRunIfDrained(c.env.DB,job.run_id);
@@ -182,7 +177,7 @@ builderAdminRouter.get('/status', async c => {
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!=''`).first(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} AND (l.pipeline_brief IS NULL OR trim(l.pipeline_brief)='') ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 500`).all(),
     c.env.DB.prepare(`SELECT l.id,l.company,l.email,l.phone_route,l.status crm_status,l.outcome,CASE WHEN l.pipeline_brief IS NOT NULL AND trim(l.pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads l WHERE ${BUILDER_ELIGIBLE_LEAD} ORDER BY CASE WHEN l.email IS NOT NULL AND trim(l.email)!='' THEN 0 ELSE 1 END,l.opportunity_score DESC NULLS LAST,l.id LIMIT 60`).all(),
-    c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.pipeline_status='awaiting_build' AND l.deleted_at IS NULL AND NOT (${BUILDER_ELIGIBLE_LEAD}) ORDER BY l.updated_at DESC,l.id LIMIT 100`).all<EligibilityRow>(),
+    c.env.DB.prepare(`SELECT l.id,l.company,l.status,l.pipeline_status,l.outcome,l.phone_route,l.enrichment_status,l.has_website,l.site_url,l.site_url_raw,(SELECT MIN(id) FROM projects WHERE lead_id=l.id) project_id,(SELECT MIN(id) FROM demos WHERE lead_id=l.id AND status IN ('booked','held','rescheduled')) demo_id FROM leads l WHERE l.pipeline_status='awaiting_build' AND l.deleted_at IS NULL AND NOT (${BUILDER_ELIGIBLE_LEAD}) ORDER BY l.updated_at DESC,l.id LIMIT 100`).all<EligibilityRow>(),
     displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
     activeRunId?c.env.DB.prepare(`SELECT j.id,l.company business_name FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? AND j.status='building' ORDER BY j.id LIMIT 1`).bind(activeRunId).first<{id:number;business_name:string}>():null,
     c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),

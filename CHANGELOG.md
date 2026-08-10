@@ -19,6 +19,11 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Email Outreach, Text Outreach, and Builder now share one server-side
+  audience definition.** Email's To Call lane requires a completed demo plus
+  a missing/invalid email; call-routed prospects without a demo remain in
+  Awaiting Build. Builder queues the union of the Email and Text Awaiting Build
+  audiences while manual-review phone routes remain safely excluded.
 - **Interrupted Builder jobs can now be resumed from the dashboard.** The
   guarded Resume build action only appears when D1 says a website is Building
   but the browser employee is idle, offline, or in error; it preserves the

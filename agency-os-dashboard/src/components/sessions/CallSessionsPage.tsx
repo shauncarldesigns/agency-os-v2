@@ -141,7 +141,7 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
     else setLoading(true);
     try {
       const [leadRes, automationRes] = await Promise.all([
-        api.leads.list(),
+        api.pipeline.list({ channel: 'email' }),
         api.emailOutreach.automations(),
       ]);
       setLeads(leadRes.leads);
@@ -860,7 +860,7 @@ function CallOutreachModal({
               </button>
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              Saving an email tags the lead and moves it to Awaiting Build.
+              Saving the email moves this built site to Ready to Send.
             </p>
           </section>}
         </div>
@@ -965,7 +965,7 @@ function EmailCaptureSplitScript({
                 Save
               </button>
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Saving moves this lead to Awaiting Build.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Saving moves this built site to Ready to Send.</p>
           </div>
 
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -2598,8 +2598,8 @@ function buildColumns(
   automations: EmailAutomationSummary[],
 ): BoardColumn[] {
   const columns: BoardColumn[] = [
-    { id: 'awaiting-build', title: 'Awaiting Build', description: 'Email available, site not built', icon: Mail, tone: 'amber', items: [] },
-    { id: 'to-call', title: 'To Call', description: 'No usable email—call to capture one', icon: PhoneCall, tone: 'blue', items: [] },
+    { id: 'awaiting-build', title: 'Awaiting Build', description: 'Site not built—queued for Builder', icon: Mail, tone: 'amber', items: [] },
+    { id: 'to-call', title: 'To Call', description: 'Site built—call to capture email', icon: PhoneCall, tone: 'blue', items: [] },
     { id: 'ready-to-send', title: 'Ready to Send', description: 'Site built, email ready next', icon: Send, tone: 'emerald', items: [] },
     { id: 'sent-no-reply', title: 'Sent — No Reply', description: 'Email sent, awaiting response', icon: Clock, tone: 'slate', items: [] },
     { id: 'final-review', title: 'Final Review', description: 'Sequence complete, operator decision needed', icon: AlertCircle, tone: 'amber', items: [] },
@@ -2615,7 +2615,7 @@ function buildColumns(
       return;
     }
 
-    if (lead.phone_route === 'text' || lead.phone_route === 'review') {
+    if (lead.phone_route !== 'call') {
       return;
     }
 
@@ -2633,6 +2633,38 @@ function buildColumns(
       lead.outcome?.startsWith('Final Review')
       || lead.outcome === 'Awaiting Final Review',
     );
+
+    const hasBuiltSite = Boolean(lead.site_url_raw?.trim() || lead.site_url?.trim());
+    const hasUsableEmail = outreachRecipientError(lead.email) === null;
+
+    // The board order is build first, then call only when a finished demo is
+    // waiting for an email address. This prevents raw prospects from flooding
+    // To Call before the Builder has produced something for the operator to send.
+    if (!hasBuiltSite) {
+      byId['awaiting-build'].items.push(leadItem(lead, {
+        eyebrow: 'Site needed',
+        detail: lead.email || lead.phone || 'Outreach prospect',
+        note: 'Included in the Builder Employee queue',
+        activityLabel: 'Awaiting build',
+        tone: 'amber',
+        sortAt: lead.updated_at,
+        emailOutreachStarted: Boolean(lead.email),
+      }));
+      return;
+    }
+
+    if (!hasUsableEmail) {
+      byId['to-call'].items.push(leadItem(lead, {
+        eyebrow: lead.status === 'contacted' ? 'Call again' : 'Site ready',
+        detail: lead.site_url_raw || lead.site_url || 'Demo site complete',
+        note: 'Call to capture a valid email address for this finished demo',
+        activityLabel: lead.last_called_at ? 'Retry call' : 'Ready to call',
+        tone: 'blue',
+        sortAt: lead.last_called_at ?? lead.updated_at,
+      }));
+      return;
+    }
+
     if (lead.email && needsFinalReview) {
       byId['final-review'].items.push(leadItem(lead, {
         eyebrow: 'Final review',
@@ -2693,7 +2725,7 @@ function buildColumns(
     // for a call outcome here meant prospects with an email could not get a
     // demo site until after we called them—the opposite of the outreach plan.
     // Build completion already schedules email automation server-side.
-    const enteredEmailFlow = Boolean(lead.email && !lead.has_website);
+    const enteredEmailFlow = hasUsableEmail && hasBuiltSite;
     if (enteredEmailFlow && lead.pipeline_status === 'engaged') {
       byId.engaged.items.push(leadItem(lead, {
         eyebrow: 'Engaged',
@@ -2736,26 +2768,16 @@ function buildColumns(
       return;
     }
 
-    if (enteredEmailFlow) {
-      byId['awaiting-build'].items.push(leadItem(lead, {
-        eyebrow: lead.outcome === 'Email Captured' ? 'Email captured' : 'Email available',
-        detail: lead.email ?? 'Email available',
-        note: 'Build the demo before any call or email is sent',
-        activityLabel: 'Awaiting build',
-        tone: 'amber',
-        sortAt: lead.updated_at,
-        emailOutreachStarted: true,
-      }));
-      return;
-    }
-
-    byId['to-call'].items.push(leadItem(lead, {
-      eyebrow: lead.status === 'contacted' ? 'Call again' : 'Fresh lead',
-      detail: lead.opportunity_score ? `${lead.opportunity_score} opportunity score` : 'Capture an email on the call',
-      note: lead.opportunity_reasoning || lead.notes,
-      activityLabel: lead.last_called_at ? 'Retry call' : 'Not called',
-      tone: 'blue',
+    // A built site with a valid email but no later-stage status is ready for
+    // the email review window; it should never fall backward into To Call.
+    byId['ready-to-send'].items.push(leadItem(lead, {
+      eyebrow: 'Ready to email',
+      detail: lead.site_url_raw || lead.site_url || lead.email || 'Site build complete',
+      note: 'Automation begins with a 10-minute review window',
+      activityLabel: 'Automation ready',
+      tone: 'emerald',
       sortAt: lead.last_called_at ?? lead.updated_at,
+      emailOutreachStarted: true,
     }));
   });
 
