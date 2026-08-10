@@ -42,19 +42,24 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   fail rather than create a duplicate if no existing editor is open.
 - Builder eligibility is fail-closed and must be applied at status display,
   brief selection, queue insertion, job claim, retry, and successful result.
-  Eligible leads are undeleted `cold`/`contacted` records in
-  `awaiting_build`, with no existing website/demo URL, no project, no booked
-  demo, and no Not Interested outcome. Dashboard Safety exclusions expose
+  `services/outreachEligibility.ts` is the shared source of truth: Text uses
+  `unknown`/`text` phone routes, Email uses `call`, and Builder takes the union
+  of both audiences narrowed to `awaiting_build` with no demo URL. All require
+  enriched, undeleted `cold`/`contacted` records with no existing website,
+  project, booked demo, or Not Interested outcome. Manual-review phone routes
+  stay excluded. Dashboard Safety exclusions expose
   stale Awaiting Build flags without allowing those leads into a run. The
   dashboard previews the exact next batch with remove/restore controls and
   submits those lead IDs; the backend revalidates the reviewed IDs before insertion.
 - Artifact policy: successes retain nothing; failures retain JSON + screenshot.
   Video recording is disabled. Failure traces require explicit
   `BUILDER_TRACE_ON_FAILURE=true`; artifacts expire after 30 days by default.
-- Email Outreach is now build-first. Email-bearing, no-site leads enter
-  **Awaiting Build** before **To Call**; leads without a usable email fall back
-  to the call lane. Builder completion saves the tracking URL and schedules
-  the existing email automation/review window—no call outcome is required.
+- Email Outreach is build-first for every call-routed prospect. A lead without
+  a demo remains in **Awaiting Build** whether or not an email is already on
+  file. **To Call** is reserved for leads with a completed demo and no usable
+  email; capturing it moves the lead to **Ready to Send** and schedules the
+  existing email automation/review window. Text Outreach continues to use the
+  same Builder for its own Awaiting Build audience.
 - Runtime secret: `BUILDER_API_TOKEN` must match the local employee's
   `.env.local`; the production secret was installed on 2026-08-10. The
   Builder process remains local rather than running on Cloudflare, but its

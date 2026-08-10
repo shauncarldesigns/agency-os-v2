@@ -763,7 +763,7 @@ export const api = {
   // server-side to leads that actually belong in this motion (no site,
   // enriched, in cold/contacted). See backend/src/routes/pipeline.ts.
   pipeline: {
-    list: (filters?: { status?: string; q?: string }) =>
+    list: (filters?: { status?: string; q?: string; channel?: 'text'|'email' }) =>
       apiFetch<{ leads: Lead[] }>(`/api/pipeline/leads${qs(filters)}`),
     get: (id: number) =>
       apiFetch<{ lead: Lead; activity: LeadActivity[] }>(`/api/pipeline/leads/${id}`),

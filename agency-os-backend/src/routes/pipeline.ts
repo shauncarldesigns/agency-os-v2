@@ -18,6 +18,7 @@ import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
 import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
 import { scheduleEmailAutomation } from '../services/emailAutomation';
+import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligibility';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -179,7 +180,10 @@ export async function completePipelineBuild(
   rawUrl: string,
 ): Promise<Lead | null> {
   const slug = slugify(lead.company || `lead-${lead.id}`);
-  const channel = lead.email && lead.phone_route !== 'text' ? 'email' : 'sms';
+  // Route attribution follows the outreach audience, not whether an email has
+  // already been captured. Call-routed leads are built before the email call,
+  // so their tracking URL must still be tagged for the eventual email motion.
+  const channel = lead.phone_route === 'call' ? 'email' : 'sms';
   const tagged = tagUrl(rawUrl, slug, channel);
   await env.DB.prepare(
     `UPDATE leads
@@ -323,21 +327,27 @@ async function writeActivity(
 // ---------------------------------------------------------------------------
 // GET /api/pipeline/leads
 // ---------------------------------------------------------------------------
-// Returns the automated-pipeline queue. Filters at the SQL boundary to the
-// leads that actually belong in this flow:
+// Returns one of the two outreach audiences. The default is Text Outreach;
+// `?channel=email` returns the Email Outreach audience. Both use the same
+// source-of-truth predicates as the Builder queue.
+// Filters at the SQL boundary to the leads that actually belong in each flow:
 //   - not soft-deleted
 //   - lifecycle status in ('cold','contacted') — excludes qualified/client/dead
 //   - pipeline_status still active — excludes booked/archived once the lead
 //     has moved into Sites or out of this motion
-//   - phone route is textable or not classified yet — classified landline /
-//     manual-review numbers are withheld from Text Outreach
+//   - Text uses textable/unclassified numbers; Email uses call-routed numbers
+//   - manual-review numbers are withheld from both until classified
 //   - enriched (need reviews/hours/etc. to build a brief)
 //   - no existing website (the whole thesis: build them one)
 // Ordered by opportunity_score DESC so the highest-signal leads surface first.
-// Optional query params: ?status=<pipeline_status>&q=<name search>
+// Optional query params: ?channel=text|email&status=<pipeline_status>&q=<name>
 pipelineRouter.get('/leads', async (c) => {
   try {
-    const { status, q } = c.req.query();
+    const { status, q, channel: rawChannel } = c.req.query();
+    if (rawChannel && rawChannel !== 'text' && rawChannel !== 'email') {
+      return c.json(badRequest('channel must be text or email'), 400);
+    }
+    const channel: OutreachChannel = rawChannel === 'email' ? 'email' : 'text';
     // v1 invariant: Sent — No Reply means no tracked session yet. Clean up
     // older/local rows that already have sessions but were not promoted.
     await c.env.DB.prepare(`
@@ -349,14 +359,7 @@ pipelineRouter.get('/leads', async (c) => {
          AND pipeline_sessions > 0
     `).run();
 
-    const clauses: string[] = [
-      'deleted_at IS NULL',
-      "status IN ('cold', 'contacted')",
-      "pipeline_status NOT IN ('booked', 'archived')",
-      "COALESCE(phone_route, 'unknown') IN ('unknown', 'text')",
-      'has_website = 0',
-      "enrichment_status = 'enriched'",
-    ];
+    const clauses: string[] = [outreachLeadSql('leads', channel)];
     const params: unknown[] = [];
     if (status) {
       clauses.push('pipeline_status = ?');
