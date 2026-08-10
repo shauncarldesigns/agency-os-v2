@@ -264,8 +264,14 @@ async function main() {
   if (editorPage) await authPage.close().catch(() => undefined);
   while (true) {
     try {
-      const { paused, job } = await api('/claim');
+      const { paused, prepare, job } = await api('/claim');
       if (paused) await api('/heartbeat', { state: 'paused', message: 'Paused by operator' });
+      else if (prepare) {
+        console.log(`Preparing brief for ${prepare.businessName} (lead ${prepare.leadId})`);
+        const result = await api('/prepare-brief', { jobId: prepare.jobId }, Number.MAX_SAFE_INTEGER);
+        if (result.success) console.log(`Brief ready for ${prepare.businessName}`);
+        else if (!result.skipped) console.error(`${result.failed ? 'Failed' : 'Retrying'} brief for ${prepare.businessName}: ${result.reason}`);
+      }
       else if (job) await build(job);
     } catch (error) {
       console.error('Queue error:', error instanceof Error ? error.message : error);
