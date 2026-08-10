@@ -24,6 +24,9 @@ when a manual deploy was needed.
   but the browser employee is idle, offline, or in error; it preserves the
   retry attempt and reuses the existing open LandingSite editor instead of
   creating a duplicate project.
+- **Completed jobs now clear their retained LandingSite editor URL** before
+  the employee returns idle or claims another lead, preventing a later resume
+  from ever inheriting the previous company's project.
 - **Builder batches now support 20, 40, or 60 sites**, while continuing to
   process one website at a time. The next-batch review is a compact drawer
   with remove/restore controls, and Safety exclusions are collapsed by default.
