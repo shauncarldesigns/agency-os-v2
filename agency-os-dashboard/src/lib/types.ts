@@ -550,6 +550,7 @@ export type Tab =
   | 'prospect'
   | 'pipeline'
   | 'automated-pipeline'
+  | 'builder'
   | 'sites'
   | 'docs'
   | 'playbook'

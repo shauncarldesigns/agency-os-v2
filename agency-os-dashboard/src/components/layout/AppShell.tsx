@@ -18,6 +18,7 @@ import {
   LogOut,
   Keyboard,
   UserRound,
+  Bot,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
 
@@ -52,6 +53,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
       { key: 'email-outreach', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
+      { key: 'builder', label: 'Builder Employee', icon: Bot, badgeKey: 'automatedPipeline' },
       { key: 'call-center', label: 'Call Center', icon: Headphones },
     ],
   },
@@ -68,10 +70,11 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
 const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Pipeline KPIs and action queue' },
   research: { title: 'Research', subtitle: 'Keyword demand and map pack ownership per market' },
-  'email-outreach': { title: 'Email Outreach', subtitle: 'Call-first email queue and follow-up board' },
+  'email-outreach': { title: 'Email Outreach', subtitle: 'Build-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
+  builder: { title: 'Builder Employee', subtitle: 'Bulk LandingSite.ai website production' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
   docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },

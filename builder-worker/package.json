@@ -1,0 +1,12 @@
+{
+  "name": "agency-os-builder-employee",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "install-browser": "playwright install chrome"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": { "playwright": "^1.54.0" }
+}
