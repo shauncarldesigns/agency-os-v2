@@ -147,6 +147,71 @@ export interface EmailAutomationDetail {
   } | null;
 }
 
+export interface BuilderJob {
+  id: number;
+  lead_id: number;
+  business_name: string;
+  status: 'waiting' | 'building' | 'completed' | 'retry' | 'failed';
+  attempt_count: number;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_ms: number | null;
+  demo_url: string | null;
+  failure_reason: string | null;
+  artifact_path: string | null;
+  email: string | null;
+  pipeline_status: string;
+  site_url: string | null;
+  site_url_raw: string | null;
+}
+
+export interface BuilderEvent {
+  id: number;
+  run_id: number;
+  job_id: number | null;
+  event_type: string;
+  state: string | null;
+  step: string | null;
+  message: string | null;
+  metadata: string | null;
+  business_name: string | null;
+  created_at: string;
+}
+
+export interface BuilderRunSummary {
+  id: number;
+  status: 'starting'|'running'|'paused'|'stopped'|'completed'|'error';
+  total_jobs: number;
+  started_at: string;
+  ended_at: string|null;
+  error_reason: string|null;
+  completed_jobs: number;
+  failed_jobs: number;
+  remaining_jobs: number;
+  average_ms: number|null;
+}
+
+export interface BuilderStatus {
+  awaitingBuild: number;
+  readyToQueue: number;
+  missingBriefLeads: Array<{id:number;company:string;email:string|null;phone_route:string|null}>;
+  control: {
+    paused: number;
+    stop_requested: number;
+    active_run_id: number | null;
+    effective_state: 'offline' | 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
+    current_step: string | null;
+    worker_message: string | null;
+    last_worker_seen_at: string | null;
+  };
+  run: { id: number; status: 'starting'|'running'|'paused'|'stopped'|'completed'|'error'; total_jobs: number; started_at: string; ended_at: string|null; error_reason: string|null } | null;
+  jobs: BuilderJob[];
+  events: BuilderEvent[];
+  runHistory: BuilderRunSummary[];
+  metrics: { averageMs:number|null;medianMs:number|null;sampleSize:number;completedToday:number;failedToday:number };
+  health: { apiConnected:boolean;workerOnline:boolean;landingSiteAuthenticated:boolean;readyToStart:boolean };
+}
+
 // DNS endpoint response shapes. Mirror what routes/dns.ts returns.
 export interface DnsRecordStatus {
   type: 'A' | 'CNAME';
@@ -745,6 +810,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ regenerate: !!opts?.regenerate }),
       }),
+  },
+  builder: {
+    status: (runId?: number) => apiFetch<BuilderStatus>(`/api/builder/status${runId ? `?runId=${runId}` : ''}`),
+    start: () => apiFetch<{ runId: number; queued: number }>('/api/builder/start', { method: 'POST' }),
+    control: (action: 'pause'|'resume'|'stop') => apiFetch<{ ok: true }>('/api/builder/control', {
+      method: 'POST', body: JSON.stringify({ action }),
+    }),
+    retryFailed: (runId?: number) => apiFetch<{ retried: number }>('/api/builder/retry-failed', { method: 'POST', body: JSON.stringify({ runId }) }),
   },
   emailOutreach: {
     send: (

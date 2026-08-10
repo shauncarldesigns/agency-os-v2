@@ -1,0 +1,204 @@
+import { Hono } from 'hono';
+import type { Env, Lead } from '../types';
+import { completePipelineBuild } from './pipeline';
+
+type WorkerState = 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
+interface Job { id: number; lead_id: number; run_id: number; status: string; attempt_count: number; lock_token: string | null }
+
+async function writeBuilderEvent(
+  db: D1Database,
+  input: { runId: number; jobId?: number | null; eventType: string; state?: string | null; step?: string | null; message?: string | null; metadata?: unknown },
+): Promise<void> {
+  await db.prepare(`INSERT INTO builder_events(run_id,job_id,event_type,state,step,message,metadata) VALUES(?,?,?,?,?,?,?)`).bind(
+    input.runId,
+    input.jobId ?? null,
+    input.eventType.slice(0, 100),
+    input.state?.slice(0, 100) ?? null,
+    input.step?.slice(0, 200) ?? null,
+    input.message?.slice(0, 1000) ?? null,
+    input.metadata === undefined ? null : JSON.stringify(input.metadata),
+  ).run();
+}
+
+async function secureEqual(left: string, right: string): Promise<boolean> {
+  const e = new TextEncoder();
+  const [a, b] = await Promise.all([crypto.subtle.digest('SHA-256', e.encode(left)), crypto.subtle.digest('SHA-256', e.encode(right))]);
+  const av = new Uint8Array(a); const bv = new Uint8Array(b); let mismatch = av.length ^ bv.length;
+  for (let i = 0; i < Math.max(av.length, bv.length); i++) mismatch |= (av[i] ?? 0) ^ (bv[i] ?? 0);
+  return mismatch === 0;
+}
+
+async function finishRunIfDrained(db: D1Database, runId: number): Promise<void> {
+  const pending = await db.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id = ? AND status IN ('waiting','retry','building')`).bind(runId).first<{count:number}>();
+  if (pending?.count) return;
+  const run = await db.prepare(`SELECT status FROM builder_runs WHERE id=?`).bind(runId).first<{status:string}>();
+  if (!run || !['starting','running','paused'].includes(run.status)) return;
+  await writeBuilderEvent(db, { runId, eventType: 'run_completed', state: 'completed', step: 'Queue complete', message: 'All queued websites have finished.' });
+  await db.batch([
+    db.prepare(`UPDATE builder_runs SET status='completed', ended_at=datetime('now') WHERE id=? AND status IN ('starting','running','paused')`).bind(runId),
+    db.prepare(`UPDATE builder_control SET active_run_id=NULL, worker_state='idle', current_step=NULL, updated_at=datetime('now') WHERE id=1 AND active_run_id=?`).bind(runId),
+  ]);
+}
+
+export const builderWorkerRouter = new Hono<{ Bindings: Env }>();
+builderWorkerRouter.use('*', async (c, next) => {
+  const token = c.req.header('Authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+  if (!c.env.BUILDER_API_TOKEN || !token || !await secureEqual(token, c.env.BUILDER_API_TOKEN)) return c.json({ error: 'Unauthorized' }, 401);
+  await next();
+});
+
+builderWorkerRouter.post('/claim', async (c) => {
+  const control = await c.env.DB.prepare(`SELECT paused, stop_requested, active_run_id FROM builder_control WHERE id=1`).first<{paused:number;stop_requested:number;active_run_id:number|null}>();
+  if (!control?.active_run_id || control.paused || control.stop_requested) {
+    await c.env.DB.prepare(`UPDATE builder_control SET last_worker_seen_at=datetime('now'),worker_state=?,current_step=CASE WHEN ?='idle' THEN NULL ELSE current_step END,updated_at=datetime('now') WHERE id=1`).bind(control?.paused ? 'paused' : 'idle', control?.paused ? 'paused' : 'idle').run();
+    return c.json({ paused: !!control?.paused, stopped: !!control?.stop_requested, job: null });
+  }
+  await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',lock_token=NULL,lease_expires_at=NULL,failure_reason='Worker lease expired',updated_at=datetime('now') WHERE run_id=? AND status='building' AND lease_expires_at<datetime('now')`).bind(control.active_run_id).run();
+  const candidate = await c.env.DB.prepare(`SELECT id FROM builder_jobs WHERE run_id=? AND status IN ('waiting','retry') AND attempt_count<3 ORDER BY id LIMIT 1`).bind(control.active_run_id).first<{id:number}>();
+  if (!candidate) { await finishRunIfDrained(c.env.DB, control.active_run_id); return c.json({ job: null }); }
+  const lockToken = crypto.randomUUID();
+  const claimed = await c.env.DB.prepare(`UPDATE builder_jobs SET status='building',attempt_count=attempt_count+1,lock_token=?,locked_at=datetime('now'),lease_expires_at=datetime('now','+20 minutes'),started_at=COALESCE(started_at,datetime('now')),failure_reason=NULL,updated_at=datetime('now') WHERE id=? AND status IN ('waiting','retry')`).bind(lockToken,candidate.id).run();
+  if (!claimed.meta.changes) return c.json({ job:null });
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE builder_runs SET status='running' WHERE id=? AND status='starting'`).bind(control.active_run_id),
+    c.env.DB.prepare(`UPDATE builder_control SET worker_state='building',current_step='Opening LandingSite.ai',last_worker_seen_at=datetime('now'),updated_at=datetime('now') WHERE id=1`),
+  ]);
+  const job = await c.env.DB.prepare(`SELECT j.id,j.lead_id leadId,j.run_id runId,j.attempt_count attempt,l.company businessName,l.pipeline_brief prompt FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.id=?`).bind(candidate.id).first();
+  await writeBuilderEvent(c.env.DB, { runId: control.active_run_id, jobId: candidate.id, eventType: 'job_claimed', state: 'building', step: 'Opening LandingSite.ai', message: `Build started for ${(job as {businessName?:string}|null)?.businessName ?? `lead ${candidate.id}`}` });
+  return c.json({ job:{...job,lockToken} });
+});
+
+builderWorkerRouter.post('/heartbeat', async (c) => {
+  const b = await c.req.json<{jobId?:number;lockToken?:string;state?:WorkerState;step?:string;message?:string}>();
+  const before = await c.env.DB.prepare(`SELECT active_run_id,current_step,worker_state,worker_message FROM builder_control WHERE id=1`).first<{active_run_id:number|null;current_step:string|null;worker_state:string;worker_message:string|null}>();
+  if (b.jobId && b.lockToken) await c.env.DB.prepare(`UPDATE builder_jobs SET lease_expires_at=datetime('now','+20 minutes'),updated_at=datetime('now') WHERE id=? AND lock_token=? AND status='building'`).bind(b.jobId,b.lockToken).run();
+  await c.env.DB.prepare(`UPDATE builder_control SET last_worker_seen_at=datetime('now'),worker_state=?,current_step=?,worker_message=?,updated_at=datetime('now') WHERE id=1`).bind(b.state??'idle',b.step?.slice(0,200)??null,b.message?.slice(0,500)??null).run();
+  if (before?.active_run_id && (b.step !== before.current_step || b.state !== before.worker_state || b.message !== before.worker_message)) {
+    await writeBuilderEvent(c.env.DB, { runId: before.active_run_id, jobId: b.jobId, eventType: 'step_changed', state: b.state, step: b.step, message: b.message });
+  }
+  return c.json({ok:true});
+});
+
+builderWorkerRouter.post('/result', async (c) => {
+  const b = await c.req.json<{jobId?:number;lockToken?:string;success?:boolean;demoUrl?:string;reason?:string;recoverable?:boolean;systemError?:boolean;artifactPath?:string}>();
+  if (!b.jobId || !b.lockToken) return c.json({error:'jobId and lockToken are required'},400);
+  const job = await c.env.DB.prepare(`SELECT * FROM builder_jobs WHERE id=? AND lock_token=?`).bind(b.jobId,b.lockToken).first<Job>();
+  if (!job || job.status !== 'building') return c.json({error:'Job lock is no longer valid'},409);
+  if (b.success) {
+    const url=b.demoUrl?.trim()??''; try { const p=new URL(url); if(!/^https?:$/.test(p.protocol)) throw new Error(); } catch { return c.json({error:'Valid demoUrl required'},400); }
+    const lead=await c.env.DB.prepare(`SELECT * FROM leads WHERE id=?`).bind(job.lead_id).first<Lead>();
+    if(!lead || lead.pipeline_status!=='awaiting_build') return c.json({error:'Lead no longer awaits build'},409);
+    await completePipelineBuild(c.env,lead,url);
+    await c.env.DB.prepare(`UPDATE builder_jobs SET status='completed',demo_url=?,ended_at=datetime('now'),duration_ms=CAST((julianday('now')-julianday(started_at))*86400000 AS INTEGER),lock_token=NULL,lease_expires_at=NULL,artifact_path=?,updated_at=datetime('now') WHERE id=?`).bind(url,b.artifactPath?.slice(0,1000)??null,job.id).run();
+    await writeBuilderEvent(c.env.DB, { runId: job.run_id, jobId: job.id, eventType: 'job_completed', state: 'completed', step: 'Completing job', message: url, metadata: { demoUrl: url } });
+  } else {
+    const retry=b.recoverable===true && job.attempt_count<3;
+    await c.env.DB.prepare(`UPDATE builder_jobs SET status=?,failure_reason=?,ended_at=datetime('now'),duration_ms=CAST((julianday('now')-julianday(started_at))*86400000 AS INTEGER),lock_token=NULL,lease_expires_at=NULL,artifact_path=?,updated_at=datetime('now') WHERE id=?`).bind(retry?'retry':'failed',(b.reason??'Unknown failure').slice(0,2000),b.artifactPath?.slice(0,1000)??null,job.id).run();
+    await writeBuilderEvent(c.env.DB, { runId: job.run_id, jobId: job.id, eventType: retry ? 'job_retrying' : 'job_failed', state: retry ? 'retry' : 'failed', step: 'Build failed', message: b.reason ?? 'Unknown failure', metadata: { recoverable: !!b.recoverable, systemError: !!b.systemError, artifactPath: b.artifactPath ?? null } });
+    if(b.systemError) await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE builder_runs SET status='error',error_reason=?,ended_at=datetime('now') WHERE id=?`).bind(b.reason??'System error',job.run_id),
+      c.env.DB.prepare(`UPDATE builder_control SET worker_state='error',paused=1,current_step='System error',worker_message=?,updated_at=datetime('now') WHERE id=1`).bind(b.reason??'System error'),
+    ]);
+  }
+  const control=await c.env.DB.prepare(`SELECT paused,stop_requested FROM builder_control WHERE id=1`).first<{paused:number;stop_requested:number}>();
+  if(control?.stop_requested) await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE builder_runs SET status='stopped',ended_at=datetime('now') WHERE id=?`).bind(job.run_id),
+    c.env.DB.prepare(`UPDATE builder_control SET active_run_id=NULL,stop_requested=0,worker_state='idle',current_step=NULL,updated_at=datetime('now') WHERE id=1`),
+  ]); else if(!b.systemError) await finishRunIfDrained(c.env.DB,job.run_id);
+  return c.json({success:!!b.success,leadId:job.lead_id,demoUrl:b.demoUrl,reason:b.reason});
+});
+
+export const builderAdminRouter = new Hono<{ Bindings: Env }>();
+builderAdminRouter.get('/status', async c => {
+  const control=await c.env.DB.prepare(`SELECT *,CASE WHEN last_worker_seen_at IS NULL OR last_worker_seen_at<datetime('now','-2 minutes') THEN 'offline' ELSE worker_state END effective_state FROM builder_control WHERE id=1`).first();
+  const activeRunId=(control as {active_run_id?:number|null})?.active_run_id;
+  const requestedRunId = Number.parseInt(c.req.query('runId') ?? '', 10);
+  const selectedRunId = Number.isFinite(requestedRunId) ? requestedRunId : activeRunId;
+  const displayRun = selectedRunId
+    ? await c.env.DB.prepare(`SELECT * FROM builder_runs WHERE id=?`).bind(selectedRunId).first<{id:number}>()
+    : await c.env.DB.prepare(`SELECT * FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
+  const displayRunId = displayRun?.id;
+  const [awaiting,ready,missingBriefLeads,jobs,durations,today,runHistory,events]=await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
+    c.env.DB.prepare(`SELECT id,company,email,phone_route FROM leads WHERE pipeline_status='awaiting_build' AND (pipeline_brief IS NULL OR trim(pipeline_brief)='') AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT 500`).all(),
+    displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
+    c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),
+    c.env.DB.prepare(`SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completedToday,SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failedToday FROM builder_jobs WHERE ended_at>=datetime('now','-24 hours')`).first(),
+    c.env.DB.prepare(`SELECT r.*,SUM(CASE WHEN j.status='completed' THEN 1 ELSE 0 END) completed_jobs,SUM(CASE WHEN j.status='failed' THEN 1 ELSE 0 END) failed_jobs,SUM(CASE WHEN j.status IN ('waiting','retry','building') THEN 1 ELSE 0 END) remaining_jobs,ROUND(AVG(CASE WHEN j.status='completed' THEN j.duration_ms END)) average_ms FROM builder_runs r LEFT JOIN builder_jobs j ON j.run_id=r.id GROUP BY r.id ORDER BY r.id DESC LIMIT 12`).all(),
+    displayRunId?c.env.DB.prepare(`SELECT e.*,l.company business_name FROM builder_events e LEFT JOIN builder_jobs j ON j.id=e.job_id LEFT JOIN leads l ON l.id=j.lead_id WHERE e.run_id=? ORDER BY e.id DESC LIMIT 100`).bind(displayRunId).all():{results:[]},
+  ]);
+  const durationValues = durations.results.map(row=>row.duration_ms).filter(value=>Number.isFinite(value)).sort((a,b)=>a-b);
+  const averageMs = durationValues.length ? Math.round(durationValues.reduce((sum,value)=>sum+value,0)/durationValues.length) : null;
+  const middle = Math.floor(durationValues.length/2);
+  const medianMs = durationValues.length ? (durationValues.length%2 ? durationValues[middle] : Math.round((durationValues[middle-1]+durationValues[middle])/2)) : null;
+  const effectiveState=(control as {effective_state?:string}|null)?.effective_state??'offline';
+  return c.json({
+    awaitingBuild:(awaiting as {count:number}|null)?.count??0,
+    readyToQueue:(ready as {count:number}|null)?.count??0,
+    missingBriefLeads:missingBriefLeads.results,
+    control,
+    run:displayRun??null,
+    jobs:jobs.results,
+    events:events.results,
+    runHistory:runHistory.results,
+    metrics:{averageMs,medianMs,sampleSize:durationValues.length,completedToday:(today as {completedToday:number|null}|null)?.completedToday??0,failedToday:(today as {failedToday:number|null}|null)?.failedToday??0},
+    health:{apiConnected:true,workerOnline:effectiveState!=='offline',landingSiteAuthenticated:effectiveState!=='login_required',readyToStart:effectiveState!=='offline'&&effectiveState!=='login_required'},
+  });
+});
+
+builderAdminRouter.post('/start', async c => {
+  const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
+  if(control?.active_run_id) return c.json({error:'A Builder run is already active'},409);
+  const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status) VALUES('starting') RETURNING id`).first<{id:number}>();
+  if(!created) return c.json({error:'Could not create Builder run'},500);
+  await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT id,?,'waiting' FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).bind(created.id).run();
+  const total=await c.env.DB.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id=?`).bind(created.id).first<{count:number}>();
+  if(!total?.count){await c.env.DB.prepare(`UPDATE builder_runs SET status='completed',ended_at=datetime('now') WHERE id=?`).bind(created.id).run();return c.json({runId:created.id,queued:0});}
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE builder_runs SET total_jobs=? WHERE id=?`).bind(total.count,created.id),
+    c.env.DB.prepare(`UPDATE builder_control SET active_run_id=?,paused=0,stop_requested=0,worker_state='starting',current_step='Waiting for browser worker',worker_message=NULL,updated_at=datetime('now') WHERE id=1`).bind(created.id),
+  ]);
+  await writeBuilderEvent(c.env.DB, { runId: created.id, eventType: 'run_started', state: 'starting', step: 'Waiting for browser worker', message: `${total.count} website${total.count===1?'':'s'} queued.` });
+  return c.json({runId:created.id,queued:total.count});
+});
+
+builderAdminRouter.post('/control', async c => {
+  const b=await c.req.json<{action?:'pause'|'resume'|'stop'}>();
+  const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
+  if(!control?.active_run_id) return c.json({error:'No active Builder run'},409);
+  if(b.action==='pause') { await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=1,worker_state=CASE WHEN worker_state='building' THEN worker_state ELSE 'paused' END,updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='paused' WHERE id=?`).bind(control.active_run_id)]); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'run_paused',state:'paused',step:'Pausing after current website',message:'Pause requested by operator.'}); }
+  else if(b.action==='resume') { await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=0,stop_requested=0,worker_state='running',updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='running' WHERE id=?`).bind(control.active_run_id)]); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'run_resumed',state:'running',step:'Resuming queue',message:'Builder resumed by operator.'}); }
+  else if(b.action==='stop') {
+    const active=await c.env.DB.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id=? AND status='building'`).bind(control.active_run_id).first<{count:number}>();
+    if(active?.count) { await c.env.DB.prepare(`UPDATE builder_control SET stop_requested=1,current_step='Stopping after current website',updated_at=datetime('now') WHERE id=1`).run(); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'stop_requested',state:'running',step:'Stopping after current website',message:'Safe stop requested by operator.'}); }
+    else await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE builder_runs SET status='stopped',ended_at=datetime('now') WHERE id=?`).bind(control.active_run_id),
+      c.env.DB.prepare(`UPDATE builder_control SET active_run_id=NULL,stop_requested=0,paused=0,worker_state='idle',current_step=NULL,updated_at=datetime('now') WHERE id=1`),
+    ]);
+  }
+  else return c.json({error:'Invalid action'},400);
+  return c.json({ok:true});
+});
+
+builderAdminRouter.post('/retry-failed', async c => {
+  const body=(await c.req.json().catch(()=>({}))) as {runId?:number};
+  const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
+  if(control?.active_run_id) {
+    const result=await c.env.DB.prepare(`UPDATE builder_jobs SET status='retry',attempt_count=0,failure_reason=NULL,ended_at=NULL,duration_ms=NULL,updated_at=datetime('now') WHERE run_id=? AND status='failed'`).bind(control.active_run_id).run();
+    await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=0,worker_state='running',updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='running',ended_at=NULL,error_reason=NULL WHERE id=?`).bind(control.active_run_id)]);
+    return c.json({retried:result.meta.changes});
+  }
+  const prior=body.runId
+    ? await c.env.DB.prepare(`SELECT id FROM builder_runs WHERE id=?`).bind(body.runId).first<{id:number}>()
+    : await c.env.DB.prepare(`SELECT id FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
+  if(!prior) return c.json({error:'No failed builds to retry'},409);
+  const failed=await c.env.DB.prepare(`SELECT lead_id FROM builder_jobs WHERE run_id=? AND status='failed'`).bind(prior.id).all<{lead_id:number}>();
+  if(!failed.results.length) return c.json({error:'No failed builds to retry'},409);
+  const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status,total_jobs) VALUES('starting',?) RETURNING id`).bind(failed.results.length).first<{id:number}>();
+  if(!created) return c.json({error:'Could not create retry run'},500);
+  await c.env.DB.batch(failed.results.map(row=>c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) VALUES(?,?,'waiting')`).bind(row.lead_id,created.id)));
+  await c.env.DB.prepare(`UPDATE builder_control SET active_run_id=?,paused=0,stop_requested=0,worker_state='starting',current_step='Waiting for browser worker',updated_at=datetime('now') WHERE id=1`).bind(created.id).run();
+  await writeBuilderEvent(c.env.DB,{runId:created.id,eventType:'retry_run_started',state:'starting',step:'Waiting for browser worker',message:`Retrying ${failed.results.length} failed build${failed.results.length===1?'':'s'} from run #${prior.id}.`,metadata:{sourceRunId:prior.id}});
+  return c.json({retried:failed.results.length});
+});

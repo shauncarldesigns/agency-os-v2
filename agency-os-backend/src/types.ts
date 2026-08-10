@@ -36,6 +36,8 @@ export interface Env {
   TWILIO_AUTH_TOKEN?: string;
   CLARITY_API_TOKEN?: string;
   CLARITY_PROJECT_ID?: string;
+  /** Dedicated token used only by the local Builder Employee. */
+  BUILDER_API_TOKEN?: string;
 }
 
 export interface Lead {

@@ -2598,8 +2598,8 @@ function buildColumns(
   automations: EmailAutomationSummary[],
 ): BoardColumn[] {
   const columns: BoardColumn[] = [
-    { id: 'to-call', title: 'To Call', description: 'Call and capture the best email', icon: PhoneCall, tone: 'blue', items: [] },
-    { id: 'awaiting-build', title: 'Awaiting Build', description: 'Email captured, site not built', icon: Mail, tone: 'amber', items: [] },
+    { id: 'awaiting-build', title: 'Awaiting Build', description: 'Email available, site not built', icon: Mail, tone: 'amber', items: [] },
+    { id: 'to-call', title: 'To Call', description: 'No usable email—call to capture one', icon: PhoneCall, tone: 'blue', items: [] },
     { id: 'ready-to-send', title: 'Ready to Send', description: 'Site built, email ready next', icon: Send, tone: 'emerald', items: [] },
     { id: 'sent-no-reply', title: 'Sent — No Reply', description: 'Email sent, awaiting response', icon: Clock, tone: 'slate', items: [] },
     { id: 'final-review', title: 'Final Review', description: 'Sequence complete, operator decision needed', icon: AlertCircle, tone: 'amber', items: [] },
@@ -2689,7 +2689,11 @@ function buildColumns(
       return;
     }
 
-    const enteredEmailFlow = Boolean(lead.email && lead.outcome === 'Email Captured');
+    // A valid email is enough to enter the build-first email motion. Waiting
+    // for a call outcome here meant prospects with an email could not get a
+    // demo site until after we called them—the opposite of the outreach plan.
+    // Build completion already schedules email automation server-side.
+    const enteredEmailFlow = Boolean(lead.email && !lead.has_website);
     if (enteredEmailFlow && lead.pipeline_status === 'engaged') {
       byId.engaged.items.push(leadItem(lead, {
         eyebrow: 'Engaged',
@@ -2734,9 +2738,9 @@ function buildColumns(
 
     if (enteredEmailFlow) {
       byId['awaiting-build'].items.push(leadItem(lead, {
-        eyebrow: 'Email captured',
-        detail: lead.email ?? 'Email captured',
-        note: 'Ready for the site build workflow',
+        eyebrow: lead.outcome === 'Email Captured' ? 'Email captured' : 'Email available',
+        detail: lead.email ?? 'Email available',
+        note: 'Build the demo before any call or email is sent',
         activityLabel: 'Awaiting build',
         tone: 'amber',
         sortAt: lead.updated_at,

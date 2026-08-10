@@ -167,9 +167,33 @@ function slugify(name: string): string {
 }
 
 // Build the tagged live URL. Preserves any existing query string with `&`.
-function tagUrl(rawUrl: string, slug: string): string {
+function tagUrl(rawUrl: string, slug: string, channel: 'email' | 'sms'): string {
   const sep = rawUrl.includes('?') ? '&' : '?';
-  return `${rawUrl}${sep}utm_source=sms&utm_medium=text&utm_campaign=${encodeURIComponent(slug)}`;
+  const medium = channel === 'email' ? 'email' : 'text';
+  return `${rawUrl}${sep}utm_source=${channel}&utm_medium=${medium}&utm_campaign=${encodeURIComponent(slug)}`;
+}
+
+export async function completePipelineBuild(
+  env: Env,
+  lead: Lead,
+  rawUrl: string,
+): Promise<Lead | null> {
+  const slug = slugify(lead.company || `lead-${lead.id}`);
+  const channel = lead.email && lead.phone_route !== 'text' ? 'email' : 'sms';
+  const tagged = tagUrl(rawUrl, slug, channel);
+  await env.DB.prepare(
+    `UPDATE leads
+       SET site_url = ?, site_url_raw = ?, campaign_slug = ?, clarity_tag = ?,
+           pipeline_status = 'ready_to_send', pipeline_last_action_at = datetime('now'),
+           updated_at = datetime('now')
+     WHERE id = ? AND pipeline_status = 'awaiting_build' AND deleted_at IS NULL`,
+  ).bind(tagged, rawUrl, slug, `lead-${lead.id}`, lead.id).run();
+  await writeActivity(env.DB, {
+    leadId: lead.id, action: 'url_saved', fromStatus: 'awaiting_build',
+    toStatus: 'ready_to_send', meta: { url: tagged, raw_url: rawUrl, channel },
+  });
+  await scheduleEmailAutomation(env, lead.id);
+  return env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`).bind(lead.id).first<Lead>();
 }
 
 // Format the lead's full mined review set (Google Places' 5 + Outscraper's
@@ -450,36 +474,8 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
       );
     }
 
-    const slug = slugify(lead.company || `lead-${lead.id}`);
-    const tagged = tagUrl(rawUrl, slug);
-
-    await c.env.DB.prepare(
-      `UPDATE leads
-         SET site_url = ?,
-             site_url_raw = ?,
-             campaign_slug = ?,
-             clarity_tag = ?,
-             pipeline_status = 'ready_to_send',
-             pipeline_last_action_at = datetime('now'),
-             updated_at = datetime('now')
-         WHERE id = ?`,
-    )
-      .bind(tagged, rawUrl, slug, `lead-${lead.id}`, id)
-      .run();
-
-    await writeActivity(c.env.DB, {
-      leadId: id,
-      action: 'url_saved',
-      fromStatus: 'awaiting_build',
-      toStatus: 'ready_to_send',
-      meta: { url: tagged, raw_url: rawUrl },
-    });
-    await scheduleEmailAutomation(c.env, id);
-
-    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
-      .bind(id)
-      .first<Lead>();
-    log('info', 'pipeline', `Lead ${id} URL saved`, { slug });
+    const updated = await completePipelineBuild(c.env, lead, rawUrl);
+    log('info', 'pipeline', `Lead ${id} URL saved`);
     return c.json({ lead: updated });
   } catch (err) {
     log('error', 'pipeline', 'POST /leads/:id/site-url failed', err);

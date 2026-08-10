@@ -1,6 +1,6 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-08. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-08-10. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
@@ -14,6 +14,29 @@ The Agency OS Access application now protects the planned app/API hostnames;
 team domain and AUD are captured in `wrangler.toml`. Next: create custom domains,
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
+
+## Builder Employee (2026-08-10, shipping)
+
+- Added a manually started, one-at-a-time Playwright bulk employee under
+  `builder-worker/`. It uses a dedicated persistent Chrome profile, fills
+  LandingSite's Business Name + Business Description fields, captures the
+  `*.agcy.dev` preview anchor, validates the deployed preview, and returns the
+  raw URL to Agency OS.
+- D1 `builder_runs`, `builder_jobs`, `builder_events`, and `builder_control`
+  provide durable queue state, leases/retries, safe-point pause/stop, worker
+  health, live steps, failure diagnostics, and run history. Migration:
+  `2026-08-10-builder-employee.sql`.
+- The Builder dashboard is an operator cockpit: separate employee/run/job
+  state, health/readiness, automatic missing-brief preparation, current-build
+  progress, queue results, URL/error/artifact details, live activity, median
+  and 24-hour metrics, and historical-run inspection/retry.
+- Email Outreach is now build-first. Email-bearing, no-site leads enter
+  **Awaiting Build** before **To Call**; leads without a usable email fall back
+  to the call lane. Builder completion saves the tracking URL and schedules
+  the existing email automation/review window—no call outcome is required.
+- Runtime secret: `BUILDER_API_TOKEN` must match the local employee's
+  `.env.local`. The Builder process itself remains local and must be running;
+  it is not deployed to Cloudflare.
 
 ## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#232, all deployed)
 

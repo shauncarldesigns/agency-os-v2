@@ -16,6 +16,7 @@ import { ToastContainer } from './components/shared/Toast';
 import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -202,6 +203,9 @@ export default function App() {
                   loadStats();
                 }}
               />
+            )}
+            {activeTab === 'builder' && (
+              <div className="main"><BuilderStatusPanel showToast={showToast} onChanged={loadStats} /></div>
             )}
             {activeTab === 'sites' && (
               <div className="main">

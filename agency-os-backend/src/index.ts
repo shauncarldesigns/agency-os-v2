@@ -33,6 +33,7 @@ import { seoAuditsRouter } from './routes/seo-audits';
 import { researchRouter, runAllMarketResearch } from './routes/research';
 import { runDueSeoAudits } from './services/seoAudit';
 import { recordApplicationEvent } from './services/applicationEvents';
+import { builderAdminRouter, builderWorkerRouter } from './routes/builder';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -60,6 +61,10 @@ app.route('/', redirectRouter);
 // Public Resend webhook + first-party open pixel. Signature/token validation
 // happens inside the router, so these must remain ahead of /api authentication.
 app.route('/', publicEmailRouter);
+
+// Local Builder Employee uses a dedicated bearer token, not an operator's
+// browser session. It is deliberately isolated from the administrative API.
+app.route('/api/builder-worker', builderWorkerRouter);
 
 app.use('/api/*', authMiddleware());
 
@@ -145,6 +150,7 @@ app.route('/api/email', emailOutreachRouter);
 app.route('/api/settings', settingsRouter);
 // Market research — demand data per industry × location market.
 app.route('/api/research', researchRouter);
+app.route('/api/builder', builderAdminRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {

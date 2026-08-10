@@ -92,3 +92,5 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 #                              GOOGLE_OAUTH_* Search Console pair — set
 #                              GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET
 #                              only to override with a dedicated client)
+# BUILDER_API_TOKEN           (random bearer token used only by the local
+#                              Playwright Builder Employee)

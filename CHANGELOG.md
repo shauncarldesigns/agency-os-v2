@@ -9,6 +9,21 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### LandingSite Builder Employee (backend + dashboard + local worker)
+
+- **Awaiting Build leads can now flow through a single-process Playwright
+  employee into Ready to Send**, with a durable D1 queue, dedicated Chrome
+  profile, state-based LandingSite completion, three-attempt retry handling,
+  failure artifacts, and dashboard pause/retry/health controls.
+- **The Builder dashboard is now an operator cockpit** with distinct employee,
+  run, and job status; readiness checks; automatic missing-brief preparation;
+  current-build progress; detailed queue results; live events; diagnostics;
+  median/24-hour metrics; and inspectable run history.
+- **Email Outreach is now build-first instead of call-gated**: email-bearing,
+  no-site leads enter Awaiting Build before a call, Start Builder prepares any
+  missing app-owned briefs, and the existing URL-completion service schedules
+  email automation after the demo is ready.
+
 ### Email Outreach: filter by site built (dashboard)
 
 - **A "Site built / No site yet" filter joins the industry and city filters
