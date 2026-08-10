@@ -202,7 +202,7 @@ export interface BuilderStatus {
     paused: number;
     stop_requested: number;
     active_run_id: number | null;
-    effective_state: 'offline' | 'idle' | 'starting' | 'running' | 'preparing' | 'building' | 'login_required' | 'paused' | 'error';
+    effective_state: 'offline' | 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
     current_step: string | null;
     worker_message: string | null;
     last_worker_seen_at: string | null;

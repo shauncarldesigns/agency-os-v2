@@ -38,7 +38,6 @@ const stamp = (value?: string | null) => {
 const tone: Record<string, string> = {
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
   building: 'bg-blue-50 text-blue-700 ring-blue-600/20',
-  preparing: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   running: 'bg-blue-50 text-blue-700 ring-blue-600/20',
   starting: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   waiting: 'bg-slate-100 text-slate-600 ring-slate-500/20',
@@ -178,7 +177,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   if (!data) return <div className="page-container"><p className="text-sm text-slate-500">Loading Builder Employee…</p></div>;
 
   const effectiveState = data.control.effective_state;
-  const employeeState = effectiveState === 'building' || effectiveState === 'preparing' ? 'running' : effectiveState;
+  const employeeState = effectiveState === 'building' ? 'running' : effectiveState;
   const batchCandidates = data.nextBatchLeads.slice(0, batchSize);
   const selectedBatch = batchCandidates.filter(lead => !excludedLeadIds.has(lead.id));
   const nextBatchCount = selectedBatch.length;
@@ -192,7 +191,7 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const currentStepIndex = Math.max(0, BUILD_STEPS.findIndex(step => data.control.current_step?.toLowerCase().includes(step.toLowerCase())));
   const currentProgress = data.control.current_step ? Math.max(8, Math.round(((currentStepIndex + 1) / BUILD_STEPS.length) * 100)) : 0;
   const elapsed = counts.building?.started_at ? Date.now() - (sqlDate(counts.building.started_at)?.getTime() ?? Date.now()) : null;
-  const isPreparingBrief = effectiveState === 'preparing';
+  const isPreparingBrief = data.control.current_step === 'Preparing brief';
   const currentCompany = isPreparingBrief
     ? data.control.worker_message?.replace(/^Preparing brief for /, '').replace(/\.$/, '')
     : counts.building?.business_name;
