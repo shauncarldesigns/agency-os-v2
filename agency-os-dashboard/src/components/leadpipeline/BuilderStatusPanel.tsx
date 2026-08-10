@@ -212,6 +212,10 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
       </div>
       {preparing && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Generating the LandingSite brief for <strong>{preparing.company}</strong>. The Builder will start after every missing brief is ready.</div>}
       {!preparing && startBlockedReason && !data.control.active_run_id && <p className="mt-4 text-sm text-slate-500">{startBlockedReason}</p>}
+      {!data.health.workerOnline && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <AlertTriangle className="mr-2 inline h-4 w-4" />
+        The browser employee normally starts automatically when the Builder Mac signs in. If it remains offline, open Terminal in <code className="rounded bg-amber-100 px-1 py-0.5">builder-worker</code> and run <code className="rounded bg-amber-100 px-1 py-0.5">npm run service:restart</code>.
+      </div>}
       {data.control.effective_state === 'login_required' && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mr-2 inline h-4 w-4" />LandingSite.ai login required. Sign in in the Builder browser; processing resumes automatically.</div>}
       {data.control.worker_message && data.control.effective_state !== 'login_required' && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{data.control.worker_message}</div>}
     </section>

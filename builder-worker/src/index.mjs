@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright';
-import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 function loadEnv(path) {
@@ -20,10 +20,39 @@ const LANDINGSITE_URL = process.env.LANDINGSITE_URL ?? 'https://app.landingsite.
 const POLL_MS = Number(process.env.BUILDER_POLL_INTERVAL_MS ?? 15000);
 const PROFILE_DIR = resolve(process.env.BUILDER_PROFILE_DIR ?? './profile');
 const ARTIFACT_DIR = resolve(process.env.BUILDER_ARTIFACT_DIR ?? './artifacts');
+const LOCK_PATH = join(PROFILE_DIR, '.builder-worker.lock');
 let resumeEditorUrl = process.env.LANDINGSITE_RESUME_URL ?? '';
 if (!TOKEN) throw new Error('BUILDER_API_TOKEN is required');
 mkdirSync(PROFILE_DIR, { recursive: true });
 mkdirSync(ARTIFACT_DIR, { recursive: true });
+
+function acquireProcessLock() {
+  if (existsSync(LOCK_PATH)) {
+    const existingPid = Number.parseInt(readFileSync(LOCK_PATH, 'utf8').trim(), 10);
+    if (Number.isFinite(existingPid)) {
+      let processExists = true;
+      try {
+        process.kill(existingPid, 0);
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') processExists = false;
+        else throw new Error(`Builder Employee is already running (PID ${existingPid}).`);
+      }
+      if (processExists) throw new Error(`Builder Employee is already running (PID ${existingPid}).`);
+    }
+    unlinkSync(LOCK_PATH);
+  }
+  const descriptor = openSync(LOCK_PATH, 'wx');
+  writeFileSync(descriptor, `${process.pid}\n`);
+  return () => {
+    try {
+      if (readFileSync(LOCK_PATH, 'utf8').trim() === String(process.pid)) unlinkSync(LOCK_PATH);
+    } catch {
+      // The lock may already be gone during shutdown or service uninstall.
+    }
+  };
+}
+
+const releaseProcessLock = acquireProcessLock();
 
 async function api(path, body, retries = 20) {
   for (let attempt = 0; ; attempt++) {
@@ -214,6 +243,7 @@ async function main() {
   }
 }
 
-process.on('SIGINT', async () => { await context?.close(); process.exit(0); });
-process.on('SIGTERM', async () => { await context?.close(); process.exit(0); });
+process.on('exit', releaseProcessLock);
+process.on('SIGINT', async () => { await context?.close(); releaseProcessLock(); process.exit(0); });
+process.on('SIGTERM', async () => { await context?.close(); releaseProcessLock(); process.exit(0); });
 await main();

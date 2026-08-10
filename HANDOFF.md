@@ -17,8 +17,10 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
 
 ## Builder Employee (2026-08-10, shipping)
 
-- Added a manually started, one-at-a-time Playwright bulk employee under
-  `builder-worker/`. It uses a dedicated persistent Chrome profile, fills
+- Added a one-at-a-time Playwright bulk employee under `builder-worker/`. It
+  runs as the `com.agencyos.builder-employee` macOS LaunchAgent, starts at
+  login, restarts after crashes, and prevents duplicate local processes. It
+  uses a dedicated persistent Chrome profile, fills
   LandingSite's Business Name + Business Description fields, captures the
   `*.agcy.dev` preview anchor, validates the deployed preview, and returns the
   raw URL to Agency OS.
@@ -35,8 +37,11 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   to the call lane. Builder completion saves the tracking URL and schedules
   the existing email automation/review window—no call outcome is required.
 - Runtime secret: `BUILDER_API_TOKEN` must match the local employee's
-  `.env.local`. The Builder process itself remains local and must be running;
-  it is not deployed to Cloudflare.
+  `.env.local`; the production secret was installed on 2026-08-10. The
+  Builder process remains local rather than running on Cloudflare, but its
+  LaunchAgent keeps it available to the live dashboard automatically. Use
+  `npm run service:status`, `service:restart`, or `service:logs` from
+  `builder-worker/` for host-level recovery.
 
 ## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#232, all deployed)
 

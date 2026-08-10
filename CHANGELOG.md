@@ -11,6 +11,9 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Builder Employee now installs as an always-on macOS login service**,
+  restarts after crashes, prevents duplicate local workers, and exposes local
+  status/restart/log commands.
 - **Awaiting Build leads can now flow through a single-process Playwright
   employee into Ready to Send**, with a durable D1 queue, dedicated Chrome
   profile, state-based LandingSite completion, three-attempt retry handling,

@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
-    "install-browser": "playwright install chrome"
+    "install-browser": "playwright install chrome",
+    "service:install": "node scripts/service.mjs install",
+    "service:status": "node scripts/service.mjs status",
+    "service:restart": "node scripts/service.mjs restart",
+    "service:logs": "node scripts/service.mjs logs",
+    "service:uninstall": "node scripts/service.mjs uninstall"
   },
   "engines": { "node": ">=22" },
   "dependencies": { "playwright": "^1.54.0" }
