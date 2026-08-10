@@ -52,8 +52,11 @@ interface TwilioLookupResponse {
 
 export function routeForLineType(valid: boolean, lineType: string | null): PhoneRoute {
   if (!valid) return 'review';
-  if (lineType === 'landline') return 'call';
-  if (lineType === 'mobile' || lineType === 'fixedVoip' || lineType === 'nonFixedVoip') return 'text';
+  // Messaging Employee only sends to confirmed mobile numbers. Landline and
+  // VoIP results route through the existing Email Outreach lane when email is
+  // available; this avoids carrier failures and accidental voice-only sends.
+  if (lineType === 'landline' || lineType === 'fixedVoip' || lineType === 'nonFixedVoip') return 'call';
+  if (lineType === 'mobile') return 'text';
   return 'review';
 }
 

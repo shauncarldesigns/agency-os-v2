@@ -826,6 +826,22 @@ export const api = {
     retryFailed: (runId?: number) => apiFetch<{ retried: number }>('/api/builder/retry-failed', { method: 'POST', body: JSON.stringify({ runId }) }),
     resumeStuck: () => apiFetch<{ ok:true;jobId:number;businessName:string }>('/api/builder/resume-stuck', { method: 'POST' }),
   },
+  messaging: {
+    status: () => apiFetch<any>('/api/messaging/status'),
+    control: (body: { action?: 'start'|'pause'|'resume'|'stop'; mode?: 'test'|'production'; transport?: 'mock'|'twilio'; sendRateSeconds?: number }) => apiFetch<any>('/api/messaging/control', { method:'POST', body:JSON.stringify(body) }),
+    conversations: (filter='all') => apiFetch<any>(`/api/messaging/conversations?filter=${encodeURIComponent(filter)}`),
+    conversation: (id:number) => apiFetch<any>(`/api/messaging/conversations/${id}`),
+    send: (id:number, body:string) => apiFetch<any>(`/api/messaging/conversations/${id}/send`, { method:'POST', body:JSON.stringify({body}) }),
+    retry: (id:number) => apiFetch<any>(`/api/messaging/messages/${id}/retry`, { method:'POST' }),
+    action: (id:number, action:string) => apiFetch<any>(`/api/messaging/conversations/${id}/action`, { method:'POST', body:JSON.stringify({action}) }),
+    run: () => apiFetch<any>('/api/messaging/run', { method:'POST' }),
+    simulate: (body:string, leadId?:number, scenario:'inbound'|'optout'|'duplicate'|'delivered'|'failed'|'network_error'|'status_duplicate'='inbound') => apiFetch<any>('/api/messaging/simulate', { method:'POST', body:JSON.stringify({body,leadId,scenario}) }),
+    testSend: () => apiFetch<any>('/api/messaging/test-send', { method:'POST' }),
+    resetTestConversation: (id:number) => apiFetch<any>(`/api/messaging/conversations/${id}/test-data`, { method:'DELETE', body:JSON.stringify({confirm:'RESET_TEST_CONVERSATION'}) }),
+    resetTestData: () => apiFetch<any>('/api/messaging/test-data', { method:'DELETE', body:JSON.stringify({confirm:'RESET_TEST_MESSAGING'}) }),
+    scripts: () => apiFetch<any>('/api/messaging/scripts'),
+    saveScript: (key:string, body:string, approved:boolean) => apiFetch<any>(`/api/messaging/scripts/${encodeURIComponent(key)}`, { method:'PUT', body:JSON.stringify({body,approved}) }),
+  },
   emailOutreach: {
     send: (
       id: number,

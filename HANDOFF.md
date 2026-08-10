@@ -15,6 +15,52 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Messaging Employee (2026-08-10, local implementation — not deployed)
+
+- Dedicated branch: `codex/messaging-employee`. Canonical continuation plan,
+  file allowlist, test evidence, Twilio setup, rebase warning, and deployment
+  order: `spec/messaging-employee-v1.md`.
+- Added Communications inbox, employee controls, mock/live test mode, simulator,
+  script approvals, human takeover, Needs Shaun filtering, signed inbound/status
+  webhooks, Twilio delivery state, and idempotent sequential initial sends.
+- Messaging copy reuses existing Text Outreach composer and Call Center playbook
+  language. Each script records and displays its source reference. Clear
+  not-interest closes/archive without a rebuttal; pricing, positive interest,
+  and call requests retain playbook context but still escalate to Shaun.
+- Mock harness now covers delivered, bad-number/landline failure, provider
+  network failure, duplicate inbound webhook, opt-out, persistent Failed badges,
+  and safe retry (transient succeeds; permanent retry is blocked). Pure messaging
+  rules have a passing `npm run test:messaging` suite.
+- Local API integration runner now covers duplicate inbound, transient/permanent
+  retry, opt-out and post-opt-out blocking, Active/AUTO approved replies, Human
+  Takeover, Paused behavior, singular test-thread reset, unsigned webhook
+  rejection, and script restoration. A pure signature test accepts a correctly
+  signed Twilio payload and rejects tampering. Messaging ready/send SQL
+  now uses current main's canonical `outreachEligibility.ts` predicate.
+- Delivery status application now uses an atomic conditional D1 update, so even
+  concurrent duplicate Twilio callbacks cannot both trigger Email Outreach
+  routing activity. The Communications reset control now deletes only its
+  selected test thread; both singular and global test cleanup endpoints are
+  guarded by Test + Mock mode and explicit confirmation tokens.
+- Invalid/bad SMS numbers and landline/VoIP routes suppress texting and schedule
+  the existing Email Outreach automation when email + demo URL are available.
+- A disposable service-level fixture proves the permanent-failure path suppresses
+  SMS, changes a landline to the Call route, writes `sms_routed_to_email`, and
+  creates the existing active Email Outreach automation. It persists no fixture
+  records and runs as part of `npm run test:messaging`. Test-conversation
+  delivery failures are explicitly blocked from mutating linked leads, and
+  Production mode is rejected unless transport is Live Twilio.
+- Migrations `2026-08-10-messaging-employee.sql` and
+  `2026-08-10-messaging-playbook-scripts.sql` are not yet applied remotely and
+  must be applied in that order.
+  Twilio Messaging Service/sender/test-number/A2P config is not yet installed;
+  production therefore remains locked. Backend/dashboard compile locally.
+- A detached clean-worktree rehearsal applied Messaging to current
+  `origin/main` (`04c6da9`) and passed backend typecheck, rule/routing tests,
+  dashboard build, and the full API integration runner. It retained main's
+  newer Builder-aware outreach eligibility and was removed afterward, including
+  its copied local secrets.
+
 ## Builder Employee (2026-08-10, shipping)
 
 - Added a one-at-a-time Playwright bulk employee under `builder-worker/`. It

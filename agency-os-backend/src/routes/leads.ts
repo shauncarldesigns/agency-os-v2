@@ -202,6 +202,20 @@ leadsRouter.post('/phone-classify', async (c) => {
       try {
         const classification = await classifyPhoneNumber(c.env, lead.phone);
         await savePhoneClassification(c.env.DB, lead.id, classification);
+        if (classification.phone_route !== 'text') {
+          await c.env.DB.prepare(`
+            UPDATE leads SET sms_suppressed = 1,
+              sms_suppressed_at = COALESCE(sms_suppressed_at, datetime('now')),
+              sms_suppression_reason = ?, updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(
+            classification.phone_valid === 0
+              ? (classification.phone_lookup_error || 'Invalid SMS number')
+              : `${classification.phone_line_type || 'Non-mobile'} number routed to Email Outreach`,
+            lead.id,
+          ).run();
+          await scheduleEmailAutomation(c.env, lead.id);
+        }
         items.push({
           id: lead.id,
           ok: true,
