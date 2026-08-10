@@ -123,7 +123,7 @@ async function waitForAuthentication(page) {
   void api('/heartbeat', { state: 'idle' }, 0).catch(() => undefined);
 }
 
-async function captureDemoUrl(page, buildStartedUrl, reportStep) {
+async function captureDemoUrl(page, buildStartedUrl) {
   console.log('LandingSite: waiting for editor route');
   await page.waitForURL(url => url.href !== buildStartedUrl, { timeout: 2 * 60_000 });
   console.log(`LandingSite: editor loaded at ${page.url()}; frames=${page.frames().map(frame => frame.url()).join(', ')}`);
@@ -131,7 +131,7 @@ async function captureDemoUrl(page, buildStartedUrl, reportStep) {
   const previewDeadline = Date.now() + 15 * 60_000;
   while (!preview && Date.now() < previewDeadline) {
     for (const frame of page.frames()) {
-      const candidate = frame.locator('a[target="_blank"][href$=".agcy.dev"]').first();
+      const candidate = frame.getByRole('link', { name: /preview website/i }).first();
       if (await candidate.isVisible().catch(() => false)) {
         preview = candidate;
         break;
@@ -143,44 +143,18 @@ async function captureDemoUrl(page, buildStartedUrl, reportStep) {
   const demoUrl = await preview.getAttribute('href');
   if (!demoUrl) throw new Error('LandingSite Preview Website link has no URL.');
   const parsed = new URL(demoUrl);
-  if (!parsed.hostname.endsWith('.agcy.dev')) {
+  if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.agcy.dev')) {
     throw new Error(`Unexpected LandingSite preview URL: ${demoUrl}`);
   }
   console.log(`LandingSite: preview URL captured from link: ${demoUrl}`);
-
-  await reportStep('Opening website preview');
-  const popupPromise = page.context().waitForEvent('page', { timeout: 15_000 });
-  await preview.click();
-  console.log('LandingSite: Preview Website clicked');
-  const previewPage = await popupPromise;
-  await previewPage.waitForLoadState('domcontentloaded');
-
-  // LandingSite exposes the final URL before its preview deployment is ready.
-  // Keep checking that exact URL; completion is based on page state, not a
-  // blind build delay in the editor.
-  await reportStep('Waiting for preview to become ready');
-  const deadline = Date.now() + 15 * 60_000;
-  while (Date.now() < deadline) {
-    const invalid = previewPage.getByText(/preview not found|preview link isn't valid/i);
-    const preparing = previewPage.getByText(/getting your preview ready/i);
-    const isInvalid = await invalid.isVisible().catch(() => false);
-    const isPreparing = await preparing.isVisible().catch(() => false);
-    if (!isInvalid && !isPreparing) {
-      await previewPage.waitForLoadState('domcontentloaded');
-      await reportStep('Validating website preview');
-      console.log(`LandingSite: valid preview ready at ${demoUrl}`);
-      return demoUrl;
-    }
-    console.log(`LandingSite: preview URL captured; ${isInvalid ? 'not deployed yet' : 'deployment in progress'}`);
-    await previewPage.waitForTimeout(3_000);
-    await previewPage.reload({ waitUntil: 'domcontentloaded' });
-  }
-  throw new Error('LandingSite preview did not become ready within 15 minutes.');
+  return parsed.href;
 }
 
 async function build(job) {
   const browser = await browserContext();
-  const page = browser.pages()[0] ?? await browser.newPage();
+  const existingPages = browser.pages();
+  const page = existingPages.find(candidate => candidate.url().startsWith(LANDINGSITE_URL)) ?? existingPages[0] ?? await browser.newPage();
+  await Promise.all(existingPages.filter(candidate => candidate !== page).map(candidate => candidate.close().catch(() => undefined)));
   const artifactBase = join(ARTIFACT_DIR, `job-${job.id}-attempt-${job.attempt}`);
   let currentStep = 'Opening LandingSite.ai';
   const step = async (value) => {
@@ -201,7 +175,7 @@ async function build(job) {
       await step('Resuming existing website');
       await page.goto(editorUrl, { waitUntil: 'domcontentloaded' });
       await step('Waiting for website');
-      demoUrl = await captureDemoUrl(page, LANDINGSITE_URL, step);
+      demoUrl = await captureDemoUrl(page, LANDINGSITE_URL);
     } else {
       await waitForAuthentication(page);
       await step('Creating new project');
@@ -216,7 +190,7 @@ async function build(job) {
       await step('Starting generation');
       await page.getByRole('button', { name: /create your website/i }).click();
       await step('Waiting for website');
-      demoUrl = await captureDemoUrl(page, buildStartedUrl, step);
+      demoUrl = await captureDemoUrl(page, buildStartedUrl);
     }
     await step('Capturing demo URL');
     if (TRACE_ON_FAILURE) await browser.tracing.stop();
