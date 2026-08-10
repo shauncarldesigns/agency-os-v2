@@ -224,9 +224,12 @@ themselves, not a description of them. Format:
   Subhead: <one or two sentences>
 Open the section with a line telling the builder to use this copy
 verbatim as the page hero and NOT to replace it with a generated
-headline. The H1 must be the first text element in the hero: never place
-an eyebrow, category label, kicker, announcement chip, or AI-cliché pill
-badge above it. The H1 must read like something a customer would actually
+headline, immediately followed by this exact sentence on its own line:
+"Do not place an eyebrow, kicker, category label, announcement chip, or
+AI-cliché pill badge above the H1. The H1 must be the first text element
+in the hero." This deliberately duplicates the same prohibition in
+CONSTRAINTS — the builder misses it when it only appears at the bottom.
+The H1 must read like something a customer would actually
 search for. It must explicitly state both what the business does and
 where it does it by naming the primary service(s) or trade and the target
 town. It may contain other natural supporting text, but service + location
