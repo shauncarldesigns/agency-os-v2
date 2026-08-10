@@ -118,10 +118,11 @@ builderAdminRouter.get('/status', async c => {
     ? await c.env.DB.prepare(`SELECT * FROM builder_runs WHERE id=?`).bind(selectedRunId).first<{id:number}>()
     : await c.env.DB.prepare(`SELECT * FROM builder_runs ORDER BY id DESC LIMIT 1`).first<{id:number}>();
   const displayRunId = displayRun?.id;
-  const [awaiting,ready,missingBriefLeads,jobs,durations,today,runHistory,events]=await Promise.all([
+  const [awaiting,ready,missingBriefLeads,nextBatchLeads,jobs,durations,today,runHistory,events]=await Promise.all([
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
     c.env.DB.prepare(`SELECT COUNT(*) count FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).first(),
     c.env.DB.prepare(`SELECT id,company,email,phone_route FROM leads WHERE pipeline_status='awaiting_build' AND (pipeline_brief IS NULL OR trim(pipeline_brief)='') AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT 500`).all(),
+    c.env.DB.prepare(`SELECT id,company,email,phone_route,CASE WHEN pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' THEN 1 ELSE 0 END has_brief FROM leads WHERE pipeline_status='awaiting_build' AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT 20`).all(),
     displayRunId?c.env.DB.prepare(`SELECT j.*,l.company business_name,l.email,l.pipeline_status,l.site_url,l.site_url_raw FROM builder_jobs j JOIN leads l ON l.id=j.lead_id WHERE j.run_id=? ORDER BY j.id`).bind(displayRunId).all():{results:[]},
     c.env.DB.prepare(`SELECT duration_ms FROM builder_jobs WHERE status='completed' AND duration_ms IS NOT NULL ORDER BY ended_at DESC LIMIT 100`).all<{duration_ms:number}>(),
     c.env.DB.prepare(`SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completedToday,SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failedToday FROM builder_jobs WHERE ended_at>=datetime('now','-24 hours')`).first(),
@@ -137,6 +138,7 @@ builderAdminRouter.get('/status', async c => {
     awaitingBuild:(awaiting as {count:number}|null)?.count??0,
     readyToQueue:(ready as {count:number}|null)?.count??0,
     missingBriefLeads:missingBriefLeads.results,
+    nextBatchLeads:nextBatchLeads.results,
     control,
     run:displayRun??null,
     jobs:jobs.results,
@@ -148,11 +150,14 @@ builderAdminRouter.get('/status', async c => {
 });
 
 builderAdminRouter.post('/start', async c => {
+  const body=(await c.req.json().catch(()=>({}))) as {batchSize?:number};
+  const requestedBatchSize=body.batchSize??20;
+  if(!Number.isInteger(requestedBatchSize)||requestedBatchSize<1||requestedBatchSize>20) return c.json({error:'batchSize must be an integer from 1 to 20'},400);
   const control=await c.env.DB.prepare(`SELECT active_run_id FROM builder_control WHERE id=1`).first<{active_run_id:number|null}>();
   if(control?.active_run_id) return c.json({error:'A Builder run is already active'},409);
   const created=await c.env.DB.prepare(`INSERT INTO builder_runs(status) VALUES('starting') RETURNING id`).first<{id:number}>();
   if(!created) return c.json({error:'Could not create Builder run'},500);
-  await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT id,?,'waiting' FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0`).bind(created.id).run();
+  await c.env.DB.prepare(`INSERT INTO builder_jobs(lead_id,run_id,status) SELECT id,?,'waiting' FROM leads WHERE pipeline_status='awaiting_build' AND pipeline_brief IS NOT NULL AND trim(pipeline_brief)!='' AND deleted_at IS NULL AND COALESCE(has_website,0)=0 ORDER BY CASE WHEN email IS NOT NULL AND trim(email)!='' THEN 0 ELSE 1 END,opportunity_score DESC NULLS LAST,id LIMIT ?`).bind(created.id,requestedBatchSize).run();
   const total=await c.env.DB.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id=?`).bind(created.id).first<{count:number}>();
   if(!total?.count){await c.env.DB.prepare(`UPDATE builder_runs SET status='completed',ended_at=datetime('now') WHERE id=?`).bind(created.id).run();return c.json({runId:created.id,queued:0});}
   await c.env.DB.batch([
