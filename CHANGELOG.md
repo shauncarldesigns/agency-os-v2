@@ -24,7 +24,9 @@ when a manual deploy was needed.
   prepares missing briefs in the background before browser work, and the
   operator can leave the page or safely pause/resume the run without losing
   preparation progress. Brief failures retry three times without stopping the
-  rest of the batch.
+  rest of the batch. A same-day hotfix represents preparation as the existing
+  durable `running` state plus a `Preparing brief` step, matching the original
+  D1 state constraint so active runs can be claimed normally.
 - **Email Outreach, Text Outreach, and Builder now share one server-side
   audience definition.** Email's To Call lane requires a completed demo plus
   a missing/invalid email; call-routed prospects without a demo remain in

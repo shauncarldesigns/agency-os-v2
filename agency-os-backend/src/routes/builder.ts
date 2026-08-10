@@ -3,7 +3,7 @@ import type { Env, Lead } from '../types';
 import { completePipelineBuild, ensurePipelineBrief } from './pipeline';
 import { builderEligibleLeadSql } from '../services/outreachEligibility';
 
-type WorkerState = 'idle' | 'starting' | 'running' | 'preparing' | 'building' | 'login_required' | 'paused' | 'error';
+type WorkerState = 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
 interface Job { id: number; lead_id: number; run_id: number; status: string; attempt_count: number; lock_token: string | null }
 interface EligibilityRow {
   id: number;
@@ -119,7 +119,9 @@ builderWorkerRouter.post('/claim', async (c) => {
   if (preparation) {
     await c.env.DB.batch([
       c.env.DB.prepare(`UPDATE builder_runs SET status='running' WHERE id=? AND status='starting'`).bind(control.active_run_id),
-      c.env.DB.prepare(`UPDATE builder_control SET worker_state='preparing',current_step='Preparing brief',worker_message=?,last_worker_seen_at=datetime('now'),updated_at=datetime('now') WHERE id=1`).bind(`Preparing brief for ${preparation.businessName}.`),
+      // builder_control's durable CHECK constraint has no `preparing` state;
+      // preparation is represented by running + the explicit current step.
+      c.env.DB.prepare(`UPDATE builder_control SET worker_state='running',current_step='Preparing brief',worker_message=?,last_worker_seen_at=datetime('now'),updated_at=datetime('now') WHERE id=1`).bind(`Preparing brief for ${preparation.businessName}.`),
     ]);
     return c.json({ prepare: preparation, job: null });
   }
@@ -301,14 +303,15 @@ builderAdminRouter.post('/start', async c => {
 
 builderAdminRouter.post('/control', async c => {
   const b=await c.req.json<{action?:'pause'|'resume'|'stop'}>();
-  const control=await c.env.DB.prepare(`SELECT active_run_id,worker_state FROM builder_control WHERE id=1`).first<{active_run_id:number|null;worker_state:string}>();
+  const control=await c.env.DB.prepare(`SELECT active_run_id,worker_state,current_step FROM builder_control WHERE id=1`).first<{active_run_id:number|null;worker_state:string;current_step:string|null}>();
   if(!control?.active_run_id) return c.json({error:'No active Builder run'},409);
-  if(b.action==='pause') { const current=control.worker_state==='preparing'?'brief':control.worker_state==='building'?'website':'step'; await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=1,worker_state=CASE WHEN worker_state IN ('building','preparing') THEN worker_state ELSE 'paused' END,updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='paused' WHERE id=?`).bind(control.active_run_id)]); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'run_paused',state:'paused',step:`Pausing after current ${current}`,message:'Pause requested by operator.'}); }
+  if(b.action==='pause') { const current=control.current_step==='Preparing brief'?'brief':control.worker_state==='building'?'website':'step'; await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=1,worker_state=CASE WHEN worker_state='building' THEN worker_state ELSE 'paused' END,updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='paused' WHERE id=?`).bind(control.active_run_id)]); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'run_paused',state:'paused',step:`Pausing after current ${current}`,message:'Pause requested by operator.'}); }
   else if(b.action==='resume') { await c.env.DB.batch([c.env.DB.prepare(`UPDATE builder_control SET paused=0,stop_requested=0,worker_state='running',updated_at=datetime('now') WHERE id=1`),c.env.DB.prepare(`UPDATE builder_runs SET status='running' WHERE id=?`).bind(control.active_run_id)]); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'run_resumed',state:'running',step:'Resuming queue',message:'Builder resumed by operator.'}); }
   else if(b.action==='stop') {
     const active=await c.env.DB.prepare(`SELECT COUNT(*) count FROM builder_jobs WHERE run_id=? AND status='building'`).bind(control.active_run_id).first<{count:number}>();
-    const current=control.worker_state==='preparing'?'brief':'website';
-    if(active?.count || control.worker_state==='preparing') { await c.env.DB.prepare(`UPDATE builder_control SET stop_requested=1,current_step=?,updated_at=datetime('now') WHERE id=1`).bind(`Stopping after current ${current}`).run(); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'stop_requested',state:'running',step:`Stopping after current ${current}`,message:'Safe stop requested by operator.'}); }
+    const preparing=control.current_step==='Preparing brief';
+    const current=preparing?'brief':'website';
+    if(active?.count || preparing) { await c.env.DB.prepare(`UPDATE builder_control SET stop_requested=1,current_step=?,updated_at=datetime('now') WHERE id=1`).bind(`Stopping after current ${current}`).run(); await writeBuilderEvent(c.env.DB,{runId:control.active_run_id,eventType:'stop_requested',state:'running',step:`Stopping after current ${current}`,message:'Safe stop requested by operator.'}); }
     else await stopRunAfterCurrent(c.env.DB,control.active_run_id);
   }
   else return c.json({error:'Invalid action'},400);
