@@ -29,7 +29,9 @@ when a manual deploy was needed.
   with remove/restore controls, and Safety exclusions are collapsed by default.
 - **The Builder now reads the validated `*.agcy.dev` URL directly from the
   Preview Website anchor** instead of clicking it, opening a tab, and polling
-  the preview page. Legacy preview tabs are cleaned up when the next job starts.
+  the preview page. It locates the anchor by its `*.agcy.dev` href first, so
+  LandingSite text-spacing changes cannot leave a completed build waiting.
+  Legacy preview tabs are cleaned up when the next job starts.
 - **Successful Builder jobs no longer retain Playwright video or trace ZIPs.**
   Failures keep a small JSON error log plus screenshot; heavyweight traces are
   opt-in for targeted debugging, with 30-day artifact retention by default.
