@@ -19,6 +19,9 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Builder runs are now capped at an operator-selected batch of 5, 10, or
+  20 sites (default 20)**. Only briefs needed by that batch are prepared; all
+  remaining Awaiting Build leads stay queued for a later run.
 - **Builder Employee now installs as an always-on macOS login service**,
   restarts after crashes, prevents duplicate local workers, and exposes local
   status/restart/log commands.
