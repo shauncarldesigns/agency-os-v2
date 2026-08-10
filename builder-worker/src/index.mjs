@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright';
-import { mkdirSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, openSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 function loadEnv(path) {
@@ -20,11 +20,34 @@ const LANDINGSITE_URL = process.env.LANDINGSITE_URL ?? 'https://app.landingsite.
 const POLL_MS = Number(process.env.BUILDER_POLL_INTERVAL_MS ?? 15000);
 const PROFILE_DIR = resolve(process.env.BUILDER_PROFILE_DIR ?? './profile');
 const ARTIFACT_DIR = resolve(process.env.BUILDER_ARTIFACT_DIR ?? './artifacts');
+const TRACE_ON_FAILURE = process.env.BUILDER_TRACE_ON_FAILURE === 'true';
+const ARTIFACT_RETENTION_DAYS = Number(process.env.BUILDER_ARTIFACT_RETENTION_DAYS ?? 30);
 const LOCK_PATH = join(PROFILE_DIR, '.builder-worker.lock');
 let resumeEditorUrl = process.env.LANDINGSITE_RESUME_URL ?? '';
 if (!TOKEN) throw new Error('BUILDER_API_TOKEN is required');
 mkdirSync(PROFILE_DIR, { recursive: true });
 mkdirSync(ARTIFACT_DIR, { recursive: true });
+
+function cleanExpiredArtifacts() {
+  if (!Number.isFinite(ARTIFACT_RETENTION_DAYS) || ARTIFACT_RETENTION_DAYS < 1) return;
+  const cutoff = Date.now() - ARTIFACT_RETENTION_DAYS * 24 * 60 * 60 * 1_000;
+  let removed = 0;
+  for (const name of readdirSync(ARTIFACT_DIR)) {
+    const path = join(ARTIFACT_DIR, name);
+    try {
+      const details = statSync(path);
+      if (details.isFile() && details.mtimeMs < cutoff) {
+        unlinkSync(path);
+        removed++;
+      }
+    } catch {
+      // A concurrent cleanup or operator action may already have removed it.
+    }
+  }
+  if (removed) console.log(`Removed ${removed} Builder artifact${removed === 1 ? '' : 's'} older than ${ARTIFACT_RETENTION_DAYS} days.`);
+}
+
+cleanExpiredArtifacts();
 
 function acquireProcessLock() {
   if (existsSync(LOCK_PATH)) {
@@ -83,7 +106,6 @@ async function browserContext() {
     headless: false,
     chromiumSandbox: true,
     viewport: { width: 1440, height: 1000 },
-    recordVideo: { dir: ARTIFACT_DIR, size: { width: 1440, height: 1000 } },
   });
   context.on('close', () => { context = undefined; });
   return context;
@@ -160,7 +182,6 @@ async function build(job) {
   const browser = await browserContext();
   const page = browser.pages()[0] ?? await browser.newPage();
   const artifactBase = join(ARTIFACT_DIR, `job-${job.id}-attempt-${job.attempt}`);
-  await browser.tracing.start({ screenshots: true, snapshots: true, sources: true });
   let currentStep = 'Opening LandingSite.ai';
   const step = async (value) => {
     currentStep = value;
@@ -171,6 +192,7 @@ async function build(job) {
     void api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: currentStep }, 0).catch(() => undefined);
   }, 60_000);
   try {
+    if (TRACE_ON_FAILURE) await browser.tracing.start({ screenshots: true, snapshots: true, sources: true });
     let demoUrl;
     if (resumeEditorUrl) {
       const editorUrl = resumeEditorUrl;
@@ -197,25 +219,44 @@ async function build(job) {
       demoUrl = await captureDemoUrl(page, buildStartedUrl, step);
     }
     await step('Capturing demo URL');
-    await browser.tracing.stop({ path: `${artifactBase}.zip` });
+    if (TRACE_ON_FAILURE) await browser.tracing.stop();
     await step('Saving URL');
     console.log('Agency OS: delivering completed site URL');
     await api('/result', {
       jobId: job.id, lockToken: job.lockToken, success: true, demoUrl,
-      artifactPath: `${artifactBase}.zip`,
     }, Number.MAX_SAFE_INTEGER);
     currentStep = 'Completing job';
     console.log(`Completed lead ${job.leadId}: ${demoUrl}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const screenshot = `${artifactBase}.png`;
+    const trace = TRACE_ON_FAILURE ? `${artifactBase}.zip` : null;
+    const errorLog = `${artifactBase}.json`;
+    let artifactPath = screenshot;
     await page.screenshot({ path: screenshot, fullPage: true }).catch(() => undefined);
-    await browser.tracing.stop({ path: `${artifactBase}.zip` }).catch(() => undefined);
+    if (trace) await browser.tracing.stop({ path: trace }).catch(() => undefined);
+    try {
+      writeFileSync(errorLog, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        jobId: job.id,
+        leadId: job.leadId,
+        businessName: job.businessName,
+        attempt: job.attempt,
+        step: currentStep,
+        error: message,
+        pageUrl: page.url(),
+        screenshot,
+        trace,
+      }, null, 2)}\n`);
+      artifactPath = errorLog;
+    } catch (logError) {
+      console.error('Could not write Builder error log:', logError instanceof Error ? logError.message : logError);
+    }
     const recoverable = /timeout|network|connection|browser|page crashed|target closed/i.test(message);
     const systemError = /LandingSite.*(?:unavailable|UI may have changed)|ERR_NAME_NOT_RESOLVED|\b50[234]\b/i.test(message);
     await api('/result', {
       jobId: job.id, lockToken: job.lockToken, success: false,
-      reason: message, recoverable, systemError, artifactPath: screenshot,
+      reason: message, recoverable, systemError, artifactPath,
     }, Number.MAX_SAFE_INTEGER);
     console.error(`${recoverable ? 'Retrying' : 'Failed'} lead ${job.leadId}: ${message}`);
     if (/browser|page crashed|target closed/i.test(message)) {

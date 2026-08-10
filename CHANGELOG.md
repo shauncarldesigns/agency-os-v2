@@ -19,6 +19,9 @@ when a manual deploy was needed.
 
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
+- **Successful Builder jobs no longer retain Playwright video or trace ZIPs.**
+  Failures keep a small JSON error log plus screenshot; heavyweight traces are
+  opt-in for targeted debugging, with 30-day artifact retention by default.
 - **Builder eligibility now fails closed across dashboard counts, brief
   preparation, queue creation, worker claims, retries, and URL completion.**
   Not-interested or qualified/demo-booked leads, existing projects, existing
