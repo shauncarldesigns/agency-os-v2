@@ -42,6 +42,9 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   stale Awaiting Build flags without allowing those leads into a run. The
   dashboard previews the exact next batch with checkboxes and submits those
   lead IDs; the backend revalidates the reviewed IDs before insertion.
+- Artifact policy: successes retain nothing; failures retain JSON + screenshot.
+  Video recording is disabled. Failure traces require explicit
+  `BUILDER_TRACE_ON_FAILURE=true`; artifacts expire after 30 days by default.
 - Email Outreach is now build-first. Email-bearing, no-site leads enter
   **Awaiting Build** before **To Call**; leads without a usable email fall back
   to the call lane. Builder completion saves the tracking URL and schedules

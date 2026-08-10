@@ -31,5 +31,16 @@ The worker fills the two creation fields exactly as LandingSite presents them:
 - **Business Name** ← lead company
 - **Business Description** ← Agency OS pipeline brief
 
-It waits on visible LandingSite state, captures failure screenshots and traces
-under `artifacts/`, and retries recoverable failures up to three attempts.
+It waits on visible LandingSite state and retries recoverable failures up to
+three attempts.
+
+## Artifact policy
+
+- Successful builds store no video, trace, screenshot, or ZIP artifact.
+- Failed attempts store one structured JSON error log and one screenshot under
+  `artifacts/`.
+- Playwright traces are off by default because they can be hundreds of MB.
+  Temporarily set `BUILDER_TRACE_ON_FAILURE=true` only for targeted debugging.
+- Failure artifacts older than `BUILDER_ARTIFACT_RETENTION_DAYS` are removed
+  when the service starts (30 days by default).
+- The LaunchAgent's lightweight text console output remains under `logs/`.
