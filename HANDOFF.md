@@ -35,6 +35,11 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
   capped server-side at 60 sites; the operator can select 20, 40, or 60, and
   only missing briefs inside that exact batch are generated. Next-batch review
   and Safety exclusions are compact, collapsed-by-default drawers.
+- A guarded **Resume build** action recovers an orphaned `building` lease after
+  a Mac/worker restart. It is offered only when the employee is idle, offline,
+  or errored, releases the stale lock without consuming another attempt, and
+  instructs the employee to reuse the already-open LandingSite editor. It must
+  fail rather than create a duplicate if no existing editor is open.
 - Builder eligibility is fail-closed and must be applied at status display,
   brief selection, queue insertion, job claim, retry, and successful result.
   Eligible leads are undeleted `cold`/`contacted` records in

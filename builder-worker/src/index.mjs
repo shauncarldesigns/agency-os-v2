@@ -123,10 +123,11 @@ async function waitForAuthentication(page) {
   void api('/heartbeat', { state: 'idle' }, 0).catch(() => undefined);
 }
 
-async function captureDemoUrl(page, buildStartedUrl) {
+async function captureDemoUrl(page, buildStartedUrl, onEditorReady) {
   console.log('LandingSite: waiting for editor route');
   await page.waitForURL(url => url.href !== buildStartedUrl, { timeout: 2 * 60_000 });
   console.log(`LandingSite: editor loaded at ${page.url()}; frames=${page.frames().map(frame => frame.url()).join(', ')}`);
+  await onEditorReady?.(page.url());
   let preview;
   const previewDeadline = Date.now() + 15 * 60_000;
   while (!preview && Date.now() < previewDeadline) {
@@ -153,29 +154,39 @@ async function captureDemoUrl(page, buildStartedUrl) {
 async function build(job) {
   const browser = await browserContext();
   const existingPages = browser.pages();
-  const page = existingPages.find(candidate => candidate.url().startsWith(LANDINGSITE_URL)) ?? existingPages[0] ?? await browser.newPage();
+  const page = (job.resumeExisting
+    ? existingPages.find(candidate => candidate.url().startsWith(`${LANDINGSITE_URL}/chat/`))
+    : existingPages.find(candidate => candidate.url().startsWith(LANDINGSITE_URL))) ?? existingPages[0] ?? await browser.newPage();
   await Promise.all(existingPages.filter(candidate => candidate !== page).map(candidate => candidate.close().catch(() => undefined)));
   const artifactBase = join(ARTIFACT_DIR, `job-${job.id}-attempt-${job.attempt}`);
   let currentStep = 'Opening LandingSite.ai';
+  let activeEditorUrl = '';
   const step = async (value) => {
     currentStep = value;
     console.log(`Step: ${value}`);
-    void api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: value }, 0).catch(() => undefined);
+    void api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: value, message: activeEditorUrl ? `LandingSite editor: ${activeEditorUrl}` : undefined }, 0).catch(() => undefined);
   };
   const heartbeat = setInterval(() => {
-    void api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: currentStep }, 0).catch(() => undefined);
+    void api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: currentStep, message: activeEditorUrl ? `LandingSite editor: ${activeEditorUrl}` : undefined }, 0).catch(() => undefined);
   }, 60_000);
   try {
     if (TRACE_ON_FAILURE) await browser.tracing.start({ screenshots: true, snapshots: true, sources: true });
     let demoUrl;
-    if (resumeEditorUrl) {
-      const editorUrl = resumeEditorUrl;
+    const openEditorUrl = page.url().startsWith(`${LANDINGSITE_URL}/chat/`) ? page.url() : '';
+    if (resumeEditorUrl || job.resumeExisting) {
+      const editorUrl = resumeEditorUrl || job.resumeEditorUrl || openEditorUrl;
       resumeEditorUrl = '';
+      if (!editorUrl) {
+        throw new Error('Resume requested, but no existing LandingSite editor is open. Open the existing project in the Builder browser and retry Resume build.');
+      }
       console.log(`LandingSite: resuming existing editor for lead ${job.leadId}`);
       await step('Resuming existing website');
-      await page.goto(editorUrl, { waitUntil: 'domcontentloaded' });
+      if (page.url() !== editorUrl) await page.goto(editorUrl, { waitUntil: 'domcontentloaded' });
       await step('Waiting for website');
-      demoUrl = await captureDemoUrl(page, LANDINGSITE_URL);
+      demoUrl = await captureDemoUrl(page, LANDINGSITE_URL, editorUrlValue => {
+        activeEditorUrl = editorUrlValue;
+        return api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: currentStep, message: `LandingSite editor: ${editorUrlValue}` }, 0).catch(() => undefined);
+      });
     } else {
       await waitForAuthentication(page);
       await step('Creating new project');
@@ -190,7 +201,10 @@ async function build(job) {
       await step('Starting generation');
       await page.getByRole('button', { name: /create your website/i }).click();
       await step('Waiting for website');
-      demoUrl = await captureDemoUrl(page, buildStartedUrl);
+      demoUrl = await captureDemoUrl(page, buildStartedUrl, editorUrlValue => {
+        activeEditorUrl = editorUrlValue;
+        return api('/heartbeat', { jobId: job.id, lockToken: job.lockToken, state: 'building', step: currentStep, message: `LandingSite editor: ${editorUrlValue}` }, 0).catch(() => undefined);
+      });
     }
     await step('Capturing demo URL');
     if (TRACE_ON_FAILURE) await browser.tracing.stop();
@@ -245,7 +259,10 @@ async function build(job) {
 async function main() {
   console.log(`Builder Employee online. Profile: ${PROFILE_DIR}`);
   const browser = await browserContext();
-  await waitForAuthentication(browser.pages()[0] ?? await browser.newPage());
+  const editorPage = browser.pages().find(page => page.url().startsWith(`${LANDINGSITE_URL}/chat/`));
+  const authPage = editorPage ? await browser.newPage() : browser.pages()[0] ?? await browser.newPage();
+  await waitForAuthentication(authPage);
+  if (editorPage) await authPage.close().catch(() => undefined);
   while (true) {
     try {
       const { paused, job } = await api('/claim');
