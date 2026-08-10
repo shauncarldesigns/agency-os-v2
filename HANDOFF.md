@@ -15,7 +15,11 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
-## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#231, all deployed)
+## Outreach visibility + UI fixes (2026-08-08/09, PRs #226–#232, all deployed)
+
+- **PR #232:** Email Outreach page gained a "Site built / No site yet"
+  filter (board + automation views) — for VoIP-rerouted leads whose sites
+  are already built, so build-complete calls come first.
 
 - **PR #231:** archive button on every active Text Outreach card (was gated
   behind the stale check), and archiving now requires a note — stored in the
