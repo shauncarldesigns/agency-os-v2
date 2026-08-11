@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { AgencySettings, Tab, HeaderStats, NavCounts } from './lib/types';
-import { api, ApiError } from './lib/api';
+import { api } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
 import { DashboardMetricsPanel } from './components/dashboard/DashboardMetricsPanel';
 import { ResearchPage } from './components/research/ResearchPage';
@@ -96,12 +96,8 @@ export default function App() {
         sites: clients.length,
       });
       setAwaitingBuildCount(awaitingBuild);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        showToast('Your secure session expired — refresh to sign in again', 'error');
-      } else {
-        showToast('Could not reach API', 'error');
-      }
+    } catch {
+      showToast('Could not reach API', 'error');
     }
   }
 
