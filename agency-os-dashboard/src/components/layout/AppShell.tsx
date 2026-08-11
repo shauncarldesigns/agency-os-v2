@@ -21,6 +21,7 @@ import {
   Bot,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
+import { endAccessSession, signBackIn } from '../../lib/accessSession';
 
 // ---------------------------------------------------------------------------
 // App shell — sidebar navigation layout (visual spec: mockups/AppShell.jsx).
@@ -89,6 +90,7 @@ function Sidebar({
   onClose,
   collapsed,
   profile,
+  onSignOut,
 }: {
   active: Tab;
   onNavigate: (t: Tab) => void;
@@ -98,6 +100,7 @@ function Sidebar({
    *  renders expanded. */
   collapsed?: boolean;
   profile: AgencySettings['general'];
+  onSignOut: () => void;
 }) {
   const [userOpen, setUserOpen] = useState(false);
   return (
@@ -221,7 +224,7 @@ function Sidebar({
             <button onClick={() => { onNavigate('settings'); setUserOpen(false); onClose?.(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"><UserRound className="h-4 w-4 text-slate-400" />Profile & preferences</button>
             <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs text-slate-500"><Keyboard className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>Call Center: 1–4 outcomes, S skip, Esc close</span></div>
             <div className="my-1 border-t border-slate-100" />
-            <button onClick={() => { window.location.href = '/cdn-cgi/access/logout'; }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sign out</button>
+            <button onClick={onSignOut} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sign out</button>
           </div>
         )}
       </div>
@@ -244,6 +247,8 @@ const COLLAPSE_KEY = 'agency-os-sidebar-collapsed';
 
 export function AppShell({ active, onNavigate, badges, headerExtra, profile, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
   // Desktop rail collapse — persisted so the operator's preference survives
   // reloads. The mobile drawer ignores it (always expanded).
   const [collapsed, setCollapsed] = useState(
@@ -256,12 +261,43 @@ export function AppShell({ active, onNavigate, badges, headerExtra, profile, chi
     });
   };
   const pageMeta = PAGE_TITLES[active];
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await endAccessSession();
+    } finally {
+      // An already-expired cookie returns Cloudflare's "No Access cookie"
+      // response, which is still a successful signed-out state for our UI.
+      setSignedOut(true);
+      setSigningOut(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50">
+      {signedOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-50 px-6">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <LogOut className="h-5 w-5" />
+            </div>
+            <h1 className="mt-5 text-xl font-semibold text-slate-900">You’re signed out</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Your secure Agency OS session has ended on this device.
+            </p>
+            <button
+              onClick={signBackIn}
+              className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              Sign back in
+            </button>
+          </div>
+        </div>
+      )}
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
-        <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} profile={profile} />
+        <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} profile={profile} onSignOut={handleSignOut} />
       </div>
 
       {/* Mobile drawer */}
@@ -278,6 +314,7 @@ export function AppShell({ active, onNavigate, badges, headerExtra, profile, chi
               badges={badges}
               onClose={() => setMobileOpen(false)}
               profile={profile}
+              onSignOut={handleSignOut}
             />
           </div>
         </div>

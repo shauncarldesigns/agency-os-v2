@@ -9,6 +9,13 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Access session and sign-out recovery (dashboard)
+
+- **Agency OS now recovers expired Cloudflare Access API sessions through the
+  login flow and returns to the dashboard**, while Sign out clears the Access
+  session in place and shows a useful sign-back-in screen instead of navigating
+  to Cloudflare's "No Access cookie found" page.
+
 ### Pipeline briefs: hero H1-first rule repeated in hero copy (backend)
 
 - **Generated pipeline briefs now repeat the "no eyebrow/kicker/pill badge

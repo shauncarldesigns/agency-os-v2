@@ -12,6 +12,7 @@ import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
   GenerateRebuttalRequest, GenerateRebuttalResponse, ObjectionHit,
 } from './playbook';
+import { reauthenticateWithAccess } from './accessSession';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
 const TRACKING_BASE = (import.meta.env.VITE_TRACKING_URL as string | undefined) ?? API_BASE;
@@ -274,6 +275,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    if (res.status === 401) reauthenticateWithAccess();
     throw new ApiError(err.error ?? res.statusText, res.status, err);
   }
   return res.json() as Promise<T>;
