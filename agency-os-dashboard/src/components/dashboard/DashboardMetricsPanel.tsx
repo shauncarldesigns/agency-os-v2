@@ -606,63 +606,55 @@ function MessageSendTimeSection({ timing }: { timing: SendTimingState | null }) 
     (peak, point) => (!peak || point.total > peak.total ? point : peak),
     null,
   );
+  const peakHourValue = peakHour?.total ?? 0;
   const rangeDetail = activityRangeLabel(timing?.range ?? '30d');
 
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60 transition-opacity ${timing?.loading ? 'opacity-60' : 'opacity-100'}`}>
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-slate-900">Message send times</h3>
-        <p className="mt-0.5 text-xs text-slate-400">
-          Intro texts and follow-ups · 8am–8pm Chicago time · {rangeDetail}
-        </p>
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-indigo-500" />
-          Intro texts
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-slate-400" />
-          Follow-ups
-        </span>
-        {peakHour && peakHour.total > 0 && (
-          <span className="font-semibold text-slate-700">
-            Peak: {formatDashboardHour(peakHour.hour)} · {peakHour.total}
-          </span>
-        )}
+    <section className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 transition-opacity ${timing?.loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Message send times</h3>
+          <p className="mt-0.5 text-xs text-slate-400">Intro texts and follow-ups · 8am–8pm Chicago time</p>
+        </div>
+        <p className="text-[11px] text-slate-400">{rangeDetail} · totals by hour</p>
       </div>
       {totalMessages === 0 ? (
-        <div className="flex h-44 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-400">
+        <div className="flex h-52 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 text-xs text-slate-400">
           {timing?.loading ? 'Loading send activity…' : 'No sent-message activity in this range.'}
         </div>
       ) : (
-        <div className="overflow-x-auto pb-1">
-          <div className="flex h-48 min-w-[560px] items-end gap-2 border-b border-slate-200 px-1">
-            {sendByHour.map((point) => {
-              const totalHeight = (point.total / maxHourlySends) * 144;
-              const introHeight = point.total > 0
-                ? totalHeight * (point.intro / point.total)
-                : 0;
-              const followupHeight = totalHeight - introHeight;
-              return (
-                <div
-                  key={point.hour}
-                  className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
-                  title={`${formatDashboardHour(point.hour)}: ${point.intro} intro, ${point.followUps} follow-up`}
-                >
-                  {point.total > 0 && (
-                    <span className="mb-1 text-[9px] font-semibold text-slate-500">{point.total}</span>
-                  )}
-                  <div className="flex w-full max-w-5 flex-col justify-end overflow-hidden rounded-t-sm">
-                    <div className="bg-slate-400" style={{ height: `${followupHeight}px` }} />
-                    <div className="bg-indigo-500" style={{ height: `${introHeight}px` }} />
+        <div className="rounded-xl border border-slate-200 bg-slate-50/30 px-4 pb-4 pt-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">Messages sent by hour</h4>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-blue-200" />Intro texts</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-blue-400" />Follow-ups</span>
+              {peakHour && peakHour.total > 0 && <span className="font-semibold text-blue-700">Peak {formatDashboardHour(peakHour.hour)} · {peakHour.total}</span>}
+            </div>
+          </div>
+          <div className="overflow-x-auto pb-1">
+            <div className="flex h-40 min-w-[560px] items-end gap-2">
+              {sendByHour.map((point) => {
+                const totalHeight = (point.total / maxHourlySends) * 116;
+                const introHeight = point.total > 0 ? totalHeight * (point.intro / point.total) : 0;
+                const followupHeight = totalHeight - introHeight;
+                const isPeak = point.total > 0 && point.total === peakHourValue;
+                return (
+                  <div
+                    key={point.hour}
+                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                    title={`${formatDashboardHour(point.hour)}: ${point.intro} intro, ${point.followUps} follow-up`}
+                  >
+                    {point.total > 0 && <span className={`mb-1 text-[9px] font-semibold ${isPeak ? 'text-blue-700' : 'text-slate-500'}`}>{point.total}</span>}
+                    <div className="flex w-full min-w-7 flex-col justify-end overflow-hidden rounded-t-[5px]">
+                      <div className={isPeak ? 'bg-blue-500' : 'bg-blue-400'} style={{ height: `${followupHeight}px` }} />
+                      <div className={isPeak ? 'bg-blue-700' : 'bg-blue-200'} style={{ height: `${introHeight}px` }} />
+                    </div>
+                    <span className={`mt-2 h-4 text-[9px] ${isPeak ? 'font-bold text-blue-700' : 'text-slate-400'}`}>{formatDashboardHour(point.hour)}</span>
                   </div>
-                  <span className="mt-1.5 h-4 text-[9px] text-slate-400">
-                    {formatDashboardHour(point.hour)}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
