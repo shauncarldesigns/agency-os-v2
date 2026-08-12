@@ -1012,17 +1012,17 @@ function EmailCaptureSplitScript({
 
           <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">If they say “No thanks”</p>
-            <p className="mt-2 border-l-2 border-blue-200 pl-3 text-base leading-7 text-slate-700">
+            <p className="mt-2 border-l-2 border-blue-200 pl-3 text-[17px] leading-8 text-slate-700">
               Totally fair. Would it be worth a quick look before you rule it out? It’s really just meant to help you look more professional and bring in more business. You might actually like it.
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">If they still say no</p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">No problem at all. Have a good one.</p>
+                <p className="mt-1 text-[17px] leading-7 text-slate-600">No problem at all. Have a good one.</p>
               </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">If they say yes</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-emerald-900">Great, what’s a good email for you?</p>
+                <p className="mt-1 text-[17px] font-semibold leading-7 text-emerald-900">Great, what’s a good email for you?</p>
               </div>
             </div>
           </section>
@@ -1070,7 +1070,7 @@ function EmailCaptureSplitScript({
 
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
-            <p className="mt-1.5 text-xs leading-5 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
+            <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
           </div>
 
           {recordingUrl && (
@@ -1194,7 +1194,7 @@ function ScriptResponseDropdown({ label, body }: { label: string; body: string }
         {label}
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
       </summary>
-      <p className="border-t border-slate-100 bg-white px-4 py-3.5 text-xs leading-5 text-slate-600">{body}</p>
+      <p className="border-t border-slate-100 bg-white px-4 py-3.5 text-[17px] leading-7 text-slate-600">{body}</p>
     </details>
   );
 }
