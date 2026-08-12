@@ -1013,7 +1013,7 @@ function EmailCaptureSplitScript({
           <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">If they say “No thanks”</p>
             <p className="mt-2 border-l-2 border-blue-200 pl-3 text-base leading-7 text-slate-700">
-              Totally fair. I was just trying to help you get more business and look more professional. Would it be worth a quick look before you rule it out? You might actually like what I put together.
+              Totally fair. Would it be worth a quick look before you rule it out? It’s really just meant to help you look more professional and bring in more business. You might actually like it.
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
