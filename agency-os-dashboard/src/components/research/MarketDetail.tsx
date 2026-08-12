@@ -137,23 +137,25 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
           <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Run research to pull keyword volumes and the current map pack for this market. A run takes tens of seconds.</p>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          {/* Keyword table */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-4 py-3">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          {/* Keyword table — height is pinned to the right column (h-0 +
+              min-h-full lets the map pack / run history panels set the row
+              height on xl) with its own internal scroll + sticky header. */}
+          <div className="flex max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:h-0 xl:max-h-none xl:min-h-full">
+            <div className="shrink-0 border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-bold text-slate-900">Keyword demand</h2>
               <p className="mt-0.5 text-xs text-slate-500">{keywords.length} keywords · sorted by monthly volume · numbers from {runs[0]?.provider === 'dataforseo' ? 'DataForSEO' : 'Google Ads'}</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <th className="px-4 py-2.5">Keyword</th>
-                    <th className="px-4 py-2.5 text-right">Avg/mo</th>
-                    <th className="px-4 py-2.5 text-right">Last mo.</th>
-                    <th className="px-4 py-2.5 text-right">CPC</th>
-                    <th className="px-4 py-2.5">Competition</th>
-                    <th className="px-4 py-2.5">12-mo trend</th>
+                  <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <th className={stickyTh}>Keyword</th>
+                    <th className={`${stickyTh} text-right`}>Avg/mo</th>
+                    <th className={`${stickyTh} text-right`}>Last mo.</th>
+                    <th className={`${stickyTh} text-right`}>CPC</th>
+                    <th className={stickyTh}>Competition</th>
+                    <th className={stickyTh}>12-mo trend</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -208,7 +210,15 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
                   {mapPackKeywords.map(keyword => (
                     <div key={keyword} className="px-4 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">“{keyword}”</h3>
+                        <a
+                          href={`https://www.google.com/maps/search/${encodeURIComponent(keyword)}/@${market.latitude},${market.longitude},13z`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Open this search on Google Maps, anchored at ${market.location_label} — the same coordinates this capture used`}
+                          className="text-xs font-bold uppercase tracking-wide text-slate-500 underline-offset-2 hover:text-blue-600 hover:underline"
+                        >
+                          “{keyword}” ↗
+                        </a>
                         <span className="text-[11px] text-slate-400">{formatDateTime(mapPack[keyword][0]?.captured_at)}</span>
                       </div>
                       <ol className="mt-2 space-y-1.5">
@@ -219,7 +229,19 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
                           >
                             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${entry.position <= 3 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>{entry.position}</span>
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-semibold text-slate-800">{entry.company}</div>
+                              {entry.place_id ? (
+                                <a
+                                  href={`https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(entry.place_id)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="Open this business's Google Business Profile"
+                                  className="block truncate text-sm font-semibold text-slate-800 underline-offset-2 hover:text-blue-600 hover:underline"
+                                >
+                                  {entry.company}
+                                </a>
+                              ) : (
+                                <div className="truncate text-sm font-semibold text-slate-800">{entry.company}</div>
+                              )}
                               <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
                                 {entry.google_rating !== null && (
                                   <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{entry.google_rating.toFixed(1)}</span>
@@ -229,6 +251,8 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
                             </div>
                             {entry.has_website === 0 ? (
                               <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">No website</span>
+                            ) : entry.website ? (
+                              <a href={entry.website} target="_blank" rel="noreferrer" title={entry.website} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-blue-50 hover:text-blue-600"><Globe className="h-3 w-3" /> Has site</a>
                             ) : (
                               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500"><Globe className="h-3 w-3" /> Has site</span>
                             )}
@@ -345,6 +369,10 @@ function Sparkline({ trendJson }: { trendJson: string | null }) {
     </svg>
   );
 }
+
+// Sticky within the keyword panel's scroll container so the column labels
+// stay visible while scrolling hundreds of keyword rows.
+const stickyTh = 'sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-2.5';
 
 interface TrendPoint { year: number; month: number; volume: number }
 
