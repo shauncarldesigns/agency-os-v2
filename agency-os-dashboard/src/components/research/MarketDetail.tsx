@@ -131,6 +131,8 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
         </div>
       </div>
 
+      {keywords.length > 0 && <MarketDemandSummary market={market} keywords={keywords} />}
+
       {keywords.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
           <h2 className="text-sm font-semibold text-slate-800">No research yet</h2>
@@ -373,6 +375,91 @@ function Sparkline({ trendJson }: { trendJson: string | null }) {
 // Sticky within the keyword panel's scroll container so the column labels
 // stay visible while scrolling hundreds of keyword rows.
 const stickyTh = 'sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-2.5';
+
+// ---------------------------------------------------------------------------
+// Market demand summary — total category demand plus intent/service buckets,
+// computed client-side from the stored keyword rows. Related queries overlap
+// (the same searcher hits several variants), so the totals are for comparing
+// markets and sizing categories, not counting unique searchers.
+// ---------------------------------------------------------------------------
+
+const EMERGENCY_PATTERNS = [/\bemergency\b/, /\b24.?hour/, /\b24.?7\b/, /same.?day/, /\burgent\b/];
+
+const INDUSTRY_SEGMENTS: Record<string, Array<{ label: string; patterns: RegExp[] }>> = {
+  'Plumbing': [
+    { label: 'Water heater', patterns: [/water heater/, /tankless/] },
+    { label: 'Drain & sewer', patterns: [/\bdrain/, /\bsewer/, /rooter/, /\bclog/, /septic/] },
+    { label: 'Leaks & fixtures', patterns: [/\bleak/, /toilet/, /faucet/, /\bpipe\b/] },
+  ],
+  'HVAC': [
+    { label: 'Furnace & heating', patterns: [/furnace/, /heating/, /heat pump/, /boiler/] },
+    { label: 'AC & cooling', patterns: [/air condition/, /\ba\/?c\b/, /cooling/] },
+    { label: 'Ducts & air quality', patterns: [/\bduct/, /air quality/, /ventilat/] },
+  ],
+  'Electrical': [
+    { label: 'Panel & wiring', patterns: [/panel/, /wiring/, /rewir/, /outlet/, /breaker/] },
+    { label: 'EV & generator', patterns: [/ev charg/, /generator/] },
+  ],
+  'Roofing': [
+    { label: 'Repair & leaks', patterns: [/repair/, /\bleak/] },
+    { label: 'Replacement & install', patterns: [/replac/, /install/, /new roof/, /shingle/, /metal roof/] },
+  ],
+  'Collision Repair': [
+    { label: 'Dent & body', patterns: [/\bdent/, /\bbody\b/, /paintless/] },
+    { label: 'Bumper, paint & glass', patterns: [/bumper/, /windshield/, /\bglass\b/, /\bpaint/, /scratch/] },
+  ],
+};
+
+function sumWhere(keywords: MarketKeyword[], predicate: (k: MarketKeyword) => boolean): { volume: number; count: number } {
+  let volume = 0, count = 0;
+  for (const k of keywords) {
+    if (k.monthly_volume === null || !predicate(k)) continue;
+    volume += k.monthly_volume;
+    count++;
+  }
+  return { volume, count };
+}
+
+function MarketDemandSummary({ market, keywords }: { market: Market; keywords: MarketKeyword[] }) {
+  const city = market.location_label.split(',')[0]?.toLowerCase().trim() ?? '';
+  const total = sumWhere(keywords, () => true);
+  const highIntent = sumWhere(keywords, k => k.is_near_me === 1 || (city.length > 0 && k.keyword.includes(city)));
+  const emergency = sumWhere(keywords, k => EMERGENCY_PATTERNS.some(p => p.test(k.keyword)));
+  const segments = (INDUSTRY_SEGMENTS[market.industry] ?? [])
+    .map(segment => ({ label: segment.label, ...sumWhere(keywords, k => segment.patterns.some(p => p.test(k.keyword))) }))
+    .filter(segment => segment.volume > 0);
+
+  return (
+    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-900">{market.industry} market demand — {market.location_label}</h2>
+        <p className="text-[11px] text-slate-400">Related queries overlap — compare markets and size categories; don't read as unique searchers.</p>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="rounded-xl bg-blue-600 p-3 text-white">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-100">Total category demand</p>
+          <p className="mt-1 text-xl font-bold">{total.volume.toLocaleString()}<span className="ml-1 text-xs font-medium text-blue-200">/mo</span></p>
+          <p className="mt-0.5 text-[11px] text-blue-100">{total.count.toLocaleString()} keywords with volume</p>
+        </div>
+        <DemandTile label="High intent (near me + city)" volume={highIntent.volume} count={highIntent.count} />
+        <DemandTile label="Emergency demand" volume={emergency.volume} count={emergency.count} />
+        {segments.slice(0, 3).map(segment => (
+          <DemandTile key={segment.label} label={segment.label} volume={segment.volume} count={segment.count} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DemandTile({ label, volume, count }: { label: string; volume: number; count: number }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-bold text-slate-900">{volume.toLocaleString()}<span className="ml-1 text-xs font-medium text-slate-400">/mo</span></p>
+      <p className="mt-0.5 text-[11px] text-slate-500">{count.toLocaleString()} keyword{count === 1 ? '' : 's'}</p>
+    </div>
+  );
+}
 
 interface TrendPoint { year: number; month: number; volume: number }
 

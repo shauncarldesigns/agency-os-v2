@@ -137,6 +137,7 @@ export function ResearchPage({ showToast }: ResearchPageProps) {
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3">Market</th>
+                  <th className="px-4 py-3">Category demand</th>
                   <th className="px-4 py-3">Top “near me” demand</th>
                   <th className="px-4 py-3">Keywords</th>
                   <th className="px-4 py-3">Last researched</th>
@@ -158,6 +159,17 @@ export function ResearchPage({ showToast }: ResearchPageProps) {
                         <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500"><MapPin className="h-3 w-3" />{market.location_label}</div>
                       </td>
                       <td className="px-4 py-3.5">
+                        {market.total_volume !== null ? (
+                          <div>
+                            <span className="text-base font-bold text-blue-700">{market.total_volume.toLocaleString()}</span>
+                            <span className="ml-1 text-xs text-slate-400">/mo</span>
+                            <div className="mt-0.5 text-xs text-slate-500">across {market.volume_keyword_count.toLocaleString()} keywords</div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">Not researched</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
                         {market.headline_volume !== null ? (
                           <div>
                             <span className="text-base font-bold text-slate-900">{market.headline_volume.toLocaleString()}</span>
@@ -165,7 +177,7 @@ export function ResearchPage({ showToast }: ResearchPageProps) {
                             {market.headline_keyword && <div className="mt-0.5 text-xs text-slate-500">“{market.headline_keyword}”</div>}
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">Not researched</span>
+                          <span className="text-xs text-slate-400">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">{market.keyword_count || '—'}</td>
