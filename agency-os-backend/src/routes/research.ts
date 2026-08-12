@@ -97,6 +97,16 @@ export async function runMarketResearch(
   const config = researchConfig(settings);
   const provider = getKeywordVolumeProvider(env);
 
+  // A run whose invocation died (e.g. subrequest-cap exhaustion killed the
+  // Worker before the status write) stays 'running' forever. Sweep those to
+  // failed before starting fresh so the UI stops reporting a phantom run.
+  await env.DB.prepare(`
+    UPDATE research_runs SET status = 'failed',
+      error_detail = 'Run abandoned — the Worker invocation ended before recording a result',
+      completed_at = datetime('now')
+    WHERE market_id = ? AND status = 'running' AND started_at < datetime('now', '-10 minutes')
+  `).bind(market.id).run();
+
   const runInsert = await env.DB.prepare(
     'INSERT INTO research_runs (market_id, "trigger", provider) VALUES (?, ?, ?) RETURNING id',
   ).bind(market.id, trigger, provider.name).first<{ id: number }>();
@@ -126,28 +136,37 @@ export async function runMarketResearch(
   }
 
   // 2. Upsert keywords on (market_id, keyword) so history doesn't balloon.
+  // MUST be batched: every individual D1 query is a Worker subrequest, and
+  // Google returns up to ~1,000 ideas per market — row-at-a-time writes
+  // burned the entire 1,000-subrequest budget on the first real run.
+  // db.batch() executes a chunk of statements as one subrequest.
+  const KEYWORD_UPSERT = `
+    INSERT INTO market_keywords (market_id, run_id, keyword, monthly_volume, competition, competition_index, cpc_low, cpc_high, trend_json, is_near_me, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(market_id, keyword) DO UPDATE SET
+      run_id = excluded.run_id,
+      monthly_volume = excluded.monthly_volume,
+      competition = excluded.competition,
+      competition_index = excluded.competition_index,
+      cpc_low = excluded.cpc_low,
+      cpc_high = excluded.cpc_high,
+      trend_json = excluded.trend_json,
+      is_near_me = excluded.is_near_me,
+      fetched_at = datetime('now')
+  `;
+  const BATCH_SIZE = 40;
   let stored = 0;
-  for (const row of volumes) {
-    await env.DB.prepare(`
-      INSERT INTO market_keywords (market_id, run_id, keyword, monthly_volume, competition, competition_index, cpc_low, cpc_high, trend_json, is_near_me, fetched_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(market_id, keyword) DO UPDATE SET
-        run_id = excluded.run_id,
-        monthly_volume = excluded.monthly_volume,
-        competition = excluded.competition,
-        competition_index = excluded.competition_index,
-        cpc_low = excluded.cpc_low,
-        cpc_high = excluded.cpc_high,
-        trend_json = excluded.trend_json,
-        is_near_me = excluded.is_near_me,
-        fetched_at = datetime('now')
-    `).bind(
-      market.id, runId, row.keyword, row.monthlyVolume, row.competition,
-      row.competitionIndex, row.cpcLow, row.cpcHigh,
-      row.trend.length ? JSON.stringify(row.trend) : null,
-      row.keyword.includes('near me') || nearMeSeedKeywords.has(row.keyword) ? 1 : 0,
-    ).run();
-    stored++;
+  for (let i = 0; i < volumes.length; i += BATCH_SIZE) {
+    const chunk = volumes.slice(i, i + BATCH_SIZE).map(row =>
+      env.DB.prepare(KEYWORD_UPSERT).bind(
+        market.id, runId, row.keyword, row.monthlyVolume, row.competition,
+        row.competitionIndex, row.cpcLow, row.cpcHigh,
+        row.trend.length ? JSON.stringify(row.trend) : null,
+        row.keyword.includes('near me') || nearMeSeedKeywords.has(row.keyword) ? 1 : 0,
+      ),
+    );
+    await env.DB.batch(chunk);
+    stored += chunk.length;
   }
 
   // 3. Map pack on the top N money terms only — near-me variants first
@@ -169,15 +188,18 @@ export async function runMarketResearch(
         // Explicit coordinates on every scrape — an unlocated "near me"
         // scrape ranks businesses around the scraper's IP, not the market.
         const entries = await captureMapPack(apiKey, keyword, market.latitude, market.longitude, config.mapPackResultLimit);
-        for (const entry of entries) {
-          await env.DB.prepare(`
-            INSERT INTO map_pack_results (market_id, run_id, keyword, position, place_id, company, has_website, website, google_rating, review_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            market.id, runId, keyword, entry.position, entry.placeId, entry.company,
-            entry.hasWebsite ? 1 : 0, entry.website, entry.googleRating, entry.reviewCount,
-          ).run();
-          mapRows++;
+        if (entries.length) {
+          // One batch per capture — a single subrequest instead of one per row.
+          await env.DB.batch(entries.map(entry =>
+            env.DB.prepare(`
+              INSERT INTO map_pack_results (market_id, run_id, keyword, position, place_id, company, has_website, website, google_rating, review_count)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              market.id, runId, keyword, entry.position, entry.placeId, entry.company,
+              entry.hasWebsite ? 1 : 0, entry.website, entry.googleRating, entry.reviewCount,
+            ),
+          ));
+          mapRows += entries.length;
         }
       } catch (err) {
         const msg = (err as Error).message;
