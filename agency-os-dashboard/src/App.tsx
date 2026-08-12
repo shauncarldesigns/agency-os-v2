@@ -154,6 +154,11 @@ export default function App() {
               <CallSessionsPage
                 showToast={showToast}
                 onStateChanged={loadStats}
+                onQualified={(project, tier) => {
+                  if (tier === 3) setPendingOpenProjectId(project.id);
+                  setActiveTab('sites');
+                  loadStats();
+                }}
               />
             )}
             {activeTab === 'call-center' && (
