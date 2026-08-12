@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email-capture rebuttal copy (dashboard)
+
+- **The email-capture call’s “No thanks” rebuttal is shorter and more direct**
+  while preserving the respectful one-retry sales flow.
+
 ### Email-capture calls: live sales handoff + mobile viewport fixes (dashboard)
 
 - **Email Outreach calls can now save an email into the normal automation or
