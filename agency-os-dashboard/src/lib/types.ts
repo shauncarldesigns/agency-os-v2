@@ -618,6 +618,11 @@ export interface MarketListRow extends Market {
   headline_keyword: string | null;
   headline_volume: number | null;
   keyword_count: number;
+  /** SUM of monthly_volume across all the market's keywords — category
+   *  demand. Related queries overlap, so compare markets with it rather
+   *  than reading it as unique searchers. */
+  total_volume: number | null;
+  volume_keyword_count: number;
   last_run_status: string | null;
 }
 

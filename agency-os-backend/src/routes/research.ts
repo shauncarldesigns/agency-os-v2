@@ -280,6 +280,8 @@ researchRouter.get('/markets', async (c) => {
         (SELECT k.monthly_volume FROM market_keywords k WHERE k.market_id = m.id AND k.is_near_me = 1
           ORDER BY k.monthly_volume DESC LIMIT 1) AS headline_volume,
         (SELECT COUNT(*) FROM market_keywords k WHERE k.market_id = m.id) AS keyword_count,
+        (SELECT SUM(k.monthly_volume) FROM market_keywords k WHERE k.market_id = m.id) AS total_volume,
+        (SELECT COUNT(*) FROM market_keywords k WHERE k.market_id = m.id AND k.monthly_volume IS NOT NULL) AS volume_keyword_count,
         (SELECT r.status FROM research_runs r WHERE r.market_id = m.id
           ORDER BY r.started_at DESC, r.id DESC LIMIT 1) AS last_run_status
       FROM markets m
