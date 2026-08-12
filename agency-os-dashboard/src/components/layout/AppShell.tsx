@@ -275,7 +275,7 @@ export function AppShell({ active, onNavigate, badges, headerExtra, profile, chi
   };
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-[100dvh] bg-slate-50">
       {signedOut && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-50 px-6">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl">

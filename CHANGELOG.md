@@ -9,6 +9,15 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email-capture calls: live sales handoff + mobile viewport fixes (dashboard)
+
+- **Email Outreach calls can now save an email into the normal automation or
+  send it immediately and continue into an inbox walkthrough and live warm-sales
+  flow.** The call script is shorter and larger, outcomes live in the context
+  column, destructive archive actions are red, Email Outreach lead details can
+  convert a signed prospect to a client, and iOS modals/pages respect dynamic
+  viewport height and safe-area insets.
+
 ### Access session and sign-out recovery (dashboard)
 
 - **Agency OS now recovers expired Cloudflare Access API sessions through the
