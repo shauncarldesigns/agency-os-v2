@@ -713,8 +713,8 @@ function ModalShell({ title, subtitle, subtitleCopy, onClose, children, footer, 
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4">
-      <div className={`w-full ${wide ? 'sm:max-w-5xl' : 'sm:max-w-lg'} max-h-[90vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col`}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-4">
+      <div className={`w-full ${wide ? 'sm:max-w-5xl' : 'sm:max-w-lg'} max-h-[90dvh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
@@ -1378,13 +1378,13 @@ export type SelectedPlan = 'Build & Maintain' | 'Growth';
 // Adapted opening for the mid-call pivot from the last-chance script: the
 // intro and "did you get a chance to look" have already happened on this
 // call, so the stage keeps only the reaction questions.
-const OVERRIDE_OPENING_BODY = `“Perfect — while I’ve got you, what stood out to you when you looked at it?”
+const OVERRIDE_OPENING_BODY = `“Perfect — now that you have it open, what catches your eye first?”
 
-“What would you want changed or added if it were actually going to become your website?”
+“As you’re looking through it, what feels right for your business — and what would you want changed?”
 
-“Absolutely. What I sent was really just a starting point based on what I could find online. We would customize all of that around your business.”`;
+“Absolutely. What you’re seeing is a starting point based on what I could find online. If we move forward, we’ll customize it around your business.”`;
 
-const OVERRIDE_OPENING_NOTE = 'They already heard the intro on this call — skip straight to their reaction. If they have not opened the site yet, text them the link and let them pull it up while you talk.';
+const OVERRIDE_OPENING_NOTE = 'They are seeing the site for the first time right now. Let them react before guiding them. Ask about what is on their screen in the present tense.';
 
 const WARM_CALL_RESPONSES = [
   { label: 'They only need a website', body: 'That sounds like the Build & Maintain plan. Let’s focus on making the business look credible and giving you a site I can keep updated for you.' },
@@ -1402,6 +1402,8 @@ export function OpenSalesCallModal({
   onFollowUpSent,
   onEmailCaptured,
   showToast,
+  initialWarm = false,
+  initialEmailBridge = false,
 }: {
   lead: PipelineLead;
   onClose: () => void;
@@ -1414,6 +1416,8 @@ export function OpenSalesCallModal({
   onFollowUpSent?: (leadId: number, messageBody: string) => Promise<void>;
   onEmailCaptured?: () => void;
   showToast: ShowToast;
+  initialWarm?: boolean;
+  initialEmailBridge?: boolean;
 }) {
   const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
   const [script, setScript] = useState<Script | null>(null);
@@ -1431,7 +1435,7 @@ export function OpenSalesCallModal({
   // Mid-call pivot: a last-chance lead can turn interested on the phone. The
   // override opens the warm sales script UI without touching lead status —
   // status still flips via the tracked link or the close-out outcome.
-  const [warmOverride, setWarmOverride] = useState(false);
+  const [warmOverride, setWarmOverride] = useState(initialWarm);
   const isWarm = warmOverride || (lead.status === 'engaged' && lead.sessions > 0);
   // Channel recovery: the texts may never have landed (wrong line type,
   // unread inbox). The operator can resend the tracked link or capture an
@@ -1441,7 +1445,7 @@ export function OpenSalesCallModal({
   const [recoverEmail, setRecoverEmail] = useState('');
   const [capturingEmail, setCapturingEmail] = useState(false);
   const [emailCapturedDone, setEmailCapturedDone] = useState(false);
-  const [introEmailSent, setIntroEmailSent] = useState(false);
+  const [introEmailSent, setIntroEmailSent] = useState(initialEmailBridge);
   const [showResendComposer, setShowResendComposer] = useState(false);
   // After the intro email fires mid-call, the warm script opens on an
   // "email track" bridge stage — walk them to their inbox and onto the site
@@ -1670,7 +1674,7 @@ export function OpenSalesCallModal({
             <section>
               <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Warm-lead sales call · email track</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">GET THEM TO THE INBOX</h3>
-              <div className="mt-5 border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+              <div className="mt-5 border-l-2 border-blue-200 pl-4 text-[17px] leading-8 text-slate-700 sm:pl-5">
                 <p>“Alright — it’s on its way. You’ll see an email from Shaun Gehrke at Shaun Carl Designs, subject line ‘I built something for {lead.name}.’”</p>
                 <p className="mt-4">“If you’re near your email, open it up and tap the link — that’s the homepage I built for you. I’ll stay on while you pull it up.”</p>
               </div>
@@ -1715,7 +1719,7 @@ export function OpenSalesCallModal({
                       </div>
                       {selectedPlan && <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">{selectedPlan}</span>}
                     </div>
-                    <div className="border-l-2 border-blue-200 pl-4 text-[15px] leading-7 text-slate-700 sm:pl-5">
+                    <div className="border-l-2 border-blue-200 pl-4 text-[17px] leading-8 text-slate-700 sm:pl-5">
                       {interpolate(stageBody, {
                         company: lead.name,
                         contact_name: lead.ownerFirst,
@@ -1732,7 +1736,7 @@ export function OpenSalesCallModal({
             <section>
               <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Last-attempt call</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">Confirm interest before closing the outreach loop.</h3>
-              <div className="mt-5 border-l-2 border-rose-200 pl-5 text-[15px] leading-7 text-slate-700">
+              <div className="mt-5 border-l-2 border-rose-200 pl-5 text-[17px] leading-8 text-slate-700">
                 <p>“Hey {lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for {lead.name} before I close this out.”</p>
                 <p className="mt-4">“Did you get a chance to take a look, and is it worth having a quick conversation about?”</p>
               </div>
@@ -1888,7 +1892,7 @@ export function OpenSalesCallModal({
             ))}
             <button
               onClick={() => void onNotInterested(lead, notes.trim() || undefined, recordingCallId ?? undefined)}
-              className="col-span-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100"
             >
               Not interested — archive
             </button>

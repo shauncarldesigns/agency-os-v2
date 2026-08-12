@@ -53,6 +53,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
       { key: 'email-outreach', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
+      { key: 'communications', label: 'Communications', icon: MessageSquareText },
       { key: 'builder', label: 'Builder Employee', icon: Bot, badgeKey: 'automatedPipeline' },
       { key: 'call-center', label: 'Call Center', icon: Headphones },
     ],
@@ -74,6 +75,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
+  communications: { title: 'Communications', subtitle: 'Messaging Employee and SMS conversation center' },
   builder: { title: 'Builder Employee', subtitle: 'Bulk LandingSite.ai website production' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
@@ -258,7 +260,7 @@ export function AppShell({ active, onNavigate, badges, headerExtra, profile, chi
   const pageMeta = PAGE_TITLES[active];
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-[100dvh] bg-slate-50">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar active={active} onNavigate={onNavigate} badges={badges} collapsed={collapsed} profile={profile} />

@@ -26,7 +26,7 @@ html{font-size:18px;}
   --tier3:#8b5cf6;--tier3-bg:rgba(139,92,246,0.1);
   --r:12px;--rl:16px;
 }
-body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:400;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
+body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:400;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased;}
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
@@ -83,7 +83,7 @@ tr:hover td{background:var(--surface2);}
 /* Lead Pipeline: the table owns both scroll axes so its header can remain
    visible during long reviews. Selection + Company stay anchored while the
    operator moves horizontally through cross-channel outreach columns. */
-.pipeline-leads-wrap{max-height:calc(100vh - 190px);overflow:auto;position:relative;}
+.pipeline-leads-wrap{max-height:calc(100dvh - 190px);overflow:auto;position:relative;}
 .pipeline-leads-table{min-width:1180px;border-collapse:separate;border-spacing:0;}
 .pipeline-leads-table thead th{position:sticky;top:0;z-index:20;background:var(--surface2);box-shadow:0 1px 0 var(--border);}
 .pipeline-leads-table th:first-child,
@@ -203,9 +203,9 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
 .progress-fill{height:100%;border-radius:3px;}
 
 /* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.18s;}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.18s;padding-bottom:env(safe-area-inset-bottom,0px);}
 .modal-overlay.open{opacity:1;pointer-events:all;}
-.modal{background:var(--surface);border:1px solid var(--border);box-shadow:0 20px 50px rgba(15,23,42,0.15);border-radius:var(--rl);max-width:90vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px);transition:transform 0.18s;position:relative;}
+.modal{background:var(--surface);border:1px solid var(--border);box-shadow:0 20px 50px rgba(15,23,42,0.15);border-radius:var(--rl);max-width:90vw;max-height:88dvh;overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px);transition:transform 0.18s;position:relative;}
 .modal-overlay.open .modal{transform:translateY(0);}
 .mclose{background:none;border:none;color:var(--text3);font-size:1.1rem;cursor:pointer;padding:4px;}
 .mclose:hover{color:var(--text);}
@@ -844,7 +844,7 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
    Just sets the outer page padding + max-width; everything else is
    bs-* classes. */
 .exec-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   padding: 20px 24px 32px;
   max-width: 1340px;
@@ -856,7 +856,7 @@ select.fsel{background:var(--surface);border:1px solid var(--border);border-radi
    Visual source: spec/execution-page-reference.html
    ============================================================================ */
 
-.cockpit-page { min-height: 100vh; width: 100%; background: #f8fafc; padding: 18px 0 26px; max-width: none; margin: 0; }
+.cockpit-page { min-height: 100dvh; width: 100%; background: #f8fafc; padding: 18px 0 calc(26px + env(safe-area-inset-bottom, 0px)); max-width: none; margin: 0; }
 .cockpit-utility { display: flex; justify-content: space-between; align-items: center; font-size: .72rem; color: #64748b; margin-bottom: 10px; gap: 12px; }
 .cockpit-utility-right { display: flex; align-items: center; gap: 14px; }
 .cockpit-exit { display:inline-flex;align-items:center;gap:5px;background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; color: #475569; font-family: inherit; font-size: inherit; font-weight: 600; cursor: pointer; padding: 6px 9px; }
