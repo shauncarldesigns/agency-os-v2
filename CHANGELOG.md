@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email-capture script typography (dashboard)
+
+- **All spoken/read-aloud copy in the email-capture call now uses the same
+  17px type size**, while labels and interface instructions remain compact.
+
 ### Email-capture rebuttal copy (dashboard)
 
 - **The email-capture call’s “No thanks” rebuttal is shorter and more direct**
