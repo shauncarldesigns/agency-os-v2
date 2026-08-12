@@ -385,26 +385,37 @@ const stickyTh = 'sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-4 p
 // ---------------------------------------------------------------------------
 
 const EMERGENCY_PATTERNS = [/\bemergency\b/, /\b24.?hour/, /\b24.?7\b/, /same.?day/, /\burgent\b/];
+// Universal commercial intent — every industry has price-shoppers, and for
+// insurance-adjacent trades (collision repair) "estimate" is the money term.
+const PRICING_PATTERNS = [/\bcost\b/, /\bprice/, /\bestimate/, /\bquote/, /affordable/, /\bcheap/];
+
+const EMERGENCY_SEGMENT = { label: 'Emergency', patterns: EMERGENCY_PATTERNS };
 
 const INDUSTRY_SEGMENTS: Record<string, Array<{ label: string; patterns: RegExp[] }>> = {
   'Plumbing': [
+    EMERGENCY_SEGMENT,
     { label: 'Water heater', patterns: [/water heater/, /tankless/] },
     { label: 'Drain & sewer', patterns: [/\bdrain/, /\bsewer/, /rooter/, /\bclog/, /septic/] },
     { label: 'Leaks & fixtures', patterns: [/\bleak/, /toilet/, /faucet/, /\bpipe\b/] },
   ],
   'HVAC': [
+    EMERGENCY_SEGMENT,
     { label: 'Furnace & heating', patterns: [/furnace/, /heating/, /heat pump/, /boiler/] },
     { label: 'AC & cooling', patterns: [/air condition/, /\ba\/?c\b/, /cooling/] },
     { label: 'Ducts & air quality', patterns: [/\bduct/, /air quality/, /ventilat/] },
   ],
   'Electrical': [
+    EMERGENCY_SEGMENT,
     { label: 'Panel & wiring', patterns: [/panel/, /wiring/, /rewir/, /outlet/, /breaker/] },
     { label: 'EV & generator', patterns: [/ev charg/, /generator/] },
   ],
   'Roofing': [
+    EMERGENCY_SEGMENT,
     { label: 'Repair & leaks', patterns: [/repair/, /\bleak/] },
     { label: 'Replacement & install', patterns: [/replac/, /install/, /new roof/, /shingle/, /metal roof/] },
   ],
+  'Water Damage Restoration': [EMERGENCY_SEGMENT],
+  'Drain and Sewer Services': [EMERGENCY_SEGMENT],
   'Collision Repair': [
     { label: 'Dent & body', patterns: [/\bdent/, /\bbody\b/, /paintless/] },
     { label: 'Bumper, paint & glass', patterns: [/bumper/, /windshield/, /\bglass\b/, /\bpaint/, /scratch/] },
@@ -425,10 +436,13 @@ function MarketDemandSummary({ market, keywords }: { market: Market; keywords: M
   const city = market.location_label.split(',')[0]?.toLowerCase().trim() ?? '';
   const total = sumWhere(keywords, () => true);
   const highIntent = sumWhere(keywords, k => k.is_near_me === 1 || (city.length > 0 && k.keyword.includes(city)));
-  const emergency = sumWhere(keywords, k => EMERGENCY_PATTERNS.some(p => p.test(k.keyword)));
+  const pricing = sumWhere(keywords, k => PRICING_PATTERNS.some(p => p.test(k.keyword)));
+  // Biggest slices first — each industry surfaces its own most meaningful
+  // segments (Emergency competes as a segment where the trade really has it).
   const segments = (INDUSTRY_SEGMENTS[market.industry] ?? [])
     .map(segment => ({ label: segment.label, ...sumWhere(keywords, k => segment.patterns.some(p => p.test(k.keyword))) }))
-    .filter(segment => segment.volume > 0);
+    .filter(segment => segment.volume > 0)
+    .sort((a, b) => b.volume - a.volume);
 
   return (
     <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -436,14 +450,14 @@ function MarketDemandSummary({ market, keywords }: { market: Market; keywords: M
         <h2 className="text-sm font-bold text-slate-900">{market.industry} market demand — {market.location_label}</h2>
         <p className="text-[11px] text-slate-400">Related queries overlap — compare markets and size categories; don't read as unique searchers.</p>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-xl bg-blue-600 p-3 text-white">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-100">Total category demand</p>
           <p className="mt-1 text-xl font-bold">{total.volume.toLocaleString()}<span className="ml-1 text-xs font-medium text-blue-200">/mo</span></p>
           <p className="mt-0.5 text-[11px] text-blue-100">{total.count.toLocaleString()} keywords with volume</p>
         </div>
         <DemandTile label="High intent (near me + city)" volume={highIntent.volume} count={highIntent.count} />
-        <DemandTile label="Emergency demand" volume={emergency.volume} count={emergency.count} />
+        <DemandTile label="Pricing & estimates" volume={pricing.volume} count={pricing.count} />
         {segments.slice(0, 3).map(segment => (
           <DemandTile key={segment.label} label={segment.label} volume={segment.volume} count={segment.count} />
         ))}
