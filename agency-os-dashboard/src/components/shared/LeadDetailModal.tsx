@@ -236,8 +236,8 @@ export function LeadDetailModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-0 sm:p-4">
-      <div className="w-full sm:max-w-xl max-h-[92vh] rounded-t-2xl sm:rounded-2xl bg-white shadow-xl flex flex-col">
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-xl sm:rounded-2xl">
         {loading || !lead ? (
           <div className="flex flex-col items-center gap-3 py-16">
             <Loader2 className="h-5 w-5 animate-spin text-blue-600" />

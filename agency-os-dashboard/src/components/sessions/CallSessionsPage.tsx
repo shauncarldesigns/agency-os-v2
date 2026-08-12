@@ -41,9 +41,11 @@ import {
   type EmailAutomationDetail,
   type EmailAutomationSummary,
 } from '../../lib/api';
-import type { CallEntry, Lead } from '../../lib/types';
+import type { CallEntry, Lead, Project } from '../../lib/types';
 import type { CallOutcome, ShowToast } from '../../lib/types';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
+import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
+import type { Tier } from '../../lib/pricing';
 import { Spinner } from '../shared/Spinner';
 import { RecordButton } from '../dashboard/RecordButton';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
@@ -57,6 +59,7 @@ import {
 interface Props {
   showToast: ShowToast;
   onStateChanged?: () => void;
+  onQualified?: (project: Project, tier: Tier) => void;
 }
 
 type CardTone = 'emerald' | 'amber' | 'blue' | 'rose' | 'slate';
@@ -108,7 +111,7 @@ const ALL = 'all';
 const CALL_OUTREACH_VIEW_KEY = 'agency-os-call-outreach-view';
 type CallOutreachView = 'automation' | 'board';
 
-export function CallSessionsPage({ showToast, onStateChanged }: Props) {
+export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [automations, setAutomations] = useState<EmailAutomationSummary[]>([]);
   const [view, setView] = useState<CallOutreachView>(() => {
@@ -125,11 +128,13 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [callModalLeadId, setCallModalLeadId] = useState<number | null>(null);
+  const [salesFlowLeadId, setSalesFlowLeadId] = useState<number | null>(null);
   const [buildModalLeadId, setBuildModalLeadId] = useState<number | null>(null);
   const [emailModalLeadId, setEmailModalLeadId] = useState<number | null>(null);
   const [automationLeadId, setAutomationLeadId] = useState<number | null>(null);
   const [startingAutomationId, setStartingAutomationId] = useState<number | null>(null);
   const [viewLeadId, setViewLeadId] = useState<number | null>(null);
+  const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [returnUndo, setReturnUndo] = useState<{
     automationId: number;
     company: string;
@@ -411,21 +416,43 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
           onClose={() => setViewLeadId(null)}
           showToast={showToast}
           onLeadUpdated={() => void load(true)}
+          onQualify={(lead) => {
+            setViewLeadId(null);
+            setQualifyLead(lead);
+          }}
           pipelineContext
         />
       )}
 
+      <QualifyLeadModal
+        open={qualifyLead !== null}
+        lead={qualifyLead}
+        onClose={() => setQualifyLead(null)}
+        showToast={showToast}
+        onQualified={(project, tier) => {
+          setQualifyLead(null);
+          void load(true);
+          onStateChanged?.();
+          onQualified?.(project, tier);
+        }}
+      />
+
       {callModalLeadId !== null && (
         (() => {
           const activeLead = leads.find((lead) => lead.id === callModalLeadId) ?? null;
-          const isEngagedEmailLead = activeLead?.pipeline_status === 'engaged'
-            && activeLead.outcome === 'Email Captured';
+          const isEngagedEmailLead = salesFlowLeadId === callModalLeadId
+            || (activeLead?.pipeline_status === 'engaged' && activeLead.outcome === 'Email Captured');
           return isEngagedEmailLead && activeLead ? (
             <EmailEngagedSalesCall
               lead={activeLead}
-              onClose={() => setCallModalLeadId(null)}
+              forceSalesFlow={salesFlowLeadId === activeLead.id}
+              onClose={() => {
+                setSalesFlowLeadId(null);
+                setCallModalLeadId(null);
+              }}
               showToast={showToast}
               onChanged={() => {
+                setSalesFlowLeadId(null);
                 setCallModalLeadId(null);
                 void load(true);
                 onStateChanged?.();
@@ -439,11 +466,12 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
               }
               onClose={() => setCallModalLeadId(null)}
               showToast={showToast}
-              onSaved={(emailCaptured) => {
-                if (emailCaptured) setCallModalLeadId(null);
+              onSaved={(emailCaptured, keepOpen = false) => {
+                if (emailCaptured && !keepOpen) setCallModalLeadId(null);
                 void load(true);
                 if (emailCaptured) onStateChanged?.();
               }}
+              onAdvanceToSalesFlow={() => setSalesFlowLeadId(activeLead?.id ?? null)}
               onOutcomeRecorded={() => {
                 setCallModalLeadId(null);
                 void load(true);
@@ -484,11 +512,13 @@ export function CallSessionsPage({ showToast, onStateChanged }: Props) {
 
 function EmailEngagedSalesCall({
   lead,
+  forceSalesFlow = false,
   onClose,
   showToast,
   onChanged,
 }: {
   lead: Lead;
+  forceSalesFlow?: boolean;
   onClose: () => void;
   showToast: ShowToast;
   onChanged: () => void;
@@ -561,6 +591,8 @@ function EmailEngagedSalesCall({
   return (
     <OpenSalesCallModal
       lead={pipelineLead}
+      initialWarm={forceSalesFlow}
+      initialEmailBridge={forceSalesFlow}
       onClose={onClose}
       onCallOutcome={recordCall}
       onMoveToClients={moveToClients}
@@ -576,18 +608,21 @@ function CallOutreachModal({
   onClose,
   showToast,
   onSaved,
+  onAdvanceToSalesFlow,
   onOutcomeRecorded,
 }: {
   lead: Lead | null;
   previousAutomation: EmailAutomationSummary | null;
   onClose: () => void;
   showToast: ShowToast;
-  onSaved: (emailCaptured: boolean) => void;
+  onSaved: (emailCaptured: boolean, keepOpen?: boolean) => void;
+  onAdvanceToSalesFlow: () => void;
   onOutcomeRecorded: () => void;
 }) {
   const [email, setEmail] = useState(lead?.email ?? '');
   const [callbackDate, setCallbackDate] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
+  const [sendingIntro, setSendingIntro] = useState(false);
   const [recordingOutcome, setRecordingOutcome] = useState<CallOutcome | null>(null);
   const [callNotes, setCallNotes] = useState('');
   const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
@@ -608,6 +643,7 @@ function CallOutreachModal({
 
   if (!lead) return null;
 
+  const activeLeadId = lead.id;
   const firstName = lead.contact?.trim().split(/\s+/)[0] || 'there';
   const place = formatPlace(lead.city, lead.state);
   const opener = lead.pitch_card_text?.trim()
@@ -620,12 +656,12 @@ function CallOutreachModal({
     ),
   );
 
-  async function saveEmail() {
-    if (!lead) return;
+  async function saveEmail(keepOpen = false): Promise<boolean> {
+    if (!lead) return false;
     const nextEmail = email.trim();
     if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
       showToast('Enter a valid email address', 'error');
-      return;
+      return false;
     }
     setSavingEmail(true);
     try {
@@ -638,12 +674,38 @@ function CallOutreachModal({
           ? `Email captured — moved to ${nextStatus === 'ready_to_send' ? 'Ready to Send' : 'Awaiting Build'}`
           : 'Email removed',
       );
-      onSaved(Boolean(nextEmail));
+      onSaved(Boolean(nextEmail), keepOpen);
+      return true;
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not save email: ${msg}`, 'error');
+      return false;
     } finally {
       setSavingEmail(false);
+    }
+  }
+
+  async function advanceToSalesFlow() {
+    const nextEmail = email.trim();
+    if (!nextEmail) {
+      showToast('Capture their email before advancing to the sales flow', 'error');
+      return;
+    }
+    if (nextEmail && nextEmail !== (lead?.email ?? '')) {
+      const saved = await saveEmail(true);
+      if (!saved) return;
+    }
+    setSendingIntro(true);
+    try {
+      const { automation } = await api.emailOutreach.automation(activeLeadId);
+      await api.emailOutreach.automationAction(automation.id, 'send_now');
+      showToast('Intro email sent — stay on the call while they open it');
+      onAdvanceToSalesFlow();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not send the intro email: ${msg}`, 'error');
+    } finally {
+      setSendingIntro(false);
     }
   }
 
@@ -700,12 +762,12 @@ function CallOutreachModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={`flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${returnedFromAutomation ? 'sm:max-w-2xl' : 'sm:max-w-5xl'}`}>
+      <div className={`flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl ${returnedFromAutomation ? 'sm:max-w-2xl' : 'sm:max-w-5xl'}`}>
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">Open call</h2>
@@ -765,13 +827,19 @@ function CallOutreachModal({
                 historyLoading={historyLoading}
                 callNotes={callNotes}
                 recordingUrl={recordingUrl}
+                callbackDate={callbackDate}
+                recordingOutcome={recordingOutcome}
+                sendingIntro={sendingIntro}
                 onEmailChange={setEmail}
+                onCallbackDateChange={setCallbackDate}
                 onCallNotesChange={setCallNotes}
                 onSave={() => void saveEmail()}
+                onAdvanceToSalesFlow={() => void advanceToSalesFlow()}
+                onRecordOutcome={(outcome) => void recordOutcome(outcome)}
               />
             )}
 
-            <section className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+            {returnedFromAutomation && <section className="rounded-xl border border-blue-100 bg-blue-50 p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
                 <PhoneCall className="h-3.5 w-3.5" />
                 After the call, what happened?
@@ -815,11 +883,11 @@ function CallOutreachModal({
                 type="button"
                 onClick={() => void recordOutcome('not_interested')}
                 disabled={recordingOutcome !== null}
-                className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
               >
                 {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
               </button>
-            </section>
+            </section>}
 
             {returnedFromAutomation && (
               <section>
@@ -883,10 +951,6 @@ const EMAIL_CAPTURE_RESPONSES = [
     title: 'They’re busy',
     body: 'No worries. What’s the best email address to send it to? You can look at it whenever it’s convenient, and if you have any thoughts afterward, just reply to the email or text me.',
   },
-  {
-    title: 'They decline',
-    body: 'No worries at all. I appreciate your time. If you ever decide you’d like to see what I put together, just let me know. Have a great day.',
-  },
 ] as const;
 
 function EmailCaptureSplitScript({
@@ -899,9 +963,15 @@ function EmailCaptureSplitScript({
   historyLoading,
   callNotes,
   recordingUrl,
+  callbackDate,
+  recordingOutcome,
+  sendingIntro,
   onEmailChange,
+  onCallbackDateChange,
   onCallNotesChange,
   onSave,
+  onAdvanceToSalesFlow,
+  onRecordOutcome,
 }: {
   firstName: string;
   leadId: number;
@@ -912,9 +982,15 @@ function EmailCaptureSplitScript({
   historyLoading: boolean;
   callNotes: string;
   recordingUrl: string | null;
+  callbackDate: string;
+  recordingOutcome: CallOutcome | null;
+  sendingIntro: boolean;
   onEmailChange: (value: string) => void;
+  onCallbackDateChange: (value: string) => void;
   onCallNotesChange: (value: string) => void;
   onSave: () => void;
+  onAdvanceToSalesFlow: () => void;
+  onRecordOutcome: (outcome: CallOutcome) => void;
 }) {
   const latestCall = callHistory[0] ?? null;
 
@@ -922,23 +998,34 @@ function EmailCaptureSplitScript({
     <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Email capture call</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-900">Create curiosity. Get permission to send.</h3>
-            </div>
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">Do not sell</span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Email capture call</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Create curiosity. Get permission to send.</h3>
           </div>
 
           <div className="mt-5 border-l-2 border-blue-200 pl-4 sm:pl-5">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
-            <div className="space-y-4 text-[15px] leading-7 text-slate-700">
-              <p>Hey {firstName}, this is Shaun with Shaun Carl Designs. I know you weren’t expecting my call, so I’ll keep it quick.</p>
-              <p>I was looking up your business earlier and noticed you had some really great Google reviews, but I couldn’t find a website where people could learn more about your business.</p>
-              <p>So I put one together for you. It’s nothing live and there’s no cost—I thought it would be easier to show you what your business could look like online rather than try to explain it over the phone.</p>
-              <p className="font-semibold text-slate-950">I’d be happy to send it over and hear what you think. What’s the best email address for you?</p>
+            <div className="text-[17px] leading-8 text-slate-700">
+              <p>Hey {firstName}, I know you hate these calls, so I’ll be quick. I put together a website for your business and wanted to see if you’d be open to taking a look.</p>
             </div>
           </div>
+
+          <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">If they say “No thanks”</p>
+            <p className="mt-2 border-l-2 border-blue-200 pl-3 text-base leading-7 text-slate-700">
+              Totally fair. I was just trying to help you get more business and look more professional. Would it be worth a quick look before you rule it out? You might actually like what I put together.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">If they still say no</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">No problem at all. Have a good one.</p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">If they say yes</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-emerald-900">Great, what’s a good email for you?</p>
+              </div>
+            </div>
+          </section>
 
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -951,21 +1038,34 @@ function EmailCaptureSplitScript({
                 type="email"
                 value={email}
                 onChange={(event) => onEmailChange(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') onSave(); }}
+                onKeyDown={(event) => { if (event.key === 'Enter' && email.trim()) onSave(); }}
                 placeholder="owner@business.com"
                 className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={onAdvanceToSalesFlow}
+                disabled={savingEmail || sendingIntro || !email.trim()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+              >
+                {sendingIntro ? <Spinner /> : <PhoneCall className="h-4 w-4" />}
+                {sendingIntro ? 'Sending intro email…' : 'Save and continue the call'}
+              </button>
               <button
                 type="button"
                 onClick={onSave}
-                disabled={savingEmail}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={savingEmail || sendingIntro || !email.trim()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
               >
                 {savingEmail ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
-                Save
+                Save and send to automation
               </button>
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Saving moves this built site to Ready to Send.</p>
+            <p className="mt-2 text-[11px] leading-4 text-slate-400">
+              Automation closes this call and queues the normal email workflow. Continue sends the intro now and opens the inbox walkthrough.
+            </p>
           </div>
 
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -978,16 +1078,16 @@ function EmailCaptureSplitScript({
           )}
         </div>
 
-        <aside className="overflow-visible border-t border-slate-200 bg-slate-50/80 p-5 lg:border-l lg:border-t-0">
+        <aside className="overflow-visible border-t border-slate-200 bg-slate-50/80 p-4 lg:border-l lg:border-t-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Objection responses</p>
           <p className="mt-1 text-[11px] leading-4 text-slate-400">Click a response to see what to say.</p>
-          <div className="mt-4 space-y-2">
+          <div className="mt-3 space-y-1.5">
             {EMAIL_CAPTURE_RESPONSES.map((response) => (
               <ScriptResponseDropdown key={response.title} label={response.title} body={response.body} />
             ))}
           </div>
 
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="mt-2.5 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call context</p>
@@ -999,18 +1099,18 @@ function EmailCaptureSplitScript({
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               <strong>{lead.google_rating != null ? lead.google_rating.toFixed(1) : 'No rating'}</strong>
               <span className="text-amber-700">Google reputation</span>
             </div>
 
-            <div className="mt-4 border-t border-slate-100 pt-3">
+            <div className="mt-3 border-t border-slate-100 pt-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Previous call</p>
               {historyLoading ? (
                 <p className="mt-2 text-xs text-slate-400">Loading call history…</p>
               ) : latestCall ? (
-                <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2.5">
+                <div className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-700">{latestCall.outcome}</span>
                     <span className="text-[10px] text-slate-400">{new Date(latestCall.created_at).toLocaleDateString()}</span>
@@ -1032,19 +1132,55 @@ function EmailCaptureSplitScript({
               </div>
             )}
 
-            <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="mt-2.5 border-t border-slate-100 pt-2.5">
               <label htmlFor={`split-call-notes-${lead.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes for this call</label>
               <textarea
                 id={`split-call-notes-${lead.id}`}
                 value={callNotes}
                 onChange={(event) => onCallNotesChange(event.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Add context, concerns, or what to remember next time…"
-                className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
               />
               <p className="mt-1.5 text-[10px] leading-4 text-slate-400">Saved with the call when you choose an outcome below.</p>
             </div>
           </div>
+
+          <section className="mt-2.5 rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+              <PhoneCall className="h-3.5 w-3.5" />
+              After the call, what happened?
+            </div>
+            <p className="mt-0.5 text-[10px] leading-4 text-blue-600">Tag the result so this card moves to the correct next step.</p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <OutcomeButton label="No answer" active={recordingOutcome === 'no_answer'} disabled={recordingOutcome !== null} onClick={() => onRecordOutcome('no_answer')} />
+              <OutcomeButton label="Left voicemail" active={recordingOutcome === 'voicemail'} disabled={recordingOutcome !== null} onClick={() => onRecordOutcome('voicemail')} />
+            </div>
+            <input
+              type="date"
+              value={callbackDate}
+              min={localDateIso()}
+              onChange={(event) => onCallbackDateChange(event.target.value)}
+              className="mt-2 h-9 w-full rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              aria-label="Follow-up date"
+            />
+            <button
+              type="button"
+              onClick={() => onRecordOutcome('callback')}
+              disabled={recordingOutcome !== null}
+              className="mt-2 w-full rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-left text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {recordingOutcome === 'callback' ? 'Recording…' : 'Follow up later'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onRecordOutcome('not_interested')}
+              disabled={recordingOutcome !== null}
+              className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+            >
+              {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
+            </button>
+          </section>
         </aside>
       </div>
     </section>
@@ -1238,7 +1374,7 @@ function EmailComposerModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl">
+      <div className="flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl">
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">{template.title}</h2>
@@ -1561,7 +1697,7 @@ function SiteUrlCaptureModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl">
+      <div className="flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl">
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">Site brief</h2>
@@ -1991,7 +2127,7 @@ function EmailAutomationModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[94vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl">
+      <div className="flex max-h-[94dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl">
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-900">Email automation</h2>
