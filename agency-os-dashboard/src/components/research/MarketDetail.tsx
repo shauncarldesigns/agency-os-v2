@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft, Play, MapPin, Star, Globe, Target, History, Pause, Trash2,
+  X, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import type { Market, MarketKeyword, MapPackRow, ResearchRun, ShowToast } from '../../lib/types';
@@ -24,6 +25,7 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [selectedKeyword, setSelectedKeyword] = useState<MarketKeyword | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -147,25 +149,46 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-2.5">Keyword</th>
-                    <th className="px-4 py-2.5 text-right">Volume/mo</th>
+                    <th className="px-4 py-2.5 text-right">Avg/mo</th>
+                    <th className="px-4 py-2.5 text-right">Last mo.</th>
                     <th className="px-4 py-2.5 text-right">CPC</th>
                     <th className="px-4 py-2.5">Competition</th>
                     <th className="px-4 py-2.5">12-mo trend</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {keywords.map(row => (
-                    <tr key={row.id}>
-                      <td className="px-4 py-2.5">
-                        <span className="font-medium text-slate-800">{row.keyword}</span>
-                        {row.is_near_me === 1 && <span className="ml-2 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">near me</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-slate-900">{row.monthly_volume !== null ? row.monthly_volume.toLocaleString() : '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-xs text-slate-600">{formatCpc(row.cpc_low, row.cpc_high)}</td>
-                      <td className="px-4 py-2.5"><CompetitionBadge value={row.competition} index={row.competition_index} /></td>
-                      <td className="px-4 py-2.5"><Sparkline trendJson={row.trend_json} /></td>
-                    </tr>
-                  ))}
+                  {keywords.map(row => {
+                    const trend = parseTrend(row.trend_json);
+                    const latest = trend?.[trend.length - 1] ?? null;
+                    const previous = trend && trend.length >= 2 ? trend[trend.length - 2] : null;
+                    return (
+                      <tr
+                        key={row.id}
+                        onClick={() => setSelectedKeyword(row)}
+                        title="Click for month-by-month detail"
+                        className="cursor-pointer transition hover:bg-blue-50/40"
+                      >
+                        <td className="px-4 py-2.5">
+                          <span className="font-medium text-slate-800">{row.keyword}</span>
+                          {row.is_near_me === 1 && <span className="ml-2 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">near me</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-slate-900">{row.monthly_volume !== null ? row.monthly_volume.toLocaleString() : '—'}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          {latest ? (
+                            <div>
+                              <span className="font-semibold text-slate-900">{latest.volume.toLocaleString()}</span>
+                              {previous && <span className="ml-1.5 align-middle"><DeltaBadge current={latest.volume} previous={previous.volume} /></span>}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-xs text-slate-600">{formatCpc(row.cpc_low, row.cpc_high)}</td>
+                        <td className="px-4 py-2.5"><CompetitionBadge value={row.competition} index={row.competition_index} /></td>
+                        <td className="px-4 py-2.5"><Sparkline trendJson={row.trend_json} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -243,6 +266,10 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
           </div>
         </div>
       )}
+
+      {selectedKeyword && (
+        <KeywordDetailModal keyword={selectedKeyword} onClose={() => setSelectedKeyword(null)} />
+      )}
     </div>
   );
 }
@@ -316,6 +343,130 @@ function Sparkline({ trendJson }: { trendJson: string | null }) {
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="text-blue-500" aria-hidden="true">
       <polyline points={coords.join(' ')} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
+  );
+}
+
+interface TrendPoint { year: number; month: number; volume: number }
+
+function parseTrend(trendJson: string | null): TrendPoint[] | null {
+  if (!trendJson) return null;
+  try {
+    const parsed = JSON.parse(trendJson) as TrendPoint[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed.filter(p => typeof p.volume === 'number' && p.year > 0 && p.month >= 1 && p.month <= 12);
+  } catch {
+    return null;
+  }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function DeltaBadge({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0 && current === 0) return null;
+  const pct = previous === 0 ? 100 : Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-slate-400"><Minus className="h-3 w-3" />0%</span>;
+  const up = pct > 0;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${up ? 'text-emerald-600' : 'text-rose-500'}`}>
+      {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{up ? '+' : ''}{pct}%
+    </span>
+  );
+}
+
+/**
+ * Everything the provider returned for one keyword — the table compresses
+ * the stored 12-month series into a sparkline; this modal shows the actual
+ * numbers. No extra API calls: it renders entirely from the stored row.
+ */
+function KeywordDetailModal({ keyword, onClose }: { keyword: MarketKeyword; onClose: () => void }) {
+  const trend = parseTrend(keyword.trend_json);
+  const latest = trend?.[trend.length - 1] ?? null;
+  const previous = trend && trend.length >= 2 ? trend[trend.length - 2] : null;
+  const peak = trend ? trend.reduce((a, b) => (b.volume > a.volume ? b : a)) : null;
+  const low = trend ? trend.reduce((a, b) => (b.volume < a.volume ? b : a)) : null;
+  const monthLabel = (p: TrendPoint) => `${MONTHS[p.month - 1]} ${String(p.year).slice(2)}`;
+
+  return (
+    <div className="fixed inset-0 z-[95] flex bg-slate-950/45 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="m-auto w-[min(640px,94vw)] overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              “{keyword.keyword}”
+              {keyword.is_near_me === 1 && <span className="ml-2 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">near me</span>}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">Everything the provider returned for this keyword.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="px-5 py-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Average / month" value={keyword.monthly_volume !== null ? keyword.monthly_volume.toLocaleString() : '—'} />
+            <StatTile
+              label={latest ? `Last month (${monthLabel(latest)})` : 'Last month'}
+              value={latest ? latest.volume.toLocaleString() : '—'}
+              extra={latest && previous ? <DeltaBadge current={latest.volume} previous={previous.volume} /> : undefined}
+            />
+            <StatTile label={peak ? `Peak (${monthLabel(peak)})` : 'Peak month'} value={peak ? peak.volume.toLocaleString() : '—'} />
+            <StatTile label={low ? `Low (${monthLabel(low)})` : 'Low month'} value={low ? low.volume.toLocaleString() : '—'} />
+          </div>
+
+          {trend && trend.length >= 2 ? (
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Monthly searches — last {trend.length} months</h4>
+              <TrendBarChart trend={trend} />
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">
+              Google returned no month-by-month series for this keyword — usually a low-volume long-tail idea.
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
+            <span><span className="font-semibold text-slate-400">Top-of-page CPC</span> {formatCpc(keyword.cpc_low, keyword.cpc_high)}</span>
+            <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-slate-400">Competition</span> <CompetitionBadge value={keyword.competition} index={keyword.competition_index} /></span>
+            <span><span className="font-semibold text-slate-400">Fetched</span> {formatDateTime(keyword.fetched_at)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value, extra }: { label: string; value: string; extra?: React.ReactNode }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 flex items-baseline gap-1.5 text-lg font-bold text-slate-900">{value}{extra && <span className="text-xs">{extra}</span>}</p>
+    </div>
+  );
+}
+
+/** Full-width bar chart with month labels and values — the sparkline's data,
+ *  readable. Pure SVG-free markup: one flex column per month. */
+function TrendBarChart({ trend }: { trend: TrendPoint[] }) {
+  const max = Math.max(...trend.map(p => p.volume), 1);
+  return (
+    <div className="mt-3 flex items-end gap-1.5" style={{ height: 150 }}>
+      {trend.map((point, index) => {
+        const isLatest = index === trend.length - 1;
+        const barHeight = Math.max(4, Math.round((point.volume / max) * 100));
+        return (
+          <div key={`${point.year}-${point.month}`} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1 self-stretch">
+            <span className={`text-[9px] font-semibold tabular-nums ${isLatest ? 'text-blue-700' : 'text-slate-500'}`}>
+              {point.volume >= 10_000 ? `${Math.round(point.volume / 1000)}k` : point.volume.toLocaleString()}
+            </span>
+            <div
+              className={`w-full rounded-t ${isLatest ? 'bg-blue-600' : 'bg-blue-200'}`}
+              style={{ height: `${barHeight}px` }}
+              title={`${MONTHS[point.month - 1]} ${point.year}: ${point.volume.toLocaleString()}`}
+            />
+            <span className={`text-[9px] ${isLatest ? 'font-bold text-blue-700' : 'text-slate-400'}`}>{MONTHS[point.month - 1]}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
