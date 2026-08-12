@@ -65,6 +65,10 @@ export function expandSeeds(config: ResearchConfig, industry: string, locationLa
       .replaceAll('{service}', service)
       .replaceAll('{city}', city)
       .replace(/\s+/g, ' ')
+      // Collapse consecutive duplicate words: a service term that already
+      // ends in a template word ("collision repair" + "{service} repair
+      // {city}") would otherwise produce "collision repair repair appleton".
+      .replace(/\b(\S+)(?: \1\b)+/gi, '$1')
       .trim();
     if (!keyword || seen.has(keyword)) continue;
     seen.add(keyword);

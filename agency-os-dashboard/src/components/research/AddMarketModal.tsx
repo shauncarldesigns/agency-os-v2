@@ -4,13 +4,17 @@ import { api, ApiError } from '../../lib/api';
 import type { ShowToast } from '../../lib/types';
 import { Spinner } from '../shared/Spinner';
 
-// Mirrors the server-curated home-services list in routes/settings.ts.
+// The home-services list from routes/settings.ts, plus research-only
+// industries (markets aren't limited to the Lead Finder discovery set).
+// Keep in sync with DEFAULTS.research.industryTerms so each entry expands
+// with the right customer search term.
 const INDUSTRIES = [
   'Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting',
   'Landscaping', 'Painting', 'Flooring', 'Concrete and Masonry', 'Siding',
   'Gutters', 'Garage Doors', 'Fencing', 'Remodeling',
   'Kitchen and Bathroom Remodeling', 'Water Damage Restoration',
   'Pest Control', 'Tree Services', 'Septic Services', 'Drain and Sewer Services',
+  'Collision Repair',
 ];
 
 interface CityOption {

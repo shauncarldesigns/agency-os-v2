@@ -93,6 +93,10 @@ const DEFAULTS = {
       'Tree Services': 'tree service',
       'Septic Services': 'septic service',
       'Drain and Sewer Services': 'drain cleaning',
+      // Research-only industries (not in the Lead Finder discovery list).
+      // Google's idea expansion surfaces the sibling phrasings ("auto body
+      // shop", "dent repair") with volumes, so one seed term is enough.
+      'Collision Repair': 'collision repair',
     } as Record<string, string>,
     mapPackKeywordCount: 3,
     mapPackResultLimit: 5,
@@ -114,12 +118,20 @@ export async function readSettings(db: D1Database) {
   const row = await db.prepare(
     'SELECT general_json, outreach_json, defaults_json, discovery_json, research_json, updated_at FROM agency_settings WHERE id = 1',
   ).first<SettingsRow>();
+  const storedResearch = parseObject(row?.research_json ?? '{}');
+  // industryTerms needs a per-key merge: a saved settings blob would
+  // otherwise shadow the whole default map and hide newly added industries.
+  const research = {
+    ...DEFAULTS.research,
+    ...storedResearch,
+    industryTerms: { ...DEFAULTS.research.industryTerms, ...objectValue(storedResearch.industryTerms) },
+  };
   return {
     general: { ...DEFAULTS.general, ...parseObject(row?.general_json ?? '{}') },
     outreach: { ...DEFAULTS.outreach, ...parseObject(row?.outreach_json ?? '{}') },
     defaults: { ...DEFAULTS.defaults, ...parseObject(row?.defaults_json ?? '{}') },
     discovery: { ...DEFAULTS.discovery, ...parseObject(row?.discovery_json ?? '{}') },
-    research: { ...DEFAULTS.research, ...parseObject(row?.research_json ?? '{}') },
+    research,
     updatedAt: row?.updated_at ?? null,
   };
 }
