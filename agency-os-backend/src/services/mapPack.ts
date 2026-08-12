@@ -38,9 +38,30 @@ interface OutscraperEnqueueResponse {
 interface OutscraperPlaceRaw {
   place_id?: string | null;
   name?: string | null;
+  /** maps/search-v3 uses `website`; the reviews endpoint uses `site`.
+   *  Reading only `site` here flagged every business as having no website. */
+  website?: string | null;
   site?: string | null;
   rating?: number | null;
   reviews?: number | null;
+}
+
+/**
+ * Outscraper returns the tracking-wrapped destination Google stores (often
+ * with percent-encoded UTM junk, e.g. `example.com/%3Futm_source%3Dgoogle`).
+ * Normalize to a clean clickable origin+path.
+ */
+function normalizeWebsite(raw: string | null | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  try {
+    let decoded = value;
+    try { decoded = decodeURIComponent(value); } catch { /* keep raw */ }
+    const url = new URL(decoded.startsWith('http') ? decoded : `https://${decoded}`);
+    return `${url.origin}${url.pathname}`.replace(/\/$/, '') || null;
+  } catch {
+    return value;
+  }
 }
 
 interface OutscraperResultsResponse {
@@ -88,15 +109,18 @@ export async function captureMapPack(
   }
 
   const places = await pollResults(apiKey, enqueue.results_location);
-  return places.map((place, index) => ({
-    position: index + 1,
-    placeId: place.place_id ?? null,
-    company: place.name ?? 'Unknown business',
-    hasWebsite: Boolean(place.site?.trim()),
-    website: place.site?.trim() || null,
-    googleRating: typeof place.rating === 'number' ? place.rating : null,
-    reviewCount: typeof place.reviews === 'number' ? place.reviews : null,
-  }));
+  return places.map((place, index) => {
+    const website = normalizeWebsite(place.website ?? place.site);
+    return {
+      position: index + 1,
+      placeId: place.place_id ?? null,
+      company: place.name ?? 'Unknown business',
+      hasWebsite: Boolean(website),
+      website,
+      googleRating: typeof place.rating === 'number' ? place.rating : null,
+      reviewCount: typeof place.reviews === 'number' ? place.reviews : null,
+    };
+  });
 }
 
 async function pollResults(apiKey: string, resultsUrl: string): Promise<OutscraperPlaceRaw[]> {
