@@ -79,6 +79,10 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 #                     without it, enrichment falls back to Google's 5)
 # TWILIO_ACCOUNT_SID  (optional — enables phone route classification)
 # TWILIO_AUTH_TOKEN   (optional — enables phone route classification)
+# TWILIO_MESSAGING_SERVICE_SID (required for Messaging Employee live transport)
+# TWILIO_PHONE_NUMBER (dedicated display/sender number attached to the service)
+# TEST_SMS_NUMBER_1 / TEST_SMS_NUMBER_2 (approved live-test recipients only)
+# TWILIO_A2P_REGISTERED (set to literal "true" only after external registration)
 # CLARITY_API_TOKEN   (optional — enables Clarity engagement sync)
 # GOOGLE_ADS_DEVELOPER_TOKEN  (market research keyword volume. Issued 2026-08-06
 #                              at EXPLORER access, which BLOCKS KeywordPlanIdeaService

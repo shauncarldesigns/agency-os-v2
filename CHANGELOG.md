@@ -33,6 +33,23 @@ when a manual deploy was needed.
   appeared once at the bottom of the brief. Regenerate a lead's brief to
   pick up the change.
 
+### Messaging Employee + Communications Center (backend + dashboard)
+
+- **Communications adds a Twilio-backed SMS inbox and controlled outbound
+  employee** with Test/Production safety gates, Mock/Live transport, delivery
+  status, retries, human takeover, Needs Shaun escalation, signed webhooks, and
+  complete conversation history.
+- **Messaging reuses the existing Text Outreach pipeline and Call Center
+  playbook** instead of introducing a second cadence or copywriting system;
+  every response script records its canonical in-app source.
+- **Invalid, landline, and VoIP SMS destinations route into the existing Email
+  Outreach automation** when the lead has an email and built demo. Test-mode
+  failures cannot mutate real leads, STOP suppresses SMS, and not-interest closes
+  the thread without an automated rebuttal.
+- **Communications now uses the dashboard's Tailwind button system throughout**
+  and adds a labeled Attach control plus real MMS image previews and sends for
+  JPEG, PNG, and GIF files (up to 10 images and 5 MB combined).
+
 ### LandingSite Builder Employee (backend + dashboard + local worker)
 
 - **Brief preparation now runs inside the durable Builder employee instead of

@@ -34,6 +34,11 @@ export interface Env {
   KEYWORD_VOLUME_PROVIDER?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
+  TWILIO_MESSAGING_SERVICE_SID?: string;
+  TWILIO_PHONE_NUMBER?: string;
+  TWILIO_A2P_REGISTERED?: string;
+  TEST_SMS_NUMBER_1?: string;
+  TEST_SMS_NUMBER_2?: string;
   CLARITY_API_TOKEN?: string;
   CLARITY_PROJECT_ID?: string;
   /** Dedicated token used only by the local Builder Employee. */
@@ -52,6 +57,9 @@ export interface Lead {
   phone_route: string | null;
   phone_lookup_error: string | null;
   phone_lookup_at: string | null;
+  sms_suppressed: number;
+  sms_suppressed_at: string | null;
+  sms_suppression_reason: string | null;
   email: string | null;
   industry: string | null;
   city: string | null;

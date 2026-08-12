@@ -34,6 +34,7 @@ import { researchRouter, runAllMarketResearch } from './routes/research';
 import { runDueSeoAudits } from './services/seoAudit';
 import { recordApplicationEvent } from './services/applicationEvents';
 import { builderAdminRouter, builderWorkerRouter } from './routes/builder';
+import { messagingRouter, publicMessagingRouter } from './routes/messaging';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -61,6 +62,8 @@ app.route('/', redirectRouter);
 // Public Resend webhook + first-party open pixel. Signature/token validation
 // happens inside the router, so these must remain ahead of /api authentication.
 app.route('/', publicEmailRouter);
+// Twilio signs both public webhook endpoints; they must remain outside /api auth.
+app.route('/', publicMessagingRouter);
 
 // Local Builder Employee uses a dedicated bearer token, not an operator's
 // browser session. It is deliberately isolated from the administrative API.
@@ -151,6 +154,7 @@ app.route('/api/settings', settingsRouter);
 // Market research — demand data per industry × location market.
 app.route('/api/research', researchRouter);
 app.route('/api/builder', builderAdminRouter);
+app.route('/api/messaging', messagingRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {

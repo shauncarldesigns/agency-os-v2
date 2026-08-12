@@ -6,6 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit",
+    "test:messaging": "node --experimental-strip-types --test tests/messagingRules.test.ts && esbuild tests/messagingRouting.fixture.mjs --bundle --platform=node --format=esm --outfile=/tmp/agency-os-messaging-routing-fixture.mjs && node /tmp/agency-os-messaging-routing-fixture.mjs",
+    "test:messaging:integration": "node scripts/test-messaging-integration.mjs",
     "db:migrate": "wrangler d1 execute agency-os-v2 --file=src/db/schema.sql",
     "db:migrate:remote": "wrangler d1 execute agency-os-v2 --remote --file=src/db/schema.sql"
   },
