@@ -132,6 +132,7 @@ export function MarketDetail({ marketId, showToast, onBack }: MarketDetailProps)
       </div>
 
       {keywords.length > 0 && <MarketDemandSummary market={market} keywords={keywords} />}
+      {keywords.length > 0 && <MarketTrendSection market={market} keywords={keywords} />}
 
       {keywords.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
@@ -446,6 +447,75 @@ function MarketDemandSummary({ market, keywords }: { market: Market; keywords: M
         {segments.slice(0, 3).map(segment => (
           <DemandTile key={segment.label} label={segment.label} volume={segment.volume} count={segment.count} />
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The whole market's trajectory: every keyword's stored 12-month series
+ * summed month-by-month. Because every keyword gets the same treatment
+ * every month, the SHAPE of this line is trustworthy even though the
+ * absolute totals double-count overlapping queries — which makes it the
+ * chart to answer "is this market growing or shrinking."
+ */
+function MarketTrendSection({ market, keywords }: { market: Market; keywords: MarketKeyword[] }) {
+  const byMonth = new Map<string, TrendPoint>();
+  let seriesCount = 0;
+  for (const k of keywords) {
+    const trend = parseTrend(k.trend_json);
+    if (!trend) continue;
+    seriesCount++;
+    for (const point of trend) {
+      const key = `${point.year}-${String(point.month).padStart(2, '0')}`;
+      const existing = byMonth.get(key);
+      if (existing) existing.volume += point.volume;
+      else byMonth.set(key, { ...point });
+    }
+  }
+  const series = [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, p]) => p);
+  if (series.length < 2) return null;
+
+  const label = (p: TrendPoint) => `${MONTHS[p.month - 1]} ${String(p.year).slice(2)}`;
+  const latest = series[series.length - 1];
+  const previous = series[series.length - 2];
+  const recent3 = series.slice(-3).reduce((sum, p) => sum + p.volume, 0);
+  const prior3 = series.slice(-6, -3).reduce((sum, p) => sum + p.volume, 0);
+  const oldest = series[0];
+  const yoyPct = oldest.volume > 0 ? Math.round(((latest.volume - oldest.volume) / oldest.volume) * 100) : null;
+  const momPct = previous.volume > 0 ? Math.round(((latest.volume - previous.volume) / previous.volume) * 100) : null;
+  const direction = momPct === null ? null : momPct > 0 ? 'up' : momPct < 0 ? 'down' : 'flat';
+
+  return (
+    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-900">
+          Market trend — is {market.industry.toLowerCase()} demand in {market.location_label.split(',')[0]} growing?
+          {direction && (
+            <span className={`ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${direction === 'up' ? 'bg-emerald-50 text-emerald-600' : direction === 'down' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+              {direction === 'up' ? <><TrendingUp className="h-3 w-3" /> Up {momPct}% MoM</> : direction === 'down' ? <><TrendingDown className="h-3 w-3" /> Down {Math.abs(momPct!)}% MoM</> : <><Minus className="h-3 w-3" /> Flat MoM</>}
+            </span>
+          )}
+        </h2>
+        <p className="text-[11px] text-slate-400">All {seriesCount.toLocaleString()} keyword series summed per month — the shape is the story.</p>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label(latest)} vs {label(previous)}</p>
+          <p className="mt-1 flex items-baseline gap-2 text-xl font-bold text-slate-900">{latest.volume.toLocaleString()}<DeltaBadge current={latest.volume} previous={previous.volume} /></p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Last 3 months vs prior 3</p>
+          <p className="mt-1 flex items-baseline gap-2 text-xl font-bold text-slate-900">{recent3.toLocaleString()}{prior3 > 0 && <DeltaBadge current={recent3} previous={prior3} />}</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label(latest)} vs {label(oldest)}</p>
+          <p className="mt-1 flex items-baseline gap-2 text-xl font-bold text-slate-900">{yoyPct !== null ? `${yoyPct > 0 ? '+' : ''}${yoyPct}%` : '—'}{yoyPct !== null && (yoyPct >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-600" /> : <TrendingDown className="h-4 w-4 text-rose-500" />)}</p>
+        </div>
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Total market searches per month</h4>
+        <TrendBarChart trend={series} />
       </div>
     </section>
   );
