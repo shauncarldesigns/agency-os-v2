@@ -21,14 +21,8 @@ stages:
     label: IF THEY ARE UNSURE
     short_label: Unsure
   - id: next-steps
-    label: CLOSING & NEXT STEPS
+    label: NEXT STEPS
     short_label: Close
-  - id: discovery
-    label: SCHEDULE DISCOVERY
-    short_label: Discovery
-  - id: website-process
-    label: EXPLAIN THE PROCESS
-    short_label: Process
   - id: growth-process
     label: GROWTH AFTER LAUNCH
     short_label: After launch
@@ -69,7 +63,7 @@ stages:
 
 “Does that sound like what you’re looking for?”
 
-> Pause for agreement. The closing stage handles paperwork and discovery, so do not explain those steps here.
+> Pause for agreement. The closing stage explains the next-steps email and discovery process, so do not explain those steps here.
 
 ## Stage: growth
 
@@ -95,31 +89,15 @@ stages:
 
 ## Stage: next-steps
 
-“Great. I’ll send the agreement and initial deposit invoice after this call.”
+“Great. The next step is that I’ll send you the agreement and a $200 deposit invoice. Once the agreement is signed and the deposit is taken care of, you’ll use the link in that same email to schedule the discovery call.”
 
-“Before we wrap up, let’s reserve a discovery time so the project can keep moving once those are completed.”
+“The discovery call is where we’ll go through everything needed to turn the concept into your actual website—what you want changed, your services and service areas, your business story, photos, branding, frequently asked questions, and where calls and form submissions should go.”
 
-> This stage confirms the administrative next step. The next screen handles only scheduling and discovery.
+“After discovery, I’ll complete the website and send it to you for review. Once you approve everything, I’ll invoice the remaining website balance. After that is paid, we’ll connect your domain and launch the site.”
 
-## Stage: discovery
+“The email will come from Shaun Carl Designs and include the agreement, the $200 deposit invoice, and the link to choose your discovery time.”
 
-“What does your schedule look like over the next few days?”
-
-“The discovery call is where we turn the concept you saw into your actual website. We’ll go through what you want changed, the services and areas you want emphasized, your business story, photos, branding, frequently asked questions, and where calls and form submissions should go.”
-
-“Perfect. I have you down for [day and time].”
-
-> Do not leave the discovery call unscheduled. Choose a specific date and time.
-
-## Stage: website-process
-
-“After discovery, I’ll update the site using the information we collected, replace the placeholder content, and add your real photos and branding.”
-
-“I’ll send the completed version to you for review, and you’ll be able to request changes before it goes live.”
-
-“Once you approve it, you’ll purchase or provide access to the domain. You will own the domain, and I’ll handle connecting it and setting up the technical side.”
-
-“After the domain is connected and the final payment is completed, the website goes live.”
+> Do not schedule discovery in Agency OS during this call. Make sure they know the next-steps email comes from Shaun Carl Designs and what to do when it arrives.
 
 ## Stage: growth-process
 
@@ -131,6 +109,6 @@ stages:
 
 ## Stage: full-close
 
-“Perfect. Watch for the agreement and invoice from me today. Once those are completed, we’ll be ready to get started.”
+“Perfect. Watch for the email from Shaun Carl Designs today. Once the agreement is signed, the $200 deposit is paid, and you choose your discovery time, we’ll be ready to get started.”
 
-> Confirm the selected plan and discovery time in your notes, record the call, and end here without repeating the offer or reopening the sale.
+> Confirm the selected plan and commitment in your notes, record the call, and end here without repeating the offer or reopening the sale.

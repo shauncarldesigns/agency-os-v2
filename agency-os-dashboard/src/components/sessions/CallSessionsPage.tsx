@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   CalendarClock,
   AlertCircle,
@@ -47,7 +47,7 @@ import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
 import type { Tier } from '../../lib/pricing';
 import { Spinner } from '../shared/Spinner';
-import { RecordButton } from '../dashboard/RecordButton';
+import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 import {
   mapLeadRow,
@@ -129,6 +129,10 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
   const [refreshing, setRefreshing] = useState(false);
   const [callModalLeadId, setCallModalLeadId] = useState<number | null>(null);
   const [salesFlowLeadId, setSalesFlowLeadId] = useState<number | null>(null);
+  const emailCallRecorderRef = useRef<RecordButtonHandle>(null);
+  const [emailCallNotes, setEmailCallNotes] = useState('');
+  const [emailCallRecordingUrl, setEmailCallRecordingUrl] = useState<string | null>(null);
+  const [emailCallRecordingId, setEmailCallRecordingId] = useState<number | null>(null);
   const [buildModalLeadId, setBuildModalLeadId] = useState<number | null>(null);
   const [emailModalLeadId, setEmailModalLeadId] = useState<number | null>(null);
   const [automationLeadId, setAutomationLeadId] = useState<number | null>(null);
@@ -140,6 +144,14 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
     company: string;
     expiresAt: number;
   } | null>(null);
+
+  const openEmailCall = useCallback((leadId: number) => {
+    setEmailCallNotes('');
+    setEmailCallRecordingUrl(null);
+    setEmailCallRecordingId(null);
+    setSalesFlowLeadId(null);
+    setCallModalLeadId(leadId);
+  }, []);
 
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -347,7 +359,7 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
             <KanbanColumn
               key={column.id}
               column={column}
-              onOpenLead={setCallModalLeadId}
+              onOpenLead={openEmailCall}
               onOpenBuild={setBuildModalLeadId}
               onOpenEmail={setEmailModalLeadId}
               onOpenAutomation={(leadId) => void openAutomationFlow(leadId)}
@@ -360,7 +372,7 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
           leads={filteredAutomationLeads}
           automations={automations}
           onOpen={setAutomationLeadId}
-          onUpdateEmail={setCallModalLeadId}
+          onUpdateEmail={openEmailCall}
           onStarted={() => void load(true)}
           showToast={showToast}
         />
@@ -451,6 +463,10 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
                 setCallModalLeadId(null);
               }}
               showToast={showToast}
+              recorderRef={emailCallRecorderRef}
+              callNotes={emailCallNotes}
+              onCallNotesChange={setEmailCallNotes}
+              recordingCallId={emailCallRecordingId}
               onChanged={() => {
                 setSalesFlowLeadId(null);
                 setCallModalLeadId(null);
@@ -466,6 +482,11 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
               }
               onClose={() => setCallModalLeadId(null)}
               showToast={showToast}
+              recorderRef={emailCallRecorderRef}
+              callNotes={emailCallNotes}
+              onCallNotesChange={setEmailCallNotes}
+              recordingUrl={emailCallRecordingUrl}
+              recordingCallId={emailCallRecordingId}
               onSaved={(emailCaptured, keepOpen = false) => {
                 if (emailCaptured && !keepOpen) setCallModalLeadId(null);
                 void load(true);
@@ -480,6 +501,21 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
             />
           );
         })()
+      )}
+
+      {callModalLeadId !== null && (
+        <div className="fixed right-16 top-4 z-[230] sm:right-20">
+          <RecordButton
+            ref={emailCallRecorderRef}
+            leadId={callModalLeadId}
+            showToast={showToast}
+            resetKey={callModalLeadId}
+            onRecorded={(url, callId) => {
+              setEmailCallRecordingUrl(url);
+              setEmailCallRecordingId(callId);
+            }}
+          />
+        </div>
       )}
 
       {buildModalLeadId !== null && (
@@ -516,18 +552,26 @@ function EmailEngagedSalesCall({
   onClose,
   showToast,
   onChanged,
+  recorderRef,
+  callNotes,
+  onCallNotesChange,
+  recordingCallId,
 }: {
   lead: Lead;
   forceSalesFlow?: boolean;
   onClose: () => void;
   showToast: ShowToast;
   onChanged: () => void;
+  recorderRef: RefObject<RecordButtonHandle | null>;
+  callNotes: string;
+  onCallNotesChange: (value: string) => void;
+  recordingCallId: number | null;
 }) {
   const pipelineLead: PipelineLead = mapLeadRow(lead);
 
   async function recordCall(
     activeLead: PipelineLead,
-    outcome: 'no_answer' | 'voicemail' | 'busy' | 'talk_later' | 'interested',
+    outcome: 'no_answer' | 'voicemail' | 'busy' | 'talk_later' | 'feedback_only' | 'interested',
     selectedPlan?: SelectedPlan,
     notes?: string,
     recordingCallId?: number,
@@ -554,13 +598,15 @@ function EmailEngagedSalesCall({
     }
   }
 
-  async function moveToClients(activeLead: PipelineLead, selectedPlan: SelectedPlan) {
+  async function moveToClients(activeLead: PipelineLead, selectedPlan: SelectedPlan, commitmentTerm: 'ongoing_hosting' | '6_months' | '12_months') {
     const tier: 2 | 3 = selectedPlan === 'Growth' ? 3 : 2;
     try {
       await api.leads.convertToClient(activeLead.id, {
         tier,
         initialStatus: 'prospect',
         clientEmail: lead.email ?? undefined,
+        selectedPlan,
+        commitmentTerm,
         note: `${selectedPlan} selected during engaged Email Outreach sales call.`,
       });
       showToast(`${activeLead.name} moved to Clients — agreement pending`, 'success');
@@ -598,6 +644,10 @@ function EmailEngagedSalesCall({
       onMoveToClients={moveToClients}
       onNotInterested={archiveLead}
       showToast={showToast}
+      externalRecorderRef={recorderRef}
+      externalNotes={callNotes}
+      onExternalNotesChange={onCallNotesChange}
+      externalRecordingCallId={recordingCallId}
     />
   );
 }
@@ -610,6 +660,11 @@ function CallOutreachModal({
   onSaved,
   onAdvanceToSalesFlow,
   onOutcomeRecorded,
+  recorderRef,
+  callNotes,
+  onCallNotesChange,
+  recordingUrl,
+  recordingCallId,
 }: {
   lead: Lead | null;
   previousAutomation: EmailAutomationSummary | null;
@@ -618,17 +673,19 @@ function CallOutreachModal({
   onSaved: (emailCaptured: boolean, keepOpen?: boolean) => void;
   onAdvanceToSalesFlow: () => void;
   onOutcomeRecorded: () => void;
+  recorderRef: RefObject<RecordButtonHandle | null>;
+  callNotes: string;
+  onCallNotesChange: (value: string) => void;
+  recordingUrl: string | null;
+  recordingCallId: number | null;
 }) {
   const [email, setEmail] = useState(lead?.email ?? '');
   const [callbackDate, setCallbackDate] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
   const [sendingIntro, setSendingIntro] = useState(false);
   const [recordingOutcome, setRecordingOutcome] = useState<CallOutcome | null>(null);
-  const [callNotes, setCallNotes] = useState('');
   const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!lead) return;
@@ -685,6 +742,39 @@ function CallOutreachModal({
     }
   }
 
+  async function saveToFollowUp() {
+    if (!lead) return;
+    const saved = await saveEmail(true);
+    if (!saved) return;
+    try {
+      // A built site can enter email review immediately. Otherwise the lead
+      // correctly waits in Awaiting Build; completePipelineBuild will start
+      // the automation after the Builder returns a URL.
+      if (lead.site_url) {
+        // Start explicitly so an unsupported/dev-mode recipient produces a
+        // truthful error instead of a success toast with no automation row.
+        await api.emailOutreach.startAutomation(activeLeadId);
+      }
+      const savedRecording = await recorderRef.current?.stopAndSave();
+      await api.pipeline.action(activeLeadId, {
+        action: 'call_outcome',
+        meta: {
+          outcome: 'review_later',
+          notes: callNotes.trim() || null,
+          recording_call_id: savedRecording?.callId ?? recordingCallId ?? null,
+          channel: 'email',
+        },
+      });
+      showToast(lead.site_url
+        ? 'Email saved — follow-up queued and call recorded'
+        : 'Email saved — awaiting site build and call recorded');
+      onSaved(true);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not queue follow-up: ${msg}`, 'error');
+    }
+  }
+
   async function advanceToSalesFlow() {
     const nextEmail = email.trim();
     if (!nextEmail) {
@@ -697,8 +787,12 @@ function CallOutreachModal({
     }
     setSendingIntro(true);
     try {
-      const { automation } = await api.emailOutreach.automation(activeLeadId);
-      await api.emailOutreach.automationAction(automation.id, 'send_now');
+      const { automation } = await api.emailOutreach.startAutomation(activeLeadId);
+      const sendResult = await api.emailOutreach.automationAction(automation.id, 'send_now');
+      const result = sendResult.result as { sent?: number; failed?: number } | undefined;
+      if (!result || result.sent !== 1) {
+        throw new Error(result?.failed ? 'The email provider rejected the send.' : 'No email was sent.');
+      }
       showToast('Intro email sent — stay on the call while they open it');
       onAdvanceToSalesFlow();
     } catch (err) {
@@ -717,13 +811,14 @@ function CallOutreachModal({
     }
     setRecordingOutcome(outcome);
     try {
+      const savedRecording = await recorderRef.current?.stopAndSave();
       const hot = await api.sessions.hotAdd([lead.id]);
       await api.sessions.outcome(hot.session_id, {
         leadId: lead.id,
         outcome,
         notes: callNotes.trim() || undefined,
-        recordingUrl: recordingUrl ?? undefined,
-        recordingCallId: recordingCallId ?? undefined,
+        recordingUrl: savedRecording?.url ?? recordingUrl ?? undefined,
+        recordingCallId: savedRecording?.callId ?? recordingCallId ?? undefined,
         callbackDate: outcome === 'callback' ? callbackDate : undefined,
         preserveFinalReview: returnedFromAutomation,
       });
@@ -786,15 +881,6 @@ function CallOutreachModal({
             ) : (
               <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400">No phone number</span>
             )}
-            <RecordButton
-              leadId={lead.id}
-              showToast={showToast}
-              resetKey={lead.id}
-              onRecorded={(url, callId) => {
-                setRecordingUrl(url);
-                setRecordingCallId(callId);
-              }}
-            />
             <button
               type="button"
               onClick={onClose}
@@ -832,8 +918,8 @@ function CallOutreachModal({
                 sendingIntro={sendingIntro}
                 onEmailChange={setEmail}
                 onCallbackDateChange={setCallbackDate}
-                onCallNotesChange={setCallNotes}
-                onSave={() => void saveEmail()}
+                onCallNotesChange={onCallNotesChange}
+                onSave={() => void saveToFollowUp()}
                 onAdvanceToSalesFlow={() => void advanceToSalesFlow()}
                 onRecordOutcome={(outcome) => void recordOutcome(outcome)}
               />
@@ -1051,7 +1137,7 @@ function EmailCaptureSplitScript({
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
               >
                 {sendingIntro ? <Spinner /> : <PhoneCall className="h-4 w-4" />}
-                {sendingIntro ? 'Sending intro email…' : 'Save and continue the call'}
+                {sendingIntro ? 'Sending intro email…' : 'Send now and stay on the call'}
               </button>
               <button
                 type="button"
@@ -1060,11 +1146,11 @@ function EmailCaptureSplitScript({
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
               >
                 {savingEmail ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
-                Save and send to automation
+                Save and send to follow-up
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-4 text-slate-400">
-              Automation closes this call and queues the normal email workflow. Continue sends the intro now and opens the inbox walkthrough.
+              Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.
             </p>
           </div>
 
@@ -2713,7 +2799,7 @@ function sendStateLabel(send: EmailAutomationDetail['sends'][number]): string {
 function formatDateTime(value: string | null): string {
   if (!value) return 'Not yet';
   const date = new Date(normalizeSqlDate(value));
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('en-US', { timeZone: 'America/Chicago' });
 }
 
 function normalizeSqlDate(value: string): string {

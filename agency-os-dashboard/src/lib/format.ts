@@ -39,10 +39,17 @@ export function formatDate(iso: string | null | undefined, opts: Intl.DateTimeFo
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '';
-  const date = new Date(iso.replace(' ', 'T'));
+  // SQLite/D1 datetime('now') values are UTC but arrive without a timezone
+  // suffix. Treat that exact SQL shape as UTC, then render in the operator's
+  // configured business timezone regardless of the browser/runtime timezone.
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(iso)
+    ? `${iso.replace(' ', 'T')}Z`
+    : iso;
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    + ' · ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const timeZone = 'America/Chicago';
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone })
+    + ' · ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone });
 }
 
 export function todayIso(): string {

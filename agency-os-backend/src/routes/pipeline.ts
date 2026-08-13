@@ -519,11 +519,14 @@ const ACTION_TRANSITIONS: Record<
   intro_sent: { from: ['ready_to_send'], to: 'sent_no_reply' },
   followed_up: {}, // no status change — stays in sent_no_reply or engaged
   reply_received: { from: ['sent_no_reply', 'engaged'], to: 'engaged' },
-  call_outcome: { from: ['sent_no_reply', 'engaged'] },
+  // A live email-capture call can legitimately finish before Resend has
+  // advanced the lead out of ready_to_send (or when a dev-mode send fails).
+  // The call itself is still real and must always be recordable.
+  call_outcome: { from: ['awaiting_build', 'ready_to_send', 'sent_no_reply', 'engaged'] },
   calendar_sent: { from: ['sent_no_reply', 'engaged'] },
   scheduling_followup: { from: ['engaged'] },
   called: {}, // no status change — display-only
-  archived: { from: ['sent_no_reply', 'engaged'], to: 'archived' },
+  archived: { from: ['ready_to_send', 'sent_no_reply', 'engaged'], to: 'archived' },
 };
 
 pipelineRouter.post('/leads/:id/action', async (c) => {
@@ -622,16 +625,23 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {
       const meta = body.meta as Record<string, unknown>;
       const recordingCallId = Number(meta.recording_call_id);
+      const outcome = typeof meta.outcome === 'string'
+        ? meta.outcome.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase())
+        : 'Call completed';
+      const notes = typeof meta.notes === 'string' && meta.notes.trim() ? meta.notes.trim() : null;
       if (Number.isInteger(recordingCallId) && recordingCallId > 0) {
-        const outcome = typeof meta.outcome === 'string'
-          ? meta.outcome.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase())
-          : 'Call completed';
-        const notes = typeof meta.notes === 'string' && meta.notes.trim() ? meta.notes.trim() : null;
         await c.env.DB.prepare(
           `UPDATE call_log
               SET outcome = ?, notes = COALESCE(?, notes)
             WHERE id = ? AND lead_id = ?`
         ).bind(outcome, notes, recordingCallId, id).run();
+      } else {
+        // Outcomes without a recording still belong in call history. The old
+        // behavior only wrote lead_activity, which made the UI claim a call
+        // was recorded while the Calls panel remained empty.
+        await c.env.DB.prepare(
+          `INSERT INTO call_log (lead_id, outcome, notes) VALUES (?, ?, ?)`
+        ).bind(id, outcome, notes ?? '').run();
       }
     }
 
