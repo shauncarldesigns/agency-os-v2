@@ -15,6 +15,22 @@ team domain and AUD are captured in `wrangler.toml`. Next: create custom domains
 test passwordless login for `info@shauncarldesigns.com`, then switch to
 `AUTH_MODE=access`, remove the production Vite API key, and disable public R2.
 
+## Email Outreach call flow (2026-08-12, release PR)
+
+- The capture-email call can send immediately and remain open through inbox
+  confirmation, site walkthrough, reaction, needs, plan selection, next steps,
+  and final close. Questions render a visible **Their turn · listen** break.
+- Follow-up-later branches include spoken closing language and persist call
+  history even without a recording or notes. Recordings and notes survive the
+  capture-to-sales transition, playback uses the authenticated R2 proxy, and
+  timestamps render in `America/Chicago`.
+- Explicit buying intent—not a passive open—enters the close. Build & Maintain
+  and Growth commitments are selected with UI cards and stored on the pending
+  project. The close explains the agreement, $200 deposit, discovery scheduling
+  link, remaining balance, and launch. Discovery is not scheduled in Agency OS.
+- Migration `2026-08-12-email-call-close-details.sql` must be applied manually
+  before the backend release.
+
 ## Builder Employee (2026-08-10, shipping)
 
 - Added a one-at-a-time Playwright bulk employee under `builder-worker/`. It

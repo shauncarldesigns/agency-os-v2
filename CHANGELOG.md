@@ -9,6 +9,12 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Email Outreach call flow and close (backend + dashboard)
+
+- **Email capture calls now support a continuous send-and-stay sales flow** with inbox receipt confirmation, prospect speaking-turn indicators, natural follow-up closings, and final-attempt text/email recovery language.
+- **Warm sales calls now separate feedback from explicit buying intent**, guide Build & Maintain or Growth plan selection, explain the agreement, $200 deposit, discovery link, remaining balance, and launch sequence, and store the selected plan and commitment on the pending project.
+- **Call recordings, notes, playback, outcome history, and Central-time display were hardened** across modal transitions; no-recording outcomes and empty-note follow-ups now save without internal errors.
+
 ### Email-capture script typography (dashboard)
 
 - **All spoken/read-aloud copy in the email-capture call now uses the same

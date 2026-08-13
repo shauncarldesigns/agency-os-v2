@@ -231,6 +231,9 @@ CREATE TABLE IF NOT EXISTS projects (
   merchynt_active INTEGER DEFAULT 0,
   contract_start  TEXT,
   contract_min_end TEXT,
+  selected_plan TEXT,
+  commitment_term TEXT,
+  discovery_scheduled_for TEXT,
   -- Status
   status          TEXT DEFAULT 'building',
   is_internal     INTEGER NOT NULL DEFAULT 0,

@@ -473,6 +473,9 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
     contractStart?: string;
     clientEmail?: string;
     note?: string;
+    selectedPlan?: 'Build & Maintain' | 'Growth';
+    commitmentTerm?: 'ongoing_hosting' | '6_months' | '12_months';
+    discoveryScheduledFor?: string;
   };
   const tier = Number(body.tier ?? lead.recommended_tier ?? 1) as 1 | 2 | 3;
   if (![1, 2, 3].includes(tier)) return c.json(badRequest('tier must be 1, 2, or 3'), 400);
@@ -486,6 +489,12 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
     : null;
   const clientEmail = body.clientEmail?.trim() || lead.email || null;
   const note = body.note?.trim() || null;
+  const selectedPlan = body.selectedPlan === 'Growth' ? 'Growth' : body.selectedPlan === 'Build & Maintain' ? 'Build & Maintain' : null;
+  const commitmentTerm = ['ongoing_hosting', '6_months', '12_months'].includes(body.commitmentTerm ?? '') ? body.commitmentTerm! : null;
+  const discoveryScheduledFor = body.discoveryScheduledFor?.trim() || null;
+  if (discoveryScheduledFor && Number.isNaN(Date.parse(discoveryScheduledFor))) {
+    return c.json(badRequest('discoveryScheduledFor must be a valid date'), 400);
+  }
   const slug = generateProjectSlug(lead.company, lead.city ?? '', lead.state ?? 'WI');
   const existing = await c.env.DB.prepare('SELECT id FROM projects WHERE slug = ?').bind(slug).first();
   if (existing) return c.json(conflict('A project for this business and location already exists'), 409);
@@ -495,15 +504,17 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
       INSERT INTO projects (
         lead_id, name, slug, tier, business_name, industry, city, state, phone, email,
         services, service_areas, landingsite_url, client_email, pages_planned, monthly_pages_target,
-        contract_start, contract_min_end, merchynt_active, status, reviews_snapshot, is_internal
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        contract_start, contract_min_end, selected_plan, commitment_term, discovery_scheduled_for,
+        merchynt_active, status, reviews_snapshot, is_internal
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `).bind(
       lead.id, lead.company, slug, tier, lead.company, lead.industry ?? null,
       lead.city ?? 'Unknown', lead.state ?? 'WI', lead.phone ?? null, lead.email ?? null,
       lead.extracted_services ?? null, lead.extracted_service_areas ?? null,
       lead.site_url_raw ?? null, clientEmail, tier === 3 ? 15 : 5,
       tier === 3 ? 3 : 0,
-      contractStart, contractMinEnd, tier === 3 ? 1 : 0, initialStatus,
+      contractStart, contractMinEnd, selectedPlan, commitmentTerm, discoveryScheduledFor,
+      tier === 3 ? 1 : 0, initialStatus,
       lead.google_reviews ?? null,
     );
 
@@ -544,7 +555,7 @@ leadsRouter.post('/:id/convert-to-client', async (c) => {
         id,
         initialStatus === 'prospect' ? 'client_pending' : 'client_converted',
         lead.pipeline_status,
-        JSON.stringify({ tier, initial_status: initialStatus, contract_start: contractStart, note }),
+        JSON.stringify({ tier, initial_status: initialStatus, contract_start: contractStart, selected_plan: selectedPlan, commitment_term: commitmentTerm, discovery_scheduled_for: discoveryScheduledFor, note }),
       ),
     ]);
 

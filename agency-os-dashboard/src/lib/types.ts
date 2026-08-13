@@ -10,9 +10,6 @@ export interface Lead {
   phone_route: 'text' | 'call' | 'review' | 'unknown' | null;
   phone_lookup_error: string | null;
   phone_lookup_at: string | null;
-  sms_suppressed: number;
-  sms_suppressed_at: string | null;
-  sms_suppression_reason: string | null;
   email: string | null;
   industry: string | null;
   city: string | null;
@@ -112,7 +109,6 @@ export interface LeadActivity {
     | 'email_complained'
     | 'email_failed'
     | 'email_suppressed'
-    | 'sms_routed_to_email'
     | 'email_final_review'
     | 'email_review_extended'
     | 'automation_stopped'
@@ -554,7 +550,6 @@ export type Tab =
   | 'prospect'
   | 'pipeline'
   | 'automated-pipeline'
-  | 'communications'
   | 'builder'
   | 'sites'
   | 'docs'
