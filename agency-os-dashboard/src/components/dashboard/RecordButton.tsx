@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { forwardRef, useState, useRef, useEffect, useCallback, useImperativeHandle } from 'react';
 import { api, ApiError } from '../../lib/api';
 import type { ShowToast } from '../../lib/types';
 import { Check, Circle, LoaderCircle, Square, TriangleAlert } from 'lucide-react';
@@ -43,7 +43,25 @@ interface RecordButtonProps {
   resetKey?: string | number;
 }
 
-export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey }: RecordButtonProps) {
+export interface RecordedCall {
+  url: string;
+  callId: number;
+}
+
+export interface RecordButtonHandle {
+  /** Stops an active recording and resolves only after its upload finishes. */
+  stopAndSave: () => Promise<RecordedCall | null>;
+}
+
+interface RecordingDeferred {
+  promise: Promise<RecordedCall | null>;
+  resolve: (recording: RecordedCall | null) => void;
+}
+
+export const RecordButton = forwardRef<RecordButtonHandle, RecordButtonProps>(function RecordButton(
+  { leadId, showToast, onStart, onRecorded, resetKey },
+  ref,
+) {
   const [state, setState] = useState<RecorderState>('idle');
   const [elapsedS, setElapsedS] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -51,14 +69,25 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stateRef = useRef<RecorderState>('idle');
+  const deferredRef = useRef<RecordingDeferred | null>(null);
+  const lastRecordedRef = useRef<RecordedCall | null>(null);
+
+  function updateState(next: RecorderState) {
+    stateRef.current = next;
+    setState(next);
+  }
 
   // Reset everything when the lead changes (resetKey is the lead id from caller).
   useEffect(() => {
     cleanup();
-    setState('idle');
+    updateState('idle');
     setElapsedS(0);
     chunksRef.current = [];
     startedAtRef.current = null;
+    deferredRef.current?.resolve(null);
+    deferredRef.current = null;
+    lastRecordedRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
@@ -86,7 +115,7 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      setState('denied');
+      updateState('denied');
       showToast(`Mic permission denied: ${(err as Error).message}`, 'error');
       return;
     }
@@ -103,20 +132,30 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
 
     const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     recorderRef.current = rec;
+    let resolveRecording!: (recording: RecordedCall | null) => void;
+    const promise = new Promise<RecordedCall | null>((resolve) => { resolveRecording = resolve; });
+    deferredRef.current = { promise, resolve: resolveRecording };
+    lastRecordedRef.current = null;
 
     rec.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
     };
-    rec.onstop = () => { void finalize(); };
+    rec.onstop = () => {
+      void finalize().then((recording) => {
+        lastRecordedRef.current = recording;
+        deferredRef.current?.resolve(recording);
+      });
+    };
     rec.onerror = (e) => {
       showToast(`Recorder error: ${(e as ErrorEvent).message ?? 'unknown'}`, 'error');
       cleanup();
-      setState('idle');
+      updateState('idle');
+      deferredRef.current?.resolve(null);
     };
 
     rec.start(1000); // emit dataavailable every 1s so chunks are bounded
     startedAtRef.current = Date.now();
-    setState('recording');
+    updateState('recording');
     onStart?.();
 
     tickRef.current = setInterval(() => {
@@ -128,15 +167,15 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
   }, [state, showToast, onStart]);
 
   const stopRecording = useCallback(() => {
-    if (state !== 'recording') return;
+    if (stateRef.current !== 'recording') return;
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
     if (recorderRef.current && recorderRef.current.state === 'recording') {
       recorderRef.current.stop(); // triggers onstop → finalize
     }
-  }, [state]);
+  }, []);
 
-  async function finalize() {
-    setState('uploading');
+  async function finalize(): Promise<RecordedCall | null> {
+    updateState('uploading');
     const stream = streamRef.current;
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
@@ -146,8 +185,8 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
     const chunks = chunksRef.current;
     if (chunks.length === 0) {
       showToast('No audio captured', 'error');
-      setState('idle');
-      return;
+      updateState('idle');
+      return null;
     }
     // Pick ext from the first chunk's type (or default webm).
     const firstType = chunks[0].type || 'audio/webm';
@@ -157,15 +196,28 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
     try {
       const res = await api.recordings.upload(leadId, blob, ext);
       onRecorded?.(res.url, res.call_id);
-      setState('done');
+      updateState('done');
       const sizeKb = Math.round(res.bytes / 1024);
       showToast(`Recording saved (${sizeKb} KB)`, 'success');
+      return { url: res.url, callId: res.call_id };
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Upload failed: ${msg}`, 'error');
-      setState('idle');
+      updateState('idle');
+      return null;
     }
   }
+
+  const stopAndSave = useCallback(async (): Promise<RecordedCall | null> => {
+    if (stateRef.current === 'done') return lastRecordedRef.current;
+    if (stateRef.current === 'recording') stopRecording();
+    if (stateRef.current === 'uploading' || stateRef.current === 'recording') {
+      return deferredRef.current?.promise ?? null;
+    }
+    return null;
+  }, [stopRecording]);
+
+  useImperativeHandle(ref, () => ({ stopAndSave }), [stopAndSave]);
 
   function handleClick() {
     if (state === 'idle' || state === 'denied' || state === 'done') void startRecording();
@@ -204,7 +256,7 @@ export function RecordButton({ leadId, showToast, onStart, onRecorded, resetKey 
       {label}
     </button>
   );
-}
+});
 
 function formatMMSS(totalS: number): string {
   const m = Math.floor(totalS / 60);

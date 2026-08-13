@@ -369,6 +369,9 @@ export const api = {
       contractStart?: string;
       clientEmail?: string;
       note?: string;
+      selectedPlan?: 'Build & Maintain' | 'Growth';
+      commitmentTerm?: 'ongoing_hosting' | '6_months' | '12_months';
+      discoveryScheduledFor?: string;
     }) => apiFetch<{ lead: Lead; project: Project }>(`/api/leads/${id}/convert-to-client`, {
       method: 'POST',
       body: JSON.stringify(input),

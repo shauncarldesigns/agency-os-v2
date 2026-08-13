@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   Phone,
   MapPin,
@@ -34,7 +34,7 @@ import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailMo
 import { StarRating } from '../shared/StarRating';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
 import { interpolate, type Script } from '../../lib/playbook';
-import { RecordButton } from '../dashboard/RecordButton';
+import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -1371,6 +1371,7 @@ type CallOutcome =
   | 'voicemail'
   | 'busy'
   | 'talk_later'
+  | 'feedback_only'
   | 'interested';
 
 export type SelectedPlan = 'Build & Maintain' | 'Growth';
@@ -1385,6 +1386,25 @@ const OVERRIDE_OPENING_BODY = `“Perfect — now that you have it open, what ca
 “Absolutely. What you’re seeing is a starting point based on what I could find online. If we move forward, we’ll customize it around your business.”`;
 
 const OVERRIDE_OPENING_NOTE = 'They are seeing the site for the first time right now. Let them react before guiding them. Ask about what is on their screen in the present tense.';
+
+function ScriptParagraph({ children }: { children: string }) {
+  const waitsForResponse = children.includes('?');
+  return (
+    <div className="mb-4 last:mb-0">
+      <p>{children}</p>
+      {waitsForResponse && (
+        <div className="mt-3 flex items-center gap-3" role="note" aria-label="Pause and let the prospect answer">
+          <span className="h-px flex-1 bg-emerald-200" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+            <MessageCircleReply className="h-3.5 w-3.5" />
+            Their turn · listen
+          </span>
+          <span className="h-px flex-1 bg-emerald-200" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 const WARM_CALL_RESPONSES = [
   { label: 'They only need a website', body: 'That sounds like the Build & Maintain plan. Let’s focus on making the business look credible and giving you a site I can keep updated for you.' },
@@ -1404,11 +1424,15 @@ export function OpenSalesCallModal({
   showToast,
   initialWarm = false,
   initialEmailBridge = false,
+  externalRecorderRef,
+  externalNotes,
+  onExternalNotesChange,
+  externalRecordingCallId,
 }: {
   lead: PipelineLead;
   onClose: () => void;
   onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number) => Promise<boolean>;
-  onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan) => Promise<void>;
+  onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan, commitmentTerm: 'ongoing_hosting' | '6_months' | '12_months') => Promise<void>;
   onNotInterested: (lead: PipelineLead, notes?: string, recordingCallId?: number) => Promise<void>;
   // Channel-recovery hooks — provided only by the Text Outreach page, where
   // "the texts never landed" is a real failure mode. The email-outreach page
@@ -1418,6 +1442,10 @@ export function OpenSalesCallModal({
   showToast: ShowToast;
   initialWarm?: boolean;
   initialEmailBridge?: boolean;
+  externalRecorderRef?: RefObject<RecordButtonHandle | null>;
+  externalNotes?: string;
+  onExternalNotesChange?: (value: string) => void;
+  externalRecordingCallId?: number | null;
 }) {
   const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
   const [script, setScript] = useState<Script | null>(null);
@@ -1425,9 +1453,16 @@ export function OpenSalesCallModal({
   const [stageIndex, setStageIndex] = useState(0);
   const [stageHistory, setStageHistory] = useState<number[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
-  const [notes, setNotes] = useState('');
+  const [commitmentTerm, setCommitmentTerm] = useState<'ongoing_hosting' | '6_months' | '12_months' | ''>('');
+  const [internalNotes, setInternalNotes] = useState('');
   const [openResponse, setOpenResponse] = useState<string | null>(null);
-  const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
+  const [internalRecordingCallId, setInternalRecordingCallId] = useState<number | null>(null);
+  const [archivingNotInterested, setArchivingNotInterested] = useState(false);
+  const internalRecorderRef = useRef<RecordButtonHandle>(null);
+  const recorderRef = externalRecorderRef ?? internalRecorderRef;
+  const notes = externalNotes ?? internalNotes;
+  const setNotes = onExternalNotesChange ?? setInternalNotes;
+  const recordingCallId = externalRecordingCallId ?? internalRecordingCallId;
   const scriptTopRef = useRef<HTMLDivElement | null>(null);
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
@@ -1544,19 +1579,31 @@ export function OpenSalesCallModal({
     voicemail: 'Left voicemail',
     busy: 'They were busy',
     talk_later: 'Follow up later',
+    feedback_only: 'Feedback only — nurture',
     interested: 'Interested — continue conversation',
   };
 
   const chooseOutcome = async (outcome: CallOutcome) => {
     setLoggingOutcome(outcome);
-    const recorded = await onCallOutcome(lead, outcome, selectedPlan ?? undefined, notes.trim() || undefined, recordingCallId ?? undefined);
+    const savedRecording = await recorderRef.current?.stopAndSave();
+    const recorded = await onCallOutcome(lead, outcome, selectedPlan ?? undefined, notes.trim() || undefined, savedRecording?.callId ?? recordingCallId ?? undefined);
     setLoggingOutcome(null);
     if (!recorded) return;
-    if (outcome === 'interested' && selectedPlan) {
-      await onMoveToClients(lead, selectedPlan);
+    if (outcome === 'interested' && selectedPlan && commitmentTerm) {
+      await onMoveToClients(lead, selectedPlan, commitmentTerm);
       return;
     }
     onClose();
+  };
+
+  const chooseNotInterested = async () => {
+    setArchivingNotInterested(true);
+    try {
+      const savedRecording = await recorderRef.current?.stopAndSave();
+      await onNotInterested(lead, notes.trim() || undefined, savedRecording?.callId ?? recordingCallId ?? undefined);
+    } finally {
+      setArchivingNotInterested(false);
+    }
   };
 
   const decisionClass = 'inline-flex w-auto items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-5 text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
@@ -1573,14 +1620,16 @@ export function OpenSalesCallModal({
     if (showEmailBridge) return (
       <>
         <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They’ll look later — follow up later</button>
-        <button type="button" onClick={() => setEmailBridgeDone(true)} className={primaryDecisionClass}>They can see the site — get their reaction <ChevronRight className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={() => setEmailBridgeDone(true)} className={primaryDecisionClass}>They can see the website — get their reaction <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
     if (!activeStage) return null;
     if (activeStage.id === 'opening') return (
       <>
-        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They have not looked yet — follow up later</button>
-        <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They looked at the site <ChevronRight className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>Review on their own — follow up later</button>
+        <button type="button" onClick={() => void chooseOutcome('feedback_only')} disabled={loggingOutcome !== null} className={decisionClass}>Feedback only — nurture</button>
+        <button type="button" onClick={() => void chooseNotInterested()} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Not interested</button>
+        <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They want to discuss moving forward <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
     if (activeStage.id === 'needs') return (
@@ -1608,15 +1657,51 @@ export function OpenSalesCallModal({
         <button type="button" onClick={() => choosePlan('Growth')} className={primaryDecisionClass}>More clients and visibility</button>
       </>
     );
-    if (activeStage.id === 'next-steps') return <button type="button" onClick={() => goToStage('discovery')} className={primaryDecisionClass}>Schedule discovery <ChevronRight className="h-3.5 w-3.5" /></button>;
-    if (activeStage.id === 'discovery') return <button type="button" onClick={() => goToStage('website-process')} className={primaryDecisionClass}>Discovery scheduled — explain the process <ChevronRight className="h-3.5 w-3.5" /></button>;
-    if (activeStage.id === 'website-process') return <button type="button" onClick={() => goToStage(selectedPlan === 'Growth' ? 'growth-process' : 'full-close')} className={primaryDecisionClass}>Finish the close <ChevronRight className="h-3.5 w-3.5" /></button>;
+    if (activeStage.id === 'next-steps') return <button type="button" onClick={() => goToStage(selectedPlan === 'Growth' ? 'growth-process' : 'full-close')} className={primaryDecisionClass}>{selectedPlan === 'Growth' ? 'Explain Growth after launch' : 'Finish the close'} <ChevronRight className="h-3.5 w-3.5" /></button>;
     if (activeStage.id === 'growth-process') return <button type="button" onClick={() => goToStage('full-close')} className={primaryDecisionClass}>Finish the close <ChevronRight className="h-3.5 w-3.5" /></button>;
     if (activeStage.id === 'full-close') return (
-      <button type="button" onClick={() => void chooseOutcome('interested')} disabled={!selectedPlan || loggingOutcome !== null} className={primaryDecisionClass}>
-        {loggingOutcome === 'interested' ? 'Advancing…' : selectedPlan ? `Advance to client · ${selectedPlan}` : 'Select a plan to continue'}
-        <ChevronRight className="h-3.5 w-3.5" />
-      </button>
+      <div className="flex w-full flex-wrap items-end justify-end gap-3">
+        <fieldset className="min-w-0 flex-1 sm:max-w-2xl">
+          <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Confirm commitment</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(selectedPlan === 'Growth'
+              ? [
+                  { value: '6_months' as const, label: '6-month Growth', detail: '$499 website build · $499/month' },
+                  { value: '12_months' as const, label: '12-month Growth', detail: 'Website build waived · $499/month' },
+                ]
+              : [
+                  { value: 'ongoing_hosting' as const, label: 'Month-to-month hosting', detail: '$79/month after launch' },
+                  { value: '12_months' as const, label: 'One-year hosting', detail: '$50/month after launch' },
+                ]
+            ).map((option) => {
+              const selected = commitmentTerm === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setCommitmentTerm(option.value)}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition ${selected
+                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
+                    : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'}`}
+                >
+                  <span className={`flex items-center gap-2 text-xs font-semibold ${selected ? 'text-blue-800' : 'text-slate-700'}`}>
+                    <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${selected ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
+                      {selected && <Check className="h-3 w-3 text-white" />}
+                    </span>
+                    {option.label}
+                  </span>
+                  <span className="mt-1 block pl-6 text-[11px] text-slate-500">{option.detail}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+        <button type="button" onClick={() => void chooseOutcome('interested')} disabled={!selectedPlan || !commitmentTerm || loggingOutcome !== null} className={primaryDecisionClass}>
+          {loggingOutcome === 'interested' ? 'Advancing…' : selectedPlan ? `Advance to client · ${selectedPlan}` : 'Select a plan to continue'}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
     );
     return null;
   };
@@ -1632,12 +1717,15 @@ export function OpenSalesCallModal({
           <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
             <PhoneCall className="h-3.5 w-3.5" /> Call {lead.phone}
           </a>
-          <RecordButton
-            leadId={lead.id}
-            showToast={showToast}
-            resetKey={lead.id}
-            onRecorded={(_url, callId) => setRecordingCallId(callId)}
-          />
+          {!externalRecorderRef && (
+            <RecordButton
+              ref={internalRecorderRef}
+              leadId={lead.id}
+              showToast={showToast}
+              resetKey={lead.id}
+              onRecorded={(_url, callId) => setInternalRecordingCallId(callId)}
+            />
+          )}
         </>
       }
       footer={
@@ -1676,7 +1764,14 @@ export function OpenSalesCallModal({
               <h3 className="mt-1 text-xl font-semibold text-slate-900">GET THEM TO THE INBOX</h3>
               <div className="mt-5 border-l-2 border-blue-200 pl-4 text-[17px] leading-8 text-slate-700 sm:pl-5">
                 <p>“Alright — it’s on its way. You’ll see an email from Shaun Gehrke at Shaun Carl Designs, subject line ‘I built something for {lead.name}.’”</p>
-                <p className="mt-4">“If you’re near your email, open it up and tap the link — that’s the homepage I built for you. I’ll stay on while you pull it up.”</p>
+                <p className="mt-4">“If you have a minute, I can walk through it with you, or you can look through it on your own time and let me know what stands out. Which one is easier for ya?”</p>
+              </div>
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">If they want to walk through it now</p>
+                <div className="mt-2">
+                  <ScriptParagraph>“Did the email come through?”</ScriptParagraph>
+                  <ScriptParagraph>“Great. Go ahead and open it, click the link to view the website, and let me know when you can see the homepage.”</ScriptParagraph>
+                </div>
               </div>
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
                 <p className="font-semibold text-slate-700">While the email lands — keep it easy:</p>
@@ -1695,7 +1790,11 @@ export function OpenSalesCallModal({
                 </a>
               )}
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-                Open the site on your own screen (button above — it’s the untracked link, so it won’t count as their visit) so you’re both looking at the same thing when they land on it. Wait until they say they can see it before moving on. If they can’t get to their email right now, record “Follow up later” — the email sequence takes over from here.
+                Open the site on your own screen (button above — it’s the untracked link, so it won’t count as their visit) so you’re both looking at the same thing when they land on it. Do not advance until they say they can see the homepage. If the email never arrives, confirm the address before retrying. If they can’t get to their email right now, record “Follow up later” — the email sequence takes over from here.
+              </div>
+              <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">If they’ll look later · close before clicking</p>
+                <p className="mt-1.5">“No problem at all. Take a look when you have a chance, and I’ll follow up in a couple of days to see what stood out or what you’d want changed. Thanks for taking the call.”</p>
               </div>
             </section>
           ) : isWarm ? (
@@ -1725,9 +1824,15 @@ export function OpenSalesCallModal({
                         contact_name: lead.ownerFirst,
                         city: lead.city,
                         trade: lead.category,
-                      }).split(/\n{2,}/).map((paragraph) => <p key={paragraph} className="mb-4 last:mb-0">{paragraph}</p>)}
+                      }).split(/\n{2,}/).map((paragraph) => <ScriptParagraph key={paragraph}>{paragraph}</ScriptParagraph>)}
                     </div>
                     {stageNote && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">{stageNote}</div>}
+                    {activeStage.id === 'opening' && (
+                      <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">If they need to follow up later · close before clicking</p>
+                        <p className="mt-1.5">“No problem at all. Take your time with it. I’ll follow up in a couple of days and see what stood out or what you’d want changed. Thanks for taking the call.”</p>
+                      </div>
+                    )}
                   </section>
                 );
               })()}
@@ -1737,8 +1842,8 @@ export function OpenSalesCallModal({
               <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Last-attempt call</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">Confirm interest before closing the outreach loop.</h3>
               <div className="mt-5 border-l-2 border-rose-200 pl-5 text-[17px] leading-8 text-slate-700">
-                <p>“Hey {lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for {lead.name} before I close this out.”</p>
-                <p className="mt-4">“Did you get a chance to take a look, and is it worth having a quick conversation about?”</p>
+                <ScriptParagraph>{`“Hey ${lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for ${lead.name} before I close this out.”`}</ScriptParagraph>
+                <ScriptParagraph>“Did you get a chance to take a look, and is it worth having a quick conversation about?”</ScriptParagraph>
               </div>
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, use <strong>“They’re interested — open the sales script”</strong> below to continue into the warm sales conversation. If they are not interested or do not answer, record that outcome in the sidebar.</div>
 
@@ -1753,6 +1858,14 @@ export function OpenSalesCallModal({
                   </div>
                 ) : (
                   <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">If they never saw the text</p>
+                      <div className="mt-2">
+                        <ScriptParagraph>“No problem. I can resend the link so it’s right at the top of your messages, or if email is easier, I can send it there instead. Which works better for you?”</ScriptParagraph>
+                        <ScriptParagraph>“Sure—what’s the best email address for you?”</ScriptParagraph>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-5 text-blue-700">Use the resend button in Call Context if they prefer text. If they choose email, enter it below and send the site while they are still on the call.</p>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-slate-500" />
                       <span className="text-sm font-semibold text-slate-900">Capture email</span>
@@ -1891,10 +2004,11 @@ export function OpenSalesCallModal({
               </button>
             ))}
             <button
-              onClick={() => void onNotInterested(lead, notes.trim() || undefined, recordingCallId ?? undefined)}
+              onClick={() => void chooseNotInterested()}
+              disabled={loggingOutcome !== null || archivingNotInterested}
               className="col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100"
             >
-              Not interested — archive
+              {archivingNotInterested ? 'Saving recording…' : 'Not interested — archive'}
             </button>
           </div>
           </section>

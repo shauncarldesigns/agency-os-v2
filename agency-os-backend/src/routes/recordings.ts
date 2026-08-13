@@ -91,7 +91,11 @@ recordingsRouter.post('/', async (c) => {
 // Authenticated R2 proxy. Once deployed and verified, the bucket's public
 // r2.dev endpoint can be disabled without breaking call playback.
 recordingsRouter.get('/file/*', async (c) => {
-  const key = decodeURIComponent(c.req.param('*') ?? '').replace(/^\/+/, '');
+  // Hono's wildcard parameter can be empty behind some local adapters. Parse
+  // the already-decoded request path as the stable source of truth.
+  const marker = '/api/recordings/file/';
+  const pathKey = c.req.path.includes(marker) ? c.req.path.slice(c.req.path.indexOf(marker) + marker.length) : '';
+  const key = decodeURIComponent(pathKey || c.req.param('*') || '').replace(/^\/+/, '');
   if (!key.startsWith('calls/') || key.includes('..') || key.includes('\\')) {
     return c.json(badRequest('Invalid recording key'), 400);
   }

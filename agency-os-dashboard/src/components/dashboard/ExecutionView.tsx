@@ -14,7 +14,7 @@ import { Badge } from '../shared/Badge';
 import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
-import { RecordButton } from './RecordButton';
+import { RecordButton, type RecordButtonHandle } from './RecordButton';
 import { ApproachSelector } from './ApproachSelector';
 import { QuestionOrientedPanel } from './QuestionOrientedPanel';
 import {
@@ -183,6 +183,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
   // for diagnostic clarity (the row already holds it).
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
+  const recorderRef = useRef<RecordButtonHandle>(null);
 
   // Call approach — No-oriented (default, pitch-first), Question-oriented
   // (discovery-first), or Quick-oriented (fast reputation-gap reveal).
@@ -385,14 +386,15 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
     if (!lead || recording) return;
     setRecording(true);
     try {
+      const savedRecording = await recorderRef.current?.stopAndSave();
       const hits = objectionHitsRef.current;
       const res = await api.sessions.outcome(sessionId, {
         leadId: lead.id,
         outcome,
         notes: notesRef.current.trim() || undefined,
         objectionHits: hits.length ? hits : undefined,
-        recordingUrl: recordingUrl ?? undefined,
-        recordingCallId: recordingCallId ?? undefined,
+        recordingUrl: savedRecording?.url ?? recordingUrl ?? undefined,
+        recordingCallId: savedRecording?.callId ?? recordingCallId ?? undefined,
         ...extra,
       });
       clearDraft();
@@ -876,6 +878,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
         <div className="cockpit-utility-right">
           <span>{currentIndex + 1} of {leads.length} · {calledCount} called</span>
           <RecordButton
+            ref={recorderRef}
             leadId={lead.id}
             showToast={showToast}
             resetKey={lead.session_lead_id ?? lead.id}
