@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Archiving engaged leads: declined-by-reply path + honest failures (backend + dashboard)
+
+- **Engaged leads can now be archived when the prospect declined by text reply** — the archive modal gains a "declined by text reply" checkbox that bypasses the recorded-sales-call requirement (the note is the close-out record, matching how the Messaging Employee auto-archives NOT_INTERESTED replies).
+- **A rejected archive no longer looks like a success**: the modal stays open and shows the server's reason inline, and the "Archived: …" note is only appended to the lead after the archive actually lands (previously a blocked archive closed the modal and stamped the note anyway).
+
 ### Email Outreach call flow and close (backend + dashboard)
 
 - **Email capture calls now support a continuous send-and-stay sales flow** with inbox receipt confirmation, prospect speaking-turn indicators, natural follow-up closings, and final-attempt text/email recovery language.

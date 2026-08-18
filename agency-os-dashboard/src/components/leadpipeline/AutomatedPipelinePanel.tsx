@@ -2039,10 +2039,15 @@ function ArchiveNoteModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onConfirm: (note: string) => Promise<void>;
+  onConfirm: (note: string, declinedByReply: boolean) => Promise<string | null>;
 }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  // Engaged leads are guarded server-side: archiving needs a recorded
+  // sales-call outcome, unless the prospect declined in a text reply and the
+  // operator attests to it here.
+  const [declinedByReply, setDeclinedByReply] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <div
       className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
@@ -2061,6 +2066,21 @@ function ArchiveNoteModal({
           placeholder="e.g. Replied STOP to the intro text"
           className="mt-3 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
+        {lead.status === 'engaged' && (
+          <label className="mt-3 flex items-start gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={declinedByReply}
+              onChange={(event) => setDeclinedByReply(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-300"
+            />
+            <span>
+              They declined by text reply — archive without a sales call.
+              <span className="block text-slate-400">Otherwise an engaged lead needs a recorded call outcome first.</span>
+            </span>
+          </label>
+        )}
+        {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
@@ -2075,7 +2095,10 @@ function ArchiveNoteModal({
               const trimmed = note.trim();
               if (!trimmed) return;
               setSaving(true);
-              void onConfirm(trimmed).finally(() => setSaving(false));
+              setError(null);
+              void onConfirm(trimmed, declinedByReply)
+                .then((failure) => setError(failure))
+                .finally(() => setSaving(false));
             }}
             disabled={!note.trim() || saving}
             className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
@@ -2403,23 +2426,28 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
       | 'archived',
     toastMessage: string,
     meta?: unknown,
-  ) => {
+    showErrorToast = true,
+  ): Promise<string | null> => {
     try {
       const { lead } = await api.pipeline.action(leadId, { action, meta });
       applyMutation(lead, action);
       setModal(null);
       offerUndo(leadId, toastMessage);
+      return null;
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Action failed';
-      showToast(msg, 'error');
+      if (showErrorToast) showToast(msg, 'error');
+      return msg;
     }
   };
 
-  const markSent = (leadId: number, messageBody: string) =>
-    runAction(leadId, 'intro_sent', "Moved to Sent — no reply. Didn't send it?", { body: messageBody });
+  const markSent = async (leadId: number, messageBody: string) => {
+    await runAction(leadId, 'intro_sent', "Moved to Sent — no reply. Didn't send it?", { body: messageBody });
+  };
 
-  const markFollowedUp = (leadId: number, messageBody: string) =>
-    runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
+  const markFollowedUp = async (leadId: number, messageBody: string) => {
+    await runAction(leadId, 'followed_up', 'Follow-up marked', { body: messageBody });
+  };
 
   const recordCallOutcome = async (
     lead: PipelineLead,
@@ -2444,22 +2472,32 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const archiveLead = (lead: PipelineLead) => setArchiveTarget(lead);
 
-  const confirmArchive = async (note: string) => {
+  const confirmArchive = async (note: string, declinedByReply: boolean): Promise<string | null> => {
     const lead = archiveTarget;
-    if (!lead) return;
-    await runAction(lead.id, 'archived', 'Lead archived', {
-      reason: isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
-      note,
-    });
+    if (!lead) return null;
+    const error = await runAction(
+      lead.id,
+      'archived',
+      'Lead archived',
+      {
+        reason: declinedByReply ? 'declined_by_reply' : isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
+        note,
+      },
+      false, // the modal stays open and renders the error itself
+    );
+    if (error) return error;
     // Mirror the note onto the lead record itself, where it's visible when
-    // reviewing archived leads in the detail modal. Non-fatal if it fails —
-    // the note also lives in the archive activity's meta.
+    // reviewing archived leads in the detail modal — but only once the archive
+    // actually landed, so a rejected attempt can't stamp "Archived:" onto a
+    // lead that never left the board. Non-fatal if it fails — the note also
+    // lives in the archive activity's meta.
     try {
       await api.leads.appendNote(lead.id, `Archived: ${note}`);
     } catch {
       // activity meta still carries the note
     }
     setArchiveTarget(null);
+    return null;
   };
 
   const archiveNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number) => {
