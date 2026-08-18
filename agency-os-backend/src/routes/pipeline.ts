@@ -560,25 +560,39 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       );
     }
 
+    // Engaged leads are warm (they opened the site), so the guided sales
+    // close requires a recorded call outcome before they can be archived.
+    // The one exception: the prospect declined in a text reply — there is no
+    // call to record, and forcing one would log a call that never happened.
+    // The operator attests to that path explicitly (reason + note) from the
+    // archive modal; the Messaging Employee's NOT_INTERESTED auto-archive is
+    // the same close-out, just automated.
     if (action === 'archived' && lead.pipeline_status === 'engaged') {
-      const completedSalesCall = await c.env.DB.prepare(`
-        SELECT 1 AS found
-          FROM lead_activity AS call_activity
-         WHERE call_activity.lead_id = ?
-           AND call_activity.action = 'call_outcome'
-           AND NOT EXISTS (
-             SELECT 1
-               FROM lead_activity AS undo_activity
-              WHERE undo_activity.action = 'undo'
-                AND json_extract(undo_activity.meta, '$.undid_activity_id') = call_activity.id
-           )
-         LIMIT 1
-      `).bind(id).first<{ found: number }>();
-      if (!completedSalesCall) {
-        return c.json(
-          badRequest('An engaged lead requires a recorded sales-call outcome before it can be archived.', 'SALES_CALL_REQUIRED'),
-          400,
-        );
+      const archiveMeta = (body.meta && typeof body.meta === 'object' ? body.meta : {}) as Record<string, unknown>;
+      const declinedByReply =
+        archiveMeta.reason === 'declined_by_reply' &&
+        typeof archiveMeta.note === 'string' &&
+        archiveMeta.note.trim() !== '';
+      if (!declinedByReply) {
+        const completedSalesCall = await c.env.DB.prepare(`
+          SELECT 1 AS found
+            FROM lead_activity AS call_activity
+           WHERE call_activity.lead_id = ?
+             AND call_activity.action = 'call_outcome'
+             AND NOT EXISTS (
+               SELECT 1
+                 FROM lead_activity AS undo_activity
+                WHERE undo_activity.action = 'undo'
+                  AND json_extract(undo_activity.meta, '$.undid_activity_id') = call_activity.id
+             )
+           LIMIT 1
+        `).bind(id).first<{ found: number }>();
+        if (!completedSalesCall) {
+          return c.json(
+            badRequest('An engaged lead needs a recorded sales-call outcome — or a "declined by reply" archive with a note — before it can be archived.', 'SALES_CALL_REQUIRED'),
+            400,
+          );
+        }
       }
     }
 
