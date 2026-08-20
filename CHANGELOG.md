@@ -9,6 +9,12 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Archive closes outreach and CRM state together (backend + dashboard)
+
+- **The Text Outreach archive modal can now mark a prospect Not interested while archiving**, stores both states atomically, and restores both through Undo.
+- **Lead Pipeline now counts and filters Archived outreach records**, replaces the ambiguous Dead tile, shows archived prospects as Closed instead of offering a second archive action, and tolerates legacy outreach states without blanking the page.
+- **Local dashboard development works on the standard Vite port 5173** through the Worker CORS allowlist.
+
 ### Archiving engaged leads: declined-by-reply path + honest failures (backend + dashboard)
 
 - **Engaged leads can now be archived when the prospect declined by text reply** — the archive modal gains a "declined by text reply" checkbox that bypasses the recorded-sales-call requirement (the note is the close-out record, matching how the Messaging Employee auto-archives NOT_INTERESTED replies).

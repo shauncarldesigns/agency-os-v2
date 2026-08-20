@@ -123,7 +123,8 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   // Filter for the table — stats show all leads (excluding hidden filters)
   const filtered = useMemo(() => {
     let list = leads;
-    if (stage !== 'all') list = list.filter(l => l.status === stage);
+    if (stage === 'archived') list = list.filter(l => l.pipeline_status === 'archived');
+    else if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
     if (view === 'active' && phoneFilter === 'review') list = list.filter(l => l.phone_route === 'review');
     if (enrichment !== 'all') list = list.filter(l => l.enrichment_status === enrichment);

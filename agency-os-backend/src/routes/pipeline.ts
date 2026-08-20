@@ -541,6 +541,9 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     if (!action || !(action in ACTION_TRANSITIONS)) {
       return c.json(badRequest(`Invalid action "${action}"`), 400);
     }
+    const actionMeta = body.meta && typeof body.meta === 'object'
+      ? body.meta as Record<string, unknown>
+      : null;
 
     const lead = await c.env.DB.prepare(
       'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
@@ -568,9 +571,10 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     // archive modal; the Messaging Employee's NOT_INTERESTED auto-archive is
     // the same close-out, just automated.
     if (action === 'archived' && lead.pipeline_status === 'engaged') {
-      const archiveMeta = (body.meta && typeof body.meta === 'object' ? body.meta : {}) as Record<string, unknown>;
+      const archiveMeta = actionMeta ?? {};
       const declinedByReply =
         archiveMeta.reason === 'declined_by_reply' &&
+        archiveMeta.mark_not_interested === true &&
         typeof archiveMeta.note === 'string' &&
         archiveMeta.note.trim() !== '';
       if (!declinedByReply) {
@@ -631,6 +635,9 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
          END`,
       );
     }
+    if (action === 'archived' && actionMeta?.mark_not_interested === true) {
+      sets.push("status = 'not_interested'", "outcome = 'Not Interested'");
+    }
     params.push(id);
     await c.env.DB.prepare(`UPDATE leads SET ${sets.join(', ')} WHERE id = ?`)
       .bind(...params)
@@ -667,8 +674,10 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       meta:
         action === 'archived'
           ? {
-              ...(body.meta && typeof body.meta === 'object' ? body.meta : {}),
+              ...(actionMeta ?? {}),
               previous_pipeline_last_action_at: lead.pipeline_last_action_at,
+              previous_status: lead.status,
+              previous_outcome: lead.outcome,
             }
           : action === 'reply_received'
             ? {
@@ -897,12 +906,20 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
     }
     if (target.action === 'archived') {
       let previousLastAction: string | null = null;
+      let previousStatus: string | null = null;
+      let previousOutcome: string | null | undefined;
       try {
         const parsed = target.meta ? JSON.parse(target.meta) as {
           previous_pipeline_last_action_at?: unknown;
+          previous_status?: unknown;
+          previous_outcome?: unknown;
         } : null;
         if (typeof parsed?.previous_pipeline_last_action_at === 'string') {
           previousLastAction = parsed.previous_pipeline_last_action_at;
+        }
+        if (typeof parsed?.previous_status === 'string') previousStatus = parsed.previous_status;
+        if (typeof parsed?.previous_outcome === 'string' || parsed?.previous_outcome === null) {
+          previousOutcome = parsed.previous_outcome;
         }
       } catch {
         // Older archive rows may not contain the timestamp snapshot.
@@ -923,6 +940,14 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
       }
       sets.push('pipeline_last_action_at = ?');
       params.push(previousLastAction);
+      if (previousStatus) {
+        sets.push('status = ?');
+        params.push(previousStatus);
+      }
+      if (previousOutcome !== undefined) {
+        sets.push('outcome = ?');
+        params.push(previousOutcome);
+      }
     }
     if (target.action === 'reply_received') {
       try {
