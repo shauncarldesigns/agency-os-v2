@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Text Outreach board flow order (dashboard)
+
+- **No engagement — last chance now appears as the final board column**, after Engaged, so exhausted outreach is visually separated at the end of the workflow.
+
 ### Archive closes outreach and CRM state together (backend + dashboard)
 
 - **The Text Outreach archive modal can now mark a prospect Not interested while archiving**, stores both states atomically, and restores both through Undo.

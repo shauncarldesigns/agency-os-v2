@@ -2155,14 +2155,14 @@ const BOARD_COLUMNS: Array<{
     dropStatus: 'sent_no_reply', match: (l) => l.status === 'sent_no_reply' && !isLastChanceNoReply(l),
   },
   {
-    key: 'last_chance', label: 'No engagement — last chance',
-    icon: PhoneCall, iconBg: 'bg-gradient-to-br from-rose-500 to-red-600',
-    dropStatus: 'sent_no_reply', match: isLastChanceNoReply,
-  },
-  {
     key: 'engaged', label: 'Engaged',
     icon: STATUS_CONFIG.engaged.icon, iconBg: STATUS_CONFIG.engaged.iconBg,
     dropStatus: 'engaged', match: (l) => l.status === 'engaged',
+  },
+  {
+    key: 'last_chance', label: 'No engagement — last chance',
+    icon: PhoneCall, iconBg: 'bg-gradient-to-br from-rose-500 to-red-600',
+    dropStatus: 'sent_no_reply', match: isLastChanceNoReply,
   },
 ];
 
