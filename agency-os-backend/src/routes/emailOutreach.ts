@@ -160,10 +160,13 @@ emailOutreachRouter.post('/leads/:id/automation/start', async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isInteger(id)) return c.json(badRequest('Invalid lead ID'), 400);
   const lead = await c.env.DB.prepare(
-    'SELECT email FROM leads WHERE id = ? AND deleted_at IS NULL',
-  ).bind(id).first<{ email: string | null }>();
+    'SELECT email, pipeline_status FROM leads WHERE id = ? AND deleted_at IS NULL',
+  ).bind(id).first<{ email: string | null; pipeline_status: string }>();
   if (!lead) return c.json(notFound('Lead'), 404);
   if (!lead.email) return c.json(badRequest('Lead requires an email address'), 400);
+  if (lead.pipeline_status !== 'ready_to_send') {
+    return c.json(badRequest('The demo site must be approved before email automation can start'), 400);
+  }
   const recipientError = validateOutreachRecipient(lead.email);
   if (recipientError) return c.json(badRequest(recipientError), 400);
   const scheduled = await scheduleEmailAutomation(c.env, id);

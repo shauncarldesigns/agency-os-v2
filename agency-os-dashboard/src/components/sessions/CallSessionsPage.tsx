@@ -176,6 +176,19 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
     void load();
   }, [load]);
 
+  const approveSite = useCallback(async (leadId: number) => {
+    try {
+      const { lead } = await api.pipeline.approveSite(leadId);
+      setLeads((current) => current.map((item) => item.id === lead.id ? lead : item));
+      showToast(`${lead.company} approved`, 'success');
+      onStateChanged?.();
+      void load(true);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not approve site: ${msg}`, 'error');
+    }
+  }, [load, onStateChanged, showToast]);
+
   const columns = useMemo(() => buildColumns(leads, automations), [leads, automations]);
 
   const filterOptions = useMemo(() => {
@@ -361,6 +374,7 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
               column={column}
               onOpenLead={openEmailCall}
               onOpenBuild={setBuildModalLeadId}
+              onApproveSite={(leadId) => void approveSite(leadId)}
               onOpenEmail={setEmailModalLeadId}
               onOpenAutomation={(leadId) => void openAutomationFlow(leadId)}
               onViewLead={setViewLeadId}
@@ -722,13 +736,23 @@ function CallOutreachModal({
     }
     setSavingEmail(true);
     try {
-      const nextStatus = lead.site_url ? 'ready_to_send' : 'awaiting_build';
+      const nextStatus = lead.pipeline_status === 'built_needs_review'
+        ? 'built_needs_review'
+        : lead.site_url
+          ? 'ready_to_send'
+          : 'awaiting_build';
       await api.leads.update(lead.id, nextEmail
         ? { email: nextEmail, pipeline_status: nextStatus, outcome: 'Email Captured' }
         : { email: null });
       showToast(
         nextEmail
-          ? `Email captured — moved to ${nextStatus === 'ready_to_send' ? 'Ready to Send' : 'Awaiting Build'}`
+          ? `Email captured — ${
+              nextStatus === 'ready_to_send'
+                ? 'moved to Ready to Send'
+                : nextStatus === 'built_needs_review'
+                  ? 'site still needs review'
+                  : 'moved to Awaiting Build'
+            }`
           : 'Email removed',
       );
       onSaved(Boolean(nextEmail), keepOpen);
@@ -747,10 +771,8 @@ function CallOutreachModal({
     const saved = await saveEmail(true);
     if (!saved) return;
     try {
-      // A built site can enter email review immediately. Otherwise the lead
-      // correctly waits in Awaiting Build; completePipelineBuild will start
-      // the automation after the Builder returns a URL.
-      if (lead.site_url) {
+      // Automation can begin only after the operator approves the built site.
+      if (lead.site_url && lead.pipeline_status === 'ready_to_send') {
         // Start explicitly so an unsupported/dev-mode recipient produces a
         // truthful error instead of a success toast with no automation row.
         await api.emailOutreach.startAutomation(activeLeadId);
@@ -765,9 +787,11 @@ function CallOutreachModal({
           channel: 'email',
         },
       });
-      showToast(lead.site_url
+      showToast(lead.site_url && lead.pipeline_status === 'ready_to_send'
         ? 'Email saved — follow-up queued and call recorded'
-        : 'Email saved — awaiting site build and call recorded');
+        : lead.pipeline_status === 'built_needs_review'
+          ? 'Email saved — site still needs review'
+          : 'Email saved — awaiting site build and call recorded');
       onSaved(true);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -2821,6 +2845,7 @@ function buildColumns(
 ): BoardColumn[] {
   const columns: BoardColumn[] = [
     { id: 'awaiting-build', title: 'Awaiting Build', description: 'Site not built—queued for Builder', icon: Mail, tone: 'amber', items: [] },
+    { id: 'built-needs-review', title: 'Built Needs Review', description: 'Open and approve the finished site', icon: Eye, tone: 'amber', items: [] },
     { id: 'to-call', title: 'To Call', description: 'Site built—call to capture email', icon: PhoneCall, tone: 'blue', items: [] },
     { id: 'ready-to-send', title: 'Ready to Send', description: 'Site built, email ready next', icon: Send, tone: 'emerald', items: [] },
     { id: 'sent-no-reply', title: 'Sent — No Reply', description: 'Email sent, awaiting response', icon: Clock, tone: 'slate', items: [] },
@@ -2871,6 +2896,18 @@ function buildColumns(
         tone: 'amber',
         sortAt: lead.updated_at,
         emailOutreachStarted: Boolean(lead.email),
+      }));
+      return;
+    }
+
+    if (lead.pipeline_status === 'built_needs_review') {
+      byId['built-needs-review'].items.push(leadItem(lead, {
+        eyebrow: 'Review required',
+        detail: lead.site_url_raw || lead.site_url || 'Demo site complete',
+        note: 'Open the site, confirm it looks right, then approve it',
+        activityLabel: 'Built — needs review',
+        tone: 'amber',
+        sortAt: lead.updated_at,
       }));
       return;
     }
@@ -2946,7 +2983,7 @@ function buildColumns(
     // A valid email is enough to enter the build-first email motion. Waiting
     // for a call outcome here meant prospects with an email could not get a
     // demo site until after we called them—the opposite of the outreach plan.
-    // Build completion already schedules email automation server-side.
+    // Site approval schedules email automation server-side.
     const enteredEmailFlow = hasUsableEmail && hasBuiltSite;
     if (enteredEmailFlow && lead.pipeline_status === 'engaged') {
       byId.engaged.items.push(leadItem(lead, {
@@ -2976,7 +3013,7 @@ function buildColumns(
 
     if (
       enteredEmailFlow
-      && (lead.pipeline_status === 'ready_to_send' || Boolean(lead.site_url))
+      && lead.pipeline_status === 'ready_to_send'
     ) {
       byId['ready-to-send'].items.push(leadItem(lead, {
         eyebrow: 'Ready to email',
@@ -3012,6 +3049,7 @@ function buildColumns(
 function emailBoardActionLabel(columnId: string, item: BoardItem): string {
   if (columnId === 'to-call') return 'Open call';
   if (columnId === 'awaiting-build') return 'Copy brief';
+  if (columnId === 'built-needs-review') return 'Approve site';
   if (columnId === 'ready-to-send') {
     return outreachRecipientError(item.email) ? 'Update email' : 'View automation';
   }
@@ -3071,6 +3109,7 @@ function KanbanColumn({
   column,
   onOpenLead,
   onOpenBuild,
+  onApproveSite,
   onOpenEmail,
   onOpenAutomation,
   onViewLead,
@@ -3078,6 +3117,7 @@ function KanbanColumn({
   column: BoardColumn;
   onOpenLead: (leadId: number) => void;
   onOpenBuild: (leadId: number) => void;
+  onApproveSite: (leadId: number) => void;
   onOpenEmail: (leadId: number) => void;
   onOpenAutomation: (leadId: number) => void;
   onViewLead: (leadId: number) => void;
@@ -3116,6 +3156,7 @@ function KanbanColumn({
               onOpen={() => {
                 if (column.id === 'to-call') onOpenLead(item.leadId);
                 else if (column.id === 'awaiting-build') onOpenBuild(item.leadId);
+                else if (column.id === 'built-needs-review') onApproveSite(item.leadId);
                 else if (column.id === 'final-review') onOpenLead(item.leadId);
                 else if (
                   column.id === 'ready-to-send'
@@ -3128,6 +3169,12 @@ function KanbanColumn({
                 else if (emailBoardActionLabel(column.id, item).startsWith('Call')) onOpenLead(item.leadId);
                 else onOpenEmail(item.leadId);
               }}
+              onCardOpen={column.id === 'built-needs-review'
+                ? () => {
+                    const url = cleanSiteUrl(item.rawSiteUrl, item.siteUrl);
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                  }
+                : undefined}
               onViewLead={() => onViewLead(item.leadId)}
             />
           ))
@@ -3142,23 +3189,25 @@ function BoardCard({
   primaryLabel,
   showCallOutcome,
   onOpen,
+  onCardOpen,
   onViewLead,
 }: {
   item: BoardItem;
   primaryLabel: string;
   showCallOutcome: boolean;
   onOpen: () => void;
+  onCardOpen?: () => void;
   onViewLead: () => void;
 }) {
   return (
     <article
       role="button"
       tabIndex={0}
-      onClick={onOpen}
+      onClick={onCardOpen ?? onOpen}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onOpen();
+          (onCardOpen ?? onOpen)();
         }
       }}
       className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60 transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -3187,9 +3236,13 @@ function BoardCard({
             rel="noreferrer"
             onClick={(event) => event.stopPropagation()}
             title="Open the site without outreach tracking"
-            className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              item.pipelineStatus === 'built_needs_review'
+                ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
+            }`}
           >
-            Site built
+            {item.pipelineStatus === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
         </div>
       )}
@@ -3484,6 +3537,7 @@ function emailLastActionLabel(lead: Lead): string {
     case 'email_final_touch': return 'Final email sent';
     case 'brief_generated': return 'Brief generated';
     case 'url_saved': return 'Site URL saved';
+    case 'site_approved': return 'Site approved';
     case 'intro_sent': return 'Email sent';
     case 'followed_up':
       return `Email follow-up #${Math.max(1, lead.pipeline_no_reply_step ?? lead.pipeline_followup_step ?? 1)} sent`;

@@ -115,6 +115,8 @@ function lastActionLabel(lead: Lead, activity: LeadActivity[]): string {
       return 'Final review extended';
     case 'url_saved':
       return 'Built';
+    case 'site_approved':
+      return 'Approved';
     case 'intro_sent':
       return 'Sent';
     case 'followed_up':
@@ -1378,6 +1380,7 @@ function activityTitle(action: string): string {
     case 'email_review_extended': return 'Final review extended';
     case 'automation_stopped': return 'Email automation stopped';
     case 'url_saved': return 'Site URL saved';
+    case 'site_approved': return 'Site approved';
     case 'brief_generated': return 'Brief generated';
     case 'client_converted': return 'Converted to client';
     case 'intro_sent': return 'Intro text sent';
@@ -1435,6 +1438,7 @@ function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): 
   }
   if (activity.action === 'client_converted') return 'Signed deal converted into a client workspace; outreach automation was stopped and demo assets were preserved.';
   if (activity.action === 'url_saved') return 'This is the demo-site URL saved for outreach.';
+  if (activity.action === 'site_approved') return 'The demo site was reviewed and approved for outreach.';
   if (activity.action === 'intro_sent') return 'First text opened in Messages.';
   if (activity.action === 'followed_up') return 'Follow-up text opened in Messages.';
   if (activity.action === 'call_outcome') {

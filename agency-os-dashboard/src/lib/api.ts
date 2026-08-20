@@ -782,6 +782,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ url }),
       }),
+    approveSite: (id: number) =>
+      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/approve-site`, {
+        method: 'POST',
+      }),
     // Fires on operator taps of Open in Messages / Log call. Optimistic:
     // the server assumes the send happened; the paired undo() reverts if
     // the operator dismisses the toast in the ~6s window.

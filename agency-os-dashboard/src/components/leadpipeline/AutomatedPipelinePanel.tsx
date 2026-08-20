@@ -49,6 +49,7 @@ import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton
 
 export type PipelineStatus =
   | 'awaiting_build'
+  | 'built_needs_review'
   | 'ready_to_send'
   | 'sent_no_reply'
   | 'engaged'
@@ -74,6 +75,15 @@ const STATUS_CONFIG: Record<PipelineStatus, StatusConfig> = {
     icon: Sparkles,
     iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600',
     action: 'Copy brief',
+  },
+  built_needs_review: {
+    label: 'Site built — needs review',
+    chipBg: 'bg-amber-50',
+    chipText: 'text-amber-700',
+    chipBorder: 'border-amber-100',
+    icon: Eye,
+    iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500',
+    action: 'Approve site',
   },
   ready_to_send: {
     label: 'Site is live — ready to send',
@@ -234,6 +244,8 @@ function actionLabel(action: string | null, status: PipelineStatus): string {
       return 'Final email sent';
     case 'url_saved':
       return 'Site URL saved';
+    case 'site_approved':
+      return 'Site approved';
     case 'brief_generated':
       return 'Brief generated';
     case 'intro_sent':
@@ -261,6 +273,7 @@ function actionLabel(action: string | null, status: PipelineStatus): string {
       // activity row. Use the workflow state instead of the useless
       // catch-all "Updated" label.
       if (status === 'awaiting_build') return 'Lead enriched';
+      if (status === 'built_needs_review') return 'Site URL saved';
       if (status === 'ready_to_send') return 'Brief ready';
       if (status === 'sent_no_reply') return 'Intro text sent';
       if (status === 'engaged') return 'Engagement recorded';
@@ -486,9 +499,18 @@ function cleanSiteUrl(rawUrl: string | null, taggedUrl: string | null): string |
   }
 }
 
-function SiteSignalBadges({ url, rawUrl }: { url: string | null; rawUrl: string | null }) {
+function SiteSignalBadges({
+  url,
+  rawUrl,
+  status,
+}: {
+  url: string | null;
+  rawUrl: string | null;
+  status: PipelineStatus;
+}) {
   if (!url) return null;
   const cleanUrl = cleanSiteUrl(rawUrl, url);
+  const needsReview = status === 'built_needs_review';
   return (
     <div className="flex flex-wrap gap-1.5 px-4 pb-3">
       <a
@@ -496,9 +518,13 @@ function SiteSignalBadges({ url, rawUrl }: { url: string | null; rawUrl: string 
         target="_blank"
         rel="noreferrer"
         title="Open the site without outreach tracking"
-        className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+          needsReview
+            ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
+        }`}
       >
-        Site built
+        {needsReview ? 'Review site' : 'Site built'}
       </a>
     </div>
   );
@@ -892,7 +918,7 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
         </div>
       )}
 
-      <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} />
+      <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} status={lead.status} />
       {recommendation && (
         <div className="px-4 pb-3">
           <EngagedRecommendationPanel lead={lead} />
@@ -2108,11 +2134,12 @@ function ArchiveNoteModal({
 
 // ---------- Page ----------
 
-type FilterKey = 'all' | 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
+type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'awaiting_build', label: 'Awaiting build' },
+  { key: 'built_needs_review', label: 'Built needs review' },
   { key: 'ready_to_send', label: 'Ready to send' },
   { key: 'sent_no_reply', label: 'Sent — no reply' },
   { key: 'last_chance', label: 'Last chance — call' },
@@ -2143,6 +2170,11 @@ const BOARD_COLUMNS: Array<{
     key: 'awaiting_build', label: 'Awaiting build',
     icon: STATUS_CONFIG.awaiting_build.icon, iconBg: STATUS_CONFIG.awaiting_build.iconBg,
     dropStatus: 'awaiting_build', match: (l) => l.status === 'awaiting_build',
+  },
+  {
+    key: 'built_needs_review', label: 'Built needs review',
+    icon: STATUS_CONFIG.built_needs_review.icon, iconBg: STATUS_CONFIG.built_needs_review.iconBg,
+    dropStatus: 'built_needs_review', match: (l) => l.status === 'built_needs_review',
   },
   {
     key: 'ready_to_send', label: 'Ready to send',
@@ -2229,9 +2261,13 @@ function BoardCard({
             target="_blank"
             rel="noreferrer"
             title="Open the site without outreach tracking"
-            className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              lead.status === 'built_needs_review'
+                ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
+            }`}
           >
-            Site built
+            {lead.status === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
         </div>
       )}
@@ -2297,6 +2333,7 @@ function BoardCard({
 
 const STATUS_TO_MODAL: Record<PipelineStatus, ModalType> = {
   awaiting_build: 'brief',
+  built_needs_review: 'detail',
   ready_to_send: 'text',
   sent_no_reply: 'followup',
   engaged: 'call',
@@ -2348,6 +2385,10 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   }, [loadLeads]);
 
   const openFor = (lead: PipelineLead) => {
+    if (lead.status === 'built_needs_review') {
+      void approveSite(lead);
+      return;
+    }
     if (lead.status === 'sent_no_reply') {
       const progress = getNoReplyProgress(lead);
       setModal({ type: progress?.action === 'call' ? 'call' : 'followup', lead });
@@ -2390,6 +2431,17 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     const { lead } = await api.pipeline.saveSiteUrl(leadId, url);
     applyMutation(lead, 'url_saved');
     offerUndo(leadId, 'URL saved');
+  };
+
+  const approveSite = async (lead: PipelineLead) => {
+    try {
+      const { lead: updated } = await api.pipeline.approveSite(lead.id);
+      applyMutation(updated, 'site_approved');
+      showToast(`${lead.name} approved and ready to send`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not approve site';
+      showToast(msg, 'error');
+    }
   };
 
   const undoAction = async (leadId: number) => {
@@ -2551,10 +2603,12 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const handleBoardDrop = (leadId: number, to: PipelineStatus) => {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.status === to) return;
-    if (lead.status === 'awaiting_build' && to === 'ready_to_send') {
+    if (lead.status === 'awaiting_build' && (to === 'built_needs_review' || to === 'ready_to_send')) {
       // The move requires a live URL — the brief modal's Save completes it.
       setModal({ type: 'brief', lead });
-      showToast('Paste the live site URL to finish moving this lead to Ready to send');
+      showToast('Paste the live site URL to move this lead to Built needs review');
+    } else if (lead.status === 'built_needs_review' && to === 'ready_to_send') {
+      void approveSite(lead);
     } else if (lead.status === 'ready_to_send' && to === 'sent_no_reply') {
       // "I already texted them" — mark sent optimistically, undo pill covers
       // mis-drags.
