@@ -64,7 +64,7 @@ export interface Lead {
   // Automated Pipeline — text + site outreach flow (added 2026-07-19).
   // Orthogonal to `status` — a lead can be 'contacted' in the cold-call
   // flow AND 'ready_to_send' in the automated flow at the same time.
-  pipeline_status: 'awaiting_build' | 'ready_to_send' | 'sent_no_reply' | 'engaged' | 'booked' | 'archived';
+  pipeline_status: 'awaiting_build' | 'built_needs_review' | 'ready_to_send' | 'sent_no_reply' | 'engaged' | 'booked' | 'archived';
   site_url: string | null;                     // UTM-tagged; source of truth for texting
   site_url_raw: string | null;                 // as-pasted, pre-UTM
   pipeline_brief: string | null;               // landingsite brief for this lead's site
@@ -113,6 +113,7 @@ export interface LeadActivity {
     | 'email_review_extended'
     | 'automation_stopped'
     | 'url_saved'
+    | 'site_approved'
     | 'intro_sent'
     | 'followed_up'
     | 'reply_received'

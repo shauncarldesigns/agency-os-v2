@@ -366,6 +366,7 @@ leadsRouter.put('/:id', async (c) => {
     const capturedEmail = typeof body.email === 'string' ? body.email.trim() : '';
     const emailTargetStatus =
       body.pipeline_status === 'ready_to_send' ? 'ready_to_send'
+      : body.pipeline_status === 'built_needs_review' ? 'built_needs_review'
       : body.pipeline_status === 'awaiting_build' ? 'awaiting_build'
       : null;
     const isEmailCapture = Boolean(

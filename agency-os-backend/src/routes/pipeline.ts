@@ -29,6 +29,7 @@ const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
 export type PipelineStatus =
   | 'awaiting_build'
+  | 'built_needs_review'
   | 'ready_to_send'
   | 'sent_no_reply'
   | 'engaged'
@@ -188,15 +189,14 @@ export async function completePipelineBuild(
   await env.DB.prepare(
     `UPDATE leads
        SET site_url = ?, site_url_raw = ?, campaign_slug = ?, clarity_tag = ?,
-           pipeline_status = 'ready_to_send', pipeline_last_action_at = datetime('now'),
+           pipeline_status = 'built_needs_review', pipeline_last_action_at = datetime('now'),
            updated_at = datetime('now')
      WHERE id = ? AND pipeline_status = 'awaiting_build' AND deleted_at IS NULL`,
   ).bind(tagged, rawUrl, slug, `lead-${lead.id}`, lead.id).run();
   await writeActivity(env.DB, {
     leadId: lead.id, action: 'url_saved', fromStatus: 'awaiting_build',
-    toStatus: 'ready_to_send', meta: { url: tagged, raw_url: rawUrl, channel },
+    toStatus: 'built_needs_review', meta: { url: tagged, raw_url: rawUrl, channel },
   });
-  await scheduleEmailAutomation(env, lead.id);
   return env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`).bind(lead.id).first<Lead>();
 }
 
@@ -443,7 +443,7 @@ pipelineRouter.post('/clarity-sync', async (c) => {
 // ---------------------------------------------------------------------------
 // Operator has built the site in landingsite.ai and pasted the live URL.
 // Server tags it with UTM, stores both raw and tagged, and transitions
-// awaiting_build → ready_to_send. Rejected if the lead is not in
+// awaiting_build → built_needs_review. Rejected if the lead is not in
 // awaiting_build (idempotent from the operator's perspective: they can
 // undo and retry, but can't double-save without an explicit reset).
 pipelineRouter.post('/leads/:id/site-url', async (c) => {
@@ -487,6 +487,66 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/pipeline/leads/:id/approve-site
+// ---------------------------------------------------------------------------
+// The operator has opened and reviewed the generated demo. Approval is the
+// only transition from built_needs_review to ready_to_send; email automation
+// cannot begin before this gate.
+pipelineRouter.post('/leads/:id/approve-site', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+    const lead = await c.env.DB.prepare(
+      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+    )
+      .bind(id)
+      .first<Lead & { pipeline_status: PipelineStatus }>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+    if (lead.pipeline_status !== 'built_needs_review') {
+      return c.json(
+        badRequest(
+          `Cannot approve site from status "${lead.pipeline_status}" — must be built_needs_review.`,
+          'INVALID_TRANSITION',
+        ),
+        400,
+      );
+    }
+    if (!(lead.site_url_raw?.trim() || lead.site_url?.trim())) {
+      return c.json(badRequest('Cannot approve a lead without a site URL.'), 400);
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE leads
+          SET pipeline_status = 'ready_to_send',
+              pipeline_last_action_at = datetime('now'),
+              updated_at = datetime('now')
+        WHERE id = ? AND pipeline_status = 'built_needs_review' AND deleted_at IS NULL`,
+    ).bind(id).run();
+    await writeActivity(c.env.DB, {
+      leadId: id,
+      action: 'site_approved',
+      fromStatus: 'built_needs_review',
+      toStatus: 'ready_to_send',
+      meta: { raw_url: lead.site_url_raw, url: lead.site_url },
+    });
+
+    // Call-routed leads use the email motion. If no email has been captured,
+    // this safely returns false and the lead waits in To Call.
+    if (lead.phone_route === 'call') await scheduleEmailAutomation(c.env, id);
+
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
+      .bind(id)
+      .first<Lead>();
+    log('info', 'pipeline', `Lead ${id} site approved`);
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'pipeline', 'POST /leads/:id/approve-site failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/action
 // ---------------------------------------------------------------------------
 // Body: { action: 'intro_sent' | 'followed_up' | 'reply_received' |
@@ -522,7 +582,7 @@ const ACTION_TRANSITIONS: Record<
   // A live email-capture call can legitimately finish before Resend has
   // advanced the lead out of ready_to_send (or when a dev-mode send fails).
   // The call itself is still real and must always be recordable.
-  call_outcome: { from: ['awaiting_build', 'ready_to_send', 'sent_no_reply', 'engaged'] },
+  call_outcome: { from: ['awaiting_build', 'built_needs_review', 'ready_to_send', 'sent_no_reply', 'engaged'] },
   calendar_sent: { from: ['sent_no_reply', 'engaged'] },
   scheduling_followup: { from: ['engaged'] },
   called: {}, // no status change — display-only

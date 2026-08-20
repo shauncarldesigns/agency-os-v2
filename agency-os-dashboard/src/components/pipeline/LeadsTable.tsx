@@ -137,7 +137,7 @@ function sortLabel(key: SortKey): string {
 function sortLeads(leads: Lead[], sort: TableSort): Lead[] {
   if (!sort) return leads;
   const outreachRank: Record<Lead['pipeline_status'], number> = {
-    awaiting_build: 0, ready_to_send: 1, sent_no_reply: 2, engaged: 3, booked: 4, archived: 5,
+    awaiting_build: 0, built_needs_review: 1, ready_to_send: 2, sent_no_reply: 3, engaged: 4, booked: 5, archived: 6,
   };
   const stageRank: Record<Lead['status'], number> = {
     cold: 0, contacted: 1, qualified: 2, client: 3, not_interested: 4, dead: 5,
@@ -528,6 +528,7 @@ function routePresentation(lead: Lead): SignalPresentation {
 function outreachPresentation(lead: Lead): SignalPresentation {
   const map: Record<Lead['pipeline_status'], SignalPresentation> = {
     awaiting_build: { label: 'Site needed', sub: 'Not ready to send', tone: 'gray' },
+    built_needs_review: { label: 'Built needs review', sub: 'Approval required', tone: 'yellow' },
     ready_to_send: { label: 'Ready to send', sub: 'Intro not sent', tone: 'blue' },
     sent_no_reply: {
       label: lead.pipeline_no_reply_step ? `Follow-up ${lead.pipeline_no_reply_step}` : 'Sent · no reply',
@@ -593,6 +594,7 @@ function nextActionPresentation(lead: Lead): SignalPresentation {
   }
   if (lead.phone_route === 'text' || lead.phone_route === 'unknown') {
     if (lead.pipeline_status === 'awaiting_build') return { label: 'Build site', sub: 'Then send intro', tone: 'blue' };
+    if (lead.pipeline_status === 'built_needs_review') return { label: 'Review site', sub: 'Approve before sending', tone: 'yellow' };
     if (lead.pipeline_status === 'ready_to_send') return { label: 'Send intro', sub: 'Ready now', tone: 'green' };
     const step = lead.pipeline_no_reply_step ?? 0;
     if (step === 0) return { label: 'Send reminder', sub: touchAgeLabel(lead), tone: 'yellow' };

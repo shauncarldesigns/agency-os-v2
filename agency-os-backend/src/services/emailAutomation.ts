@@ -273,6 +273,7 @@ export async function scheduleEmailAutomation(env: Env, leadId: number): Promise
   const lead = await env.DB.prepare(`
     SELECT * FROM leads
      WHERE id = ? AND deleted_at IS NULL
+       AND pipeline_status = 'ready_to_send'
        AND email IS NOT NULL AND trim(email) <> ''
        AND site_url IS NOT NULL AND trim(site_url) <> ''
   `).bind(leadId).first<Lead>();
