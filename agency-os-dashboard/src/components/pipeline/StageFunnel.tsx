@@ -1,6 +1,6 @@
 import type { Lead } from '../../lib/types';
 
-export type StageFilter = 'all' | 'cold' | 'contacted' | 'qualified' | 'client' | 'not_interested' | 'dead';
+export type StageFilter = 'all' | 'cold' | 'contacted' | 'qualified' | 'client' | 'not_interested' | 'archived';
 
 interface StageFunnelProps {
   leads: Lead[];
@@ -16,7 +16,7 @@ export function StageFunnel({ leads, active, onChange }: StageFunnelProps) {
     qualified: leads.filter(l => l.status === 'qualified').length,
     client: leads.filter(l => l.status === 'client').length,
     not_interested: leads.filter(l => l.status === 'not_interested').length,
-    dead: leads.filter(l => l.status === 'dead').length,
+    archived: leads.filter(l => l.pipeline_status === 'archived').length,
   };
 
   // 'qualified' was generic in pre-Phase-0 vocabulary; now it specifically
@@ -30,7 +30,7 @@ export function StageFunnel({ leads, active, onChange }: StageFunnelProps) {
     { key: 'qualified', label: 'Demo booked' },
     { key: 'client', label: 'Client' },
     { key: 'not_interested', label: 'Not interested', muted: true },
-    { key: 'dead', label: 'Dead', muted: true },
+    { key: 'archived', label: 'Archived', muted: true },
   ];
 
   return (

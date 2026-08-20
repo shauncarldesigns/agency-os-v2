@@ -2039,14 +2039,11 @@ function ArchiveNoteModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onConfirm: (note: string, declinedByReply: boolean) => Promise<string | null>;
+  onConfirm: (note: string, markNotInterested: boolean) => Promise<string | null>;
 }) {
   const [note, setNote] = useState('');
+  const [markNotInterested, setMarkNotInterested] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Engaged leads are guarded server-side: archiving needs a recorded
-  // sales-call outcome, unless the prospect declined in a text reply and the
-  // operator attests to it here.
-  const [declinedByReply, setDeclinedByReply] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <div
@@ -2066,20 +2063,18 @@ function ArchiveNoteModal({
           placeholder="e.g. Replied STOP to the intro text"
           className="mt-3 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
-        {lead.status === 'engaged' && (
-          <label className="mt-3 flex items-start gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={declinedByReply}
-              onChange={(event) => setDeclinedByReply(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-300"
-            />
-            <span>
-              They declined by text reply — archive without a sales call.
-              <span className="block text-slate-400">Otherwise an engaged lead needs a recorded call outcome first.</span>
-            </span>
-          </label>
-        )}
+        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <input
+            type="checkbox"
+            checked={markNotInterested}
+            onChange={(event) => setMarkNotInterested(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+          />
+          <span>
+            <span className="block text-xs font-semibold text-slate-800">They said they’re not interested</span>
+            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Also marks the CRM stage as Not interested so this lead is fully closed.</span>
+          </span>
+        </label>
         {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -2096,7 +2091,7 @@ function ArchiveNoteModal({
               if (!trimmed) return;
               setSaving(true);
               setError(null);
-              void onConfirm(trimmed, declinedByReply)
+              void onConfirm(trimmed, markNotInterested)
                 .then((failure) => setError(failure))
                 .finally(() => setSaving(false));
             }}
@@ -2472,7 +2467,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const archiveLead = (lead: PipelineLead) => setArchiveTarget(lead);
 
-  const confirmArchive = async (note: string, declinedByReply: boolean): Promise<string | null> => {
+  const confirmArchive = async (note: string, markNotInterested: boolean): Promise<string | null> => {
     const lead = archiveTarget;
     if (!lead) return null;
     const error = await runAction(
@@ -2480,8 +2475,9 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
       'archived',
       'Lead archived',
       {
-        reason: declinedByReply ? 'declined_by_reply' : isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
+        reason: markNotInterested ? 'declined_by_reply' : isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
         note,
+        mark_not_interested: markNotInterested,
       },
       false, // the modal stays open and renders the error itself
     );

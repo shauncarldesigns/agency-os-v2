@@ -361,6 +361,8 @@ function LeadRow({
                 🗑 Delete forever
               </Button>
             </>
+          ) : lead.pipeline_status === 'archived' ? (
+            <span className="px-2 text-xs text-slate-400">Closed</span>
           ) : (
             <Button
               variant="ghost"
@@ -535,7 +537,11 @@ function outreachPresentation(lead: Lead): SignalPresentation {
     booked: { label: 'Demo booked', sub: lead.demo_scheduled_for ? shortDate(lead.demo_scheduled_for) : 'Moved to Sites', tone: 'green' },
     archived: { label: 'Archived', sub: 'Outreach closed', tone: 'gray' },
   };
-  return map[lead.pipeline_status];
+  return map[lead.pipeline_status] ?? {
+    label: humanize(lead.pipeline_status || 'unknown'),
+    sub: 'Legacy outreach state',
+    tone: 'gray',
+  };
 }
 
 function latestTouchPresentation(lead: Lead): SignalPresentation {
@@ -576,8 +582,8 @@ function latestTouchPresentation(lead: Lead): SignalPresentation {
 function nextActionPresentation(lead: Lead): SignalPresentation {
   if (lead.status === 'client') return { label: 'Manage client', sub: 'Open Clients & Sites', tone: 'green' };
   if (lead.status === 'qualified' || lead.pipeline_status === 'booked') return { label: 'Prepare demo', sub: lead.demo_scheduled_for ? shortDate(lead.demo_scheduled_for) : 'Demo booked', tone: 'green' };
-  if (lead.status === 'not_interested') return { label: 'Archive', sub: 'If outreach is complete', tone: 'gray' };
   if (lead.status === 'dead' || lead.pipeline_status === 'archived') return { label: 'No action', sub: 'Closed', tone: 'gray' };
+  if (lead.status === 'not_interested') return { label: 'Archive', sub: 'If outreach is complete', tone: 'gray' };
   if (lead.phone_route === 'review') return { label: 'Review route', sub: 'Confirm text or call', tone: 'yellow' };
   if (lead.followup) return { label: 'Callback', sub: shortDate(lead.followup), tone: 'yellow' };
   if (lead.pipeline_status === 'engaged') {

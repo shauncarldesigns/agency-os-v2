@@ -42,7 +42,13 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('/api/*', cors({
   origin: (origin, c) => {
     const configured = c.env.DASHBOARD_ORIGIN?.replace(/\/$/, '');
-    const allowed = [configured, 'http://127.0.0.1:5174', 'http://localhost:5174'].filter(Boolean);
+    const allowed = [
+      configured,
+      'http://127.0.0.1:5173',
+      'http://localhost:5173',
+      'http://127.0.0.1:5174',
+      'http://localhost:5174',
+    ].filter(Boolean);
     return allowed.includes(origin) ? origin : '';
   },
   allowHeaders: ['Content-Type', 'X-API-Key'],
