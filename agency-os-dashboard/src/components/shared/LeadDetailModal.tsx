@@ -5,7 +5,6 @@ import {
   Phone,
   Globe,
   MapPin,
-  Clock,
   ExternalLink,
   Loader2,
   Map as MapIcon,
@@ -529,11 +528,16 @@ function OverviewPane({
 
   return (
     <div className="space-y-4">
-      {/* Automated context: the original pipeline-card icon rows — regular
-          font, address doubles as the Google Maps link. Cold-call context
-          keeps the labeled grid + the standalone Maps card below. */}
+      {/* Automated context mirrors Lead Finder's compact contact details.
+          Cold-call context keeps the labeled grid + standalone Maps card. */}
       {pipelineContext && (
         <div className="space-y-2 text-sm text-slate-600">
+          <span className="flex items-center gap-2">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="truncate">
+              {[lead.city, lead.state].filter(Boolean).join(', ') || addressLine || '—'}
+            </span>
+          </span>
           {lead.phone ? (
             <a
               href={`tel:${lead.phone.replace(/\D/g, '')}`}
@@ -554,22 +558,13 @@ function OverviewPane({
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 text-blue-600 hover:underline"
-              title="Open the Google Maps listing — reviews, hours & photos"
+              title="Open the Google Maps listing"
             >
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span className="truncate">{addressLine || 'View on Google Maps'}</span>
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+              <span className="font-medium">View on Google Maps</span>
               <ExternalLink className="h-3 w-3 shrink-0" />
             </a>
-          ) : (
-            <span className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span className="truncate">{addressLine || '—'}</span>
-            </span>
-          )}
-          <span className="flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            {lead.gbp_hours || '—'}
-          </span>
+          ) : null}
           <PhoneRouteRow
             lead={lead}
             classifying={classifying}
