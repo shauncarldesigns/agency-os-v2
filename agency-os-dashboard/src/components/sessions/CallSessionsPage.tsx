@@ -213,18 +213,6 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
     }
   }, [onStateChanged, showToast]);
 
-  const reviewAgain = useCallback(async (leadId: number) => {
-    try {
-      const { lead: updated } = await api.pipeline.updateSiteReview(leadId, { status: 'pending' });
-      setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
-      showToast(`${updated.company} returned to review`, 'success');
-      onStateChanged?.();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      showToast(`Could not update site review: ${msg}`, 'error');
-    }
-  }, [onStateChanged, showToast]);
-
   const columns = useMemo(() => buildColumns(leads, automations), [leads, automations]);
 
   const filterOptions = useMemo(() => {
@@ -415,7 +403,6 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
                 const lead = leads.find((item) => item.id === leadId);
                 if (lead) setFixTarget(lead);
               }}
-              onReviewAgain={(leadId) => void reviewAgain(leadId)}
               onOpenEmail={setEmailModalLeadId}
               onOpenAutomation={(leadId) => void openAutomationFlow(leadId)}
               onViewLead={setViewLeadId}
@@ -3165,7 +3152,6 @@ function KanbanColumn({
   onOpenBuild,
   onApproveSite,
   onNeedsFix,
-  onReviewAgain,
   onOpenEmail,
   onOpenAutomation,
   onViewLead,
@@ -3175,7 +3161,6 @@ function KanbanColumn({
   onOpenBuild: (leadId: number) => void;
   onApproveSite: (leadId: number) => void;
   onNeedsFix: (leadId: number) => void;
-  onReviewAgain: (leadId: number) => void;
   onOpenEmail: (leadId: number) => void;
   onOpenAutomation: (leadId: number) => void;
   onViewLead: (leadId: number) => void;
@@ -3240,7 +3225,6 @@ function KanbanColumn({
                 : undefined}
               onViewLead={() => onViewLead(item.leadId)}
               onNeedsFix={column.id === 'built-needs-review' ? () => onNeedsFix(item.leadId) : undefined}
-              onReviewAgain={column.id === 'built-needs-review' && item.reviewStatus === 'needs_fix' ? () => onReviewAgain(item.leadId) : undefined}
             />
           ))
         )}
@@ -3257,7 +3241,6 @@ function BoardCard({
   onCardOpen,
   onViewLead,
   onNeedsFix,
-  onReviewAgain,
 }: {
   item: BoardItem;
   primaryLabel: string;
@@ -3266,7 +3249,6 @@ function BoardCard({
   onCardOpen?: () => void;
   onViewLead: () => void;
   onNeedsFix?: () => void;
-  onReviewAgain?: () => void;
 }) {
   return (
     <article
@@ -3313,22 +3295,13 @@ function BoardCard({
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
             }`}
           >
-            {item.reviewStatus === 'needs_fix' ? 'Needs fix' : item.pipelineStatus === 'built_needs_review' ? 'Review site' : 'Site built'}
+            {item.reviewStatus === 'needs_fix' ? 'Edit fix note' : item.pipelineStatus === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
         </div>
       )}
 
       {item.pipelineStatus === 'built_needs_review' && item.reviewStatus === 'needs_fix' && (
         <SiteReviewIssueSummary reasons={item.reviewReasons} note={item.reviewNote} />
-      )}
-
-      {onNeedsFix && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <button type="button" onClick={(event) => { event.stopPropagation(); onNeedsFix(); }} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
-            {item.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
-          </button>
-          {onReviewAgain && <button type="button" onClick={(event) => { event.stopPropagation(); onReviewAgain(); }} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">Review again</button>}
-        </div>
       )}
 
       {showCallOutcome && item.outcomeLabel && (
@@ -3343,17 +3316,24 @@ function BoardCard({
       <EmailSequencePanel item={item} />
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen();
-          }}
-          className="flex w-fit min-w-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
-        >
-          <span className="truncate">{primaryLabel}</span>
-          <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
-        </button>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+            className="flex w-fit min-w-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
+          >
+            <span className="truncate">{primaryLabel}</span>
+            <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
+          </button>
+          {onNeedsFix && (
+            <button type="button" onClick={(event) => { event.stopPropagation(); onNeedsFix(); }} className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
+              {item.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={(event) => {

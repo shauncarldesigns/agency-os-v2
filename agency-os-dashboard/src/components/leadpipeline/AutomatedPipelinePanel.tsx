@@ -539,7 +539,7 @@ function SiteSignalBadges({
             : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
         }`}
       >
-        {reviewStatus === 'needs_fix' ? 'Needs fix' : needsReview ? 'Review site' : 'Site built'}
+        {reviewStatus === 'needs_fix' ? 'Edit fix note' : needsReview ? 'Review site' : 'Site built'}
       </a>
     </div>
   );
@@ -806,10 +806,12 @@ function StatusChip({
   lead,
   onAction,
   onArchive,
+  onNeedsFix,
 }: {
   lead: PipelineLead;
   onAction: (l: PipelineLead) => void;
   onArchive: (l: PipelineLead) => void;
+  onNeedsFix: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
@@ -843,14 +845,21 @@ function StatusChip({
         </span>
         <span className={`text-sm font-medium truncate ${cfg.chipText}`}>{cfg.label}</span>
       </div>
-      <button
-        onClick={() => onAction(lead)}
-        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.98]"
-      >
-        {isCallAction && <PhoneCall className="h-3.5 w-3.5" strokeWidth={2.25} />}
-        {actionLabel}
-        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-      </button>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <button
+          onClick={() => onAction(lead)}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm shadow-blue-600/20 transition hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.98]"
+        >
+          {isCallAction && <PhoneCall className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          {actionLabel}
+          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </button>
+        {lead.status === 'built_needs_review' && (
+          <button type="button" onClick={() => onNeedsFix(lead)} className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">
+            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+          </button>
+        )}
+      </div>
       {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
         <button
           onClick={() => onArchive(lead)}
@@ -877,10 +886,9 @@ interface LeadCardProps {
   onArchive: (l: PipelineLead) => void;
   onReply: (l: PipelineLead) => void;
   onNeedsFix: (l: PipelineLead) => void;
-  onReviewAgain: (l: PipelineLead) => void;
 }
 
-function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply, onNeedsFix, onReviewAgain }: LeadCardProps) {
+function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply, onNeedsFix }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const recommendation = getOutreachRecommendation({
     status: lead.status,
@@ -923,7 +931,7 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply, onNee
       </div>
 
       <div className="px-4 pb-3">
-        <StatusChip lead={lead} onAction={onAction} onArchive={onArchive} />
+        <StatusChip lead={lead} onAction={onAction} onArchive={onArchive} onNeedsFix={onNeedsFix} />
       </div>
 
       {isStaleLead(lead) && (
@@ -938,16 +946,6 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply, onNee
       <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} status={lead.status} reviewStatus={lead.reviewStatus} />
       {lead.status === 'built_needs_review' && lead.reviewStatus === 'needs_fix' && (
         <div className="px-4 pb-3"><SiteReviewIssueSummary reasons={lead.reviewReasons} note={lead.reviewNote} /></div>
-      )}
-      {lead.status === 'built_needs_review' && (
-        <div className="flex flex-wrap gap-2 px-4 pb-3">
-          <button type="button" onClick={() => onNeedsFix(lead)} className="rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
-          </button>
-          {lead.reviewStatus === 'needs_fix' && (
-            <button type="button" onClick={() => onReviewAgain(lead)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Review again</button>
-          )}
-        </div>
       )}
       {recommendation && (
         <div className="px-4 pb-3">
@@ -2238,7 +2236,6 @@ function BoardCard({
   onArchive,
   onReply,
   onNeedsFix,
-  onReviewAgain,
 }: {
   lead: PipelineLead;
   onAction: (l: PipelineLead) => void;
@@ -2246,7 +2243,6 @@ function BoardCard({
   onArchive: (l: PipelineLead) => void;
   onReply: (l: PipelineLead) => void;
   onNeedsFix: (l: PipelineLead) => void;
-  onReviewAgain: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
@@ -2304,20 +2300,12 @@ function BoardCard({
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
             }`}
           >
-            {lead.reviewStatus === 'needs_fix' ? 'Needs fix' : lead.status === 'built_needs_review' ? 'Review site' : 'Site built'}
+            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : lead.status === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
         </div>
       )}
       {lead.status === 'built_needs_review' && lead.reviewStatus === 'needs_fix' && (
         <SiteReviewIssueSummary reasons={lead.reviewReasons} note={lead.reviewNote} />
-      )}
-      {lead.status === 'built_needs_review' && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => onNeedsFix(lead)} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
-            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
-          </button>
-          {lead.reviewStatus === 'needs_fix' && <button type="button" onClick={() => onReviewAgain(lead)} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">Review again</button>}
-        </div>
       )}
       {rec && <EngagedRecommendationPanel lead={lead} compact />}
       {lead.status === 'sent_no_reply' && (
@@ -2329,14 +2317,21 @@ function BoardCard({
         </div>
       )}
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        <button
-          onClick={() => onAction(lead)}
-          className="flex w-fit min-w-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
-        >
-          {isCallAction && <PhoneCall className="h-3 w-3 shrink-0" strokeWidth={2.25} />}
-          <span className="truncate">{actionLabel}</span>
-          <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
-        </button>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            onClick={() => onAction(lead)}
+            className="flex w-fit min-w-0 items-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-blue-600/20"
+          >
+            {isCallAction && <PhoneCall className="h-3 w-3 shrink-0" strokeWidth={2.25} />}
+            <span className="truncate">{actionLabel}</span>
+            <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
+          </button>
+          {lead.status === 'built_needs_review' && (
+            <button type="button" onClick={() => onNeedsFix(lead)} className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
+              {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+            </button>
+          )}
+        </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {(lead.status === 'sent_no_reply' || lead.status === 'engaged') && (
             <button
@@ -2500,17 +2495,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     applyMutation(updated, 'site_needs_fix');
     setFixTarget(null);
     showToast(`${lead.name} marked Needs fix`, 'success');
-  };
-
-  const reviewAgain = async (lead: PipelineLead) => {
-    try {
-      const { lead: updated } = await api.pipeline.updateSiteReview(lead.id, { status: 'pending' });
-      applyMutation(updated, 'site_review_reset');
-      showToast(`${lead.name} returned to review`, 'success');
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not update site review';
-      showToast(msg, 'error');
-    }
   };
 
   const undoAction = async (leadId: number) => {
@@ -2900,7 +2884,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                         onArchive={archiveLead}
                         onReply={markReplied}
                         onNeedsFix={setFixTarget}
-                        onReviewAgain={(lead) => void reviewAgain(lead)}
                       />
                     ))}
                     {items.length === 0 && (
@@ -2929,7 +2912,6 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                 onArchive={archiveLead}
                 onReply={markReplied}
                 onNeedsFix={setFixTarget}
-                onReviewAgain={(lead) => void reviewAgain(lead)}
               />
             ))}
             {filtered.length === 0 && (
