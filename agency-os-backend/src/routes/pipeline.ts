@@ -22,6 +22,17 @@ import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligi
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
+const SITE_REVIEW_REASONS = new Set([
+  'legibility_colors',
+  'incorrect_logo',
+  'bad_images',
+  'bad_reviews',
+  'incorrect_business_info',
+  'content_problem',
+  'layout_problem',
+  'other',
+]);
+
 // ---------------------------------------------------------------------------
 // Status enum + transition rules (enforced server-side).
 // The client mirrors this list; keep the two in sync.
@@ -190,6 +201,9 @@ export async function completePipelineBuild(
     `UPDATE leads
        SET site_url = ?, site_url_raw = ?, campaign_slug = ?, clarity_tag = ?,
            pipeline_status = 'built_needs_review', pipeline_last_action_at = datetime('now'),
+           site_review_status = 'pending', site_review_reasons = NULL,
+           site_review_note = NULL, site_review_updated_at = datetime('now'),
+           site_review_approved_at = NULL,
            updated_at = datetime('now')
      WHERE id = ? AND pipeline_status = 'awaiting_build' AND deleted_at IS NULL`,
   ).bind(tagged, rawUrl, slug, `lead-${lead.id}`, lead.id).run();
@@ -487,6 +501,75 @@ pipelineRouter.post('/leads/:id/site-url', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/pipeline/leads/:id/site-review
+// ---------------------------------------------------------------------------
+// Records the operator's review outcome without changing the pipeline stage.
+// A site marked needs_fix remains in Built Needs Review until it is approved.
+pipelineRouter.post('/leads/:id/site-review', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+
+    const body = await c.req.json<{
+      status?: 'pending' | 'needs_fix';
+      reasons?: unknown;
+      note?: unknown;
+    }>();
+    if (body.status !== 'pending' && body.status !== 'needs_fix') {
+      return c.json(badRequest('Review status must be pending or needs_fix.'), 400);
+    }
+
+    const lead = await c.env.DB.prepare(
+      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+    ).bind(id).first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+    if (lead.pipeline_status !== 'built_needs_review') {
+      return c.json(badRequest('Site review can only be changed while the lead is in Built Needs Review.'), 400);
+    }
+
+    let reasons: string[] = [];
+    let note = '';
+    if (body.status === 'needs_fix') {
+      if (!Array.isArray(body.reasons) || !body.reasons.every((reason) => typeof reason === 'string')) {
+        return c.json(badRequest('Review reasons must be a list of valid reason codes.'), 400);
+      }
+      reasons = [...new Set(body.reasons)].filter((reason) => SITE_REVIEW_REASONS.has(reason)).slice(0, 8);
+      note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) : '';
+      if (reasons.length === 0 && note.length === 0) {
+        return c.json(badRequest('Choose at least one reason or add a note.'), 400);
+      }
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE leads
+          SET site_review_status = ?, site_review_reasons = ?, site_review_note = ?,
+              site_review_updated_at = datetime('now'), site_review_approved_at = NULL,
+              pipeline_last_action_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ? AND pipeline_status = 'built_needs_review' AND deleted_at IS NULL`,
+    ).bind(
+      body.status,
+      body.status === 'needs_fix' ? JSON.stringify(reasons) : null,
+      body.status === 'needs_fix' ? note || null : null,
+      id,
+    ).run();
+    await writeActivity(c.env.DB, {
+      leadId: id,
+      action: body.status === 'needs_fix' ? 'site_needs_fix' : 'site_review_reset',
+      fromStatus: 'built_needs_review',
+      toStatus: 'built_needs_review',
+      meta: body.status === 'needs_fix' ? { reasons, note: note || null } : {},
+    });
+
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
+      .bind(id).first<Lead>();
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'pipeline', 'POST /leads/:id/site-review failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/pipeline/leads/:id/approve-site
 // ---------------------------------------------------------------------------
 // The operator has opened and reviewed the generated demo. Approval is the
@@ -519,6 +602,9 @@ pipelineRouter.post('/leads/:id/approve-site', async (c) => {
     await c.env.DB.prepare(
       `UPDATE leads
           SET pipeline_status = 'ready_to_send',
+              site_review_status = 'approved',
+              site_review_updated_at = datetime('now'),
+              site_review_approved_at = datetime('now'),
               pipeline_last_action_at = datetime('now'),
               updated_at = datetime('now')
         WHERE id = ? AND pipeline_status = 'built_needs_review' AND deleted_at IS NULL`,

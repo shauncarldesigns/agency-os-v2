@@ -116,6 +116,10 @@ function lastActionLabel(lead: Lead, activity: LeadActivity[]): string {
       return 'Built';
     case 'site_approved':
       return 'Approved';
+    case 'site_needs_fix':
+      return 'Needs fix';
+    case 'site_review_reset':
+      return 'Review again';
     case 'intro_sent':
       return 'Sent';
     case 'followed_up':
@@ -1376,6 +1380,8 @@ function activityTitle(action: string): string {
     case 'automation_stopped': return 'Email automation stopped';
     case 'url_saved': return 'Site URL saved';
     case 'site_approved': return 'Site approved';
+    case 'site_needs_fix': return 'Site marked Needs fix';
+    case 'site_review_reset': return 'Site returned to review';
     case 'brief_generated': return 'Brief generated';
     case 'client_converted': return 'Converted to client';
     case 'intro_sent': return 'Intro text sent';
@@ -1434,6 +1440,12 @@ function activityDetail(activity: LeadActivity, meta: Record<string, unknown>): 
   if (activity.action === 'client_converted') return 'Signed deal converted into a client workspace; outreach automation was stopped and demo assets were preserved.';
   if (activity.action === 'url_saved') return 'This is the demo-site URL saved for outreach.';
   if (activity.action === 'site_approved') return 'The demo site was reviewed and approved for outreach.';
+  if (activity.action === 'site_needs_fix') {
+    const reasons = Array.isArray(meta.reasons) ? meta.reasons.join(', ') : '';
+    const note = typeof meta.note === 'string' ? meta.note : '';
+    return [reasons, note].filter(Boolean).join(' — ') || 'The demo site needs corrections before approval.';
+  }
+  if (activity.action === 'site_review_reset') return 'Corrections are ready for another site review.';
   if (activity.action === 'intro_sent') return 'First text opened in Messages.';
   if (activity.action === 'followed_up') return 'Follow-up text opened in Messages.';
   if (activity.action === 'call_outcome') {

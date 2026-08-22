@@ -786,6 +786,13 @@ export const api = {
       apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/approve-site`, {
         method: 'POST',
       }),
+    updateSiteReview: (
+      id: number,
+      body: { status: 'pending' | 'needs_fix'; reasons?: string[]; note?: string },
+    ) => apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/site-review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
     // Fires on operator taps of Open in Messages / Log call. Optimistic:
     // the server assumes the send happened; the paired undo() reverts if
     // the operator dismisses the toast in the ~6s window.
