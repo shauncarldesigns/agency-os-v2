@@ -321,6 +321,7 @@ function LeadRow({
             && lead.status !== 'client'
             && lead.status !== 'not_interested'
             && lead.status !== 'dead'
+            && lead.pipeline_status !== 'archived'
             && !lead.deleted_at && (
               <Button
                 variant="primary"
