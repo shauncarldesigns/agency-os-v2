@@ -47,6 +47,11 @@ import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
 import type { Tier } from '../../lib/pricing';
 import { Spinner } from '../shared/Spinner';
+import {
+  parseSiteReviewReasons,
+  SiteReviewFixModal,
+  SiteReviewIssueSummary,
+} from '../shared/SiteReviewFixModal';
 import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 import {
@@ -84,6 +89,9 @@ type BoardItem = {
   callbackDate: string | null;
   siteUrl: string | null;
   rawSiteUrl: string | null;
+  reviewStatus: Lead['site_review_status'];
+  reviewReasons: string[];
+  reviewNote: string | null;
   clarityTag: string | null;
   sessions: number;
   engagementScore: number;
@@ -113,6 +121,7 @@ type CallOutreachView = 'automation' | 'board';
 
 export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [fixTarget, setFixTarget] = useState<Lead | null>(null);
   const [automations, setAutomations] = useState<EmailAutomationSummary[]>([]);
   const [view, setView] = useState<CallOutreachView>(() => {
     const saved = localStorage.getItem(CALL_OUTREACH_VIEW_KEY);
@@ -188,6 +197,33 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
       showToast(`Could not approve site: ${msg}`, 'error');
     }
   }, [load, onStateChanged, showToast]);
+
+  const saveNeedsFix = useCallback(async (lead: Lead, reasons: string[], note: string) => {
+    try {
+      const { lead: updated } = await api.pipeline.updateSiteReview(lead.id, {
+        status: 'needs_fix', reasons, note,
+      });
+      setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setFixTarget(null);
+      showToast(`${lead.company} marked Needs fix`, 'success');
+      onStateChanged?.();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      throw new Error(msg);
+    }
+  }, [onStateChanged, showToast]);
+
+  const reviewAgain = useCallback(async (leadId: number) => {
+    try {
+      const { lead: updated } = await api.pipeline.updateSiteReview(leadId, { status: 'pending' });
+      setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
+      showToast(`${updated.company} returned to review`, 'success');
+      onStateChanged?.();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not update site review: ${msg}`, 'error');
+    }
+  }, [onStateChanged, showToast]);
 
   const columns = useMemo(() => buildColumns(leads, automations), [leads, automations]);
 
@@ -375,6 +411,11 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
               onOpenLead={openEmailCall}
               onOpenBuild={setBuildModalLeadId}
               onApproveSite={(leadId) => void approveSite(leadId)}
+              onNeedsFix={(leadId) => {
+                const lead = leads.find((item) => item.id === leadId);
+                if (lead) setFixTarget(lead);
+              }}
+              onReviewAgain={(leadId) => void reviewAgain(leadId)}
               onOpenEmail={setEmailModalLeadId}
               onOpenAutomation={(leadId) => void openAutomationFlow(leadId)}
               onViewLead={setViewLeadId}
@@ -400,6 +441,16 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
           <p className="text-sm font-semibold text-slate-700">No cards match those filters</p>
           <p className="mt-1 text-xs text-slate-400">Clear the filters or refresh the board.</p>
         </div>
+      )}
+
+      {fixTarget && (
+        <SiteReviewFixModal
+          leadName={fixTarget.company}
+          initialReasons={parseSiteReviewReasons(fixTarget.site_review_reasons)}
+          initialNote={fixTarget.site_review_note ?? ''}
+          onClose={() => setFixTarget(null)}
+          onSave={(reasons, note) => saveNeedsFix(fixTarget, reasons, note)}
+        />
       )}
 
       {automationLeadId !== null && (
@@ -3090,6 +3141,9 @@ function leadItem(
     callbackDate: lead.followup,
     siteUrl: lead.site_url,
     rawSiteUrl: lead.site_url_raw,
+    reviewStatus: lead.site_review_status ?? 'pending',
+    reviewReasons: parseSiteReviewReasons(lead.site_review_reasons),
+    reviewNote: lead.site_review_note,
     clarityTag: lead.clarity_tag,
     sessions: lead.pipeline_sessions ?? 0,
     engagementScore: lead.engagement_score ?? 0,
@@ -3110,6 +3164,8 @@ function KanbanColumn({
   onOpenLead,
   onOpenBuild,
   onApproveSite,
+  onNeedsFix,
+  onReviewAgain,
   onOpenEmail,
   onOpenAutomation,
   onViewLead,
@@ -3118,6 +3174,8 @@ function KanbanColumn({
   onOpenLead: (leadId: number) => void;
   onOpenBuild: (leadId: number) => void;
   onApproveSite: (leadId: number) => void;
+  onNeedsFix: (leadId: number) => void;
+  onReviewAgain: (leadId: number) => void;
   onOpenEmail: (leadId: number) => void;
   onOpenAutomation: (leadId: number) => void;
   onViewLead: (leadId: number) => void;
@@ -3134,6 +3192,11 @@ function KanbanColumn({
             {column.title}
           </span>
           <p className="mt-0.5 truncate pl-6 text-[11px] text-slate-400">{column.description}</p>
+          {column.id === 'built-needs-review' && column.items.length > 0 && (
+            <p className="mt-0.5 pl-6 text-[10px] font-medium text-rose-500">
+              {column.items.filter((item) => item.reviewStatus === 'needs_fix').length} needs fix · {column.items.filter((item) => item.reviewStatus !== 'needs_fix').length} awaiting review
+            </p>
+          )}
         </div>
         <span className="text-xs font-medium text-slate-400">
           {column.items.length}
@@ -3176,6 +3239,8 @@ function KanbanColumn({
                   }
                 : undefined}
               onViewLead={() => onViewLead(item.leadId)}
+              onNeedsFix={column.id === 'built-needs-review' ? () => onNeedsFix(item.leadId) : undefined}
+              onReviewAgain={column.id === 'built-needs-review' && item.reviewStatus === 'needs_fix' ? () => onReviewAgain(item.leadId) : undefined}
             />
           ))
         )}
@@ -3191,6 +3256,8 @@ function BoardCard({
   onOpen,
   onCardOpen,
   onViewLead,
+  onNeedsFix,
+  onReviewAgain,
 }: {
   item: BoardItem;
   primaryLabel: string;
@@ -3198,6 +3265,8 @@ function BoardCard({
   onOpen: () => void;
   onCardOpen?: () => void;
   onViewLead: () => void;
+  onNeedsFix?: () => void;
+  onReviewAgain?: () => void;
 }) {
   return (
     <article
@@ -3237,13 +3306,28 @@ function BoardCard({
             onClick={(event) => event.stopPropagation()}
             title="Open the site without outreach tracking"
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-              item.pipelineStatus === 'built_needs_review'
+              item.reviewStatus === 'needs_fix'
+                ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800'
+                : item.pipelineStatus === 'built_needs_review'
                 ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
             }`}
           >
-            {item.pipelineStatus === 'built_needs_review' ? 'Review site' : 'Site built'}
+            {item.reviewStatus === 'needs_fix' ? 'Needs fix' : item.pipelineStatus === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
+        </div>
+      )}
+
+      {item.pipelineStatus === 'built_needs_review' && item.reviewStatus === 'needs_fix' && (
+        <SiteReviewIssueSummary reasons={item.reviewReasons} note={item.reviewNote} />
+      )}
+
+      {onNeedsFix && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" onClick={(event) => { event.stopPropagation(); onNeedsFix(); }} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
+            {item.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+          </button>
+          {onReviewAgain && <button type="button" onClick={(event) => { event.stopPropagation(); onReviewAgain(); }} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">Review again</button>}
         </div>
       )}
 

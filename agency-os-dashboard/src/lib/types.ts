@@ -67,6 +67,11 @@ export interface Lead {
   pipeline_status: 'awaiting_build' | 'built_needs_review' | 'ready_to_send' | 'sent_no_reply' | 'engaged' | 'booked' | 'archived';
   site_url: string | null;                     // UTM-tagged; source of truth for texting
   site_url_raw: string | null;                 // as-pasted, pre-UTM
+  site_review_status: 'pending' | 'needs_fix' | 'approved';
+  site_review_reasons: string | null;
+  site_review_note: string | null;
+  site_review_updated_at: string | null;
+  site_review_approved_at: string | null;
   pipeline_brief: string | null;               // landingsite brief for this lead's site
   campaign_slug: string | null;                // slugified name used in the UTM campaign
   clarity_tag: string | null;                  // Clarity custom-tag id
@@ -114,6 +119,8 @@ export interface LeadActivity {
     | 'automation_stopped'
     | 'url_saved'
     | 'site_approved'
+    | 'site_needs_fix'
+    | 'site_review_reset'
     | 'intro_sent'
     | 'followed_up'
     | 'reply_received'

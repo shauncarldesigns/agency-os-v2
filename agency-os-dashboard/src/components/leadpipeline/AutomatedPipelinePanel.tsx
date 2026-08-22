@@ -33,6 +33,11 @@ import { api, TRACKING_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 import { StarRating } from '../shared/StarRating';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
+import {
+  parseSiteReviewReasons,
+  SiteReviewFixModal,
+  SiteReviewIssueSummary,
+} from '../shared/SiteReviewFixModal';
 import { interpolate, type Script } from '../../lib/playbook';
 import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
 
@@ -168,6 +173,9 @@ export interface PipelineLead {
   initials: string;
   url: string | null;                 // tagged live URL (for preview + View live site)
   rawUrl: string | null;              // clean destination for operator preview links
+  reviewStatus: 'pending' | 'needs_fix' | 'approved';
+  reviewReasons: string[];
+  reviewNote: string | null;
   clarityTag: string | null;
   trackerUrl: string;                 // /r/:id link — this is what gets texted
   brief: string | null;
@@ -320,6 +328,9 @@ export function mapLeadRow(l: Lead, lastActionAction: string | null = null): Pip
     initials: deriveInitials(l.company ?? ''),
     url: l.site_url,
     rawUrl: l.site_url_raw,
+    reviewStatus: l.site_review_status ?? 'pending',
+    reviewReasons: parseSiteReviewReasons(l.site_review_reasons),
+    reviewNote: l.site_review_note,
     clarityTag: l.clarity_tag,
     trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
     brief: l.pipeline_brief,
@@ -503,10 +514,12 @@ function SiteSignalBadges({
   url,
   rawUrl,
   status,
+  reviewStatus = 'pending',
 }: {
   url: string | null;
   rawUrl: string | null;
   status: PipelineStatus;
+  reviewStatus?: PipelineLead['reviewStatus'];
 }) {
   if (!url) return null;
   const cleanUrl = cleanSiteUrl(rawUrl, url);
@@ -519,12 +532,14 @@ function SiteSignalBadges({
         rel="noreferrer"
         title="Open the site without outreach tracking"
         className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-          needsReview
+          reviewStatus === 'needs_fix'
+            ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800'
+            : needsReview
             ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
             : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
         }`}
       >
-        {needsReview ? 'Review site' : 'Site built'}
+        {reviewStatus === 'needs_fix' ? 'Needs fix' : needsReview ? 'Review site' : 'Site built'}
       </a>
     </div>
   );
@@ -861,9 +876,11 @@ interface LeadCardProps {
   onViewLead: (l: PipelineLead) => void;
   onArchive: (l: PipelineLead) => void;
   onReply: (l: PipelineLead) => void;
+  onNeedsFix: (l: PipelineLead) => void;
+  onReviewAgain: (l: PipelineLead) => void;
 }
 
-function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: LeadCardProps) {
+function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply, onNeedsFix, onReviewAgain }: LeadCardProps) {
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const recommendation = getOutreachRecommendation({
     status: lead.status,
@@ -918,7 +935,20 @@ function LeadCard({ lead, index, onAction, onViewLead, onArchive, onReply }: Lea
         </div>
       )}
 
-      <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} status={lead.status} />
+      <SiteSignalBadges url={lead.url} rawUrl={lead.rawUrl} status={lead.status} reviewStatus={lead.reviewStatus} />
+      {lead.status === 'built_needs_review' && lead.reviewStatus === 'needs_fix' && (
+        <div className="px-4 pb-3"><SiteReviewIssueSummary reasons={lead.reviewReasons} note={lead.reviewNote} /></div>
+      )}
+      {lead.status === 'built_needs_review' && (
+        <div className="flex flex-wrap gap-2 px-4 pb-3">
+          <button type="button" onClick={() => onNeedsFix(lead)} className="rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">
+            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+          </button>
+          {lead.reviewStatus === 'needs_fix' && (
+            <button type="button" onClick={() => onReviewAgain(lead)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Review again</button>
+          )}
+        </div>
+      )}
       {recommendation && (
         <div className="px-4 pb-3">
           <EngagedRecommendationPanel lead={lead} />
@@ -2134,12 +2164,13 @@ function ArchiveNoteModal({
 
 // ---------- Page ----------
 
-type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
+type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'needs_fix' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'awaiting_build', label: 'Awaiting build' },
-  { key: 'built_needs_review', label: 'Built needs review' },
+  { key: 'built_needs_review', label: 'Awaiting review' },
+  { key: 'needs_fix', label: 'Needs fix' },
   { key: 'ready_to_send', label: 'Ready to send' },
   { key: 'sent_no_reply', label: 'Sent — no reply' },
   { key: 'last_chance', label: 'Last chance — call' },
@@ -2206,12 +2237,16 @@ function BoardCard({
   onViewLead,
   onArchive,
   onReply,
+  onNeedsFix,
+  onReviewAgain,
 }: {
   lead: PipelineLead;
   onAction: (l: PipelineLead) => void;
   onViewLead: (l: PipelineLead) => void;
   onArchive: (l: PipelineLead) => void;
   onReply: (l: PipelineLead) => void;
+  onNeedsFix: (l: PipelineLead) => void;
+  onReviewAgain: (l: PipelineLead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status];
   const rec = getOutreachRecommendation({
@@ -2262,13 +2297,26 @@ function BoardCard({
             rel="noreferrer"
             title="Open the site without outreach tracking"
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-              lead.status === 'built_needs_review'
+              lead.reviewStatus === 'needs_fix'
+                ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800'
+                : lead.status === 'built_needs_review'
                 ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800'
             }`}
           >
-            {lead.status === 'built_needs_review' ? 'Review site' : 'Site built'}
+            {lead.reviewStatus === 'needs_fix' ? 'Needs fix' : lead.status === 'built_needs_review' ? 'Review site' : 'Site built'}
           </a>
+        </div>
+      )}
+      {lead.status === 'built_needs_review' && lead.reviewStatus === 'needs_fix' && (
+        <SiteReviewIssueSummary reasons={lead.reviewReasons} note={lead.reviewNote} />
+      )}
+      {lead.status === 'built_needs_review' && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" onClick={() => onNeedsFix(lead)} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50">
+            {lead.reviewStatus === 'needs_fix' ? 'Edit fix note' : 'Needs fix'}
+          </button>
+          {lead.reviewStatus === 'needs_fix' && <button type="button" onClick={() => onReviewAgain(lead)} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">Review again</button>}
         </div>
       )}
       {rec && <EngagedRecommendationPanel lead={lead} compact />}
@@ -2357,6 +2405,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [modal, setModal] = useState<ModalState>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PipelineLead | null>(null);
+  const [fixTarget, setFixTarget] = useState<PipelineLead | null>(null);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
@@ -2440,6 +2489,26 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
       showToast(`${lead.name} approved and ready to send`, 'success');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not approve site';
+      showToast(msg, 'error');
+    }
+  };
+
+  const saveNeedsFix = async (lead: PipelineLead, reasons: string[], note: string) => {
+    const { lead: updated } = await api.pipeline.updateSiteReview(lead.id, {
+      status: 'needs_fix', reasons, note,
+    });
+    applyMutation(updated, 'site_needs_fix');
+    setFixTarget(null);
+    showToast(`${lead.name} marked Needs fix`, 'success');
+  };
+
+  const reviewAgain = async (lead: PipelineLead) => {
+    try {
+      const { lead: updated } = await api.pipeline.updateSiteReview(lead.id, { status: 'pending' });
+      applyMutation(updated, 'site_review_reset');
+      showToast(`${lead.name} returned to review`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not update site review';
       showToast(msg, 'error');
     }
   };
@@ -2649,6 +2718,8 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     () => visibleLeads.filter((l) => {
       if (filter === 'all') return true;
       if (filter === 'last_chance') return isLastChanceNoReply(l);
+      if (filter === 'needs_fix') return l.status === 'built_needs_review' && l.reviewStatus === 'needs_fix';
+      if (filter === 'built_needs_review') return l.status === 'built_needs_review' && l.reviewStatus !== 'needs_fix';
       if (filter === 'sent_no_reply') return l.status === 'sent_no_reply' && !isLastChanceNoReply(l);
       return l.status === filter;
     }),
@@ -2659,7 +2730,11 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     () =>
       visibleLeads.reduce<Record<string, number>>((acc, l) => {
         const key = isLastChanceNoReply(l) ? 'last_chance' : l.status;
-        acc[key] = (acc[key] || 0) + 1;
+        if (l.status === 'built_needs_review' && l.reviewStatus === 'needs_fix') {
+          acc.needs_fix = (acc.needs_fix || 0) + 1;
+        } else {
+          acc[key] = (acc[key] || 0) + 1;
+        }
         return acc;
       }, {}),
     [visibleLeads],
@@ -2824,6 +2899,8 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                         onViewLead={openDetail}
                         onArchive={archiveLead}
                         onReply={markReplied}
+                        onNeedsFix={setFixTarget}
+                        onReviewAgain={(lead) => void reviewAgain(lead)}
                       />
                     ))}
                     {items.length === 0 && (
@@ -2851,6 +2928,8 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
                 onViewLead={openDetail}
                 onArchive={archiveLead}
                 onReply={markReplied}
+                onNeedsFix={setFixTarget}
+                onReviewAgain={(lead) => void reviewAgain(lead)}
               />
             ))}
             {filtered.length === 0 && (
@@ -2874,6 +2953,15 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
               prev.map((l) => (l.id === leadId ? { ...l, brief } : l)),
             );
           }}
+        />
+      )}
+      {fixTarget && (
+        <SiteReviewFixModal
+          leadName={fixTarget.name}
+          initialReasons={fixTarget.reviewReasons}
+          initialNote={fixTarget.reviewNote ?? ''}
+          onClose={() => setFixTarget(null)}
+          onSave={(reasons, note) => saveNeedsFix(fixTarget, reasons, note)}
         />
       )}
       {modal?.type === 'text' && (

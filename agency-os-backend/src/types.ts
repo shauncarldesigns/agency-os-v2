@@ -102,6 +102,11 @@ export interface Lead {
   pipeline_status: string;
   site_url: string | null;
   site_url_raw: string | null;
+  site_review_status: 'pending' | 'needs_fix' | 'approved';
+  site_review_reasons: string | null;
+  site_review_note: string | null;
+  site_review_updated_at: string | null;
+  site_review_approved_at: string | null;
   pipeline_brief: string | null;
   campaign_slug: string | null;
   clarity_tag: string | null;
