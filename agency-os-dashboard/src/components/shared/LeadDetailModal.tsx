@@ -229,6 +229,7 @@ export function LeadDetailModal({
     !!lead &&
     !!onQualify &&
     lead.enrichment_status === 'enriched' &&
+    lead.pipeline_status !== 'archived' &&
     !['qualified', 'client', 'not_interested', 'dead'].includes(lead.status);
 
   const tabs: Array<{ key: DetailTab; label: string; badge?: number }> = [
