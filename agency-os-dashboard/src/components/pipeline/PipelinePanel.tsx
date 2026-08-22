@@ -316,6 +316,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
           showToast={showToast}
           onLeadUpdated={handleLeadUpdated}
           onQualify={setQualifyLead}
+          pipelineContext
         />
       )}
 
