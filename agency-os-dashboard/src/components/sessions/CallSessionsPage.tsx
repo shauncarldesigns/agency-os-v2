@@ -1158,7 +1158,7 @@ function EmailCaptureSplitScript({
           <div className="mt-5 border-l-2 border-blue-200 pl-4 sm:pl-5">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
             <div className="text-[17px] leading-8 text-slate-700">
-              <p>Hey {firstName}, I know you hate these calls, so I’ll be quick. I put together a website for your business and wanted to see if you’d be open to taking a look.</p>
+              <p>Hey {firstName}, I know you weren’t expecting my call, so I’ll be quick. I put together a website for your business and wanted to see if you’d be open to taking a look.</p>
             </div>
           </div>
 
