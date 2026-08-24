@@ -1099,6 +1099,10 @@ const EMAIL_CAPTURE_RESPONSES = [
     title: 'They’re busy',
     body: 'No worries. What’s the best email address to send it to? You can look at it whenever it’s convenient, and if you have any thoughts afterward, just reply to the email or text me.',
   },
+  {
+    title: 'Calls all the time',
+    body: 'I get it! Have you taken a look at any of the sites people have put together for ya?',
+  },
 ] as const;
 
 function EmailCaptureSplitScript({
@@ -1163,6 +1167,12 @@ function EmailCaptureSplitScript({
             <p className="mt-2 border-l-2 border-blue-200 pl-3 text-[17px] leading-8 text-slate-700">
               Totally fair. Would it be worth a quick look before you rule it out? It’s really just meant to help you look more professional and bring in more business. You might actually like it.
             </p>
+            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">If they hesitate again</p>
+              <p className="mt-1 text-[17px] leading-7 text-slate-700">
+                Listen, there’s no cost to take a look. Worst case scenario, you hate it and you tell me to go pound sand. Best case scenario, you like it and we can move forward and turn the cold calls into customer calls.
+              </p>
+            </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">If they still say no</p>
