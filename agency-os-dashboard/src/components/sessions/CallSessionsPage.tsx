@@ -1191,7 +1191,9 @@ function EmailCaptureSplitScript({
 }) {
   const latestCall = callHistory[0] ?? null;
   const [callPath, setCallPath] = useState<'website' | 'receptionist' | null>(null);
-  const [receptionistStage, setReceptionistStage] = useState<'question' | 'irony' | 'interested'>('question');
+  const [receptionistStage, setReceptionistStage] = useState<'question' | 'irony' | 'interested' | 'irony_offer'>('question');
+  const showingReceptionistDemoOffer = callPath === 'receptionist'
+    && (receptionistStage === 'interested' || receptionistStage === 'irony_offer');
 
   return (
     <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1232,7 +1234,7 @@ function EmailCaptureSplitScript({
               </button>
               <button type="button" onClick={() => { setCallPath('receptionist'); setReceptionistStage('question'); }} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-left transition hover:bg-blue-100">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Website: no · pivot</p>
-                <p className="mt-1 text-sm font-semibold leading-5 text-blue-900">Ask about the call gatekeeper</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-blue-900">Ask about the automated receptionist</p>
               </button>
             </div>
           </section>
@@ -1243,7 +1245,7 @@ function EmailCaptureSplitScript({
               <button type="button" onClick={() => { setCallPath(null); setReceptionistStage('question'); }} className="mb-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to website decision</button>
               {receptionistStage === 'question' && <>
                 <p className="mt-2 text-[17px] leading-8 text-slate-800">Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?</p>
-                <p className="mt-3 text-[17px] leading-8 text-slate-800">Would you be interested in an automated call gatekeeper that screens calls like this before they ever reach you, while still letting customer calls through?</p>
+                <p className="mt-3 text-[17px] leading-8 text-slate-800">Would you be interested in an automated receptionist that screens calls like this before they ever reach you, while still letting customer calls through?</p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <button type="button" onClick={() => setReceptionistStage('interested')} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">They’re interested</button>
                   <button type="button" onClick={() => setReceptionistStage('irony')} className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">They point out the irony</button>
@@ -1251,20 +1253,24 @@ function EmailCaptureSplitScript({
                 </div>
               </>}
               {receptionistStage === 'irony' && <>
-                <p className="mt-2 text-[17px] leading-8 text-slate-800">Fair point—the irony isn’t lost on me. The reason I’m working on it is that nearly every contractor tells me the same thing: they’re sick of sales calls, but they can’t ignore unknown numbers because the next one could be a customer.</p>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">Fair point—the irony isn’t lost on me. Calls like mine are actually why I decided to build this. Small business owners keep telling me they’re tired of sales calls, but they can’t ignore unknown numbers because the next call could be a customer.</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setReceptionistStage('interested')} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Continue to the demo offer</button>
+                  <button type="button" onClick={() => setReceptionistStage('irony_offer')} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Continue to the demo offer</button>
                   <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Still not interested</button>
                 </div>
               </>}
               {receptionistStage === 'interested' && <>
                 <p className="mt-2 text-[17px] leading-8 text-slate-800">That’s something I’m developing specifically for service businesses. It finds out who’s calling and why, lets real customers through, and handles the sales calls without interrupting you. Would it be okay if I emailed you a demo number when it’s ready?</p>
-                <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the gatekeeper question</button>
+                <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the receptionist question</button>
+              </>}
+              {receptionistStage === 'irony_offer' && <>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">The idea is simple: the automated receptionist asks who’s calling and why, lets real customers through, and handles sales calls without interrupting you. I’m putting together a demo number so you can try it yourself. Would it be okay if I emailed you the number when it’s ready?</p>
+                <button type="button" onClick={() => setReceptionistStage('irony')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the irony response</button>
               </>}
             </section>
           )}
 
-          {(callPath === 'website' || (callPath === 'receptionist' && receptionistStage === 'interested')) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          {(callPath === 'website' || showingReceptionistDemoOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-2 flex items-center gap-2">
               <Mail className="h-3.5 w-3.5 text-slate-500" />
               <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{callPath === 'receptionist' ? 'Where should the demo number be sent?' : 'Capture email'}</label>
@@ -1313,7 +1319,7 @@ function EmailCaptureSplitScript({
             </p>
           </div>}
 
-          {(callPath === 'website' || (callPath === 'receptionist' && receptionistStage === 'interested')) && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          {(callPath === 'website' || showingReceptionistDemoOffer) && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
             <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">
               {callPath === 'receptionist'

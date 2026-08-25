@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, Loader2, Pencil, X } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
@@ -184,6 +184,7 @@ function LeadRow({
   const [enriching, setEnriching] = useState(false);
   const [showEnrichmentProgress, setShowEnrichmentProgress] = useState(false);
   const [progressLead, setProgressLead] = useState<Lead>(lead);
+  const [editing, setEditing] = useState(false);
   const stage = statusBadge(lead.status);
   const route = routePresentation(lead);
   const outreach = outreachPresentation(lead);
@@ -374,6 +375,17 @@ function LeadRow({
               {lead.status === 'not_interested' ? 'Archive' : '🗑'}
             </Button>
           )}
+          {!lead.deleted_at && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setEditing(true)}
+              title={`Edit ${lead.company}`}
+              aria-label={`Edit ${lead.company}`}
+            >
+              <Pencil size={13} />
+            </Button>
+          )}
         </div>
       </td>
     </tr>
@@ -384,7 +396,139 @@ function LeadRow({
       />,
       document.body,
     )}
+    {editing && createPortal(
+      <EditLeadModal
+        lead={lead}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          showToast(`${lead.company} updated`, 'success');
+          onLeadUpdated();
+        }}
+        showToast={showToast}
+      />,
+      document.body,
+    )}
     </>
+  );
+}
+
+function EditLeadModal({
+  lead,
+  onClose,
+  onSaved,
+  showToast,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: ShowToast;
+}) {
+  const [company, setCompany] = useState(lead.company);
+  const [contact, setContact] = useState(lead.contact ?? '');
+  const [phone, setPhone] = useState(lead.phone ?? '');
+  const [email, setEmail] = useState(lead.email ?? '');
+  const [phoneRoute, setPhoneRoute] = useState<NonNullable<Lead['phone_route']>>(lead.phone_route ?? 'unknown');
+  const [status, setStatus] = useState<Lead['status']>(lead.status);
+  const [pipelineStatus, setPipelineStatus] = useState<Lead['pipeline_status']>(lead.pipeline_status);
+  const [resetOutcome, setResetOutcome] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const placeInToCall = () => {
+    setEmail('');
+    setPhoneRoute('call');
+    setStatus('contacted');
+    setPipelineStatus('ready_to_send');
+    setResetOutcome(true);
+  };
+
+  const save = async () => {
+    if (!company.trim()) {
+      showToast('Company name is required', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.leads.update(lead.id, {
+        company: company.trim(),
+        contact: contact.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        phone_route: phoneRoute,
+        status,
+        pipeline_status: pipelineStatus,
+        ...(resetOutcome ? { outcome: null } : {}),
+      });
+      onSaved();
+    } catch (err) {
+      showToast(`Could not update lead: ${err instanceof ApiError ? err.message : (err as Error).message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+      <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Edit lead</p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-950">{lead.company}</h2>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close"><X className="h-4 w-4" /></button>
+        </header>
+
+        <div className="space-y-4 px-5 py-5">
+          <button type="button" onClick={placeInToCall} className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100">
+            <span className="block text-sm font-semibold text-blue-900">Put this lead back in Email Outreach → To Call</span>
+            <span className="mt-0.5 block text-xs leading-5 text-blue-700">Sets the phone route to Call, clears the email and latest outcome, and reopens the lead for outreach.</span>
+          </button>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <EditField label="Company" value={company} onChange={setCompany} />
+            <EditField label="Contact" value={contact} onChange={setContact} />
+            <EditField label="Phone" value={phone} onChange={setPhone} type="tel" />
+            <EditField label="Email" value={email} onChange={setEmail} type="email" />
+            <EditSelect label="Phone route" value={phoneRoute} onChange={(value) => setPhoneRoute(value as NonNullable<Lead['phone_route']>)} options={[
+              ['call', 'Call'], ['text', 'Text'], ['review', 'Review'], ['unknown', 'Unknown'],
+            ]} />
+            <EditSelect label="CRM stage" value={status} onChange={(value) => setStatus(value as Lead['status'])} options={[
+              ['cold', 'Cold'], ['contacted', 'Contacted'], ['qualified', 'Qualified'], ['client', 'Client'], ['not_interested', 'Not interested'], ['dead', 'Dead'],
+            ]} />
+            <div className="sm:col-span-2">
+              <EditSelect label="Outreach stage" value={pipelineStatus} onChange={(value) => setPipelineStatus(value as Lead['pipeline_status'])} options={[
+                ['awaiting_build', 'Awaiting build'], ['built_needs_review', 'Built — needs review'], ['ready_to_send', 'Ready to send / To Call'], ['sent_no_reply', 'Sent — no reply'], ['engaged', 'Engaged'], ['booked', 'Booked'], ['archived', 'Archived'],
+              ]} />
+            </div>
+          </div>
+        </div>
+
+        <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function EditField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'tel' }) {
+  return (
+    <label className="block text-xs font-semibold text-slate-700">
+      {label}
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+    </label>
+  );
+}
+
+function EditSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<[string, string]> }) {
+  return (
+    <label className="block text-xs font-semibold text-slate-700">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100">
+        {options.map(([optionValue, labelText]) => <option key={optionValue} value={optionValue}>{labelText}</option>)}
+      </select>
+    </label>
   );
 }
 
