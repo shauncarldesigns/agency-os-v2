@@ -40,6 +40,7 @@ import {
 } from '../shared/SiteReviewFixModal';
 import { interpolate, type Script } from '../../lib/playbook';
 import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
+import { NotInterestedModal, type NotInterestedCloseout } from '../shared/NotInterestedModal';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -157,6 +158,7 @@ export interface PipelineLead {
   rating: number;
   reviews: number;
   phone: string;
+  email: string | null;
   city: string;
   address: string;
   hours: string;
@@ -312,6 +314,7 @@ export function mapLeadRow(l: Lead, lastActionAction: string | null = null): Pip
     rating: l.google_rating ?? 0,
     reviews: l.google_review_count ?? 0,
     phone,
+    email: l.email,
     city: l.city ?? '',
     address,
     hours: l.gbp_hours ?? '',
@@ -1487,7 +1490,7 @@ export function OpenSalesCallModal({
   onClose: () => void;
   onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number) => Promise<boolean>;
   onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan, commitmentTerm: 'ongoing_hosting' | '6_months' | '12_months') => Promise<void>;
-  onNotInterested: (lead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested?: boolean) => Promise<void>;
+  onNotInterested: (lead: PipelineLead, closeout: NotInterestedCloseout, recordingCallId?: number) => Promise<void>;
   // Channel-recovery hooks — provided only by the Text Outreach page, where
   // "the texts never landed" is a real failure mode. The email-outreach page
   // reuses this modal and omits them, which hides the recovery section.
@@ -1512,6 +1515,7 @@ export function OpenSalesCallModal({
   const [openResponse, setOpenResponse] = useState<string | null>(null);
   const [internalRecordingCallId, setInternalRecordingCallId] = useState<number | null>(null);
   const [archivingNotInterested, setArchivingNotInterested] = useState(false);
+  const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const internalRecorderRef = useRef<RecordButtonHandle>(null);
   const recorderRef = externalRecorderRef ?? internalRecorderRef;
   const notes = externalNotes ?? internalNotes;
@@ -1650,11 +1654,12 @@ export function OpenSalesCallModal({
     onClose();
   };
 
-  const chooseNotInterested = async (receptionistInterested = false) => {
+  const submitNotInterested = async (closeout: NotInterestedCloseout) => {
     setArchivingNotInterested(true);
     try {
       const savedRecording = await recorderRef.current?.stopAndSave();
-      await onNotInterested(lead, notes.trim() || undefined, savedRecording?.callId ?? recordingCallId ?? undefined, receptionistInterested);
+      await onNotInterested(lead, closeout, savedRecording?.callId ?? recordingCallId ?? undefined);
+      setNotInterestedOpen(false);
     } finally {
       setArchivingNotInterested(false);
     }
@@ -1682,7 +1687,7 @@ export function OpenSalesCallModal({
       <>
         <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>Review on their own — follow up later</button>
         <button type="button" onClick={() => void chooseOutcome('feedback_only')} disabled={loggingOutcome !== null} className={decisionClass}>Feedback only — nurture</button>
-        <button type="button" onClick={() => void chooseNotInterested()} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Not interested</button>
+        <button type="button" onClick={() => setNotInterestedOpen(true)} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Not interested</button>
         <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They want to discuss moving forward <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
@@ -2058,18 +2063,11 @@ export function OpenSalesCallModal({
               </button>
             ))}
             <button
-              onClick={() => void chooseNotInterested()}
+              onClick={() => setNotInterestedOpen(true)}
               disabled={loggingOutcome !== null || archivingNotInterested}
               className="col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100"
             >
               {archivingNotInterested ? 'Saving recording…' : 'Not interested'}
-            </button>
-            <button
-              onClick={() => void chooseNotInterested(true)}
-              disabled={loggingOutcome !== null || archivingNotInterested}
-              className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-            >
-              {archivingNotInterested ? 'Saving recording…' : 'Website: not interested · Receptionist: interested'}
             </button>
           </div>
           </section>
@@ -2085,6 +2083,16 @@ export function OpenSalesCallModal({
             await onFollowUpSent(leadId, messageBody);
             setShowResendComposer(false);
           }}
+        />
+      )}
+      {notInterestedOpen && (
+        <NotInterestedModal
+          leadName={lead.name}
+          initialNote={notes}
+          initialEmail={lead.email ?? ''}
+          busy={archivingNotInterested}
+          onClose={() => setNotInterestedOpen(false)}
+          onConfirm={(closeout) => void submitNotInterested(closeout)}
         />
       )}
     </ModalShell>
@@ -2608,21 +2616,29 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     return null;
   };
 
-  const markNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) => {
-    if (!window.confirm(`Mark ${lead.name} as not interested?`)) return;
+  const markNotInterested = async (lead: PipelineLead, closeout: NotInterestedCloseout, recordingCallId?: number) => {
     try {
       const { lead: updated } = await api.pipeline.action(lead.id, {
         action: 'call_outcome',
         meta: {
           outcome: 'not_interested',
-          notes: notes ?? null,
+          notes: closeout.note,
           recording_call_id: recordingCallId ?? null,
-          receptionist_interested: receptionistInterested,
+          receptionist_interested: closeout.receptionistInterested,
+          receptionist_email: closeout.email ?? null,
         },
       });
-      applyMutation(updated, 'call_outcome');
+      if (closeout.archive) {
+        const { lead: archived } = await api.pipeline.action(lead.id, {
+          action: 'archived',
+          meta: { reason: 'not_interested_after_call', mark_not_interested: true, note: closeout.note },
+        });
+        applyMutation(archived, 'archived');
+      } else {
+        applyMutation(updated, 'call_outcome');
+      }
       setModal(null);
-      showToast('Call recorded and lead marked not interested');
+      showToast(closeout.archive ? 'Call recorded and lead archived' : 'Call recorded and lead marked not interested');
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Could not mark lead not interested', 'error');
     }

@@ -1191,6 +1191,8 @@ export interface SessionOutcomeBody {
   recordingUrl?: string | null;
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
+  receptionistEmail?: string;
+  archiveLead?: boolean;
 }
 
 export { API_BASE, TRACKING_BASE };

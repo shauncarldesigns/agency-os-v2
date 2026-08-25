@@ -53,6 +53,7 @@ import {
   SiteReviewIssueSummary,
 } from '../shared/SiteReviewFixModal';
 import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
+import { NotInterestedModal, type NotInterestedCloseout } from '../shared/NotInterestedModal';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 import {
   mapLeadRow,
@@ -668,20 +669,26 @@ function EmailEngagedSalesCall({
     }
   }
 
-  async function markNotInterested(activeLead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) {
-    if (!window.confirm(`Mark ${activeLead.name} as not interested?`)) return;
+  async function markNotInterested(activeLead: PipelineLead, closeout: NotInterestedCloseout, recordingCallId?: number) {
     try {
       await api.pipeline.action(activeLead.id, {
         action: 'call_outcome',
         meta: {
           outcome: 'not_interested',
-          notes: notes ?? null,
+          notes: closeout.note,
           recording_call_id: recordingCallId ?? null,
           channel: 'email',
-          receptionist_interested: receptionistInterested,
+          receptionist_interested: closeout.receptionistInterested,
+          receptionist_email: closeout.email ?? null,
         },
       });
-      showToast('Call recorded and lead marked not interested');
+      if (closeout.archive) {
+        await api.pipeline.action(activeLead.id, {
+          action: 'archived',
+          meta: { reason: 'not_interested_after_email_engagement_call', mark_not_interested: true, note: closeout.note },
+        });
+      }
+      showToast(closeout.archive ? 'Call recorded and lead archived' : 'Call recorded and lead marked not interested');
       onChanged();
     } catch (error) {
       showToast(error instanceof ApiError ? error.message : 'Could not mark lead not interested', 'error');
@@ -740,6 +747,7 @@ function CallOutreachModal({
   const [recordingOutcome, setRecordingOutcome] = useState<CallOutcome | null>(null);
   const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [notInterestedOpen, setNotInterestedOpen] = useState(false);
 
   useEffect(() => {
     if (!lead) return;
@@ -867,7 +875,7 @@ function CallOutreachModal({
     }
   }
 
-  async function recordOutcome(outcome: CallOutcome, receptionistInterested = false) {
+  async function recordOutcome(outcome: CallOutcome, closeout?: NotInterestedCloseout) {
     if (!lead) return;
     if (outcome === 'callback' && !callbackDate) {
       showToast('Choose a follow-up date first', 'error');
@@ -880,12 +888,14 @@ function CallOutreachModal({
       await api.sessions.outcome(hot.session_id, {
         leadId: lead.id,
         outcome,
-        notes: callNotes.trim() || undefined,
+        notes: closeout?.note ?? (callNotes.trim() || undefined),
         recordingUrl: savedRecording?.url ?? recordingUrl ?? undefined,
         recordingCallId: savedRecording?.callId ?? recordingCallId ?? undefined,
         callbackDate: outcome === 'callback' ? callbackDate : undefined,
         preserveFinalReview: returnedFromAutomation,
-        receptionistInterested: outcome === 'not_interested' && receptionistInterested,
+        receptionistInterested: outcome === 'not_interested' && closeout?.receptionistInterested === true,
+        receptionistEmail: outcome === 'not_interested' ? closeout?.email : undefined,
+        archiveLead: outcome === 'not_interested' && closeout?.archive === true,
       });
       const label = {
         no_answer: 'No answer recorded',
@@ -896,6 +906,7 @@ function CallOutreachModal({
         skipped: 'Lead skipped',
       }[outcome];
       showToast(label);
+      setNotInterestedOpen(false);
       onOutcomeRecorded();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
@@ -903,6 +914,20 @@ function CallOutreachModal({
     } finally {
       setRecordingOutcome(null);
     }
+  }
+
+  async function saveReceptionistInterest() {
+    const nextEmail = email.trim();
+    if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      showToast('Capture a valid email for the receptionist demo', 'error');
+      return;
+    }
+    await recordOutcome('not_interested', {
+      note: callNotes.trim() || 'Interested in the automated receptionist demo.',
+      receptionistInterested: true,
+      email: nextEmail,
+      archive: false,
+    });
   }
 
   async function archiveLead() {
@@ -986,7 +1011,9 @@ function CallOutreachModal({
                 onCallNotesChange={onCallNotesChange}
                 onSave={() => void saveToFollowUp()}
                 onAdvanceToSalesFlow={() => void advanceToSalesFlow()}
-                onRecordOutcome={(outcome, receptionistInterested) => void recordOutcome(outcome, receptionistInterested)}
+                onRecordOutcome={(outcome) => void recordOutcome(outcome)}
+                onArchiveRejection={() => setNotInterestedOpen(true)}
+                onSaveReceptionist={() => void saveReceptionistInterest()}
               />
             )}
 
@@ -1032,19 +1059,11 @@ function CallOutreachModal({
               </div>
               <button
                 type="button"
-                onClick={() => void recordOutcome('not_interested')}
+                onClick={() => setNotInterestedOpen(true)}
                 disabled={recordingOutcome !== null}
                 className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
               >
                 {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void recordOutcome('not_interested', true)}
-                disabled={recordingOutcome !== null}
-                className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-              >
-                {recordingOutcome === 'not_interested' ? 'Recording…' : 'Website: not interested · Receptionist: interested'}
               </button>
             </section>}
 
@@ -1093,6 +1112,17 @@ function CallOutreachModal({
         </div>
 
       </div>
+      {notInterestedOpen && (
+        <NotInterestedModal
+          leadName={lead.company}
+          initialNote={callNotes}
+          initialEmail={lead.email ?? ''}
+          busy={recordingOutcome === 'not_interested'}
+          archiveOnly
+          onClose={() => setNotInterestedOpen(false)}
+          onConfirm={(closeout) => void recordOutcome('not_interested', closeout)}
+        />
+      )}
     </div>
   );
 }
@@ -1135,6 +1165,8 @@ function EmailCaptureSplitScript({
   onSave,
   onAdvanceToSalesFlow,
   onRecordOutcome,
+  onArchiveRejection,
+  onSaveReceptionist,
 }: {
   firstName: string;
   leadId: number;
@@ -1153,19 +1185,24 @@ function EmailCaptureSplitScript({
   onCallNotesChange: (value: string) => void;
   onSave: () => void;
   onAdvanceToSalesFlow: () => void;
-  onRecordOutcome: (outcome: CallOutcome, receptionistInterested?: boolean) => void;
+  onRecordOutcome: (outcome: CallOutcome) => void;
+  onArchiveRejection: () => void;
+  onSaveReceptionist: () => void;
 }) {
   const latestCall = callHistory[0] ?? null;
+  const [callPath, setCallPath] = useState<'website' | 'receptionist' | null>(null);
+  const [receptionistStage, setReceptionistStage] = useState<'question' | 'irony' | 'interested'>('question');
 
   return (
     <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="p-5 sm:p-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Email capture call</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">Create curiosity. Get permission to send.</h3>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{callPath === 'receptionist' ? 'Automated receptionist interest' : 'Email capture call'}</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">{callPath === 'receptionist' ? 'Test interest. Capture where to send the demo.' : 'Create curiosity. Get permission to send.'}</h3>
           </div>
 
+          {callPath !== 'receptionist' && <>
           <div className="mt-5 border-l-2 border-blue-200 pl-4 sm:pl-5">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
             <div className="text-[17px] leading-8 text-slate-700">
@@ -1184,22 +1221,53 @@ function EmailCaptureSplitScript({
                 Listen, there’s no cost to take a look. Worst case scenario, you hate it and you tell me to go pound sand. Best case scenario, you like it and we can move forward and turn the cold calls into customer calls.
               </p>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">If they still say no</p>
-                <p className="mt-1 text-[17px] leading-7 text-slate-600">No problem at all. Have a good one.</p>
-              </div>
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">If they say yes</p>
-                <p className="mt-1 text-[17px] font-semibold leading-7 text-emerald-900">Great, what’s a good email for you?</p>
-              </div>
+            <div className="mt-3 grid gap-2 lg:grid-cols-3">
+              <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-rose-200 hover:bg-rose-50">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">End the call</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-slate-700">No problem at all. Have a good one.</p>
+              </button>
+              <button type="button" onClick={() => setCallPath('website')} className={`rounded-lg border px-3 py-2.5 text-left transition ${callPath === 'website' ? 'border-emerald-300 bg-emerald-100' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'}`}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Website: yes</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-emerald-900">Great, what’s a good email for you?</p>
+              </button>
+              <button type="button" onClick={() => { setCallPath('receptionist'); setReceptionistStage('question'); }} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-left transition hover:bg-blue-100">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Website: no · pivot</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-blue-900">Ask about the call gatekeeper</p>
+              </button>
             </div>
           </section>
+          </>}
 
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          {callPath === 'receptionist' && (
+            <section className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <button type="button" onClick={() => { setCallPath(null); setReceptionistStage('question'); }} className="mb-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to website decision</button>
+              {receptionistStage === 'question' && <>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?</p>
+                <p className="mt-3 text-[17px] leading-8 text-slate-800">Would you be interested in an automated call gatekeeper that screens calls like this before they ever reach you, while still letting customer calls through?</p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <button type="button" onClick={() => setReceptionistStage('interested')} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">They’re interested</button>
+                  <button type="button" onClick={() => setReceptionistStage('irony')} className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">They point out the irony</button>
+                  <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Still not interested</button>
+                </div>
+              </>}
+              {receptionistStage === 'irony' && <>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">Fair point—the irony isn’t lost on me. The reason I’m working on it is that nearly every contractor tells me the same thing: they’re sick of sales calls, but they can’t ignore unknown numbers because the next one could be a customer.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setReceptionistStage('interested')} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Continue to the demo offer</button>
+                  <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Still not interested</button>
+                </div>
+              </>}
+              {receptionistStage === 'interested' && <>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">That’s something I’m developing specifically for service businesses. It finds out who’s calling and why, lets real customers through, and handles the sales calls without interrupting you. Would it be okay if I emailed you a demo number when it’s ready?</p>
+                <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the gatekeeper question</button>
+              </>}
+            </section>
+          )}
+
+          {(callPath === 'website' || (callPath === 'receptionist' && receptionistStage === 'interested')) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-2 flex items-center gap-2">
               <Mail className="h-3.5 w-3.5 text-slate-500" />
-              <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">Capture email</label>
+              <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{callPath === 'receptionist' ? 'Where should the demo number be sent?' : 'Capture email'}</label>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -1212,7 +1280,7 @@ function EmailCaptureSplitScript({
                 className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
             </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {callPath === 'website' ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={onAdvanceToSalesFlow}
@@ -1231,16 +1299,28 @@ function EmailCaptureSplitScript({
                 {savingEmail ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
                 Save and send to follow-up
               </button>
-            </div>
+            </div> : <button
+              type="button"
+              onClick={onSaveReceptionist}
+              disabled={recordingOutcome !== null || !email.trim()}
+              className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
+            >
+              {recordingOutcome === 'not_interested' ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
+              {recordingOutcome === 'not_interested' ? 'Saving interest…' : 'Save email & add to Receptionist Interest'}
+            </button>}
             <p className="mt-2 text-[11px] leading-4 text-slate-400">
-              Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.
+              {callPath === 'website' ? 'Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.' : 'This closes the website opportunity as Not interested, keeps the lead unarchived, and adds it to Receptionist Interest.'}
             </p>
-          </div>
+          </div>}
 
-          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          {(callPath === 'website' || (callPath === 'receptionist' && receptionistStage === 'interested')) && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
-            <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
-          </div>
+            <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">
+              {callPath === 'receptionist'
+                ? 'Perfect, thank you. I’ll save your email and send you the demo number as soon as it’s ready. I really appreciate your interest—I think this could be a useful way to protect your time without missing real customer calls.'
+                : 'Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.'}
+            </p>
+          </div>}
 
           {recordingUrl && (
             <div className="mt-3"><AuthenticatedAudioPlayer url={recordingUrl} /></div>
@@ -1343,19 +1423,11 @@ function EmailCaptureSplitScript({
             </button>
             <button
               type="button"
-              onClick={() => onRecordOutcome('not_interested')}
+              onClick={onArchiveRejection}
               disabled={recordingOutcome !== null}
               className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
             >
               {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onRecordOutcome('not_interested', true)}
-              disabled={recordingOutcome !== null}
-              className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-            >
-              {recordingOutcome === 'not_interested' ? 'Recording…' : 'Website: not interested · Receptionist: interested'}
             </button>
           </section>
         </aside>

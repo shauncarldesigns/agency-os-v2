@@ -15,6 +15,7 @@ import { InlineEditField } from '../shared/InlineEditField';
 import { formatPhone, googleMapsUrl } from '../../lib/format';
 import { BookingPane } from './BookingPane';
 import { RecordButton, type RecordButtonHandle } from './RecordButton';
+import { NotInterestedModal, type NotInterestedCloseout } from '../shared/NotInterestedModal';
 import { ApproachSelector } from './ApproachSelector';
 import { QuestionOrientedPanel } from './QuestionOrientedPanel';
 import {
@@ -183,6 +184,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
   // for diagnostic clarity (the row already holds it).
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingCallId, setRecordingCallId] = useState<number | null>(null);
+  const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const recorderRef = useRef<RecordButtonHandle>(null);
 
   // Call approach — No-oriented (default, pitch-first), Question-oriented
@@ -762,11 +764,16 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
 
   const handleVoicemail = useCallback(() => void recordOutcome('voicemail'), [recordOutcome]);
   const handleNoAnswer = useCallback(() => void recordOutcome('no_answer'), [recordOutcome]);
-  const handleNotInterested = useCallback(() => void recordOutcome('not_interested'), [recordOutcome]);
-  const handleReceptionistInterested = useCallback(
-    () => void recordOutcome('not_interested', { receptionistInterested: true }),
-    [recordOutcome],
-  );
+  const handleNotInterested = useCallback(() => setNotInterestedOpen(true), []);
+  const handleNotInterestedConfirm = useCallback((closeout: NotInterestedCloseout) => {
+    setNotes(closeout.note);
+    void recordOutcome('not_interested', {
+      notes: closeout.note,
+      receptionistInterested: closeout.receptionistInterested,
+      receptionistEmail: closeout.email,
+      archiveLead: closeout.archive,
+    }).then(() => setNotInterestedOpen(false));
+  }, [recordOutcome]);
   const handleCallbackToggle = useCallback(() => setCallbackOpen((v) => !v), []);
   const handleCallbackConfirm = useCallback(async () => {
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
@@ -862,6 +869,16 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
 
   return (
     <div className="cockpit-page">
+      {notInterestedOpen && lead && (
+        <NotInterestedModal
+          leadName={lead.company}
+          initialNote={notes}
+          initialEmail={lead.email ?? ''}
+          busy={recording}
+          onClose={() => setNotInterestedOpen(false)}
+          onConfirm={handleNotInterestedConfirm}
+        />
+      )}
       {pendingBooked && (
         <PostBookingPrompt
           company={pendingBooked.company}
@@ -1075,7 +1092,6 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-no-answer" onClick={handleNoAnswer} disabled={recording || bookingMode}><Circle size={15} /> No answer</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}><PhoneMissed size={15} /> Voicemail</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}><Ban size={15} /> Not interested — remove</button>
-        <button type="button" className="cockpit-outcome-btn" onClick={handleReceptionistInterested} disabled={recording || bookingMode}><Phone size={15} /> Website no · Receptionist interested</button>
         <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}><RotateCcw size={15} /> Callback</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}><CalendarClock size={15} /> Booked demo</button>
       </div>
