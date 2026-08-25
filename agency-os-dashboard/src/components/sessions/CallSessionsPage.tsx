@@ -668,25 +668,23 @@ function EmailEngagedSalesCall({
     }
   }
 
-  async function archiveLead(activeLead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) {
-    if (!window.confirm(`Archive ${activeLead.name} as not interested?`)) return;
+  async function markNotInterested(activeLead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) {
+    if (!window.confirm(`Mark ${activeLead.name} as not interested?`)) return;
     try {
       await api.pipeline.action(activeLead.id, {
         action: 'call_outcome',
-        meta: { outcome: 'not_interested', notes: notes ?? null, recording_call_id: recordingCallId ?? null, channel: 'email' },
-      });
-      await api.pipeline.action(activeLead.id, {
-        action: 'archived',
         meta: {
-          reason: 'not_interested_after_email_engagement_call',
-          mark_not_interested: true,
+          outcome: 'not_interested',
+          notes: notes ?? null,
+          recording_call_id: recordingCallId ?? null,
+          channel: 'email',
           receptionist_interested: receptionistInterested,
         },
       });
-      showToast('Call recorded and lead archived');
+      showToast('Call recorded and lead marked not interested');
       onChanged();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : 'Could not archive lead', 'error');
+      showToast(error instanceof ApiError ? error.message : 'Could not mark lead not interested', 'error');
     }
   }
 
@@ -698,7 +696,7 @@ function EmailEngagedSalesCall({
       onClose={onClose}
       onCallOutcome={recordCall}
       onMoveToClients={moveToClients}
-      onNotInterested={archiveLead}
+      onNotInterested={markNotInterested}
       showToast={showToast}
       externalRecorderRef={recorderRef}
       externalNotes={callNotes}

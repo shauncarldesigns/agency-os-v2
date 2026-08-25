@@ -1683,7 +1683,6 @@ export function OpenSalesCallModal({
         <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>Review on their own — follow up later</button>
         <button type="button" onClick={() => void chooseOutcome('feedback_only')} disabled={loggingOutcome !== null} className={decisionClass}>Feedback only — nurture</button>
         <button type="button" onClick={() => void chooseNotInterested()} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Not interested</button>
-        <button type="button" onClick={() => void chooseNotInterested(true)} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Website no · Receptionist interested</button>
         <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They want to discuss moving forward <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
@@ -2063,7 +2062,7 @@ export function OpenSalesCallModal({
               disabled={loggingOutcome !== null || archivingNotInterested}
               className="col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100"
             >
-              {archivingNotInterested ? 'Saving recording…' : 'Not interested — archive'}
+              {archivingNotInterested ? 'Saving recording…' : 'Not interested'}
             </button>
             <button
               onClick={() => void chooseNotInterested(true)}
@@ -2609,26 +2608,23 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     return null;
   };
 
-  const archiveNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) => {
-    if (!window.confirm(`Archive ${lead.name} as not interested?`)) return;
+  const markNotInterested = async (lead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) => {
+    if (!window.confirm(`Mark ${lead.name} as not interested?`)) return;
     try {
-      await api.pipeline.action(lead.id, {
-        action: 'call_outcome',
-        meta: { outcome: 'not_interested', notes: notes ?? null, recording_call_id: recordingCallId ?? null },
-      });
       const { lead: updated } = await api.pipeline.action(lead.id, {
-        action: 'archived',
+        action: 'call_outcome',
         meta: {
-          reason: 'not_interested_after_call',
-          mark_not_interested: true,
+          outcome: 'not_interested',
+          notes: notes ?? null,
+          recording_call_id: recordingCallId ?? null,
           receptionist_interested: receptionistInterested,
         },
       });
-      applyMutation(updated, 'archived');
+      applyMutation(updated, 'call_outcome');
       setModal(null);
-      showToast('Call recorded and lead archived');
+      showToast('Call recorded and lead marked not interested');
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : 'Could not archive lead', 'error');
+      showToast(err instanceof ApiError ? err.message : 'Could not mark lead not interested', 'error');
     }
   };
 
@@ -2974,7 +2970,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           onClose={() => setModal(null)}
           onCallOutcome={recordCallOutcome}
           onMoveToClients={moveToClients}
-          onNotInterested={archiveNotInterested}
+          onNotInterested={markNotInterested}
           onFollowUpSent={markFollowedUp}
           onEmailCaptured={() => void loadLeads()}
           showToast={showToast}
