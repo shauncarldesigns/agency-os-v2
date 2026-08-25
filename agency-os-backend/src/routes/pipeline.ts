@@ -781,6 +781,18 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
          END`,
       );
     }
+    if (action === 'call_outcome' && actionMeta?.outcome === 'not_interested') {
+      sets.push(
+        "status = 'not_interested'",
+        "outcome = 'Not Interested'",
+        actionMeta.receptionist_interested === true
+          ? 'receptionist_interested = 1'
+          : 'receptionist_interested = 0',
+      );
+      if (actionMeta.receptionist_interested === true) {
+        sets.push("receptionist_interested_at = datetime('now')");
+      }
+    }
     if (action === 'archived' && actionMeta?.mark_not_interested === true) {
       sets.push("status = 'not_interested'", "outcome = 'Not Interested'");
       if (actionMeta.receptionist_interested === true) {
