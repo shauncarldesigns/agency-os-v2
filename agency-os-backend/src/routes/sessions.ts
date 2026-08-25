@@ -571,6 +571,7 @@ interface OutcomeBody {
   // row instead of INSERTing a new one — keeps recording + outcome on a
   // single row instead of duplicating.
   recordingCallId?: number | null;
+  receptionistInterested?: boolean;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -655,8 +656,19 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   } else if (body.outcome === 'not_interested') {
     await c.env.DB.prepare(
       `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?,
+         receptionist_interested = ?,
+         receptionist_interested_at = CASE WHEN ? = 1 THEN ? ELSE receptionist_interested_at END,
          pipeline_last_action_at = ?, updated_at = ? WHERE id = ?`
-    ).bind(now, friendlyOutcome, now, now, body.leadId).run();
+    ).bind(
+      now,
+      friendlyOutcome,
+      body.receptionistInterested === true ? 1 : 0,
+      body.receptionistInterested === true ? 1 : 0,
+      now,
+      now,
+      now,
+      body.leadId,
+    ).run();
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
@@ -778,6 +790,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       label: friendlyOutcome,
       callback_date: body.callbackDate ?? null,
       source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
+      receptionist_interested: body.outcome === 'not_interested' && body.receptionistInterested === true,
     })).run();
   }
 

@@ -19,6 +19,7 @@ import {
   Keyboard,
   UserRound,
   Bot,
+  PhoneIncoming,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
 import { endAccessSession, signBackIn } from '../../lib/accessSession';
@@ -35,6 +36,7 @@ export interface NavBadges {
   coldCallPipeline?: number | null;
   automatedPipeline?: number | null;
   sites?: number | null;
+  receptionistInterest?: number | null;
 }
 
 interface NavItem {
@@ -56,6 +58,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
       { key: 'builder', label: 'Builder Employee', icon: Bot, badgeKey: 'automatedPipeline' },
       { key: 'call-center', label: 'Call Center', icon: Headphones },
+      { key: 'receptionist-interest', label: 'Receptionist Interest', icon: PhoneIncoming, badgeKey: 'receptionistInterest' },
     ],
   },
   {
@@ -73,6 +76,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   research: { title: 'Research', subtitle: 'Keyword demand and map pack ownership per market' },
   'email-outreach': { title: 'Email Outreach', subtitle: 'Build-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
+  'receptionist-interest': { title: 'Receptionist Interest', subtitle: 'Website declines who expressed interest in an automated receptionist' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
   builder: { title: 'Builder Employee', subtitle: 'Bulk LandingSite.ai website production' },

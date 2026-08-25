@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS leads (
   last_called_at  TEXT,                       -- Drives 14-day exclusion in session composer
   demo_booked_at  TEXT,                       -- Quick-reference pointer to latest demo
   demo_scheduled_for TEXT,                    -- Quick-reference pointer to latest demo
+  receptionist_interested INTEGER NOT NULL DEFAULT 0,
+  receptionist_interested_at TEXT,
   -- Automated Pipeline — text + site outreach flow
   pipeline_status TEXT NOT NULL DEFAULT 'awaiting_build',
   site_url        TEXT,
@@ -101,6 +103,9 @@ CREATE INDEX IF NOT EXISTS idx_lead_place ON leads(place_id);
 CREATE INDEX IF NOT EXISTS idx_lead_enrich ON leads(enrichment_status);
 CREATE INDEX IF NOT EXISTS idx_lead_active ON leads(deleted_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_last_called ON leads(last_called_at);
+CREATE INDEX IF NOT EXISTS idx_leads_receptionist_interested
+  ON leads(receptionist_interested, receptionist_interested_at)
+  WHERE receptionist_interested = 1 AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_phone_route ON leads(phone_route);
 CREATE INDEX IF NOT EXISTS idx_leads_pipeline_status
   ON leads(pipeline_status)

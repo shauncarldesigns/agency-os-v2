@@ -61,6 +61,8 @@ export interface Lead {
   last_called_at: string | null;
   demo_booked_at: string | null;
   demo_scheduled_for: string | null;
+  receptionist_interested: number;
+  receptionist_interested_at: string | null;
   // Automated Pipeline — text + site outreach flow (added 2026-07-19).
   // Orthogonal to `status` — a lead can be 'contacted' in the cold-call
   // flow AND 'ready_to_send' in the automated flow at the same time.
@@ -559,6 +561,7 @@ export type Tab =
   | 'pipeline'
   | 'automated-pipeline'
   | 'builder'
+  | 'receptionist-interest'
   | 'sites'
   | 'docs'
   | 'playbook'

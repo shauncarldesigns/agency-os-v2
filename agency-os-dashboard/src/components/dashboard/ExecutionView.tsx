@@ -763,6 +763,10 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
   const handleVoicemail = useCallback(() => void recordOutcome('voicemail'), [recordOutcome]);
   const handleNoAnswer = useCallback(() => void recordOutcome('no_answer'), [recordOutcome]);
   const handleNotInterested = useCallback(() => void recordOutcome('not_interested'), [recordOutcome]);
+  const handleReceptionistInterested = useCallback(
+    () => void recordOutcome('not_interested', { receptionistInterested: true }),
+    [recordOutcome],
+  );
   const handleCallbackToggle = useCallback(() => setCallbackOpen((v) => !v), []);
   const handleCallbackConfirm = useCallback(async () => {
     await recordOutcome('callback', { callbackDate, blockHint: callbackBlock });
@@ -1070,7 +1074,8 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
       <div className="cockpit-outcome-bar">
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-no-answer" onClick={handleNoAnswer} disabled={recording || bookingMode}><Circle size={15} /> No answer</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}><PhoneMissed size={15} /> Voicemail</button>
-        <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}><Ban size={15} /> Not interested</button>
+        <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}><Ban size={15} /> Not interested — remove</button>
+        <button type="button" className="cockpit-outcome-btn" onClick={handleReceptionistInterested} disabled={recording || bookingMode}><Phone size={15} /> Website no · Receptionist interested</button>
         <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}><RotateCcw size={15} /> Callback</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}><CalendarClock size={15} /> Booked demo</button>
       </div>
