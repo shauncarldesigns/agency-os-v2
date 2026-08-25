@@ -572,6 +572,8 @@ interface OutcomeBody {
   // single row instead of duplicating.
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
+  receptionistEmail?: string;
+  archiveLead?: boolean;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -658,6 +660,8 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?,
          receptionist_interested = ?,
          receptionist_interested_at = CASE WHEN ? = 1 THEN ? ELSE receptionist_interested_at END,
+         email = COALESCE(?, email),
+         pipeline_status = CASE WHEN ? = 1 THEN 'archived' ELSE pipeline_status END,
          pipeline_last_action_at = ?, updated_at = ? WHERE id = ?`
     ).bind(
       now,
@@ -665,6 +669,8 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       body.receptionistInterested === true ? 1 : 0,
       body.receptionistInterested === true ? 1 : 0,
       now,
+      body.receptionistEmail?.trim() || null,
+      body.archiveLead === true ? 1 : 0,
       now,
       now,
       body.leadId,
@@ -791,6 +797,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       callback_date: body.callbackDate ?? null,
       source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
       receptionist_interested: body.outcome === 'not_interested' && body.receptionistInterested === true,
+      archived: body.outcome === 'not_interested' && body.archiveLead === true,
     })).run();
   }
 

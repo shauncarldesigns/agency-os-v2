@@ -792,6 +792,10 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       if (actionMeta.receptionist_interested === true) {
         sets.push("receptionist_interested_at = datetime('now')");
       }
+      if (typeof actionMeta.receptionist_email === 'string' && actionMeta.receptionist_email.trim()) {
+        sets.push('email = ?');
+        params.push(actionMeta.receptionist_email.trim());
+      }
     }
     if (action === 'archived' && actionMeta?.mark_not_interested === true) {
       sets.push("status = 'not_interested'", "outcome = 'Not Interested'");
