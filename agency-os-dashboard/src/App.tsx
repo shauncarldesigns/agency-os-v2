@@ -17,11 +17,13 @@ import { useToast } from './hooks/useToast';
 import { TIER_MRR } from './lib/pricing';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel';
+import { ReceptionistInterestPage } from './components/receptionist/ReceptionistInterestPage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
   const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, callOutreach: 0, pipeline: 0, sites: 0 });
+  const [receptionistInterestCount, setReceptionistInterestCount] = useState(0);
   // Count of automated-pipeline leads still awaiting a site build — drives
   // the sidebar badge. Computed from the same leads fetch as the other nav
   // counts (leads.list returns pipeline_status).
@@ -96,6 +98,7 @@ export default function App() {
         sites: clients.length,
       });
       setAwaitingBuildCount(awaitingBuild);
+      setReceptionistInterestCount(leadsRes.leads.filter((lead) => lead.receptionist_interested === 1 && lead.deleted_at === null).length);
     } catch {
       showToast('Could not reach API', 'error');
     }
@@ -106,6 +109,7 @@ export default function App() {
     coldCallPipeline: navCounts.pipeline || null,
     automatedPipeline: awaitingBuildCount || null,
     sites: navCounts.sites || null,
+    receptionistInterest: receptionistInterestCount || null,
   };
 
   const headerExtra = (
@@ -208,6 +212,7 @@ export default function App() {
             {activeTab === 'builder' && (
               <div className="main"><BuilderStatusPanel showToast={showToast} onChanged={loadStats} /></div>
             )}
+            {activeTab === 'receptionist-interest' && <ReceptionistInterestPage showToast={showToast} />}
             {activeTab === 'sites' && (
               <div className="main">
                 <SitesPanel

@@ -1190,6 +1190,7 @@ export interface SessionOutcomeBody {
   objectionHits?: ObjectionHit[];
   recordingUrl?: string | null;
   recordingCallId?: number | null;
+  receptionistInterested?: boolean;
 }
 
 export { API_BASE, TRACKING_BASE };

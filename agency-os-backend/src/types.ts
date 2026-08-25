@@ -97,6 +97,8 @@ export interface Lead {
   last_called_at: string | null;
   demo_booked_at: string | null;
   demo_scheduled_for: string | null;
+  receptionist_interested: number;
+  receptionist_interested_at: string | null;
   // Automated Pipeline — text + site outreach flow (added 2026-07-19).
   // Orthogonal to `status`. See routes/pipeline.ts for the state machine.
   pipeline_status: string;

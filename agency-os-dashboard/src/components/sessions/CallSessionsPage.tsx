@@ -668,7 +668,7 @@ function EmailEngagedSalesCall({
     }
   }
 
-  async function archiveLead(activeLead: PipelineLead, notes?: string, recordingCallId?: number) {
+  async function archiveLead(activeLead: PipelineLead, notes?: string, recordingCallId?: number, receptionistInterested = false) {
     if (!window.confirm(`Archive ${activeLead.name} as not interested?`)) return;
     try {
       await api.pipeline.action(activeLead.id, {
@@ -677,7 +677,11 @@ function EmailEngagedSalesCall({
       });
       await api.pipeline.action(activeLead.id, {
         action: 'archived',
-        meta: { reason: 'not_interested_after_email_engagement_call' },
+        meta: {
+          reason: 'not_interested_after_email_engagement_call',
+          mark_not_interested: true,
+          receptionist_interested: receptionistInterested,
+        },
       });
       showToast('Call recorded and lead archived');
       onChanged();
@@ -865,7 +869,7 @@ function CallOutreachModal({
     }
   }
 
-  async function recordOutcome(outcome: CallOutcome) {
+  async function recordOutcome(outcome: CallOutcome, receptionistInterested = false) {
     if (!lead) return;
     if (outcome === 'callback' && !callbackDate) {
       showToast('Choose a follow-up date first', 'error');
@@ -883,6 +887,7 @@ function CallOutreachModal({
         recordingCallId: savedRecording?.callId ?? recordingCallId ?? undefined,
         callbackDate: outcome === 'callback' ? callbackDate : undefined,
         preserveFinalReview: returnedFromAutomation,
+        receptionistInterested: outcome === 'not_interested' && receptionistInterested,
       });
       const label = {
         no_answer: 'No answer recorded',
@@ -983,7 +988,7 @@ function CallOutreachModal({
                 onCallNotesChange={onCallNotesChange}
                 onSave={() => void saveToFollowUp()}
                 onAdvanceToSalesFlow={() => void advanceToSalesFlow()}
-                onRecordOutcome={(outcome) => void recordOutcome(outcome)}
+                onRecordOutcome={(outcome, receptionistInterested) => void recordOutcome(outcome, receptionistInterested)}
               />
             )}
 
@@ -1034,6 +1039,14 @@ function CallOutreachModal({
                 className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
               >
                 {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void recordOutcome('not_interested', true)}
+                disabled={recordingOutcome !== null}
+                className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+              >
+                {recordingOutcome === 'not_interested' ? 'Recording…' : 'Website: not interested · Receptionist: interested'}
               </button>
             </section>}
 
@@ -1142,7 +1155,7 @@ function EmailCaptureSplitScript({
   onCallNotesChange: (value: string) => void;
   onSave: () => void;
   onAdvanceToSalesFlow: () => void;
-  onRecordOutcome: (outcome: CallOutcome) => void;
+  onRecordOutcome: (outcome: CallOutcome, receptionistInterested?: boolean) => void;
 }) {
   const latestCall = callHistory[0] ?? null;
 
@@ -1337,6 +1350,14 @@ function EmailCaptureSplitScript({
               className="mt-2 w-full rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-left text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
             >
               {recordingOutcome === 'not_interested' ? 'Recording…' : 'Not interested — remove from board'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onRecordOutcome('not_interested', true)}
+              disabled={recordingOutcome !== null}
+              className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+            >
+              {recordingOutcome === 'not_interested' ? 'Recording…' : 'Website: not interested · Receptionist: interested'}
             </button>
           </section>
         </aside>

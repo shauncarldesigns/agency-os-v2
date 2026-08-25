@@ -783,6 +783,9 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     }
     if (action === 'archived' && actionMeta?.mark_not_interested === true) {
       sets.push("status = 'not_interested'", "outcome = 'Not Interested'");
+      if (actionMeta.receptionist_interested === true) {
+        sets.push('receptionist_interested = 1', "receptionist_interested_at = datetime('now')");
+      }
     }
     params.push(id);
     await c.env.DB.prepare(`UPDATE leads SET ${sets.join(', ')} WHERE id = ?`)
