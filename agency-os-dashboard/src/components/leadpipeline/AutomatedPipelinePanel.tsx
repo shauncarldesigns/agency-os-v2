@@ -2628,17 +2628,9 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           receptionist_email: closeout.email ?? null,
         },
       });
-      if (closeout.archive) {
-        const { lead: archived } = await api.pipeline.action(lead.id, {
-          action: 'archived',
-          meta: { reason: 'not_interested_after_call', mark_not_interested: true, note: closeout.note },
-        });
-        applyMutation(archived, 'archived');
-      } else {
-        applyMutation(updated, 'call_outcome');
-      }
+      applyMutation(updated, 'call_outcome');
       setModal(null);
-      showToast(closeout.archive ? 'Call recorded and lead archived' : 'Call recorded and lead marked not interested');
+      showToast('Call recorded and lead archived');
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Could not mark lead not interested', 'error');
     }

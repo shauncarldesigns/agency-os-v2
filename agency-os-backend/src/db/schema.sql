@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS leads (
   pipeline_status TEXT NOT NULL DEFAULT 'awaiting_build',
   site_url        TEXT,
   site_url_raw    TEXT,
+  demo_site_status TEXT NOT NULL DEFAULT 'none', -- none / live / cleanup_needed / deleted
+  demo_site_deleted_at TEXT,
   site_review_status TEXT NOT NULL DEFAULT 'pending',
   site_review_reasons TEXT,
   site_review_note TEXT,
@@ -107,6 +109,41 @@ CREATE INDEX IF NOT EXISTS idx_leads_receptionist_interested
   ON leads(receptionist_interested, receptionist_interested_at)
   WHERE receptionist_interested = 1 AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_phone_route ON leads(phone_route);
+CREATE INDEX IF NOT EXISTS idx_leads_demo_site_status
+  ON leads(demo_site_status) WHERE deleted_at IS NULL;
+CREATE TRIGGER IF NOT EXISTS leads_demo_site_saved
+AFTER UPDATE OF site_url, site_url_raw ON leads
+WHEN COALESCE(NULLIF(TRIM(NEW.site_url_raw), ''), NULLIF(TRIM(NEW.site_url), ''), '') != ''
+ AND (OLD.site_url IS NOT NEW.site_url OR OLD.site_url_raw IS NOT NEW.site_url_raw)
+BEGIN
+  UPDATE leads SET demo_site_status = 'live', demo_site_deleted_at = NULL WHERE id = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS leads_demo_site_cleanup_on_decline
+AFTER UPDATE OF status, pipeline_status ON leads
+WHEN COALESCE(NULLIF(TRIM(NEW.site_url_raw), ''), NULLIF(TRIM(NEW.site_url), ''), '') != ''
+ AND NEW.demo_site_status = 'live'
+ AND (NEW.status = 'not_interested' OR (NEW.pipeline_status = 'archived' AND NEW.status NOT IN ('qualified', 'client')))
+BEGIN
+  UPDATE leads SET demo_site_status = 'cleanup_needed' WHERE id = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS leads_archive_not_interested
+AFTER UPDATE OF status ON leads
+WHEN NEW.status = 'not_interested' AND NEW.deleted_at IS NULL
+BEGIN
+  UPDATE leads
+     SET pipeline_status = 'archived',
+         demo_site_status = CASE
+           WHEN demo_site_status = 'deleted' THEN 'deleted'
+           WHEN COALESCE(NULLIF(TRIM(site_url_raw), ''), NULLIF(TRIM(site_url), ''), '') != '' THEN 'cleanup_needed'
+           ELSE 'none'
+         END,
+         pipeline_last_action_at = datetime('now'), updated_at = datetime('now')
+   WHERE id = NEW.id;
+  UPDATE email_automations
+     SET status = 'stopped', stopped_at = COALESCE(stopped_at, datetime('now')), updated_at = datetime('now')
+   WHERE lead_id = NEW.id AND status IN ('active', 'paused');
+  UPDATE callbacks SET status = 'cancelled' WHERE lead_id = NEW.id AND status = 'pending';
+END;
 CREATE INDEX IF NOT EXISTS idx_leads_pipeline_status
   ON leads(pipeline_status)
   WHERE deleted_at IS NULL;
@@ -594,7 +631,7 @@ CREATE TABLE IF NOT EXISTS callbacks (
   due_date      TEXT NOT NULL,
   block_hint    TEXT,                                          -- 'morning' | 'evening' | null
   notes         TEXT,
-  status        TEXT NOT NULL DEFAULT 'pending',               -- pending | completed | missed
+  status        TEXT NOT NULL DEFAULT 'pending',               -- pending | completed | missed | cancelled
   completed_at  TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );

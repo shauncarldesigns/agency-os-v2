@@ -20,6 +20,7 @@ import {
   UserRound,
   Bot,
   PhoneIncoming,
+  Archive,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
 import { endAccessSession, signBackIn } from '../../lib/accessSession';
@@ -37,6 +38,7 @@ export interface NavBadges {
   automatedPipeline?: number | null;
   sites?: number | null;
   receptionistInterest?: number | null;
+  archivedLeads?: number | null;
 }
 
 interface NavItem {
@@ -54,6 +56,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'research', label: 'Research', icon: TrendingUp },
       { key: 'prospect', label: 'Lead Finder', icon: SearchIcon },
       { key: 'pipeline', label: 'Lead Pipeline', icon: Users, badgeKey: 'coldCallPipeline' },
+      { key: 'archived-leads', label: 'Archived Leads', icon: Archive, badgeKey: 'archivedLeads' },
       { key: 'email-outreach', label: 'Email Outreach', icon: Mail, badgeKey: 'callOutreach' },
       { key: 'automated-pipeline', label: 'Text Outreach', icon: MessageSquareText, badgeKey: 'automatedPipeline' },
       { key: 'builder', label: 'Builder Employee', icon: Bot, badgeKey: 'automatedPipeline' },
@@ -78,6 +81,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   'receptionist-interest': { title: 'Receptionist Interest', subtitle: 'Website declines who expressed interest in an automated receptionist' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
+  'archived-leads': { title: 'Archived Leads', subtitle: 'Closed prospects, site cleanup, notes, and reactivation' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },
   builder: { title: 'Builder Employee', subtitle: 'Bulk LandingSite.ai website production' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },

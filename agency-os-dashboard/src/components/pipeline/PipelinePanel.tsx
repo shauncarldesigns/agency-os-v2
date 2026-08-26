@@ -24,6 +24,7 @@ interface PipelinePanelProps {
 
 type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
+type DemoSiteFilter = 'all' | 'cleanup_needed' | 'live' | 'deleted' | 'none';
 type PhoneFilter = 'all' | 'review';
 // Enrichment status filter. Mirrors lead.enrichment_status's four values so
 // the operator can quickly slice to "leads still pending enrichment" or
@@ -41,6 +42,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [stage, setStage] = useState<StageFilter>('all');
   const [tier, setTier] = useState<TierFilter>('all');
   const [website, setWebsite] = useState<WebsiteFilter>('all');
+  const [demoSite, setDemoSite] = useState<DemoSiteFilter>('all');
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>('all');
   const [enrichment, setEnrichment] = useState<EnrichmentFilter>('all');
   const [sort, setSort] = useState<SortMode>('default');
@@ -96,7 +98,12 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   }, [view]);
 
   const phoneReviewCount = useMemo(
-    () => leads.filter((l) => !l.deleted_at && l.phone_route === 'review').length,
+    () => leads.filter((l) => !l.deleted_at && l.pipeline_status !== 'archived' && l.phone_route === 'review').length,
+    [leads],
+  );
+
+  const activeLeads = useMemo(
+    () => leads.filter((lead) => lead.pipeline_status !== 'archived'),
     [leads],
   );
 
@@ -122,9 +129,8 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
 
   // Filter for the table — stats show all leads (excluding hidden filters)
   const filtered = useMemo(() => {
-    let list = leads;
-    if (stage === 'archived') list = list.filter(l => l.pipeline_status === 'archived');
-    else if (stage !== 'all') list = list.filter(l => l.status === stage);
+    let list = view === 'active' ? activeLeads : leads;
+    if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
     if (view === 'active' && phoneFilter === 'review') list = list.filter(l => l.phone_route === 'review');
     if (enrichment !== 'all') list = list.filter(l => l.enrichment_status === enrichment);
@@ -133,6 +139,10 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
     // Website column actually shows ("No site" badge vs domain).
     if (website === 'none') list = list.filter(l => l.enrichment_status === 'enriched' && !l.website);
     if (website === 'has') list = list.filter(l => l.enrichment_status === 'enriched' && !!l.website);
+    if (demoSite !== 'all') list = list.filter(l => {
+      const status = l.demo_site_status ?? (l.site_url_raw || l.site_url ? 'live' : 'none');
+      return status === demoSite;
+    });
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       list = list.filter(l =>
@@ -160,7 +170,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       });
     }
     return list;
-  }, [leads, view, stage, tier, phoneFilter, enrichment, website, search, sort]);
+  }, [leads, activeLeads, view, stage, tier, phoneFilter, enrichment, website, demoSite, search, sort]);
 
   return (
     <>
@@ -208,16 +218,16 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       {view === 'active' && (
         <>
           <EnrichmentStrip
-            leads={leads}
+            leads={activeLeads}
             selectedIds={selectedIds}
             onClearSelection={() => setSelectedIds(new Set())}
             showToast={showToast}
             onComplete={() => { loadLeads(); setSelectedIds(new Set()); }}
           />
 
-          <StageFunnel leads={leads} active={stage} onChange={setStage} />
+          <StageFunnel leads={activeLeads} active={stage} onChange={setStage} />
 
-          <TierStats leads={leads} />
+          <TierStats leads={activeLeads} />
         </>
       )}
 
@@ -277,9 +287,18 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         )}
         {view === 'active' && (
           <select className="fsel" value={website} onChange={e => setWebsite(e.target.value as WebsiteFilter)}>
-            <option value="all">All Websites</option>
-            <option value="none">No website</option>
-            <option value="has">Has website</option>
+            <option value="all">All Existing Sites</option>
+            <option value="none">No existing site</option>
+            <option value="has">Has existing site</option>
+          </select>
+        )}
+        {view === 'active' && (
+          <select className="fsel" value={demoSite} onChange={e => setDemoSite(e.target.value as DemoSiteFilter)}>
+            <option value="all">All Demo Sites</option>
+            <option value="cleanup_needed">⚠ Cleanup needed</option>
+            <option value="live">Live demos</option>
+            <option value="deleted">Deleted demos</option>
+            <option value="none">No demo built</option>
           </select>
         )}
         {view === 'active' && (

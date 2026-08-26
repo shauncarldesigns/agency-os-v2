@@ -1,6 +1,6 @@
 import type { Lead } from '../../lib/types';
 
-export type StageFilter = 'all' | 'cold' | 'contacted' | 'qualified' | 'client' | 'not_interested' | 'archived';
+export type StageFilter = 'all' | 'cold' | 'contacted' | 'qualified' | 'client';
 
 interface StageFunnelProps {
   leads: Lead[];
@@ -15,13 +15,11 @@ export function StageFunnel({ leads, active, onChange }: StageFunnelProps) {
     contacted: leads.filter(l => l.status === 'contacted').length,
     qualified: leads.filter(l => l.status === 'qualified').length,
     client: leads.filter(l => l.status === 'client').length,
-    not_interested: leads.filter(l => l.status === 'not_interested').length,
-    archived: leads.filter(l => l.pipeline_status === 'archived').length,
   };
 
   // 'qualified' was generic in pre-Phase-0 vocabulary; now it specifically
   // means "demo booked, prospect project exists, awaiting outcome". Label
-  // reflects that. 'not_interested' is the new cold-call-rejection slot.
+  // reflects that. Not Interested is an archive reason, not an active stage.
   // 'dead' is reserved for churned former clients.
   const stages: Array<{ key: StageFilter; label: string; muted?: boolean }> = [
     { key: 'all', label: 'All' },
@@ -29,8 +27,6 @@ export function StageFunnel({ leads, active, onChange }: StageFunnelProps) {
     { key: 'contacted', label: 'Contacted' },
     { key: 'qualified', label: 'Demo booked' },
     { key: 'client', label: 'Client' },
-    { key: 'not_interested', label: 'Not interested', muted: true },
-    { key: 'archived', label: 'Archived', muted: true },
   ];
 
   return (
@@ -42,7 +38,7 @@ export function StageFunnel({ leads, active, onChange }: StageFunnelProps) {
         </div>
         {active !== 'all' && <button onClick={() => onChange('all')} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Clear filter</button>}
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         {stages.map(s => {
           const selected = active === s.key;
           return (

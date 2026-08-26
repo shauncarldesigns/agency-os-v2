@@ -771,7 +771,6 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
       notes: closeout.note,
       receptionistInterested: closeout.receptionistInterested,
       receptionistEmail: closeout.email,
-      archiveLead: closeout.archive,
     }).then(() => setNotInterestedOpen(false));
   }, [recordOutcome]);
   const handleCallbackToggle = useCallback(() => setCallbackOpen((v) => !v), []);

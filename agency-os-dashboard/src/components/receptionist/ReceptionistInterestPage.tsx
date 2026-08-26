@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Mail, Phone, PhoneIncoming } from 'lucide-react';
-import { api } from '../../lib/api';
+import { CheckCircle2, Link2, Mail, Phone, PhoneIncoming, Trash2 } from 'lucide-react';
+import { api, ApiError } from '../../lib/api';
 import type { Lead } from '../../lib/types';
 
 export function ReceptionistInterestPage({ showToast }: { showToast: (message: string, type?: 'success' | 'error') => void }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     api.leads.list({ status: 'not_interested' })
       .then(({ leads: rows }) => setLeads(
         rows
@@ -16,7 +17,20 @@ export function ReceptionistInterestPage({ showToast }: { showToast: (message: s
       ))
       .catch((error) => showToast(`Could not load receptionist interest: ${(error as Error).message}`, 'error'))
       .finally(() => setLoading(false));
-  }, [showToast]);
+  };
+
+  useEffect(() => { load(); }, [showToast]);
+
+  const completeCleanup = async (lead: Lead) => {
+    if (!window.confirm(`Confirm that the demo site for "${lead.company}" has been deleted in LandingSite.`)) return;
+    try {
+      const { lead: updated } = await api.pipeline.updateDemoSiteStatus(lead.id, 'deleted');
+      setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
+      showToast(`${lead.company} site cleanup complete`, 'success');
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not complete site cleanup', 'error');
+    }
+  };
 
   return (
     <div className="main">
@@ -49,6 +63,14 @@ export function ReceptionistInterestPage({ showToast }: { showToast: (message: s
                       {[lead.contact, lead.industry, [lead.city, lead.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'No additional details'}
                     </p>
                     {lead.notes && <p className="mt-2 line-clamp-2 text-xs text-slate-500">{lead.notes}</p>}
+                    {lead.demo_site_status === 'cleanup_needed' && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
+                        <span className="mr-auto text-xs font-semibold text-amber-800">Website demo cleanup required</span>
+                        {(lead.site_url_raw || lead.site_url) && <a href={lead.site_url_raw || lead.site_url || '#'} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"><Link2 className="h-3 w-3" /> Open demo</a>}
+                        <button type="button" onClick={() => void completeCleanup(lead)} className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-600"><Trash2 className="h-3 w-3" /> Mark deleted</button>
+                      </div>
+                    )}
+                    {lead.demo_site_status === 'deleted' && <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Website demo cleanup complete</p>}
                   </div>
                   <div className="text-xs text-slate-400">
                     {lead.receptionist_interested_at ? new Date(lead.receptionist_interested_at).toLocaleDateString() : 'Date unavailable'}
