@@ -20,6 +20,7 @@ import type {
 import { badRequest, conflict, notFound, log } from '../utils/errors';
 import { normalizeRecordingStorageValue } from '../utils/recordings';
 import { createProjectFromLead } from './leads';
+import { closeLeadNotInterested } from '../services/leadCloseout';
 import {
   chicagoToday, chicagoCallingMode, chicagoCallingWeek,
 } from '../services/dayOfWeek';
@@ -573,7 +574,6 @@ interface OutcomeBody {
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string;
-  archiveLead?: boolean;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -656,25 +656,12 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // Silent advance — no last_called_at update so the lead doesn't get
     // 14-day-excluded by a non-call.
   } else if (body.outcome === 'not_interested') {
-    await c.env.DB.prepare(
-      `UPDATE leads SET last_called_at = ?, status = 'not_interested', outcome = ?,
-         receptionist_interested = ?,
-         receptionist_interested_at = CASE WHEN ? = 1 THEN ? ELSE receptionist_interested_at END,
-         email = COALESCE(?, email),
-         pipeline_status = CASE WHEN ? = 1 THEN 'archived' ELSE pipeline_status END,
-         pipeline_last_action_at = ?, updated_at = ? WHERE id = ?`
-    ).bind(
+    await closeLeadNotInterested(c.env.DB, body.leadId, {
+      receptionistInterested: body.receptionistInterested,
+      receptionistEmail: body.receptionistEmail,
+      lastCalledAt: now,
       now,
-      friendlyOutcome,
-      body.receptionistInterested === true ? 1 : 0,
-      body.receptionistInterested === true ? 1 : 0,
-      now,
-      body.receptionistEmail?.trim() || null,
-      body.archiveLead === true ? 1 : 0,
-      now,
-      now,
-      body.leadId,
-    ).run();
+    });
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
@@ -797,7 +784,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       callback_date: body.callbackDate ?? null,
       source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
       receptionist_interested: body.outcome === 'not_interested' && body.receptionistInterested === true,
-      archived: body.outcome === 'not_interested' && body.archiveLead === true,
+      archived: body.outcome === 'not_interested',
     })).run();
   }
 

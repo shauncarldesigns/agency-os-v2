@@ -18,12 +18,14 @@ import { TIER_MRR } from './lib/pricing';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel';
 import { ReceptionistInterestPage } from './components/receptionist/ReceptionistInterestPage';
+import { ArchivedLeadsPage } from './components/archive/ArchivedLeadsPage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
   const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, callOutreach: 0, pipeline: 0, sites: 0 });
   const [receptionistInterestCount, setReceptionistInterestCount] = useState(0);
+  const [archivedCleanupCount, setArchivedCleanupCount] = useState(0);
   // Count of automated-pipeline leads still awaiting a site build — drives
   // the sidebar badge. Computed from the same leads fetch as the other nav
   // counts (leads.list returns pipeline_status).
@@ -99,6 +101,12 @@ export default function App() {
       });
       setAwaitingBuildCount(awaitingBuild);
       setReceptionistInterestCount(leadsRes.leads.filter((lead) => lead.receptionist_interested === 1 && lead.deleted_at === null).length);
+      setArchivedCleanupCount(leadsRes.leads.filter((lead) =>
+        lead.pipeline_status === 'archived'
+        && lead.demo_site_status === 'cleanup_needed'
+        && lead.receptionist_interested !== 1
+        && lead.deleted_at === null
+      ).length);
     } catch {
       showToast('Could not reach API', 'error');
     }
@@ -110,6 +118,7 @@ export default function App() {
     automatedPipeline: awaitingBuildCount || null,
     sites: navCounts.sites || null,
     receptionistInterest: receptionistInterestCount || null,
+    archivedLeads: archivedCleanupCount || null,
   };
 
   const headerExtra = (
@@ -199,6 +208,7 @@ export default function App() {
                 />
               </div>
             )}
+            {activeTab === 'archived-leads' && <ArchivedLeadsPage showToast={showToast} onChanged={loadStats} />}
             {activeTab === 'automated-pipeline' && (
               <AutomatedPipelinePanel
                 showToast={showToast}

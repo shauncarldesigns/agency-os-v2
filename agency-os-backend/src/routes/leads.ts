@@ -5,6 +5,7 @@ import { scheduleEmailAutomation } from '../services/emailAutomation';
 import { badRequest, conflict, notFound, serverError, log } from '../utils/errors';
 import { generateProjectSlug } from '../utils/slug';
 import { classifyPhoneNumber, savePhoneClassification } from '../services/twilioLookup';
+import { closeLeadNotInterested } from '../services/leadCloseout';
 
 export const leadsRouter = new Hono<{ Bindings: Env }>();
 
@@ -23,7 +24,7 @@ const LEAD_FIELDS = [
 
 leadsRouter.get('/', async (c) => {
   try {
-    const { status, tier, enrichment, search, industry, include_deleted, only_deleted } = c.req.query();
+    const { status, pipeline_status, tier, enrichment, search, industry, include_deleted, only_deleted } = c.req.query();
     let query = `
       SELECT leads.*,
              (
@@ -105,6 +106,7 @@ leadsRouter.get('/', async (c) => {
     }
 
     if (status) { query += ' AND status = ?'; params.push(status); }
+    if (pipeline_status) { query += ' AND pipeline_status = ?'; params.push(pipeline_status); }
     if (tier) { query += ' AND recommended_tier = ?'; params.push(parseInt(tier, 10)); }
     if (enrichment) { query += ' AND enrichment_status = ?'; params.push(enrichment); }
     if (industry) { query += ' AND industry = ?'; params.push(industry); }
@@ -408,6 +410,10 @@ leadsRouter.put('/:id', async (c) => {
       }
     } else {
       await updateLead.run();
+    }
+
+    if (body.status === 'not_interested') {
+      await closeLeadNotInterested(c.env.DB, id);
     }
 
     // NOTE: Auto-project-on-client was removed in the qualify-flow refactor.
@@ -726,6 +732,81 @@ leadsRouter.post('/:id/restore', async (c) => {
   log('info', 'leads', `Lead ${id} restored`);
   const lead = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first();
   return c.json({ lead });
+});
+
+// POST /api/leads/:id/reactivate — return an archived prospect to active
+// outreach without automatically restarting any email/text automation.
+leadsRouter.post('/:id/reactivate', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+  const lead = await c.env.DB.prepare(
+    "SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL AND pipeline_status = 'archived'",
+  ).bind(id).first<Lead>();
+  if (!lead) return c.json(notFound('Archived lead'), 404);
+  if (lead.status === 'client' || lead.status === 'qualified' || lead.project_id) {
+    return c.json(badRequest('Client and booked-demo records must be managed from Clients & Sites'), 400);
+  }
+
+  const body = await c.req.json().catch(() => ({})) as { workspace?: string; destination?: string };
+  const workspace = body.workspace;
+  if (!workspace || !['text', 'email', 'receptionist'].includes(workspace)) {
+    return c.json(badRequest('workspace must be text, email, or receptionist'), 400);
+  }
+  if (workspace === 'receptionist') {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+        UPDATE leads
+           SET status = 'not_interested', pipeline_status = 'archived',
+               receptionist_interested = 1, receptionist_interested_at = datetime('now'),
+               outcome = 'Receptionist Interest Reactivated', updated_at = datetime('now')
+         WHERE id = ?
+      `).bind(id),
+      c.env.DB.prepare(`
+        INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+        VALUES (?, 'reactivated', 'archived', 'receptionist_interest', ?)
+      `).bind(id, JSON.stringify({ workspace: 'receptionist', previous_status: lead.status, previous_demo_site_status: lead.demo_site_status })),
+    ]);
+    const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
+    return c.json({ lead: updated });
+  }
+  const destination = body.destination;
+  if (!destination || !['awaiting_build', 'built_needs_review', 'ready_to_send'].includes(destination)) {
+    return c.json(badRequest('destination must be awaiting_build, built_needs_review, or ready_to_send'), 400);
+  }
+
+  const siteWasDeleted = lead.demo_site_status === 'deleted';
+  const hasSite = !siteWasDeleted && Boolean(lead.site_url_raw?.trim() || lead.site_url?.trim());
+  if (destination !== 'awaiting_build' && !hasSite) {
+    return c.json(badRequest('Review Site and Ready to Send require an existing demo site'), 400);
+  }
+  const pipelineStatus = destination;
+  const resetBuild = destination === 'awaiting_build';
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`
+      UPDATE leads
+         SET status = 'contacted', pipeline_status = ?, outcome = 'Reactivated',
+             phone_route = ?, receptionist_interested = 0,
+             demo_site_status = CASE WHEN ? = 1 THEN 'none' WHEN ? = 1 THEN 'live' ELSE demo_site_status END,
+             demo_site_deleted_at = NULL,
+             site_url = CASE WHEN ? = 1 THEN NULL ELSE site_url END,
+             site_url_raw = CASE WHEN ? = 1 THEN NULL ELSE site_url_raw END,
+             site_review_status = CASE
+               WHEN ? = 1 THEN 'pending'
+               WHEN ? = 'ready_to_send' THEN 'approved'
+               ELSE 'pending'
+             END,
+             pipeline_last_action_at = datetime('now'), updated_at = datetime('now')
+       WHERE id = ?
+    `).bind(pipelineStatus, workspace === 'text' ? 'text' : 'call', resetBuild ? 1 : 0, hasSite ? 1 : 0, resetBuild ? 1 : 0, resetBuild ? 1 : 0, resetBuild ? 1 : 0, pipelineStatus, id),
+    c.env.DB.prepare(`
+      INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+      VALUES (?, 'reactivated', 'archived', ?, ?)
+    `).bind(id, pipelineStatus, JSON.stringify({ workspace, previous_status: lead.status, previous_demo_site_status: lead.demo_site_status })),
+  ]);
+
+  const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();
+  return c.json({ lead: updated });
 });
 
 // CSV import — header-based parser, dedupes by company+phone or place_id

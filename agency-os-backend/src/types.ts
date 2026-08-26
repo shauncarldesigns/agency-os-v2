@@ -98,6 +98,8 @@ export interface Lead {
   demo_booked_at: string | null;
   demo_scheduled_for: string | null;
   receptionist_interested: number;
+  demo_site_status: 'none' | 'live' | 'cleanup_needed' | 'deleted';
+  demo_site_deleted_at: string | null;
   receptionist_interested_at: string | null;
   // Automated Pipeline — text + site outreach flow (added 2026-07-19).
   // Orthogonal to `status`. See routes/pipeline.ts for the state machine.
@@ -308,7 +310,7 @@ export type SessionBlock = 'morning' | 'evening';
 export type SessionStatus = 'planned' | 'active' | 'complete';
 export type CallOutcome = 'no_answer' | 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
 export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
-export type CallbackStatus = 'pending' | 'completed' | 'missed';
+export type CallbackStatus = 'pending' | 'completed' | 'missed' | 'cancelled';
 
 export type SessionKind = 'auto' | 'hot';
 

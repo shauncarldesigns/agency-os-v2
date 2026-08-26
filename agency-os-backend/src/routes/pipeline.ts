@@ -18,6 +18,7 @@ import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
 import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
 import { scheduleEmailAutomation } from '../services/emailAutomation';
+import { closeLeadNotInterested } from '../services/leadCloseout';
 import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligibility';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
@@ -655,6 +656,50 @@ type OutreachAction =
   | 'called'
   | 'archived';
 
+// POST /api/pipeline/leads/:id/demo-site-status
+// The app cannot delete a LandingSite project itself yet, so this records the
+// operator's cleanup after they remove it there. The saved URL remains as
+// historical context and can still be reopened if the status was changed by
+// mistake.
+pipelineRouter.post('/leads/:id/demo-site-status', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
+    const body = await c.req.json().catch(() => ({})) as { status?: string };
+    if (!body.status || !['live', 'cleanup_needed', 'deleted'].includes(body.status)) {
+      return c.json(badRequest('status must be live, cleanup_needed, or deleted'), 400);
+    }
+    const lead = await c.env.DB.prepare(
+      'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
+    ).bind(id).first<Lead>();
+    if (!lead) return c.json(notFound('Lead'), 404);
+    if (!(lead.site_url_raw?.trim() || lead.site_url?.trim())) {
+      return c.json(badRequest('This lead does not have a saved demo site'), 400);
+    }
+
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+        UPDATE leads
+           SET demo_site_status = ?,
+               demo_site_deleted_at = CASE WHEN ? = 'deleted' THEN datetime('now') ELSE NULL END,
+               updated_at = datetime('now')
+         WHERE id = ?
+      `).bind(body.status, body.status, id),
+      c.env.DB.prepare(`
+        INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
+        VALUES (?, 'demo_site_status_changed', ?, ?, ?)
+      `).bind(id, lead.demo_site_status, body.status, JSON.stringify({ previous_deleted_at: lead.demo_site_deleted_at })),
+    ]);
+
+    const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
+      .bind(id).first<Lead>();
+    return c.json({ lead: updated });
+  } catch (err) {
+    log('error', 'pipeline', 'POST /leads/:id/demo-site-status failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
 const ACTION_TRANSITIONS: Record<
   OutreachAction,
   { from?: PipelineStatus[]; to?: PipelineStatus }
@@ -808,6 +853,16 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       .bind(...params)
       .run();
 
+    if (
+      (action === 'call_outcome' && actionMeta?.outcome === 'not_interested')
+      || (action === 'archived' && actionMeta?.mark_not_interested === true)
+    ) {
+      await closeLeadNotInterested(c.env.DB, id, {
+        receptionistInterested: actionMeta?.receptionist_interested === true,
+        receptionistEmail: typeof actionMeta?.receptionist_email === 'string' ? actionMeta.receptionist_email : null,
+      });
+    }
+
     if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {
       const meta = body.meta as Record<string, unknown>;
       const recordingCallId = Number(meta.recording_call_id);
@@ -843,6 +898,8 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
               previous_pipeline_last_action_at: lead.pipeline_last_action_at,
               previous_status: lead.status,
               previous_outcome: lead.outcome,
+              previous_demo_site_status: lead.demo_site_status,
+              previous_demo_site_deleted_at: lead.demo_site_deleted_at,
             }
           : action === 'reply_received'
             ? {
@@ -1073,11 +1130,15 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
       let previousLastAction: string | null = null;
       let previousStatus: string | null = null;
       let previousOutcome: string | null | undefined;
+      let previousDemoSiteStatus: string | null = null;
+      let previousDemoSiteDeletedAt: string | null = null;
       try {
         const parsed = target.meta ? JSON.parse(target.meta) as {
           previous_pipeline_last_action_at?: unknown;
           previous_status?: unknown;
           previous_outcome?: unknown;
+          previous_demo_site_status?: unknown;
+          previous_demo_site_deleted_at?: unknown;
         } : null;
         if (typeof parsed?.previous_pipeline_last_action_at === 'string') {
           previousLastAction = parsed.previous_pipeline_last_action_at;
@@ -1086,6 +1147,8 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
         if (typeof parsed?.previous_outcome === 'string' || parsed?.previous_outcome === null) {
           previousOutcome = parsed.previous_outcome;
         }
+        if (typeof parsed?.previous_demo_site_status === 'string') previousDemoSiteStatus = parsed.previous_demo_site_status;
+        if (typeof parsed?.previous_demo_site_deleted_at === 'string') previousDemoSiteDeletedAt = parsed.previous_demo_site_deleted_at;
       } catch {
         // Older archive rows may not contain the timestamp snapshot.
       }
@@ -1112,6 +1175,10 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
       if (previousOutcome !== undefined) {
         sets.push('outcome = ?');
         params.push(previousOutcome);
+      }
+      if (previousDemoSiteStatus) {
+        sets.push('demo_site_status = ?', 'demo_site_deleted_at = ?');
+        params.push(previousDemoSiteStatus, previousDemoSiteDeletedAt);
       }
     }
     if (target.action === 'reply_received') {

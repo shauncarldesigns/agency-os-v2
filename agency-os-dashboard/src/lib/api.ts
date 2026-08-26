@@ -321,7 +321,7 @@ export const api = {
     },
   },
   leads: {
-    list: (filters?: { status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>
+    list: (filters?: { status?: string; pipeline_status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>
       apiFetch<{ leads: Lead[]; total: number }>(`/api/leads${qs(filters)}`),
     industries: () => apiFetch<{ industries: string[] }>('/api/leads/industries'),
     get: (id: number) => apiFetch<{ lead: Lead; calls: CallEntry[] }>(`/api/leads/${id}`),
@@ -351,6 +351,8 @@ export const api = {
       apiFetch<void>(`/api/leads/${id}?hard=true`, { method: 'DELETE' }),
     restore: (id: number) =>
       apiFetch<{ lead: Lead }>(`/api/leads/${id}/restore`, { method: 'POST' }),
+    reactivate: (id: number, body: { workspace: 'text' | 'email' | 'receptionist'; destination?: 'awaiting_build' | 'built_needs_review' | 'ready_to_send' }) =>
+      apiFetch<{ lead: Lead }>(`/api/leads/${id}/reactivate`, { method: 'POST', body: JSON.stringify(body) }),
     importCsv: (csv: string) =>
       apiFetch<{ imported: number; skipped: number; errors: string[] }>('/api/leads/import', {
         method: 'POST',
@@ -796,6 +798,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+    updateDemoSiteStatus: (id: number, status: 'live' | 'cleanup_needed' | 'deleted') =>
+      apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/demo-site-status`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      }),
     // Fires on operator taps of Open in Messages / Log call. Optimistic:
     // the server assumes the send happened; the paired undo() reverts if
     // the operator dismisses the toast in the ~6s window.
@@ -1192,7 +1199,6 @@ export interface SessionOutcomeBody {
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string;
-  archiveLead?: boolean;
 }
 
 export { API_BASE, TRACKING_BASE };

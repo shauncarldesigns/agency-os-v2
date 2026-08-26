@@ -69,6 +69,8 @@ export interface Lead {
   pipeline_status: 'awaiting_build' | 'built_needs_review' | 'ready_to_send' | 'sent_no_reply' | 'engaged' | 'booked' | 'archived';
   site_url: string | null;                     // UTM-tagged; source of truth for texting
   site_url_raw: string | null;                 // as-pasted, pre-UTM
+  demo_site_status: 'none' | 'live' | 'cleanup_needed' | 'deleted';
+  demo_site_deleted_at: string | null;
   site_review_status: 'pending' | 'needs_fix' | 'approved';
   site_review_reasons: string | null;
   site_review_note: string | null;
@@ -138,6 +140,8 @@ export interface LeadActivity {
     | 'clarity_synced'
     | 'engagement_reset'
     | 'client_converted'
+    | 'demo_site_status_changed'
+    | 'reactivated'
     | 'undo';
   from_status: string | null;
   to_status: string | null;
@@ -559,6 +563,7 @@ export type Tab =
   | 'call-center'
   | 'prospect'
   | 'pipeline'
+  | 'archived-leads'
   | 'automated-pipeline'
   | 'builder'
   | 'receptionist-interest'
@@ -747,7 +752,7 @@ export interface ApplicationEvent {
   details_json: string | null;
   created_at: string;
 }
-export type CallbackStatus = 'pending' | 'completed' | 'missed';
+export type CallbackStatus = 'pending' | 'completed' | 'missed' | 'cancelled';
 
 export type SessionKind = 'auto' | 'hot';
 

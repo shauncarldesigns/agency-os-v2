@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2, Pencil, X } from 'lucide-react';
+import { Check, ExternalLink, Loader2, Pencil, X } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { Badge } from '../shared/Badge';
@@ -74,6 +74,7 @@ export function LeadsTable({
             <SortHeader label="Fit" sortKey="fit" active={tableSort} onSort={setTableSort} />
             <SortHeader label="Route" sortKey="route" active={tableSort} onSort={setTableSort} />
             <SortHeader label="Outreach" sortKey="outreach" active={tableSort} onSort={setTableSort} />
+            <SortHeader label="Demo site" sortKey="demoSite" active={tableSort} onSort={setTableSort} />
             <SortHeader label="Latest touch" sortKey="latestTouch" active={tableSort} onSort={setTableSort} />
             <SortHeader label="Next action" sortKey="nextAction" active={tableSort} onSort={setTableSort} />
             <SortHeader label="CRM stage" sortKey="stage" active={tableSort} onSort={setTableSort} />
@@ -100,7 +101,7 @@ export function LeadsTable({
   );
 }
 
-type SortKey = 'company' | 'fit' | 'route' | 'outreach' | 'latestTouch' | 'nextAction' | 'stage';
+type SortKey = 'company' | 'fit' | 'route' | 'outreach' | 'demoSite' | 'latestTouch' | 'nextAction' | 'stage';
 type SortDirection = 'asc' | 'desc';
 type TableSort = { key: SortKey; direction: SortDirection } | null;
 
@@ -129,7 +130,7 @@ function SortHeader({ label, sortKey, active, onSort }: { label: string; sortKey
 function sortLabel(key: SortKey): string {
   const labels: Record<SortKey, string> = {
     company: 'Company', fit: 'Fit', route: 'Route', outreach: 'Outreach',
-    latestTouch: 'Latest touch', nextAction: 'Next action', stage: 'CRM stage',
+    demoSite: 'Demo site', latestTouch: 'Latest touch', nextAction: 'Next action', stage: 'CRM stage',
   };
   return labels[key];
 }
@@ -147,6 +148,7 @@ function sortLeads(leads: Lead[], sort: TableSort): Lead[] {
     if (sort.key === 'fit') return lead.opportunity_score ?? -1;
     if (sort.key === 'route') return routePresentation(lead).label.toLocaleLowerCase();
     if (sort.key === 'outreach') return outreachRank[lead.pipeline_status];
+    if (sort.key === 'demoSite') return demoSitePresentation(lead).rank;
     if (sort.key === 'latestTouch') return timestampValue(lead.pipeline_last_action_created_at ?? lead.pipeline_last_action_at ?? lead.last_called_at);
     if (sort.key === 'nextAction') return nextActionPresentation(lead).label.toLocaleLowerCase();
     return stageRank[lead.status];
@@ -166,6 +168,33 @@ function timestampValue(raw: string | null | undefined): number {
   if (!raw) return 0;
   const date = new Date(raw.replace(' ', 'T') + (raw.includes('Z') || /[+-]\d\d:\d\d$/.test(raw) ? '' : 'Z'));
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function demoSiteStatus(lead: Lead): Lead['demo_site_status'] {
+  return lead.demo_site_status ?? (lead.site_url_raw || lead.site_url ? 'live' : 'none');
+}
+
+function demoSitePresentation(lead: Lead): { label: string; sub: string; tone: SignalTone; rank: number } {
+  const status = demoSiteStatus(lead);
+  if (status === 'cleanup_needed') return { label: 'Cleanup needed', sub: 'Delete in LandingSite', tone: 'yellow', rank: 3 };
+  if (status === 'live') return { label: 'Live demo', sub: 'Site still exists', tone: 'blue', rank: 2 };
+  if (status === 'deleted') return { label: 'Deleted', sub: 'Cleanup complete', tone: 'gray', rank: 1 };
+  return { label: 'No demo', sub: 'Not built', tone: 'gray', rank: 0 };
+}
+
+function DemoSiteSignal({ lead }: { lead: Lead }) {
+  const signal = demoSitePresentation(lead);
+  const url = lead.site_url_raw || lead.site_url;
+  return (
+    <div>
+      <CompactSignal label={signal.label} sub={signal.sub} tone={signal.tone} />
+      {url && demoSiteStatus(lead) !== 'deleted' && (
+        <a href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700">
+          Open demo <ExternalLink size={10} />
+        </a>
+      )}
+    </div>
+  );
 }
 
 interface LeadRowProps {
@@ -312,6 +341,7 @@ function LeadRow({
       <td><FitSummary lead={lead} /></td>
       <td><CompactSignal label={route.label} sub={route.sub} tone={route.tone} /></td>
       <td><CompactSignal label={outreach.label} sub={outreach.sub} tone={outreach.tone} /></td>
+      <td><DemoSiteSignal lead={lead} /></td>
       <td><CompactSignal label={latestTouch.label} sub={latestTouch.sub} tone={latestTouch.tone} /></td>
       <td><CompactSignal label={nextAction.label} sub={nextAction.sub} tone={nextAction.tone} /></td>
       <td><Badge color={stage.color}>{stage.label}</Badge></td>

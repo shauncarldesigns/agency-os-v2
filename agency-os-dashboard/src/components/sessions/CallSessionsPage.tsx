@@ -682,13 +682,7 @@ function EmailEngagedSalesCall({
           receptionist_email: closeout.email ?? null,
         },
       });
-      if (closeout.archive) {
-        await api.pipeline.action(activeLead.id, {
-          action: 'archived',
-          meta: { reason: 'not_interested_after_email_engagement_call', mark_not_interested: true, note: closeout.note },
-        });
-      }
-      showToast(closeout.archive ? 'Call recorded and lead archived' : 'Call recorded and lead marked not interested');
+      showToast('Call recorded and lead archived');
       onChanged();
     } catch (error) {
       showToast(error instanceof ApiError ? error.message : 'Could not mark lead not interested', 'error');
@@ -895,7 +889,6 @@ function CallOutreachModal({
         preserveFinalReview: returnedFromAutomation,
         receptionistInterested: outcome === 'not_interested' && closeout?.receptionistInterested === true,
         receptionistEmail: outcome === 'not_interested' ? closeout?.email : undefined,
-        archiveLead: outcome === 'not_interested' && closeout?.archive === true,
       });
       const label = {
         no_answer: 'No answer recorded',
@@ -926,7 +919,7 @@ function CallOutreachModal({
       note: callNotes.trim() || 'Interested in the automated receptionist demo.',
       receptionistInterested: true,
       email: nextEmail,
-      archive: false,
+      archive: true,
     });
   }
 
@@ -1315,7 +1308,7 @@ function EmailCaptureSplitScript({
               {recordingOutcome === 'not_interested' ? 'Saving interest…' : 'Save email & add to Receptionist Interest'}
             </button>}
             <p className="mt-2 text-[11px] leading-4 text-slate-400">
-              {callPath === 'website' ? 'Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.' : 'This closes the website opportunity as Not interested, keeps the lead unarchived, and adds it to Receptionist Interest.'}
+              {callPath === 'website' ? 'Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.' : 'This closes website outreach as Not interested and moves the business to Receptionist Interest as its active workspace.'}
             </p>
           </div>}
 
