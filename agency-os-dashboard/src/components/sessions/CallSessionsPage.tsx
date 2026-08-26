@@ -40,6 +40,7 @@ import {
   TRACKING_BASE,
   type EmailAutomationDetail,
   type EmailAutomationSummary,
+  type SessionOutcomeBody,
 } from '../../lib/api';
 import type { CallEntry, Lead, Project } from '../../lib/types';
 import type { CallOutcome, ShowToast } from '../../lib/types';
@@ -869,7 +870,7 @@ function CallOutreachModal({
     }
   }
 
-  async function recordOutcome(outcome: CallOutcome, closeout?: NotInterestedCloseout) {
+  async function recordOutcome(outcome: CallOutcome, closeout?: NotInterestedCloseout, badContactReason?: SessionOutcomeBody['badContactReason']) {
     if (!lead) return;
     if (outcome === 'callback' && !callbackDate) {
       showToast('Choose a follow-up date first', 'error');
@@ -889,12 +890,14 @@ function CallOutreachModal({
         preserveFinalReview: returnedFromAutomation,
         receptionistInterested: outcome === 'not_interested' && closeout?.receptionistInterested === true,
         receptionistEmail: outcome === 'not_interested' ? closeout?.email : undefined,
+        badContactReason: outcome === 'bad_contact' ? badContactReason : undefined,
       });
       const label = {
         no_answer: 'No answer recorded',
         voicemail: 'Voicemail recorded',
         callback: 'Follow-up scheduled',
         not_interested: 'Lead marked not interested',
+        bad_contact: 'Bad contact archived',
         booked: 'Demo booked',
         skipped: 'Lead skipped',
       }[outcome];
@@ -1004,7 +1007,7 @@ function CallOutreachModal({
                 onCallNotesChange={onCallNotesChange}
                 onSave={() => void saveToFollowUp()}
                 onAdvanceToSalesFlow={() => void advanceToSalesFlow()}
-                onRecordOutcome={(outcome) => void recordOutcome(outcome)}
+                onRecordOutcome={(outcome, reason) => void recordOutcome(outcome, undefined, reason)}
                 onArchiveRejection={() => setNotInterestedOpen(true)}
                 onSaveReceptionist={() => void saveReceptionistInterest()}
               />
@@ -1032,15 +1035,7 @@ function CallOutreachModal({
                   onClick={() => void recordOutcome('voicemail')}
                 />
               </div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                <input
-                  type="date"
-                  value={callbackDate}
-                  min={localDateIso()}
-                  onChange={(event) => setCallbackDate(event.target.value)}
-                  className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
-                  aria-label="Follow-up date"
-                />
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => void recordOutcome('callback')}
@@ -1049,7 +1044,28 @@ function CallOutreachModal({
                 >
                   {recordingOutcome === 'callback' ? 'Recording…' : 'Follow up later'}
                 </button>
+                <input
+                  type="date"
+                  value={callbackDate}
+                  min={localDateIso()}
+                  onChange={(event) => setCallbackDate(event.target.value)}
+                  className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                  aria-label="Follow-up date"
+                />
               </div>
+              <select
+                defaultValue=""
+                disabled={recordingOutcome !== null}
+                onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', undefined, event.target.value as SessionOutcomeBody['badContactReason']); }}
+                className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50"
+                aria-label="Bad contact reason"
+              >
+                <option value="" disabled>Bad contact…</option>
+                <option value="disconnected">Disconnected number</option>
+                <option value="wrong_number">Wrong number</option>
+                <option value="no_contact">No usable contact</option>
+                <option value="business_closed">Business appears closed</option>
+              </select>
               <button
                 type="button"
                 onClick={() => setNotInterestedOpen(true)}
@@ -1178,7 +1194,7 @@ function EmailCaptureSplitScript({
   onCallNotesChange: (value: string) => void;
   onSave: () => void;
   onAdvanceToSalesFlow: () => void;
-  onRecordOutcome: (outcome: CallOutcome) => void;
+  onRecordOutcome: (outcome: CallOutcome, reason?: SessionOutcomeBody['badContactReason']) => void;
   onArchiveRejection: () => void;
   onSaveReceptionist: () => void;
 }) {
@@ -1404,22 +1420,13 @@ function EmailCaptureSplitScript({
               <OutcomeButton label="No answer" active={recordingOutcome === 'no_answer'} disabled={recordingOutcome !== null} onClick={() => onRecordOutcome('no_answer')} />
               <OutcomeButton label="Left voicemail" active={recordingOutcome === 'voicemail'} disabled={recordingOutcome !== null} onClick={() => onRecordOutcome('voicemail')} />
             </div>
-            <input
-              type="date"
-              value={callbackDate}
-              min={localDateIso()}
-              onChange={(event) => onCallbackDateChange(event.target.value)}
-              className="mt-2 h-9 w-full rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
-              aria-label="Follow-up date"
-            />
-            <button
-              type="button"
-              onClick={() => onRecordOutcome('callback')}
-              disabled={recordingOutcome !== null}
-              className="mt-2 w-full rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-left text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-            >
-              {recordingOutcome === 'callback' ? 'Recording…' : 'Follow up later'}
-            </button>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => onRecordOutcome('callback')} disabled={recordingOutcome !== null} className="h-9 rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-left text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">{recordingOutcome === 'callback' ? 'Recording…' : 'Follow up later'}</button>
+              <input type="date" value={callbackDate} min={localDateIso()} onChange={(event) => onCallbackDateChange(event.target.value)} className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100" aria-label="Follow-up date" />
+            </div>
+            <select defaultValue="" disabled={recordingOutcome !== null} onChange={(event) => { if (event.target.value) onRecordOutcome('bad_contact', event.target.value as SessionOutcomeBody['badContactReason']); }} className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50" aria-label="Bad contact reason">
+              <option value="" disabled>Bad contact…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option>
+            </select>
             <button
               type="button"
               onClick={onArchiveRejection}

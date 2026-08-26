@@ -736,7 +736,7 @@ export type ShowToast = (message: string, type?: ToastType, action?: ToastAction
 
 export type SessionBlock = 'morning' | 'evening';
 export type SessionStatus = 'planned' | 'active' | 'complete';
-export type CallOutcome = 'no_answer' | 'voicemail' | 'not_interested' | 'callback' | 'booked' | 'skipped';
+export type CallOutcome = 'no_answer' | 'voicemail' | 'not_interested' | 'bad_contact' | 'callback' | 'booked' | 'skipped';
 export type DemoStatus = 'booked' | 'held' | 'no_show' | 'rescheduled';
 
 export interface ApplicationEvent {
