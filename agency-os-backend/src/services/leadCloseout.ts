@@ -64,3 +64,26 @@ export async function closeLeadNotInterested(
 
   return db.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
 }
+
+export async function closeLeadBadContact(db: D1Database, leadId: number, reason: string, now: string): Promise<Lead | null> {
+  const labels: Record<string, string> = {
+    disconnected: 'Disconnected number', wrong_number: 'Wrong number',
+    no_contact: 'No usable contact information', business_closed: 'Business appears closed',
+  };
+  const label = labels[reason] ?? 'Bad contact';
+  await db.batch([
+    db.prepare(`
+      UPDATE leads SET status = CASE WHEN status = 'cold' THEN 'contacted' ELSE status END,
+        outcome = ?, pipeline_status = 'archived', phone_valid = 0,
+        demo_site_status = CASE
+          WHEN demo_site_status = 'deleted' THEN 'deleted'
+          WHEN COALESCE(NULLIF(TRIM(site_url_raw), ''), NULLIF(TRIM(site_url), ''), '') != '' THEN 'cleanup_needed'
+          ELSE 'none'
+        END,
+        last_called_at = ?, pipeline_last_action_at = ?, updated_at = ? WHERE id = ?
+    `).bind(label, now, now, now, leadId),
+    db.prepare(`UPDATE email_automations SET status='stopped', stopped_at=COALESCE(stopped_at,datetime('now')), updated_at=datetime('now') WHERE lead_id=? AND status IN ('active','paused')`).bind(leadId),
+    db.prepare(`UPDATE callbacks SET status='cancelled' WHERE lead_id=? AND status='pending'`).bind(leadId),
+  ]);
+  return db.prepare('SELECT * FROM leads WHERE id=?').bind(leadId).first<Lead>();
+}

@@ -20,7 +20,7 @@ import type {
 import { badRequest, conflict, notFound, log } from '../utils/errors';
 import { normalizeRecordingStorageValue } from '../utils/recordings';
 import { createProjectFromLead } from './leads';
-import { closeLeadNotInterested } from '../services/leadCloseout';
+import { closeLeadBadContact, closeLeadNotInterested } from '../services/leadCloseout';
 import {
   chicagoToday, chicagoCallingMode, chicagoCallingWeek,
 } from '../services/dayOfWeek';
@@ -574,6 +574,7 @@ interface OutcomeBody {
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string;
+  badContactReason?: string;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -584,7 +585,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     return c.json(badRequest('leadId + outcome are required'), 400);
   }
 
-  const VALID: CallOutcome[] = ['no_answer', 'voicemail', 'not_interested', 'callback', 'booked', 'skipped'];
+  const VALID: CallOutcome[] = ['no_answer', 'voicemail', 'not_interested', 'bad_contact', 'callback', 'booked', 'skipped'];
   if (!VALID.includes(body.outcome)) {
     return c.json(badRequest(`Invalid outcome '${body.outcome}'`), 400);
   }
@@ -610,6 +611,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     no_answer: 'No Answer',
     voicemail: 'Voicemail Left',
     not_interested: 'Not Interested',
+    bad_contact: 'Bad Contact',
     callback: 'Callback Requested',
     booked: 'Demo Booked',
     skipped: '',  // unused; skipped never writes to call_log or lead.outcome
@@ -662,6 +664,10 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       lastCalledAt: now,
       now,
     });
+  } else if (body.outcome === 'bad_contact') {
+    const validReasons = ['disconnected', 'wrong_number', 'no_contact', 'business_closed'];
+    const reason = validReasons.includes(body.badContactReason ?? '') ? body.badContactReason! : 'no_contact';
+    await closeLeadBadContact(c.env.DB, body.leadId, reason, now);
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
     // after we know the project_id.
@@ -785,6 +791,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
       receptionist_interested: body.outcome === 'not_interested' && body.receptionistInterested === true,
       archived: body.outcome === 'not_interested',
+      bad_contact_reason: body.outcome === 'bad_contact' ? body.badContactReason ?? 'no_contact' : null,
     })).run();
   }
 
