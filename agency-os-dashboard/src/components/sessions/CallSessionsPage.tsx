@@ -1253,8 +1253,15 @@ function EmailCaptureSplitScript({
             <section className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
               <button type="button" onClick={() => { setCallPath(null); setReceptionistStage('question'); }} className="mb-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to website decision</button>
               {receptionistStage === 'question' && <>
-                <p className="mt-2 text-[17px] leading-8 text-slate-800">Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?</p>
-                <p className="mt-3 text-[17px] leading-8 text-slate-800">Would you be interested in an automated receptionist that screens calls like this before they ever reach you, while still letting customer calls through?</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Pivot option 1</p>
+                <div className="mt-2 border-l-2 border-blue-200 pl-3">
+                  <p className="text-[17px] leading-8 text-slate-800">Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?</p>
+                  <p className="mt-3 text-[17px] leading-8 text-slate-800">Would you be interested in an automated receptionist that screens calls like this before they ever reach you, while still letting customer calls through?</p>
+                </div>
+                <div className="mt-4 rounded-lg border border-blue-200 bg-white px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Pivot option 2</p>
+                  <p className="mt-1 text-[17px] leading-8 text-slate-800">Sounds like you get these calls all the time. Would it be useful to have an answering service that screens them out for you?</p>
+                </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <button type="button" onClick={() => setReceptionistStage('interested')} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">They’re interested</button>
                   <button type="button" onClick={() => setReceptionistStage('irony')} className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">They point out the irony</button>
@@ -1269,7 +1276,8 @@ function EmailCaptureSplitScript({
                 </div>
               </>}
               {receptionistStage === 'interested' && <>
-                <p className="mt-2 text-[17px] leading-8 text-slate-800">That’s something I’m developing specifically for service businesses. It finds out who’s calling and why, lets real customers through, and handles the sales calls without interrupting you. Would it be okay if I emailed you a demo number when it’s ready?</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">If yes</p>
+                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s actually something I’m developing—an automated receptionist that captures real customer information while screening out cold calls. I can set up a demo number for your business so you can call it and experience it like a customer. What’s the best email to send it to when it’s ready?</p>
                 <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the receptionist question</button>
               </>}
               {receptionistStage === 'irony_offer' && <>
