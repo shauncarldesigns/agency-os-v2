@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, CheckCircle2, Eye, Link2, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Archive, BarChart3, CheckCircle2, Eye, Link2, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
+import { NOT_INTERESTED_REASONS } from '../shared/NotInterestedModal';
 
 type ArchiveFilter = 'all' | 'cleanup_needed' | 'deleted' | 'no_site';
 
@@ -35,6 +36,19 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
   useEffect(() => { void load(); }, [load]);
 
   const cleanupCount = leads.filter((lead) => lead.demo_site_status === 'cleanup_needed').length;
+  const declineStats = useMemo(() => {
+    const declined = leads.filter((lead) => lead.status === 'not_interested');
+    const counts = new Map<string, number>();
+    declined.forEach((lead) => {
+      if (lead.not_interested_reason) counts.set(lead.not_interested_reason, (counts.get(lead.not_interested_reason) ?? 0) + 1);
+    });
+    const reasons = NOT_INTERESTED_REASONS
+      .map((option) => ({ ...option, count: counts.get(option.value) ?? 0 }))
+      .filter((option) => option.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const classified = reasons.reduce((sum, reason) => sum + reason.count, 0);
+    return { total: declined.length, classified, unclassified: declined.length - classified, reasons, top: reasons[0] ?? null };
+  }, [leads]);
   const filtered = useMemo(() => leads.filter((lead) => {
     const q = query.trim().toLowerCase();
     const matchesSearch = !q || [lead.company, lead.contact, lead.phone, lead.email, lead.city]
@@ -84,6 +98,8 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
         </div>
       </section>
 
+      <ArchiveInsights stats={declineStats} cleanupCount={cleanupCount} />
+
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -118,10 +134,11 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
               </div>
               <button type="button" onClick={() => setOpenLeadId(lead.id)} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="View lead and activity"><Eye className="h-4 w-4" /></button>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 sm:grid-cols-3">
+            <div className={`mt-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 ${isNotInterested ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
               <ArchiveSignal label="Route" value={route.label} sub={route.sub} tone={route.tone} />
               <ArchiveSignal label="Latest touch" value={latestTouch.label} sub={latestTouch.sub} tone={latestTouch.tone} />
-              <ArchiveSignal label="Closeout" value={isNotInterested ? 'Not interested' : lead.outcome || 'Archived'} sub="Outreach closed" tone={isNotInterested ? 'rose' : 'slate'} />
+              <ArchiveSignal label="Closeout" value={archiveCloseoutLabel(lead)} sub={archiveCloseoutDetail(lead)} tone={isNotInterested ? 'rose' : 'slate'} />
+              {isNotInterested && <ArchiveSignal label="Archive reason" value={notInterestedReasonLabel(lead.not_interested_reason)} sub="Customer feedback" tone="rose" />}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {cleanupNeeded && siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"><Link2 className="h-3.5 w-3.5" /> Open demo</a>}
@@ -137,6 +154,61 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
       {reactivateLead && <ReactivateLeadModal lead={reactivateLead} onClose={() => setReactivateLead(null)} onConfirm={(workspace, destination) => void reactivate(reactivateLead, workspace, destination)} />}
     </div>
   );
+}
+
+type DeclineStats = {
+  total: number;
+  classified: number;
+  unclassified: number;
+  reasons: Array<{ value: string; label: string; count: number }>;
+  top: { value: string; label: string; count: number } | null;
+};
+
+function ArchiveInsights({ stats, cleanupCount }: { stats: DeclineStats; cleanupCount: number }) {
+  const maxCount = stats.reasons[0]?.count ?? 1;
+  return <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-center gap-2">
+      <BarChart3 className="h-4 w-4 text-blue-600" />
+      <div><h3 className="text-sm font-bold text-slate-900">Why opportunities close</h3><p className="text-xs text-slate-500">Structured reasons from Not Interested closeouts.</p></div>
+    </div>
+    <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <InsightMetric label="Not interested" value={stats.total} detail="Archived declines" />
+      <InsightMetric label="Reasons captured" value={stats.classified} detail={stats.total ? `${Math.round((stats.classified / stats.total) * 100)}% classified` : 'No declines yet'} />
+      <InsightMetric label="Most common" value={stats.top?.count ?? 0} detail={stats.top?.label ?? 'No reason data yet'} />
+      <InsightMetric label="Sites to clean" value={cleanupCount} detail={cleanupCount ? 'Action required' : 'Cleanup is clear'} tone={cleanupCount ? 'amber' : 'emerald'} />
+    </div>
+    {stats.reasons.length > 0 ? <div className="mt-4 grid gap-x-5 gap-y-3 lg:grid-cols-2">
+      {stats.reasons.map((reason) => <div key={reason.value}>
+        <div className="flex items-center justify-between gap-3 text-xs"><span className="font-medium text-slate-700">{reason.label}</span><span className="font-bold text-slate-500">{reason.count} · {stats.classified ? Math.round((reason.count / stats.classified) * 100) : 0}%</span></div>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(8, (reason.count / maxCount) * 100)}%` }} /></div>
+      </div>)}
+    </div> : <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center text-xs text-slate-500">Archive a lead with a Not Interested reason to start building the breakdown.</div>}
+    {stats.unclassified > 0 && <p className="mt-3 text-[11px] text-slate-400">{stats.unclassified} older decline{stats.unclassified === 1 ? '' : 's'} predate structured reason tracking and remain unclassified.</p>}
+  </section>;
+}
+
+function InsightMetric({ label, value, detail, tone = 'blue' }: { label: string; value: number; detail: string; tone?: 'blue' | 'amber' | 'emerald' }) {
+  const color = tone === 'amber' ? 'text-amber-600' : tone === 'emerald' ? 'text-emerald-600' : 'text-blue-600';
+  return <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-3"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-1 text-xl font-bold ${color}`}>{value}</p><p className="mt-0.5 truncate text-[10px] text-slate-500">{detail}</p></div>;
+}
+
+function notInterestedReasonLabel(reason: string | null): string {
+  if (!reason) return 'Reason not recorded';
+  return NOT_INTERESTED_REASONS.find((option) => option.value === reason)?.label ?? reason.replaceAll('_', ' ');
+}
+
+function archiveCloseoutLabel(lead: Lead): string {
+  if (lead.status === 'not_interested') return 'Not interested';
+  const outcome = lead.outcome?.trim();
+  if (!outcome) return 'Archived';
+  if (['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Bad contact'].includes(outcome)) return 'Bad contact';
+  return outcome;
+}
+
+function archiveCloseoutDetail(lead: Lead): string {
+  const outcome = lead.outcome?.trim();
+  if (outcome && ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed'].includes(outcome)) return outcome;
+  return 'Outreach closed';
 }
 
 type ArchiveTone = 'slate' | 'blue' | 'emerald' | 'rose';
