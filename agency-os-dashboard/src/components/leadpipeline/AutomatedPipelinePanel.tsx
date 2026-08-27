@@ -40,7 +40,7 @@ import {
 } from '../shared/SiteReviewFixModal';
 import { interpolate, type Script } from '../../lib/playbook';
 import { RecordButton, type RecordButtonHandle } from '../dashboard/RecordButton';
-import { NotInterestedModal, type NotInterestedCloseout } from '../shared/NotInterestedModal';
+import { NOT_INTERESTED_REASONS, NotInterestedModal, type NotInterestedCloseout, type NotInterestedReason } from '../shared/NotInterestedModal';
 
 // ---------------------------------------------------------------------------
 // Automated Pipeline — text + site outreach queue.
@@ -1429,7 +1429,10 @@ type CallOutcome =
   | 'busy'
   | 'talk_later'
   | 'feedback_only'
+  | 'bad_contact'
   | 'interested';
+
+export type BadContactReason = 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed';
 
 export type SelectedPlan = 'Build & Maintain' | 'Growth';
 
@@ -1488,7 +1491,7 @@ export function OpenSalesCallModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number) => Promise<boolean>;
+  onCallOutcome: (lead: PipelineLead, outcome: CallOutcome, selectedPlan?: SelectedPlan, notes?: string, recordingCallId?: number, badContactReason?: BadContactReason, callbackDate?: string) => Promise<boolean>;
   onMoveToClients: (lead: PipelineLead, selectedPlan: SelectedPlan, commitmentTerm: 'ongoing_hosting' | '6_months' | '12_months') => Promise<void>;
   onNotInterested: (lead: PipelineLead, closeout: NotInterestedCloseout, recordingCallId?: number) => Promise<void>;
   // Channel-recovery hooks — provided only by the Text Outreach page, where
@@ -1499,12 +1502,13 @@ export function OpenSalesCallModal({
   showToast: ShowToast;
   initialWarm?: boolean;
   initialEmailBridge?: boolean;
-  externalRecorderRef?: RefObject<RecordButtonHandle | null>;
+  externalRecorderRef: RefObject<RecordButtonHandle | null>;
   externalNotes?: string;
   onExternalNotesChange?: (value: string) => void;
   externalRecordingCallId?: number | null;
 }) {
   const [loggingOutcome, setLoggingOutcome] = useState<CallOutcome | null>(null);
+  const [callbackDate, setCallbackDate] = useState('');
   const [script, setScript] = useState<Script | null>(null);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [stageIndex, setStageIndex] = useState(0);
@@ -1513,14 +1517,12 @@ export function OpenSalesCallModal({
   const [commitmentTerm, setCommitmentTerm] = useState<'ongoing_hosting' | '6_months' | '12_months' | ''>('');
   const [internalNotes, setInternalNotes] = useState('');
   const [openResponse, setOpenResponse] = useState<string | null>(null);
-  const [internalRecordingCallId, setInternalRecordingCallId] = useState<number | null>(null);
   const [archivingNotInterested, setArchivingNotInterested] = useState(false);
   const [notInterestedOpen, setNotInterestedOpen] = useState(false);
-  const internalRecorderRef = useRef<RecordButtonHandle>(null);
-  const recorderRef = externalRecorderRef ?? internalRecorderRef;
+  const recorderRef = externalRecorderRef;
   const notes = externalNotes ?? internalNotes;
   const setNotes = onExternalNotesChange ?? setInternalNotes;
-  const recordingCallId = externalRecordingCallId ?? internalRecordingCallId;
+  const recordingCallId = externalRecordingCallId ?? null;
   const scriptTopRef = useRef<HTMLDivElement | null>(null);
   const progress = getEngagedProgress(lead);
   const noReplyProgress = getNoReplyProgress(lead);
@@ -1632,19 +1634,14 @@ export function OpenSalesCallModal({
     goToStage(plan === 'Growth' ? 'growth' : 'presence');
   };
 
-  const outcomeLabels: Record<CallOutcome, string> = {
-    no_answer: 'No answer',
-    voicemail: 'Left voicemail',
-    busy: 'They were busy',
-    talk_later: 'Follow up later',
-    feedback_only: 'Feedback only — nurture',
-    interested: 'Interested — continue conversation',
-  };
-
-  const chooseOutcome = async (outcome: CallOutcome) => {
+  const chooseOutcome = async (outcome: CallOutcome, badContactReason?: BadContactReason) => {
+    if (outcome === 'talk_later' && !callbackDate) {
+      showToast('Choose a follow-up date first', 'error');
+      return;
+    }
     setLoggingOutcome(outcome);
     const savedRecording = await recorderRef.current?.stopAndSave();
-    const recorded = await onCallOutcome(lead, outcome, selectedPlan ?? undefined, notes.trim() || undefined, savedRecording?.callId ?? recordingCallId ?? undefined);
+    const recorded = await onCallOutcome(lead, outcome, selectedPlan ?? undefined, notes.trim() || undefined, savedRecording?.callId ?? recordingCallId ?? undefined, badContactReason, outcome === 'talk_later' ? callbackDate : undefined);
     setLoggingOutcome(null);
     if (!recorded) return;
     if (outcome === 'interested' && selectedPlan && commitmentTerm) {
@@ -1678,16 +1675,13 @@ export function OpenSalesCallModal({
     );
     if (showEmailBridge) return (
       <>
-        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>They’ll look later — follow up later</button>
         <button type="button" onClick={() => setEmailBridgeDone(true)} className={primaryDecisionClass}>They can see the website — get their reaction <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
     if (!activeStage) return null;
     if (activeStage.id === 'opening') return (
       <>
-        <button type="button" onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className={decisionClass}>Review on their own — follow up later</button>
         <button type="button" onClick={() => void chooseOutcome('feedback_only')} disabled={loggingOutcome !== null} className={decisionClass}>Feedback only — nurture</button>
-        <button type="button" onClick={() => setNotInterestedOpen(true)} disabled={loggingOutcome !== null || archivingNotInterested} className={decisionClass}>Not interested</button>
         <button type="button" onClick={() => goToStage('needs')} className={primaryDecisionClass}>They want to discuss moving forward <ChevronRight className="h-3.5 w-3.5" /></button>
       </>
     );
@@ -1771,22 +1765,7 @@ export function OpenSalesCallModal({
       subtitle={`${lead.name} · ${isLastChanceCall ? 'Final attempt' : isWarm ? 'Warm lead' : 'Follow-up'}`}
       onClose={onClose}
       wide
-      headerActions={
-        <>
-          <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-            <PhoneCall className="h-3.5 w-3.5" /> Call {lead.phone}
-          </a>
-          {!externalRecorderRef && (
-            <RecordButton
-              ref={internalRecorderRef}
-              leadId={lead.id}
-              showToast={showToast}
-              resetKey={lead.id}
-              onRecorded={(_url, callId) => setInternalRecordingCallId(callId)}
-            />
-          )}
-        </>
-      }
+      headerActions={<a href={`tel:${lead.phone}`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"><PhoneCall className="h-3.5 w-3.5" /> Call {lead.phone}</a>}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2046,22 +2025,31 @@ export function OpenSalesCallModal({
           )}
 
           <section className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-blue-700"><PhoneCall className="h-3.5 w-3.5" />After the call</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-700"><PhoneCall className="h-3.5 w-3.5" />After the call, what happened?</div>
+            <p className="mt-0.5 text-[10px] leading-4 text-blue-600">Tag the result so this card moves to the correct next step.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              {(Object.keys(outcomeLabels) as CallOutcome[]).filter((outcome) => outcome !== 'interested').map((outcome) => (
-              <button
-                key={outcome}
-                onClick={() => void chooseOutcome(outcome)}
-                disabled={loggingOutcome !== null}
-                className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition disabled:opacity-50 ${
-                  'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
-                }`}
+              <button onClick={() => void chooseOutcome('no_answer')} disabled={loggingOutcome !== null} className="rounded-lg border border-blue-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50">{loggingOutcome === 'no_answer' ? 'Recording…' : 'No answer'}</button>
+              <button onClick={() => void chooseOutcome('voicemail')} disabled={loggingOutcome !== null} className="rounded-lg border border-blue-200 bg-white px-2.5 py-2 text-left text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50">{loggingOutcome === 'voicemail' ? 'Recording…' : 'Left voicemail'}</button>
+              <button onClick={() => void chooseOutcome('talk_later')} disabled={loggingOutcome !== null} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-left text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50">{loggingOutcome === 'talk_later' ? 'Recording…' : 'Follow up later'}</button>
+              <input type="date" value={callbackDate} min={localDateIso()} onChange={(event) => setCallbackDate(event.target.value)} className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100" aria-label="Follow-up date" />
+            <div className="relative col-span-2">
+              <select
+                defaultValue=""
+                disabled={loggingOutcome !== null || archivingNotInterested}
+                onChange={(event) => {
+                  if (event.target.value) void chooseOutcome('bad_contact', event.target.value as BadContactReason);
+                }}
+                className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+                aria-label="Bad contact reason"
               >
-                <span className="inline-flex items-center gap-1.5">
-                  {loggingOutcome === outcome ? 'Recording…' : outcomeLabels[outcome]}
-                </span>
-              </button>
-            ))}
+                <option value="" disabled>Bad contact…</option>
+                <option value="disconnected">Disconnected number</option>
+                <option value="wrong_number">Wrong number</option>
+                <option value="no_contact">No usable contact</option>
+                <option value="business_closed">Business appears closed</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            </div>
             <button
               onClick={() => setNotInterestedOpen(true)}
               disabled={loggingOutcome !== null || archivingNotInterested}
@@ -2108,10 +2096,11 @@ function ArchiveNoteModal({
 }: {
   lead: PipelineLead;
   onClose: () => void;
-  onConfirm: (note: string, markNotInterested: boolean) => Promise<string | null>;
+  onConfirm: (note: string, markNotInterested: boolean, reason?: NotInterestedReason) => Promise<string | null>;
 }) {
   const [note, setNote] = useState('');
   const [markNotInterested, setMarkNotInterested] = useState(false);
+  const [notInterestedReason, setNotInterestedReason] = useState<NotInterestedReason | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -2144,6 +2133,16 @@ function ArchiveNoteModal({
             <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Also marks the CRM stage as Not interested so this lead is fully closed.</span>
           </span>
         </label>
+        {markNotInterested && (
+          <fieldset className="mt-3">
+            <legend className="text-xs font-semibold text-slate-700">Why are they not interested? <span className="text-rose-500">*</span></legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {NOT_INTERESTED_REASONS.map((option) => (
+                <button key={option.value} type="button" aria-pressed={notInterestedReason === option.value} onClick={() => setNotInterestedReason(option.value)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${notInterestedReason === option.value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50'}`}>{option.label}</button>
+              ))}
+            </div>
+          </fieldset>
+        )}
         {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -2158,9 +2157,13 @@ function ArchiveNoteModal({
             onClick={() => {
               const trimmed = note.trim();
               if (!trimmed) return;
+              if (markNotInterested && !notInterestedReason) {
+                setError('Choose why they are not interested.');
+                return;
+              }
               setSaving(true);
               setError(null);
-              void onConfirm(trimmed, markNotInterested)
+              void onConfirm(trimmed, markNotInterested, notInterestedReason ?? undefined)
                 .then((failure) => setError(failure))
                 .finally(() => setSaving(false));
             }}
@@ -2178,6 +2181,12 @@ function ArchiveNoteModal({
 // ---------- Page ----------
 
 type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'needs_fix' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
+
+function localDateIso(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
@@ -2413,9 +2422,16 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const [industryFilter, setIndustryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [modal, setModal] = useState<ModalState>(null);
+  const pipelineCallRecorderRef = useRef<RecordButtonHandle>(null);
+  const [pipelineCallRecordingId, setPipelineCallRecordingId] = useState<number | null>(null);
   const [qualifyLead, setQualifyLead] = useState<Lead | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PipelineLead | null>(null);
   const [fixTarget, setFixTarget] = useState<PipelineLead | null>(null);
+  const activeCallLeadId = modal?.type === 'call' ? modal.lead.id : null;
+
+  useEffect(() => {
+    setPipelineCallRecordingId(null);
+  }, [activeCallLeadId]);
   // Grid (default) vs Kanban board. Persisted like the sidebar collapse.
   const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'grid',
@@ -2570,11 +2586,13 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
     selectedPlan?: SelectedPlan,
     notes?: string,
     recordingCallId?: number,
+    badContactReason?: BadContactReason,
+    callbackDate?: string,
   ): Promise<boolean> => {
     try {
       const { lead: updated } = await api.pipeline.action(lead.id, {
         action: 'call_outcome',
-        meta: { outcome, selected_plan: selectedPlan ?? null, notes: notes ?? null, recording_call_id: recordingCallId ?? null },
+        meta: { outcome, selected_plan: selectedPlan ?? null, notes: notes ?? null, recording_call_id: recordingCallId ?? null, bad_contact_reason: badContactReason ?? null, callback_date: callbackDate ?? null },
       });
       applyMutation(updated, 'call_outcome');
       return true;
@@ -2587,7 +2605,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
 
   const archiveLead = (lead: PipelineLead) => setArchiveTarget(lead);
 
-  const confirmArchive = async (note: string, markNotInterested: boolean): Promise<string | null> => {
+  const confirmArchive = async (note: string, markNotInterested: boolean, notInterestedReason?: NotInterestedReason): Promise<string | null> => {
     const lead = archiveTarget;
     if (!lead) return null;
     const error = await runAction(
@@ -2598,6 +2616,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         reason: markNotInterested ? 'declined_by_reply' : isStaleLead(lead) ? 'stale_outreach' : 'operator_archive',
         note,
         mark_not_interested: markNotInterested,
+        not_interested_reason: markNotInterested ? notInterestedReason ?? null : null,
       },
       false, // the modal stays open and renders the error itself
     );
@@ -2622,6 +2641,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
         action: 'call_outcome',
         meta: {
           outcome: 'not_interested',
+          not_interested_reason: closeout.reason,
           notes: closeout.note,
           recording_call_id: recordingCallId ?? null,
           receptionist_interested: closeout.receptionistInterested,
@@ -2982,7 +3002,20 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           onFollowUpSent={markFollowedUp}
           onEmailCaptured={() => void loadLeads()}
           showToast={showToast}
+          externalRecorderRef={pipelineCallRecorderRef}
+          externalRecordingCallId={pipelineCallRecordingId}
         />
+      )}
+      {modal?.type === 'call' && (
+        <div className="fixed right-16 top-4 z-[230] sm:right-20">
+          <RecordButton
+            ref={pipelineCallRecorderRef}
+            leadId={modal.lead.id}
+            showToast={showToast}
+            resetKey={modal.lead.id}
+            onRecorded={(_url, callId) => setPipelineCallRecordingId(callId)}
+          />
+        </div>
       )}
       {modal?.type === 'detail' && (
         <SharedLeadDetailModal

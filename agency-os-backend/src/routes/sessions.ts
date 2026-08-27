@@ -574,6 +574,7 @@ interface OutcomeBody {
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string;
+  notInterestedReason?: string;
   badContactReason?: string;
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
@@ -659,6 +660,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     // 14-day-excluded by a non-call.
   } else if (body.outcome === 'not_interested') {
     await closeLeadNotInterested(c.env.DB, body.leadId, {
+      reason: body.notInterestedReason,
       receptionistInterested: body.receptionistInterested,
       receptionistEmail: body.receptionistEmail,
       lastCalledAt: now,
@@ -790,6 +792,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       callback_date: body.callbackDate ?? null,
       source: body.preserveFinalReview ? 'email_final_review' : 'call_outreach',
       receptionist_interested: body.outcome === 'not_interested' && body.receptionistInterested === true,
+      not_interested_reason: body.outcome === 'not_interested' ? body.notInterestedReason ?? null : null,
       archived: body.outcome === 'not_interested',
       bad_contact_reason: body.outcome === 'bad_contact' ? body.badContactReason ?? 'no_contact' : null,
     })).run();

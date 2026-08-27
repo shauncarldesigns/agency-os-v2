@@ -769,6 +769,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
     setNotes(closeout.note);
     void recordOutcome('not_interested', {
       notes: closeout.note,
+      notInterestedReason: closeout.reason,
       receptionistInterested: closeout.receptionistInterested,
       receptionistEmail: closeout.email,
     }).then(() => setNotInterestedOpen(false));
@@ -1092,7 +1093,7 @@ export function ExecutionView({ sessionId, initialLeadId, showToast, onClose, on
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-voicemail" onClick={handleVoicemail} disabled={recording || bookingMode}><PhoneMissed size={15} /> Voicemail</button>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-not-interested" onClick={handleNotInterested} disabled={recording || bookingMode}><Ban size={15} /> Not interested — remove</button>
         <button type="button" className={`cockpit-outcome-btn cockpit-outcome-callback${callbackOpen ? ' active' : ''}`} onClick={handleCallbackToggle} disabled={recording || bookingMode}><RotateCcw size={15} /> Callback</button>
-        <select defaultValue="" disabled={recording || bookingMode} onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', { badContactReason: event.target.value as SessionOutcomeBody['badContactReason'] }); }} className="cockpit-outcome-btn" aria-label="Bad contact reason">
+        <select defaultValue="" disabled={recording || bookingMode} onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', { badContactReason: event.target.value as SessionOutcomeBody['badContactReason'] }); }} className="cockpit-outcome-btn pr-10" aria-label="Bad contact reason">
           <option value="" disabled>Bad contact…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option>
         </select>
         <button type="button" className="cockpit-outcome-btn cockpit-outcome-booked" onClick={handleBookedDemo} disabled={recording || bookingMode}><CalendarClock size={15} /> Booked demo</button>

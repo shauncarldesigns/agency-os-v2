@@ -1,6 +1,20 @@
 import type { Lead } from '../types';
 
+export const NOT_INTERESTED_REASONS = new Set([
+  'price_budget',
+  'bad_timing',
+  'existing_provider',
+  'no_value',
+  'do_it_themselves',
+  'partner_approval',
+  'outreach_trust',
+  'business_change',
+  'different_service',
+  'other',
+]);
+
 export interface NotInterestedCloseoutInput {
+  reason?: string | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string | null;
   now?: string;
@@ -24,12 +38,15 @@ export async function closeLeadNotInterested(
   const now = input.now ?? new Date().toISOString();
   const receptionistInterested = input.receptionistInterested === true;
   const receptionistEmail = input.receptionistEmail?.trim() || null;
+  const requestedReason = input.reason?.trim() || null;
+  const reason = requestedReason && NOT_INTERESTED_REASONS.has(requestedReason) ? requestedReason : null;
 
   await db.batch([
     db.prepare(`
       UPDATE leads
          SET status = 'not_interested', outcome = 'Not Interested',
              pipeline_status = 'archived',
+             not_interested_reason = COALESCE(?, not_interested_reason),
              demo_site_status = CASE
                WHEN demo_site_status = 'deleted' THEN 'deleted'
                WHEN COALESCE(NULLIF(TRIM(site_url_raw), ''), NULLIF(TRIM(site_url), ''), '') != '' THEN 'cleanup_needed'
@@ -42,6 +59,7 @@ export async function closeLeadNotInterested(
              pipeline_last_action_at = ?, updated_at = ?
        WHERE id = ?
     `).bind(
+      reason,
       receptionistInterested ? 1 : 0,
       receptionistInterested ? 1 : 0,
       now,

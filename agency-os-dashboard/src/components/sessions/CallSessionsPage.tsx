@@ -59,6 +59,7 @@ import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
 import {
   mapLeadRow,
   OpenSalesCallModal,
+  type BadContactReason,
   type PipelineLead,
   type SelectedPlan,
 } from '../leadpipeline/AutomatedPipelinePanel';
@@ -625,10 +626,12 @@ function EmailEngagedSalesCall({
 
   async function recordCall(
     activeLead: PipelineLead,
-    outcome: 'no_answer' | 'voicemail' | 'busy' | 'talk_later' | 'feedback_only' | 'interested',
+    outcome: 'no_answer' | 'voicemail' | 'busy' | 'talk_later' | 'feedback_only' | 'bad_contact' | 'interested',
     selectedPlan?: SelectedPlan,
     notes?: string,
     recordingCallId?: number,
+    badContactReason?: BadContactReason,
+    callbackDate?: string,
   ): Promise<boolean> {
     try {
       await api.pipeline.action(activeLead.id, {
@@ -638,6 +641,8 @@ function EmailEngagedSalesCall({
           selected_plan: selectedPlan ?? null,
           notes: notes ?? null,
           recording_call_id: recordingCallId ?? null,
+          bad_contact_reason: badContactReason ?? null,
+          callback_date: callbackDate ?? null,
           channel: 'email',
         },
       });
@@ -676,6 +681,7 @@ function EmailEngagedSalesCall({
         action: 'call_outcome',
         meta: {
           outcome: 'not_interested',
+          not_interested_reason: closeout.reason,
           notes: closeout.note,
           recording_call_id: recordingCallId ?? null,
           channel: 'email',
@@ -890,6 +896,7 @@ function CallOutreachModal({
         preserveFinalReview: returnedFromAutomation,
         receptionistInterested: outcome === 'not_interested' && closeout?.receptionistInterested === true,
         receptionistEmail: outcome === 'not_interested' ? closeout?.email : undefined,
+        notInterestedReason: outcome === 'not_interested' ? closeout?.reason : undefined,
         badContactReason: outcome === 'bad_contact' ? badContactReason : undefined,
       });
       const label = {
@@ -919,6 +926,7 @@ function CallOutreachModal({
       return;
     }
     await recordOutcome('not_interested', {
+      reason: 'different_service',
       note: callNotes.trim() || 'Interested in the automated receptionist demo.',
       receptionistInterested: true,
       email: nextEmail,
@@ -1053,19 +1061,22 @@ function CallOutreachModal({
                   aria-label="Follow-up date"
                 />
               </div>
-              <select
-                defaultValue=""
-                disabled={recordingOutcome !== null}
-                onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', undefined, event.target.value as SessionOutcomeBody['badContactReason']); }}
-                className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50"
-                aria-label="Bad contact reason"
-              >
-                <option value="" disabled>Bad contact…</option>
-                <option value="disconnected">Disconnected number</option>
-                <option value="wrong_number">Wrong number</option>
-                <option value="no_contact">No usable contact</option>
-                <option value="business_closed">Business appears closed</option>
-              </select>
+              <div className="relative mt-2">
+                <select
+                  defaultValue=""
+                  disabled={recordingOutcome !== null}
+                  onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', undefined, event.target.value as SessionOutcomeBody['badContactReason']); }}
+                  className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50"
+                  aria-label="Bad contact reason"
+                >
+                  <option value="" disabled>Bad contact…</option>
+                  <option value="disconnected">Disconnected number</option>
+                  <option value="wrong_number">Wrong number</option>
+                  <option value="no_contact">No usable contact</option>
+                  <option value="business_closed">Business appears closed</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              </div>
               <button
                 type="button"
                 onClick={() => setNotInterestedOpen(true)}
@@ -1432,9 +1443,12 @@ function EmailCaptureSplitScript({
               <button type="button" onClick={() => onRecordOutcome('callback')} disabled={recordingOutcome !== null} className="h-9 rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-left text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">{recordingOutcome === 'callback' ? 'Recording…' : 'Follow up later'}</button>
               <input type="date" value={callbackDate} min={localDateIso()} onChange={(event) => onCallbackDateChange(event.target.value)} className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100" aria-label="Follow-up date" />
             </div>
-            <select defaultValue="" disabled={recordingOutcome !== null} onChange={(event) => { if (event.target.value) onRecordOutcome('bad_contact', event.target.value as SessionOutcomeBody['badContactReason']); }} className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50" aria-label="Bad contact reason">
-              <option value="" disabled>Bad contact…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option>
-            </select>
+            <div className="relative mt-2">
+              <select defaultValue="" disabled={recordingOutcome !== null} onChange={(event) => { if (event.target.value) onRecordOutcome('bad_contact', event.target.value as SessionOutcomeBody['badContactReason']); }} className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50" aria-label="Bad contact reason">
+                <option value="" disabled>Bad contact…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            </div>
             <button
               type="button"
               onClick={onArchiveRejection}

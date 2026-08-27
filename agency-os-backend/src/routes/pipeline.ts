@@ -18,7 +18,7 @@ import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
 import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
 import { scheduleEmailAutomation } from '../services/emailAutomation';
-import { closeLeadNotInterested } from '../services/leadCloseout';
+import { closeLeadBadContact, closeLeadNotInterested } from '../services/leadCloseout';
 import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligibility';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
@@ -735,6 +735,12 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     const actionMeta = body.meta && typeof body.meta === 'object'
       ? body.meta as Record<string, unknown>
       : null;
+    if (action === 'call_outcome' && actionMeta?.outcome === 'talk_later') {
+      const callbackDate = typeof actionMeta.callback_date === 'string' ? actionMeta.callback_date : '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(callbackDate)) {
+        return c.json(badRequest('A valid follow-up date is required.'), 400);
+      }
+    }
 
     const lead = await c.env.DB.prepare(
       'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
@@ -858,9 +864,30 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       || (action === 'archived' && actionMeta?.mark_not_interested === true)
     ) {
       await closeLeadNotInterested(c.env.DB, id, {
+        reason: typeof actionMeta?.not_interested_reason === 'string' ? actionMeta.not_interested_reason : null,
         receptionistInterested: actionMeta?.receptionist_interested === true,
         receptionistEmail: typeof actionMeta?.receptionist_email === 'string' ? actionMeta.receptionist_email : null,
       });
+    }
+
+    if (action === 'call_outcome' && actionMeta?.outcome === 'bad_contact') {
+      const validReasons = ['disconnected', 'wrong_number', 'no_contact', 'business_closed'];
+      const reason = typeof actionMeta.bad_contact_reason === 'string' && validReasons.includes(actionMeta.bad_contact_reason)
+        ? actionMeta.bad_contact_reason
+        : 'no_contact';
+      await closeLeadBadContact(c.env.DB, id, reason, new Date().toISOString());
+    }
+
+    if (action === 'call_outcome' && actionMeta?.outcome === 'talk_later') {
+      const callbackDate = actionMeta.callback_date as string;
+      await c.env.DB.batch([
+        c.env.DB.prepare("UPDATE callbacks SET status = 'cancelled' WHERE lead_id = ? AND status = 'pending'").bind(id),
+        c.env.DB.prepare('INSERT INTO callbacks (lead_id, due_date, notes) VALUES (?, ?, ?)').bind(
+          id,
+          callbackDate,
+          typeof actionMeta.notes === 'string' && actionMeta.notes.trim() ? actionMeta.notes.trim() : 'Website follow-up',
+        ),
+      ]);
     }
 
     if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {

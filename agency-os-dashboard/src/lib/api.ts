@@ -1199,6 +1199,7 @@ export interface SessionOutcomeBody {
   recordingCallId?: number | null;
   receptionistInterested?: boolean;
   receptionistEmail?: string;
+  notInterestedReason?: string;
   badContactReason?: 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed';
 }
 

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS leads (
   demo_scheduled_for TEXT,                    -- Quick-reference pointer to latest demo
   receptionist_interested INTEGER NOT NULL DEFAULT 0,
   receptionist_interested_at TEXT,
+  not_interested_reason TEXT,
   -- Automated Pipeline — text + site outreach flow
   pipeline_status TEXT NOT NULL DEFAULT 'awaiting_build',
   site_url        TEXT,

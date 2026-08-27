@@ -101,6 +101,7 @@ export interface Lead {
   demo_site_status: 'none' | 'live' | 'cleanup_needed' | 'deleted';
   demo_site_deleted_at: string | null;
   receptionist_interested_at: string | null;
+  not_interested_reason: string | null;
   // Automated Pipeline — text + site outreach flow (added 2026-07-19).
   // Orthogonal to `status`. See routes/pipeline.ts for the state machine.
   pipeline_status: string;
