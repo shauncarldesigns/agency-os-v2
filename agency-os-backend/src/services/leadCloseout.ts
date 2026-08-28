@@ -101,14 +101,15 @@ export async function closeLeadBadContact(db: D1Database, leadId: number, reason
   await db.batch([
     db.prepare(`
       UPDATE leads SET status = CASE WHEN status = 'cold' THEN 'contacted' ELSE status END,
-        outcome = ?, pipeline_status = 'archived', phone_valid = 0,
+        outcome = ?, pipeline_status = 'archived',
+        phone_valid = CASE WHEN ? = 'call_screening' THEN 1 ELSE 0 END,
         demo_site_status = CASE
           WHEN demo_site_status = 'deleted' THEN 'deleted'
           WHEN COALESCE(NULLIF(TRIM(site_url_raw), ''), NULLIF(TRIM(site_url), ''), '') != '' THEN 'cleanup_needed'
           ELSE 'none'
         END,
         last_called_at = ?, pipeline_last_action_at = ?, updated_at = ? WHERE id = ?
-    `).bind(label, now, now, now, leadId),
+    `).bind(label, reason, now, now, now, leadId),
     db.prepare(`UPDATE email_automations SET status='stopped', stopped_at=COALESCE(stopped_at,datetime('now')), updated_at=datetime('now') WHERE lead_id=? AND status IN ('active','paused')`).bind(leadId),
     db.prepare(`UPDATE callbacks SET status='cancelled' WHERE lead_id=? AND status='pending'`).bind(leadId),
   ]);
