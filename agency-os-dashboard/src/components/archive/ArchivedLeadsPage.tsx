@@ -135,11 +135,11 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
               </div>
               <button type="button" onClick={() => setOpenLeadId(lead.id)} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="View lead and activity"><Eye className="h-4 w-4" /></button>
             </div>
-            <div className={`mt-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 ${isNotInterested ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 sm:grid-cols-4">
               <ArchiveSignal label="Route" value={route.label} sub={route.sub} tone={route.tone} />
               <ArchiveSignal label="Latest touch" value={latestTouch.label} sub={latestTouch.sub} tone={latestTouch.tone} />
               <ArchiveSignal label="Closeout" value={archiveCloseoutLabel(lead)} sub={archiveCloseoutDetail(lead)} tone={isNotInterested ? 'rose' : 'slate'} />
-              {isNotInterested && <ArchiveSignal label="Archive reason" value={notInterestedReasonLabel(lead.not_interested_reason)} sub="Customer feedback" tone="rose" />}
+              <ArchiveSignal label="Archive reason" value={archiveReasonLabel(lead)} sub={archiveReasonDetail(lead)} tone={isNotInterested ? 'rose' : 'slate'} />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {cleanupNeeded && siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"><Link2 className="h-3.5 w-3.5" /> Open demo</a>}
@@ -195,7 +195,7 @@ function ArchiveInsights({ stats }: { stats: DeclineStats }) {
   return <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <div className="flex items-center gap-2">
       <BarChart3 className="h-4 w-4 text-blue-600" />
-      <div><h3 className="text-sm font-bold text-slate-900">Why opportunities close</h3><p className="text-xs text-slate-500">Structured reasons from Not Interested closeouts.</p></div>
+      <div><h3 className="text-sm font-bold text-slate-900">Why customers decline</h3><p className="text-xs text-slate-500">Customer feedback from Not Interested closeouts only.</p></div>
     </div>
     {stats.reasons.length > 0 ? <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
       {stats.reasons.map((reason, index) => {
@@ -205,7 +205,7 @@ function ArchiveInsights({ stats }: { stats: DeclineStats }) {
           {isMostCommon && <span className="absolute right-2.5 top-2.5 rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700">Most common</span>}
           <p className={`text-2xl font-bold leading-none ${isMostCommon ? 'text-blue-700' : 'text-slate-950'}`}>{percentage}%</p>
           <p className="mt-3 text-xs font-semibold text-slate-700">{reason.label}</p>
-          <p className="mt-0.5 text-[10px] text-slate-400">{reason.count} of {stats.classified} categorized decline{stats.classified === 1 ? '' : 's'}</p>
+          <p className="mt-0.5 text-[10px] text-slate-400">{reason.count} of {stats.classified} customer decline{stats.classified === 1 ? '' : 's'}</p>
         </div>;
       })}
     </div> : <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center text-xs text-slate-500">Archive a lead with a Not Interested reason to start building the breakdown.</div>}
@@ -225,14 +225,26 @@ function archiveCloseoutLabel(lead: Lead): string {
   return outcome;
 }
 
+function archiveReasonLabel(lead: Lead): string {
+  if (lead.status === 'not_interested') return notInterestedReasonLabel(lead.not_interested_reason);
+  if (isBadContactLead(lead)) return lead.outcome?.trim() || 'Reason not recorded';
+  return lead.outcome?.trim() || 'Reason not recorded';
+}
+
+function archiveReasonDetail(lead: Lead): string {
+  if (lead.status === 'not_interested') return 'Customer feedback';
+  if (isBadContactLead(lead)) return 'Reachability issue';
+  return 'Archive context';
+}
+
 function isBadContactLead(lead: Lead): boolean {
   const outcome = lead.outcome?.trim() ?? '';
   return ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Call screening blocked', 'Bad contact', 'Unable to reach'].includes(outcome);
 }
 
 function archiveCloseoutDetail(lead: Lead): string {
-  const outcome = lead.outcome?.trim();
-  if (outcome && ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Call screening blocked'].includes(outcome)) return outcome;
+  if (lead.status === 'not_interested') return 'Customer declined';
+  if (isBadContactLead(lead)) return 'Contact or access issue';
   return 'Outreach closed';
 }
 
