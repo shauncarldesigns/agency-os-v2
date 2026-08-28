@@ -56,6 +56,8 @@ CLARITY_PROJECT_ID = "xt0tg8n14n"
 # "1st of month, 9am America/Chicago" guard in src/index.ts.
 GOOGLE_ADS_LOGIN_CUSTOMER_ID = "1493697645"
 KEYWORD_VOLUME_PROVIDER = "google_ads"
+CALL_INTELLIGENCE_ENABLED = "true"
+CALL_TRANSCRIPTION_MODEL = "gpt-4o-transcribe-diarize"
 OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
 OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
 OUTREACH_PUBLIC_URL = "https://try.shauncarldesigns.com"
@@ -94,3 +96,4 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 #                              only to override with a dedicated client)
 # BUILDER_API_TOKEN           (random bearer token used only by the local
 #                              Playwright Builder Employee)
+# OPENAI_API_KEY              (speaker-separated call transcription)

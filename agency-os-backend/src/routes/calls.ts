@@ -8,6 +8,7 @@ import {
   recordingResponseUrl,
   recordingStorageRef,
 } from '../utils/recordings';
+import { enqueueCallAnalysis, processCallIntelligenceJobs } from '../services/callIntelligence';
 
 // Mounted at /api/leads — handles /:id/calls (list, create) and at /api/calls — handles /:id (delete)
 export const leadCallsRouter = new Hono<{ Bindings: Env }>();
@@ -184,6 +185,12 @@ leadCallsRouter.post('/:id/recordings/attach', async (c) => {
     .prepare(`INSERT INTO call_log (lead_id, outcome, notes, recording_url) VALUES (?, 'Recording', ?, ?)`)
     .bind(leadId, '(orphan recording re-attached from R2)', recordingStorageRef(key))
     .run();
+
+  if (c.env.CALL_INTELLIGENCE_ENABLED === 'true') {
+    const callId = Number(result.meta.last_row_id);
+    await enqueueCallAnalysis(c.env.DB, callId);
+    c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1));
+  }
 
   return c.json({ call_id: result.meta.last_row_id, created: true });
 });

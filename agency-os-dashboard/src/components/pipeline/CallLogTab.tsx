@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { CallEntry, ShowToast } from '../../lib/types';
+import type { CallEntry, CallIntelligenceReport, ShowToast } from '../../lib/types';
 import { api, ApiError, type RecordingObject } from '../../lib/api';
 import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
@@ -185,6 +185,11 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                     <span style={{ marginLeft: 8 }}>
                       <Badge color={ob.color}>{ob.label}</Badge>
                     </span>
+                    {c.call_approach && (
+                      <span style={{ marginLeft: 6 }}>
+                        <Badge color="blue">{c.call_approach === 'question_based' ? 'Question-based' : 'Direct'}</Badge>
+                      </span>
+                    )}
                   </div>
                   <button className="btn btn-ghost btn-xs" style={{ padding: '2px 6px' }} onClick={() => handleDelete(c.id)} aria-label="Delete entry">✕</button>
                 </div>
@@ -192,6 +197,7 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                 {c.recording_url && (
                   <div style={{ marginTop: 10 }}><AuthenticatedAudioPlayer url={c.recording_url} compact /></div>
                 )}
+                {c.recording_url && <IntelligenceReport callId={c.id} showToast={showToast} />}
                 {c.followup_date && (
                   <div className="call-entry-followup">📅 Follow-up: {new Date(c.followup_date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
                 )}
@@ -202,4 +208,49 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
       </div>
     </div>
   );
+}
+
+function IntelligenceReport({ callId, showToast }: { callId: number; showToast: ShowToast }) {
+  const [report, setReport] = useState<CallIntelligenceReport | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { try { setReport(await api.calls.intelligenceReport(callId)); } catch { /* migration may not be applied */ } }, [callId]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!report?.job || !['queued', 'transcribing', 'analyzing'].includes(report.job.status)) return;
+    const timer = window.setInterval(() => void load(), 4_000);
+    return () => window.clearInterval(timer);
+  }, [load, report?.job]);
+  const run = async (mode: 'process'|'retry'|'reanalyze') => {
+    setBusy(true);
+    if (mode === 'retry') {
+      setReport(current => current?.job ? { ...current, job: { ...current.job, status: 'queued', error: null } } : current);
+    }
+    try {
+      if (mode === 'retry') await api.calls.retry(callId); else await api.calls.process(callId, mode === 'reanalyze');
+      showToast(mode === 'retry' ? 'Analysis retry queued' : 'Call analysis queued', 'success');
+      await load();
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not queue analysis', 'error'); }
+    finally { setBusy(false); }
+  };
+  const analysis = report?.analysis?.analysis_json;
+  const status = report?.job?.status;
+  const noSpeech = report?.job?.error?.includes('no speaker segments') === true;
+  return <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+    <div className="flex items-center justify-between gap-2">
+      <button className="font-semibold text-blue-700" onClick={() => setOpen(value => !value)}>Sales intelligence {status ? `· ${status}` : ''}</button>
+      {!status && <button disabled={busy} className="rounded-lg bg-blue-600 px-2 py-1 font-semibold text-white disabled:opacity-50" onClick={() => void run('process')}>Analyze</button>}
+      {status === 'failed' && !noSpeech && <button disabled={busy} className="rounded-lg bg-rose-600 px-2 py-1 font-semibold text-white" onClick={() => void run('retry')}>Retry</button>}
+      {status === 'completed' && <button disabled={busy} className="rounded-lg border border-slate-300 px-2 py-1 font-semibold" onClick={() => void run('reanalyze')}>Reanalyze</button>}
+    </div>
+    {status === 'failed' && <p className="mt-2 text-rose-700">{noSpeech ? 'No speech was detected in this recording, so there is nothing to analyze.' : report?.job?.error}</p>}
+    {open && analysis && <div className="mt-3 space-y-3 text-slate-700">
+      <p>{String(analysis.call_summary || '')}</p>
+      <div><b>Outcome:</b> {String(analysis.outcome || 'unknown')}</div>
+      <div><b>Stated needs:</b> {(analysis.stated_needs as string[] || []).join(', ') || 'None supported'}</div>
+      <div><b>Next action:</b> {String(analysis.recommended_next_action || '')}</div>
+      <details><summary className="cursor-pointer font-semibold">Transcript</summary><pre className="mt-2 whitespace-pre-wrap font-sans leading-relaxed">{report?.transcript?.transcript_text}</pre></details>
+      <details><summary className="cursor-pointer font-semibold">Full structured report</summary><pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[11px]">{JSON.stringify(analysis, null, 2)}</pre></details>
+    </div>}
+  </div>;
 }

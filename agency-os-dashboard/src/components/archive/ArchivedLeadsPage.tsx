@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, BarChart3, CheckCircle2, Eye, Link2, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Archive, Ban, BarChart3, CheckCircle2, Eye, Globe2, Link2, PhoneOff, RefreshCw, RotateCcw, Search, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
@@ -47,7 +47,7 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
       .filter((option) => option.count > 0)
       .sort((a, b) => b.count - a.count);
     const classified = reasons.reduce((sum, reason) => sum + reason.count, 0);
-    return { total: declined.length, classified, unclassified: declined.length - classified, reasons, top: reasons[0] ?? null };
+    return { classified, reasons };
   }, [leads]);
   const filtered = useMemo(() => leads.filter((lead) => {
     const q = query.trim().toLowerCase();
@@ -98,7 +98,8 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
         </div>
       </section>
 
-      <ArchiveInsights stats={declineStats} cleanupCount={cleanupCount} />
+      <ArchiveOverview leads={leads} />
+      <ArchiveInsights stats={declineStats} />
 
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <div className="relative min-w-0 flex-1">
@@ -157,39 +158,58 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
 }
 
 type DeclineStats = {
-  total: number;
   classified: number;
-  unclassified: number;
   reasons: Array<{ value: string; label: string; count: number }>;
-  top: { value: string; label: string; count: number } | null;
 };
 
-function ArchiveInsights({ stats, cleanupCount }: { stats: DeclineStats; cleanupCount: number }) {
-  const maxCount = stats.reasons[0]?.count ?? 1;
+function ArchiveOverview({ leads }: { leads: Lead[] }) {
+  const stats = [
+    { label: 'Total archived', value: leads.length, detail: 'Closed opportunities', icon: Archive, tone: 'slate' as const },
+    { label: 'Not interested', value: leads.filter((lead) => lead.status === 'not_interested').length, detail: 'Customer declined', icon: Ban, tone: 'rose' as const },
+    { label: 'Bad contact', value: leads.filter(isBadContactLead).length, detail: 'Unusable lead data', icon: PhoneOff, tone: 'violet' as const },
+    { label: 'Cleanup required', value: leads.filter((lead) => lead.demo_site_status === 'cleanup_needed').length, detail: 'Demo sites to delete', icon: TriangleAlert, tone: 'amber' as const },
+    { label: 'Sites deleted', value: leads.filter((lead) => lead.demo_site_status === 'deleted').length, detail: 'Cleanup completed', icon: CheckCircle2, tone: 'emerald' as const },
+    { label: 'No demo site', value: leads.filter((lead) => lead.demo_site_status === 'none').length, detail: 'Nothing to clean', icon: Globe2, tone: 'blue' as const },
+  ];
+  return <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+      {stats.map((stat) => <ArchiveMetric key={stat.label} {...stat} />)}
+    </div>
+  </section>;
+}
+
+function ArchiveMetric({ label, value, detail, icon: Icon, tone }: { label: string; value: number; detail: string; icon: LucideIcon; tone: 'slate' | 'rose' | 'violet' | 'amber' | 'emerald' | 'blue' }) {
+  const colors = {
+    slate: 'bg-slate-100 text-slate-600', rose: 'bg-rose-50 text-rose-600', violet: 'bg-violet-50 text-violet-600',
+    amber: 'bg-amber-50 text-amber-600', emerald: 'bg-emerald-50 text-emerald-600', blue: 'bg-blue-50 text-blue-600',
+  }[tone];
+  return <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+    <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors}`}><Icon className="h-4 w-4" /></div>
+    <p className="mt-3 text-2xl font-bold leading-none text-slate-950">{value}</p>
+    <p className="mt-2 text-xs font-semibold text-slate-700">{label}</p>
+    <p className="mt-0.5 truncate text-[10px] text-slate-400">{detail}</p>
+  </div>;
+}
+
+function ArchiveInsights({ stats }: { stats: DeclineStats }) {
   return <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <div className="flex items-center gap-2">
       <BarChart3 className="h-4 w-4 text-blue-600" />
       <div><h3 className="text-sm font-bold text-slate-900">Why opportunities close</h3><p className="text-xs text-slate-500">Structured reasons from Not Interested closeouts.</p></div>
     </div>
-    <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-      <InsightMetric label="Not interested" value={stats.total} detail="Archived declines" />
-      <InsightMetric label="Reasons captured" value={stats.classified} detail={stats.total ? `${Math.round((stats.classified / stats.total) * 100)}% classified` : 'No declines yet'} />
-      <InsightMetric label="Most common" value={stats.top?.count ?? 0} detail={stats.top?.label ?? 'No reason data yet'} />
-      <InsightMetric label="Sites to clean" value={cleanupCount} detail={cleanupCount ? 'Action required' : 'Cleanup is clear'} tone={cleanupCount ? 'amber' : 'emerald'} />
-    </div>
-    {stats.reasons.length > 0 ? <div className="mt-4 grid gap-x-5 gap-y-3 lg:grid-cols-2">
-      {stats.reasons.map((reason) => <div key={reason.value}>
-        <div className="flex items-center justify-between gap-3 text-xs"><span className="font-medium text-slate-700">{reason.label}</span><span className="font-bold text-slate-500">{reason.count} · {stats.classified ? Math.round((reason.count / stats.classified) * 100) : 0}%</span></div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(8, (reason.count / maxCount) * 100)}%` }} /></div>
-      </div>)}
+    {stats.reasons.length > 0 ? <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+      {stats.reasons.map((reason, index) => {
+        const percentage = stats.classified ? Math.round((reason.count / stats.classified) * 100) : 0;
+        const isMostCommon = index === 0;
+        return <div key={reason.value} className={`relative min-w-0 rounded-xl border p-3 ${isMostCommon ? 'border-blue-200 bg-blue-50/70 shadow-sm' : 'border-slate-200 bg-slate-50/40'}`}>
+          {isMostCommon && <span className="absolute right-2.5 top-2.5 rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-700">Most common</span>}
+          <p className={`text-2xl font-bold leading-none ${isMostCommon ? 'text-blue-700' : 'text-slate-950'}`}>{percentage}%</p>
+          <p className="mt-3 text-xs font-semibold text-slate-700">{reason.label}</p>
+          <p className="mt-0.5 text-[10px] text-slate-400">{reason.count} of {stats.classified} categorized decline{stats.classified === 1 ? '' : 's'}</p>
+        </div>;
+      })}
     </div> : <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center text-xs text-slate-500">Archive a lead with a Not Interested reason to start building the breakdown.</div>}
-    {stats.unclassified > 0 && <p className="mt-3 text-[11px] text-slate-400">{stats.unclassified} older decline{stats.unclassified === 1 ? '' : 's'} predate structured reason tracking and remain unclassified.</p>}
   </section>;
-}
-
-function InsightMetric({ label, value, detail, tone = 'blue' }: { label: string; value: number; detail: string; tone?: 'blue' | 'amber' | 'emerald' }) {
-  const color = tone === 'amber' ? 'text-amber-600' : tone === 'emerald' ? 'text-emerald-600' : 'text-blue-600';
-  return <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-3"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-1 text-xl font-bold ${color}`}>{value}</p><p className="mt-0.5 truncate text-[10px] text-slate-500">{detail}</p></div>;
 }
 
 function notInterestedReasonLabel(reason: string | null): string {
@@ -201,8 +221,13 @@ function archiveCloseoutLabel(lead: Lead): string {
   if (lead.status === 'not_interested') return 'Not interested';
   const outcome = lead.outcome?.trim();
   if (!outcome) return 'Archived';
-  if (['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Bad contact'].includes(outcome)) return 'Bad contact';
+  if (isBadContactLead(lead)) return 'Bad contact';
   return outcome;
+}
+
+function isBadContactLead(lead: Lead): boolean {
+  const outcome = lead.outcome?.trim() ?? '';
+  return ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Bad contact'].includes(outcome);
 }
 
 function archiveCloseoutDetail(lead: Lead): string {

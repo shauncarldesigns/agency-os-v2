@@ -34,6 +34,8 @@ import { researchRouter, runAllMarketResearch } from './routes/research';
 import { runDueSeoAudits } from './services/seoAudit';
 import { recordApplicationEvent } from './services/applicationEvents';
 import { builderAdminRouter, builderWorkerRouter } from './routes/builder';
+import { callIntelligenceRouter } from './routes/callIntelligence';
+import { processCallIntelligenceJobs } from './services/callIntelligence';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -157,6 +159,7 @@ app.route('/api/settings', settingsRouter);
 // Market research — demand data per industry × location market.
 app.route('/api/research', researchRouter);
 app.route('/api/builder', builderAdminRouter);
+app.route('/api/call-intelligence', callIntelligenceRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {
@@ -241,10 +244,12 @@ export default {
       // immediate app-owned /r/:lead_id click signal.
       ctx.waitUntil(syncClarityEngagement(env).then(out => log('info', 'cron', 'Clarity engagement sync run', out)));
     } else if (event.cron === '*/5 * * * *') {
-      ctx.waitUntil(
-        processDueEmailAutomations(env)
-          .then(out => log('info', 'cron', 'Email automation run', out)),
-      );
+      ctx.waitUntil(Promise.all([
+        processDueEmailAutomations(env).then(out => log('info', 'cron', 'Email automation run', out)),
+        processCallIntelligenceJobs(env).then(out => {
+          if (out.processed) log('info', 'cron', 'Call intelligence run', out);
+        }),
+      ]));
     }
   },
 };

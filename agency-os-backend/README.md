@@ -161,3 +161,23 @@ npx wrangler d1 execute agency-os-v2 --local --file=src/db/schema.sql
 DASHBOARD_API_KEY=test-key npx wrangler dev --local --port 8788 --var DASHBOARD_API_KEY:test-key &
 # then exercise the dashboard at http://localhost:5174
 ```
+# Call Sales Intelligence
+
+Call processing is deliberately off by default. Apply
+`src/db/migrations/2026-08-28-call-intelligence.sql` and configure the
+`OPENAI_API_KEY` secret. Real recordings use OpenAI's
+`gpt-4o-transcribe-diarize`; structured analysis continues to use the existing
+Claude integration. With `CALL_INTELLIGENCE_ENABLED=true`, every successful
+recording upload or orphan-recording attachment is queued automatically. Blank
+or unusable audio is retained and receives a visible failed job rather than
+being silently omitted. The existing five-minute trigger recovers queued or
+abandoned jobs; an immediate background kick handles the common case after
+upload. The authenticated backfill endpoint queues historical recordings once,
+idempotently.
+
+For local UI/integration testing, set `CALL_INTELLIGENCE_TEST_MODE=mock`. Mock
+mode never reads an R2 recording and never calls OpenAI or Anthropic. It emits
+a deterministic speaker-separated transcript and validated analysis. Do not set
+mock mode in production. Recordings are retained in R2; transcript and analysis
+rows cascade when their parent `call_log` row is deleted. No time-based purge is
+enabled until the operator chooses a retention period.

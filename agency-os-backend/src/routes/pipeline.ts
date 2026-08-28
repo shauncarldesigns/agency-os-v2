@@ -892,6 +892,9 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
 
     if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {
       const meta = body.meta as Record<string, unknown>;
+      const callApproach = meta.call_approach === 'direct' || meta.call_approach === 'question_based'
+        ? meta.call_approach
+        : null;
       const recordingCallId = Number(meta.recording_call_id);
       const outcome = typeof meta.outcome === 'string'
         ? meta.outcome.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase())
@@ -900,16 +903,16 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
       if (Number.isInteger(recordingCallId) && recordingCallId > 0) {
         await c.env.DB.prepare(
           `UPDATE call_log
-              SET outcome = ?, notes = COALESCE(?, notes)
+              SET outcome = ?, notes = COALESCE(?, notes), call_approach = ?
             WHERE id = ? AND lead_id = ?`
-        ).bind(outcome, notes, recordingCallId, id).run();
+        ).bind(outcome, notes, callApproach, recordingCallId, id).run();
       } else {
         // Outcomes without a recording still belong in call history. The old
         // behavior only wrote lead_activity, which made the UI claim a call
         // was recorded while the Calls panel remained empty.
         await c.env.DB.prepare(
-          `INSERT INTO call_log (lead_id, outcome, notes) VALUES (?, ?, ?)`
-        ).bind(id, outcome, notes ?? '').run();
+          `INSERT INTO call_log (lead_id, outcome, notes, call_approach) VALUES (?, ?, ?, ?)`
+        ).bind(id, outcome, notes ?? '', callApproach).run();
       }
     }
 

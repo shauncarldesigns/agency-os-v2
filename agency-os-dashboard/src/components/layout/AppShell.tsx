@@ -20,6 +20,7 @@ import {
   UserRound,
   Bot,
   PhoneIncoming,
+  BrainCircuit,
   Archive,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
@@ -62,6 +63,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
       { key: 'builder', label: 'Builder Employee', icon: Bot, badgeKey: 'automatedPipeline' },
       { key: 'call-center', label: 'Call Center', icon: Headphones },
       { key: 'receptionist-interest', label: 'Receptionist Interest', icon: PhoneIncoming, badgeKey: 'receptionistInterest' },
+      { key: 'sales-intelligence', label: 'Sales Intelligence', icon: BrainCircuit },
     ],
   },
   {
@@ -80,6 +82,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   'email-outreach': { title: 'Email Outreach', subtitle: 'Build-first email queue and follow-up board' },
   'call-center': { title: 'Call Center', subtitle: 'Select a company and run the call execution playbook' },
   'receptionist-interest': { title: 'Receptionist Interest', subtitle: 'Website declines who expressed interest in an automated receptionist' },
+  'sales-intelligence': { title: 'Sales Intelligence', subtitle: 'Evidence-backed patterns across recorded calls' },
   pipeline: { title: 'Lead Pipeline', subtitle: 'Enrich, qualify, and convert signed leads' },
   'archived-leads': { title: 'Archived Leads', subtitle: 'Closed prospects, site cleanup, notes, and reactivation' },
   'automated-pipeline': { title: 'Text Outreach', subtitle: 'Text + site outreach — work your way down the queue' },

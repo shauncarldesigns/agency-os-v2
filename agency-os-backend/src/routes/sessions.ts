@@ -576,6 +576,7 @@ interface OutcomeBody {
   receptionistEmail?: string;
   notInterestedReason?: string;
   badContactReason?: string;
+  callApproach?: 'direct' | 'question_based';
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -589,6 +590,9 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   const VALID: CallOutcome[] = ['no_answer', 'voicemail', 'not_interested', 'bad_contact', 'callback', 'booked', 'skipped'];
   if (!VALID.includes(body.outcome)) {
     return c.json(badRequest(`Invalid outcome '${body.outcome}'`), 400);
+  }
+  if (body.callApproach && !['direct', 'question_based'].includes(body.callApproach)) {
+    return c.json(badRequest(`Invalid call approach '${body.callApproach}'`), 400);
   }
 
   const session = await c.env.DB.prepare('SELECT * FROM sessions WHERE id = ?').bind(sessionId).first<Session>();
@@ -639,13 +643,14 @@ sessionsRouter.post('/:id/outcome', async (c) => {
             SET outcome = ?,
                 notes = ?,
                 objection_hits = ?,
+                call_approach = ?,
                 recording_url = COALESCE(recording_url, ?)
           WHERE id = ? AND lead_id = ?`
-      ).bind(friendlyOutcome, callLogNotes, objectionHits, recordingUrl, body.recordingCallId, body.leadId).run();
+      ).bind(friendlyOutcome, callLogNotes, objectionHits, body.callApproach ?? null, recordingUrl, body.recordingCallId, body.leadId).run();
     } else {
       await c.env.DB.prepare(
-        `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, recording_url) VALUES (?, ?, ?, ?, ?)`
-      ).bind(body.leadId, friendlyOutcome, callLogNotes, objectionHits, recordingUrl).run();
+        `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, call_approach, recording_url) VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(body.leadId, friendlyOutcome, callLogNotes, objectionHits, body.callApproach ?? null, recordingUrl).run();
     }
   }
 

@@ -19,6 +19,7 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel';
 import { ReceptionistInterestPage } from './components/receptionist/ReceptionistInterestPage';
 import { ArchivedLeadsPage } from './components/archive/ArchivedLeadsPage';
+import { SalesIntelligencePage } from './components/intelligence/SalesIntelligencePage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -223,6 +224,9 @@ export default function App() {
               <div className="main"><BuilderStatusPanel showToast={showToast} onChanged={loadStats} /></div>
             )}
             {activeTab === 'receptionist-interest' && <ReceptionistInterestPage showToast={showToast} />}
+            {activeTab === 'sales-intelligence' && (
+              <div className="main"><SalesIntelligencePage /></div>
+            )}
             {activeTab === 'sites' && (
               <div className="main">
                 <SitesPanel
