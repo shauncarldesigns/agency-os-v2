@@ -156,8 +156,15 @@ export interface CallEntry {
   outcome: string;
   notes: string;
   followup_date: string | null;
+  call_approach: 'direct' | 'question_based' | null;
   recording_url: string | null;     // Authenticated API URL when operator recorded this call
   created_at: string;
+}
+
+export interface CallIntelligenceReport {
+  job: { status: 'queued'|'transcribing'|'analyzing'|'completed'|'failed'; error: string|null; attempt_count: number; updated_at: string } | null;
+  transcript: { provider: string; model: string; transcript_text: string; transcript_json: Array<{ speaker:number; start:number; end:number; transcript:string }> } | null;
+  analysis: { id:number; provider:string; model:string; analysis_prompt_version:string; analysis_schema_version:string; analysis_json: Record<string, unknown>; created_at:string } | null;
 }
 
 export interface ProspectResult {
@@ -568,6 +575,7 @@ export type Tab =
   | 'automated-pipeline'
   | 'builder'
   | 'receptionist-interest'
+  | 'sales-intelligence'
   | 'sites'
   | 'docs'
   | 'playbook'

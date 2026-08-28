@@ -411,6 +411,13 @@ export const api = {
       apiFetch<{ call: CallEntry }>(`/api/leads/${leadId}/calls`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number) =>
       apiFetch<{ success: boolean }>(`/api/calls/${id}`, { method: 'DELETE' }),
+    intelligenceReport: (id: number) => apiFetch<import('./types').CallIntelligenceReport>(`/api/call-intelligence/calls/${id}/report`),
+    process: (id: number, force = false) => apiFetch<{ job_id:number; status:string }>(`/api/call-intelligence/calls/${id}/process`, { method: 'POST', body: JSON.stringify({ force }) }),
+    retry: (id: number) => apiFetch<{ status:string }>(`/api/call-intelligence/calls/${id}/retry`, { method: 'POST' }),
+  },
+  callIntelligence: {
+    insights: (filters?: { from?:string; to?:string; call_type?:string; industry?:string; outcome?:string }) => apiFetch<{ summary:{ calls_analyzed:number; meetings_booked:number; sold:number; not_interested:number }; outcomes:Array<{label:string;count:number}>; findings:Array<{fact_type:string;category:string;reaction:string|null;supporting_calls:number;percentage:number;representative_call_id:number;quote:string|null;timestamp:string|null}>; jobs:Array<{id:number;call_id:number;lead_id:number;company:string;outcome:string;status:string;attempt_count:number;error:string|null;updated_at:string;analysis:Record<string,unknown>|null;outcome_reconciliation:{status:'matched'|'mismatch'|'unclear';operator_class:string|null;analysis_class:string|null}}> ; directional:boolean }>(`/api/call-intelligence/insights${qs(filters)}`),
+    backfill: () => apiFetch<{ queued:number; status:string }>('/api/call-intelligence/backfill', { method: 'POST' }),
   },
   prospect: {
     search: (input: { location: string; industry: string; radius?: number; pageToken?: string | null; maxPages?: number }) =>
@@ -1201,6 +1208,7 @@ export interface SessionOutcomeBody {
   receptionistEmail?: string;
   notInterestedReason?: string;
   badContactReason?: 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed';
+  callApproach?: 'direct' | 'question_based';
 }
 
 export { API_BASE, TRACKING_BASE };

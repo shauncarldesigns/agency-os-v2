@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   CalendarClock,
   AlertCircle,
@@ -71,6 +71,7 @@ interface Props {
 }
 
 type CardTone = 'emerald' | 'amber' | 'blue' | 'rose' | 'slate';
+type CallApproach = 'direct' | 'question_based';
 
 type BoardItem = {
   id: string;
@@ -141,6 +142,7 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
   const [refreshing, setRefreshing] = useState(false);
   const [callModalLeadId, setCallModalLeadId] = useState<number | null>(null);
   const [salesFlowLeadId, setSalesFlowLeadId] = useState<number | null>(null);
+  const [salesFlowApproach, setSalesFlowApproach] = useState<CallApproach | null>(null);
   const emailCallRecorderRef = useRef<RecordButtonHandle>(null);
   const [emailCallNotes, setEmailCallNotes] = useState('');
   const [emailCallRecordingUrl, setEmailCallRecordingUrl] = useState<string | null>(null);
@@ -162,6 +164,7 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
     setEmailCallRecordingUrl(null);
     setEmailCallRecordingId(null);
     setSalesFlowLeadId(null);
+    setSalesFlowApproach(null);
     setCallModalLeadId(leadId);
   }, []);
 
@@ -513,8 +516,10 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
             <EmailEngagedSalesCall
               lead={activeLead}
               forceSalesFlow={salesFlowLeadId === activeLead.id}
+              callApproach={salesFlowLeadId === activeLead.id ? salesFlowApproach : null}
               onClose={() => {
                 setSalesFlowLeadId(null);
+                setSalesFlowApproach(null);
                 setCallModalLeadId(null);
               }}
               showToast={showToast}
@@ -547,7 +552,10 @@ export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Pro
                 void load(true);
                 if (emailCaptured) onStateChanged?.();
               }}
-              onAdvanceToSalesFlow={() => setSalesFlowLeadId(activeLead?.id ?? null)}
+              onAdvanceToSalesFlow={(approach) => {
+                setSalesFlowApproach(approach);
+                setSalesFlowLeadId(activeLead?.id ?? null);
+              }}
               onOutcomeRecorded={() => {
                 setCallModalLeadId(null);
                 void load(true);
@@ -611,6 +619,7 @@ function EmailEngagedSalesCall({
   callNotes,
   onCallNotesChange,
   recordingCallId,
+  callApproach,
 }: {
   lead: Lead;
   forceSalesFlow?: boolean;
@@ -621,6 +630,7 @@ function EmailEngagedSalesCall({
   callNotes: string;
   onCallNotesChange: (value: string) => void;
   recordingCallId: number | null;
+  callApproach: CallApproach | null;
 }) {
   const pipelineLead: PipelineLead = mapLeadRow(lead);
 
@@ -644,6 +654,7 @@ function EmailEngagedSalesCall({
           bad_contact_reason: badContactReason ?? null,
           callback_date: callbackDate ?? null,
           channel: 'email',
+          call_approach: callApproach,
         },
       });
       if (outcome !== 'interested') {
@@ -687,6 +698,7 @@ function EmailEngagedSalesCall({
           channel: 'email',
           receptionist_interested: closeout.receptionistInterested,
           receptionist_email: closeout.email ?? null,
+          call_approach: callApproach,
         },
       });
       showToast('Call recorded and lead archived');
@@ -701,6 +713,7 @@ function EmailEngagedSalesCall({
       lead={pipelineLead}
       initialWarm={forceSalesFlow}
       initialEmailBridge={forceSalesFlow}
+      callApproach={callApproach ?? undefined}
       onClose={onClose}
       onCallOutcome={recordCall}
       onMoveToClients={moveToClients}
@@ -733,7 +746,7 @@ function CallOutreachModal({
   onClose: () => void;
   showToast: ShowToast;
   onSaved: (emailCaptured: boolean, keepOpen?: boolean) => void;
-  onAdvanceToSalesFlow: () => void;
+  onAdvanceToSalesFlow: (approach: CallApproach) => void;
   onOutcomeRecorded: () => void;
   recorderRef: RefObject<RecordButtonHandle | null>;
   callNotes: string;
@@ -749,6 +762,7 @@ function CallOutreachModal({
   const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [notInterestedOpen, setNotInterestedOpen] = useState(false);
+  const [callApproach, setCallApproach] = useState<CallApproach>('direct');
 
   useEffect(() => {
     if (!lead) return;
@@ -834,6 +848,7 @@ function CallOutreachModal({
           notes: callNotes.trim() || null,
           recording_call_id: savedRecording?.callId ?? recordingCallId ?? null,
           channel: 'email',
+          call_approach: callApproach,
         },
       });
       showToast(lead.site_url && lead.pipeline_status === 'ready_to_send'
@@ -867,7 +882,7 @@ function CallOutreachModal({
         throw new Error(result?.failed ? 'The email provider rejected the send.' : 'No email was sent.');
       }
       showToast('Intro email sent — stay on the call while they open it');
-      onAdvanceToSalesFlow();
+      onAdvanceToSalesFlow(callApproach);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err as Error).message;
       showToast(`Could not send the intro email: ${msg}`, 'error');
@@ -898,6 +913,7 @@ function CallOutreachModal({
         receptionistEmail: outcome === 'not_interested' ? closeout?.email : undefined,
         notInterestedReason: outcome === 'not_interested' ? closeout?.reason : undefined,
         badContactReason: outcome === 'bad_contact' ? badContactReason : undefined,
+        callApproach,
       });
       const label = {
         no_answer: 'No answer recorded',
@@ -1010,6 +1026,8 @@ function CallOutreachModal({
                 callbackDate={callbackDate}
                 recordingOutcome={recordingOutcome}
                 sendingIntro={sendingIntro}
+                callApproach={callApproach}
+                onCallApproachChange={setCallApproach}
                 onEmailChange={setEmail}
                 onCallbackDateChange={setCallbackDate}
                 onCallNotesChange={onCallNotesChange}
@@ -1147,6 +1165,130 @@ function CallOutreachModal({
   );
 }
 
+type QuestionPath = 'opening' | 'more_work' | 'busy' | 'voicemail' | 'covered' | 'referrals' | 'referrals_yes' | 'not_interested';
+
+const QUESTION_BASED_COPY = {
+  moreWork: 'Okay, then I’ll be straight with you—a website by itself isn’t going to magically make your phone ring. But when someone gets your name from a referral, sees your truck, picks up your business card, or finds your reviews, it gives them somewhere to see your work, understand what you do, and feel confident calling you.',
+  busy: 'Got it. Then I’m not going to pretend a website should be your biggest priority. When you’re working and can’t answer a new customer call, does someone else pick it up, or does it usually go to voicemail?',
+  voicemail: 'That may actually be the bigger opportunity. I’m developing an automated receptionist that answers when you can’t, gathers the customer’s information, and makes sure you know what they need. When the demo is ready, I can send you a number you can call and test as if you were one of your own customers.',
+  referrals: 'That’s actually why I asked whether you want more work. I’m not suggesting you replace referrals. If referrals keep you completely full, I’m not going to tell you that you desperately need a website. But if you want more of the right jobs, the website gives every referral, truck impression, and business card somewhere to learn more before deciding who to call.',
+  coldCalls: 'That’s actually something I’m developing—a receptionist that can answer those calls, figure out what the caller needs, and capture their information without interrupting you. I can send you a demo number to test when it’s ready.',
+} as const;
+
+function QuestionBasedEmailScript({
+  firstName,
+  company,
+  leadId,
+  email,
+  savingEmail,
+  sendingIntro,
+  recordingOutcome,
+  onEmailChange,
+  onSave,
+  onAdvanceToSalesFlow,
+  onArchiveRejection,
+  onSaveReceptionist,
+}: {
+  firstName: string;
+  company: string;
+  leadId: number;
+  email: string;
+  savingEmail: boolean;
+  sendingIntro: boolean;
+  recordingOutcome: CallOutcome | null;
+  onEmailChange: (value: string) => void;
+  onSave: () => void;
+  onAdvanceToSalesFlow: () => void;
+  onArchiveRejection: () => void;
+  onSaveReceptionist: () => void;
+}) {
+  const [path, setPath] = useState<QuestionPath>('opening');
+  const websiteOffer = path === 'more_work' || path === 'referrals_yes';
+  const receptionistOffer = path === 'voicemail' || path === 'not_interested';
+
+  const reset = () => setPath('opening');
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Question-based call</p>
+      <h3 className="mt-1 text-lg font-semibold text-slate-900">Ask first. Recommend the right next step.</h3>
+
+      {path !== 'opening' && (
+        <button type="button" onClick={reset} className="mt-4 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to opening</button>
+      )}
+
+      {path === 'opening' && <section className="mt-5 border-l-2 border-violet-200 pl-4 sm:pl-5">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
+        <p className="text-[17px] leading-8 text-slate-700">Hey {firstName}, this is Shaun Gehrke. I run a small digital agency here in Wisconsin. I was looking at {company} online and noticed you don’t have a website.</p>
+        <p className="mt-3 text-[17px] leading-8 text-slate-700">But before I assume that’s something you even need—are you looking to bring in more work right now, or are you already about as busy as you want to be?</p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <QuestionPathButton label="They want more work" onClick={() => setPath('more_work')} />
+          <QuestionPathButton label="They’re already busy" onClick={() => setPath('busy')} />
+          <QuestionPathButton label="Everything comes from referrals" onClick={() => setPath('referrals')} />
+          <QuestionPathButton label="Immediately not interested" onClick={() => setPath('not_interested')} />
+        </div>
+      </section>}
+
+      {path === 'more_work' && <ScriptBranch label="If they want more work" body={QUESTION_BASED_COPY.moreWork}>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">I already mocked up a homepage for {company}, so you don’t have to listen to me pitch what I could build—you can judge it for yourself. What’s the best email to send it to?</p>
+      </ScriptBranch>}
+
+      {path === 'busy' && <ScriptBranch label="If they’re already busy" body={QUESTION_BASED_COPY.busy}>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <QuestionPathButton label="Calls go to voicemail" onClick={() => setPath('voicemail')} />
+          <QuestionPathButton label="Someone handles calls" onClick={() => setPath('covered')} />
+        </div>
+      </ScriptBranch>}
+
+      {path === 'voicemail' && <ScriptBranch label="Calls go to voicemail" body={QUESTION_BASED_COPY.voicemail}>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email for that?</p>
+      </ScriptBranch>}
+
+      {path === 'covered' && <ScriptBranch label="Someone already handles calls" body={`Then it sounds like you have that covered. I appreciate you answering the question, ${firstName}. Have a good one.`}>
+        <button type="button" onClick={onArchiveRejection} className="mt-4 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">End call · not interested</button>
+      </ScriptBranch>}
+
+      {path === 'referrals' && <ScriptBranch label="They get everything from referrals" body={QUESTION_BASED_COPY.referrals}>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">So would you take on more of the right work if it came in?</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <QuestionPathButton label="Yes—send the homepage" onClick={() => setPath('referrals_yes')} />
+          <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">No—they’re completely full</button>
+        </div>
+      </ScriptBranch>}
+
+      {path === 'referrals_yes' && <ScriptBranch label="They would take the right work" body="Then let me send you what I put together. What’s the best email?" />}
+
+      {path === 'not_interested' && <ScriptBranch label="If they immediately say “Not interested”" body="Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?">
+        <div className="mt-3 rounded-lg border border-violet-200 bg-white p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">After they answer</p>
+          <p className="mt-1 text-[17px] leading-8 text-slate-800">{QUESTION_BASED_COPY.coldCalls} What’s the best email for you?</p>
+        </div>
+      </ScriptBranch>}
+
+      {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <label htmlFor={`question-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{receptionistOffer ? 'Where should the receptionist demo be sent?' : 'Capture email'}</label>
+        <input id={`question-call-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+        {websiteOffer ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <button type="button" onClick={onAdvanceToSalesFlow} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 disabled:opacity-50">{sendingIntro ? 'Sending intro email…' : 'Send now and stay on the call'}</button>
+          <button type="button" onClick={onSave} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingEmail ? 'Saving…' : 'Save and send to follow-up'}</button>
+        </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
+      </div>}
+    </div>
+  );
+}
+
+function ScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
+  return <section className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">{label}</p>
+    <p className="mt-2 border-l-2 border-violet-200 pl-3 text-[17px] leading-8 text-slate-800">{body}</p>
+    {children}
+  </section>;
+}
+
+function QuestionPathButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
+}
+
 const EMAIL_CAPTURE_RESPONSES = [
   {
     title: 'Why did you build it?',
@@ -1179,6 +1321,8 @@ function EmailCaptureSplitScript({
   callbackDate,
   recordingOutcome,
   sendingIntro,
+  callApproach,
+  onCallApproachChange,
   onEmailChange,
   onCallbackDateChange,
   onCallNotesChange,
@@ -1200,6 +1344,8 @@ function EmailCaptureSplitScript({
   callbackDate: string;
   recordingOutcome: CallOutcome | null;
   sendingIntro: boolean;
+  callApproach: CallApproach;
+  onCallApproachChange: (approach: CallApproach) => void;
   onEmailChange: (value: string) => void;
   onCallbackDateChange: (value: string) => void;
   onCallNotesChange: (value: string) => void;
@@ -1219,6 +1365,41 @@ function EmailCaptureSplitScript({
     <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="p-5 sm:p-6">
+          <div className="mb-5 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1" role="group" aria-label="Call approach">
+            {([
+              ['direct', 'Direct'],
+              ['question_based', 'Question-based'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onCallApproachChange(value)}
+                aria-pressed={callApproach === value}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${callApproach === value
+                  ? `bg-white shadow-sm ${value === 'question_based' ? 'text-violet-700' : 'text-blue-700'}`
+                  : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {callApproach === 'question_based' ? (
+            <QuestionBasedEmailScript
+              firstName={firstName}
+              company={lead.company}
+              leadId={leadId}
+              email={email}
+              savingEmail={savingEmail}
+              sendingIntro={sendingIntro}
+              recordingOutcome={recordingOutcome}
+              onEmailChange={onEmailChange}
+              onSave={onSave}
+              onAdvanceToSalesFlow={onAdvanceToSalesFlow}
+              onArchiveRejection={onArchiveRejection}
+              onSaveReceptionist={onSaveReceptionist}
+            />
+          ) : <>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{callPath === 'receptionist' ? 'Automated receptionist interest' : 'Email capture call'}</p>
             <h3 className="mt-1 text-lg font-semibold text-slate-900">{callPath === 'receptionist' ? 'Test interest. Capture where to send the demo.' : 'Create curiosity. Get permission to send.'}</h3>
@@ -1355,6 +1536,7 @@ function EmailCaptureSplitScript({
                 : 'Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.'}
             </p>
           </div>}
+          </>}
 
           {recordingUrl && (
             <div className="mt-3"><AuthenticatedAudioPlayer url={recordingUrl} /></div>
@@ -1395,7 +1577,10 @@ function EmailCaptureSplitScript({
               ) : latestCall ? (
                 <div className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-700">{latestCall.outcome}</span>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      {latestCall.outcome}
+                      {latestCall.call_approach && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-700">{latestCall.call_approach === 'question_based' ? 'Question-based' : 'Direct'}</span>}
+                    </span>
                     <span className="text-[10px] text-slate-400">{new Date(latestCall.created_at).toLocaleDateString()}</span>
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-4 text-slate-500">{latestCall.notes || 'No notes were recorded.'}</p>

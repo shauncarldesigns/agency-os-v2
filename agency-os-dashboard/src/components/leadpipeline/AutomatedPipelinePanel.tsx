@@ -1447,6 +1447,27 @@ const OVERRIDE_OPENING_BODY = `“Perfect — now that you have it open, what ca
 
 const OVERRIDE_OPENING_NOTE = 'They are seeing the site for the first time right now. Let them react before guiding them. Ask about what is on their screen in the present tense.';
 
+// Email Outreach's question-based approach deliberately overrides only the
+// conversational moments. Plan details, pricing, agreements, and outcome
+// handling remain owned by the shared sales flow below.
+const QUESTION_BASED_FOLLOWUP_COPY: Record<string, { label: string; body: string }> = {
+  opening: {
+    label: 'GET THEIR HONEST REACTION',
+    body: `“Hey {{contact_name}}, it’s Shaun. I wanted to get your honest reaction to the homepage I sent. What did you think?”
+
+“What would you want changed before you’d feel comfortable having something like that represent the business?”
+`,
+  },
+  unsure: {
+    label: 'ISOLATE THE HESITATION',
+    body: `“Totally fair. What’s the part you’re unsure about—the website itself, the investment, or whether it will actually help the business?”
+
+Address only the concern they name.
+
+“If we can get that part handled, is there anything else stopping you from moving forward?”`,
+  },
+};
+
 function ScriptParagraph({ children }: { children: string }) {
   const waitsForResponse = children.includes('?');
   return (
@@ -1454,12 +1475,9 @@ function ScriptParagraph({ children }: { children: string }) {
       <p>{children}</p>
       {waitsForResponse && (
         <div className="mt-3 flex items-center gap-3" role="note" aria-label="Pause and let the prospect answer">
-          <span className="h-px flex-1 bg-emerald-200" />
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
-            <MessageCircleReply className="h-3.5 w-3.5" />
-            Their turn · listen
-          </span>
-          <span className="h-px flex-1 bg-emerald-200" />
+          <span className="h-px flex-1 bg-blue-200" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600">Pause</span>
+          <span className="h-px flex-1 bg-blue-200" />
         </div>
       )}
     </div>
@@ -1484,6 +1502,7 @@ export function OpenSalesCallModal({
   showToast,
   initialWarm = false,
   initialEmailBridge = false,
+  callApproach,
   externalRecorderRef,
   externalNotes,
   onExternalNotesChange,
@@ -1502,6 +1521,7 @@ export function OpenSalesCallModal({
   showToast: ShowToast;
   initialWarm?: boolean;
   initialEmailBridge?: boolean;
+  callApproach?: 'direct' | 'question_based';
   externalRecorderRef: RefObject<RecordButtonHandle | null>;
   externalNotes?: string;
   onExternalNotesChange?: (value: string) => void;
@@ -1844,8 +1864,11 @@ export function OpenSalesCallModal({
                 // last-chance opener, so the opening stage swaps to the
                 // trimmed reaction-only version.
                 const overrideOpening = warmOverride && activeStage.id === 'opening';
-                const stageLabel = overrideOpening ? 'GET THEIR REACTION' : activeStage.label;
-                const stageBody = overrideOpening ? OVERRIDE_OPENING_BODY : activeStage.body;
+                const questionBasedBody = callApproach === 'question_based'
+                  ? QUESTION_BASED_FOLLOWUP_COPY[activeStage.id]
+                  : undefined;
+                const stageLabel = questionBasedBody?.label ?? (overrideOpening ? 'GET THEIR REACTION' : activeStage.label);
+                const stageBody = questionBasedBody?.body ?? (overrideOpening ? OVERRIDE_OPENING_BODY : activeStage.body);
                 const stageNote = overrideOpening ? OVERRIDE_OPENING_NOTE : activeStage.note;
                 return (
                   <section>

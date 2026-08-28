@@ -38,6 +38,10 @@ export interface Env {
   CLARITY_PROJECT_ID?: string;
   /** Dedicated token used only by the local Builder Employee. */
   BUILDER_API_TOKEN?: string;
+  CALL_INTELLIGENCE_ENABLED?: string;
+  CALL_INTELLIGENCE_TEST_MODE?: 'mock';
+  OPENAI_API_KEY?: string;
+  CALL_TRANSCRIPTION_MODEL?: string;
 }
 
 export interface Lead {

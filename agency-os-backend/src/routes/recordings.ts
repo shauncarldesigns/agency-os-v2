@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, log, serverError } from '../utils/errors';
 import { authenticatedRecordingUrl, recordingStorageRef } from '../utils/recordings';
+import { enqueueCallAnalysis, processCallIntelligenceJobs } from '../services/callIntelligence';
 
 /**
  * POST /api/recordings
@@ -83,6 +84,11 @@ recordingsRouter.post('/', async (c) => {
     .bind(leadId, placeholderNotes, storageRef)
     .run();
   const callId = inserted.meta.last_row_id;
+
+  if (c.env.CALL_INTELLIGENCE_ENABLED === 'true') {
+    await enqueueCallAnalysis(c.env.DB, Number(callId));
+    c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1));
+  }
 
   log('info', 'recordings', `Uploaded ${file.size} bytes → ${key} (call_log #${callId})`);
   return c.json({ url, key, bytes: file.size, call_id: callId });
