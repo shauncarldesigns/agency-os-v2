@@ -1432,7 +1432,7 @@ type CallOutcome =
   | 'bad_contact'
   | 'interested';
 
-export type BadContactReason = 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed';
+export type BadContactReason = 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed' | 'call_screening';
 
 export type SelectedPlan = 'Build & Maintain' | 'Growth';
 
@@ -2063,13 +2063,14 @@ export function OpenSalesCallModal({
                   if (event.target.value) void chooseOutcome('bad_contact', event.target.value as BadContactReason);
                 }}
                 className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
-                aria-label="Bad contact reason"
+                aria-label="Unable to reach reason"
               >
-                <option value="" disabled>Bad contact…</option>
+                <option value="" disabled>Unable to reach…</option>
                 <option value="disconnected">Disconnected number</option>
                 <option value="wrong_number">Wrong number</option>
                 <option value="no_contact">No usable contact</option>
                 <option value="business_closed">Business appears closed</option>
+                <option value="call_screening">Call screening blocked</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             </div>

@@ -18,7 +18,7 @@ import { fetchOutscraperReviews, mergeReviews } from '../services/outscraper';
 import type { GoogleReview } from '../services/places';
 import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity';
 import { scheduleEmailAutomation } from '../services/emailAutomation';
-import { closeLeadBadContact, closeLeadNotInterested } from '../services/leadCloseout';
+import { closeLeadBadContact, closeLeadNotInterested, UNABLE_TO_REACH_REASONS } from '../services/leadCloseout';
 import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligibility';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
@@ -871,8 +871,7 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     }
 
     if (action === 'call_outcome' && actionMeta?.outcome === 'bad_contact') {
-      const validReasons = ['disconnected', 'wrong_number', 'no_contact', 'business_closed'];
-      const reason = typeof actionMeta.bad_contact_reason === 'string' && validReasons.includes(actionMeta.bad_contact_reason)
+      const reason = typeof actionMeta.bad_contact_reason === 'string' && UNABLE_TO_REACH_REASONS.has(actionMeta.bad_contact_reason)
         ? actionMeta.bad_contact_reason
         : 'no_contact';
       await closeLeadBadContact(c.env.DB, id, reason, new Date().toISOString());

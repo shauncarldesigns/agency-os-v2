@@ -166,7 +166,7 @@ function ArchiveOverview({ leads }: { leads: Lead[] }) {
   const stats = [
     { label: 'Total archived', value: leads.length, detail: 'Closed opportunities', icon: Archive, tone: 'slate' as const },
     { label: 'Not interested', value: leads.filter((lead) => lead.status === 'not_interested').length, detail: 'Customer declined', icon: Ban, tone: 'rose' as const },
-    { label: 'Bad contact', value: leads.filter(isBadContactLead).length, detail: 'Unusable lead data', icon: PhoneOff, tone: 'violet' as const },
+    { label: 'Unable to reach', value: leads.filter(isBadContactLead).length, detail: 'Contact or access issue', icon: PhoneOff, tone: 'violet' as const },
     { label: 'Cleanup required', value: leads.filter((lead) => lead.demo_site_status === 'cleanup_needed').length, detail: 'Demo sites to delete', icon: TriangleAlert, tone: 'amber' as const },
     { label: 'Sites deleted', value: leads.filter((lead) => lead.demo_site_status === 'deleted').length, detail: 'Cleanup completed', icon: CheckCircle2, tone: 'emerald' as const },
     { label: 'No demo site', value: leads.filter((lead) => lead.demo_site_status === 'none').length, detail: 'Nothing to clean', icon: Globe2, tone: 'blue' as const },
@@ -221,18 +221,18 @@ function archiveCloseoutLabel(lead: Lead): string {
   if (lead.status === 'not_interested') return 'Not interested';
   const outcome = lead.outcome?.trim();
   if (!outcome) return 'Archived';
-  if (isBadContactLead(lead)) return 'Bad contact';
+  if (isBadContactLead(lead)) return 'Unable to reach';
   return outcome;
 }
 
 function isBadContactLead(lead: Lead): boolean {
   const outcome = lead.outcome?.trim() ?? '';
-  return ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Bad contact'].includes(outcome);
+  return ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Call screening blocked', 'Bad contact', 'Unable to reach'].includes(outcome);
 }
 
 function archiveCloseoutDetail(lead: Lead): string {
   const outcome = lead.outcome?.trim();
-  if (outcome && ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed'].includes(outcome)) return outcome;
+  if (outcome && ['Disconnected number', 'Wrong number', 'No usable contact information', 'Business appears closed', 'Call screening blocked'].includes(outcome)) return outcome;
   return 'Outreach closed';
 }
 

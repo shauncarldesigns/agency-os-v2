@@ -1207,7 +1207,7 @@ export interface SessionOutcomeBody {
   receptionistInterested?: boolean;
   receptionistEmail?: string;
   notInterestedReason?: string;
-  badContactReason?: 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed';
+  badContactReason?: 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed' | 'call_screening';
   callApproach?: 'direct' | 'question_based';
 }
 
