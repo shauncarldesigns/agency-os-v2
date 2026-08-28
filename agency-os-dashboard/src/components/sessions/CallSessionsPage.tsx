@@ -920,7 +920,7 @@ function CallOutreachModal({
         voicemail: 'Voicemail recorded',
         callback: 'Follow-up scheduled',
         not_interested: 'Lead marked not interested',
-        bad_contact: 'Bad contact archived',
+        bad_contact: 'Unable to reach archived',
         booked: 'Demo booked',
         skipped: 'Lead skipped',
       }[outcome];
@@ -1085,13 +1085,14 @@ function CallOutreachModal({
                   disabled={recordingOutcome !== null}
                   onChange={(event) => { if (event.target.value) void recordOutcome('bad_contact', undefined, event.target.value as SessionOutcomeBody['badContactReason']); }}
                   className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50"
-                  aria-label="Bad contact reason"
+                  aria-label="Unable to reach reason"
                 >
-                  <option value="" disabled>Bad contact…</option>
+                  <option value="" disabled>Unable to reach…</option>
                   <option value="disconnected">Disconnected number</option>
                   <option value="wrong_number">Wrong number</option>
                   <option value="no_contact">No usable contact</option>
                   <option value="business_closed">Business appears closed</option>
+                  <option value="call_screening">Call screening blocked</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               </div>
@@ -1629,8 +1630,8 @@ function EmailCaptureSplitScript({
               <input type="date" value={callbackDate} min={localDateIso()} onChange={(event) => onCallbackDateChange(event.target.value)} className="h-9 rounded-lg border border-blue-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100" aria-label="Follow-up date" />
             </div>
             <div className="relative mt-2">
-              <select defaultValue="" disabled={recordingOutcome !== null} onChange={(event) => { if (event.target.value) onRecordOutcome('bad_contact', event.target.value as SessionOutcomeBody['badContactReason']); }} className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50" aria-label="Bad contact reason">
-                <option value="" disabled>Bad contact…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option>
+              <select defaultValue="" disabled={recordingOutcome !== null} onChange={(event) => { if (event.target.value) onRecordOutcome('bad_contact', event.target.value as SessionOutcomeBody['badContactReason']); }} className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-10 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 disabled:opacity-50" aria-label="Unable to reach reason">
+                <option value="" disabled>Unable to reach…</option><option value="disconnected">Disconnected number</option><option value="wrong_number">Wrong number</option><option value="no_contact">No usable contact</option><option value="business_closed">Business appears closed</option><option value="call_screening">Call screening blocked</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             </div>

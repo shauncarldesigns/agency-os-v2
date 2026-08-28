@@ -83,12 +83,21 @@ export async function closeLeadNotInterested(
   return db.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId).first<Lead>();
 }
 
-export async function closeLeadBadContact(db: D1Database, leadId: number, reason: string, now: string): Promise<Lead | null> {
+export const UNABLE_TO_REACH_REASONS = new Set([
+  'disconnected', 'wrong_number', 'no_contact', 'business_closed', 'call_screening',
+]);
+
+export function unableToReachReasonLabel(reason: string): string {
   const labels: Record<string, string> = {
     disconnected: 'Disconnected number', wrong_number: 'Wrong number',
     no_contact: 'No usable contact information', business_closed: 'Business appears closed',
+    call_screening: 'Call screening blocked',
   };
-  const label = labels[reason] ?? 'Bad contact';
+  return labels[reason] ?? 'Unable to reach';
+}
+
+export async function closeLeadBadContact(db: D1Database, leadId: number, reason: string, now: string): Promise<Lead | null> {
+  const label = unableToReachReasonLabel(reason);
   await db.batch([
     db.prepare(`
       UPDATE leads SET status = CASE WHEN status = 'cold' THEN 'contacted' ELSE status END,

@@ -20,7 +20,7 @@ import type {
 import { badRequest, conflict, notFound, log } from '../utils/errors';
 import { normalizeRecordingStorageValue } from '../utils/recordings';
 import { createProjectFromLead } from './leads';
-import { closeLeadBadContact, closeLeadNotInterested } from '../services/leadCloseout';
+import { closeLeadBadContact, closeLeadNotInterested, UNABLE_TO_REACH_REASONS, unableToReachReasonLabel } from '../services/leadCloseout';
 import {
   chicagoToday, chicagoCallingMode, chicagoCallingWeek,
 } from '../services/dayOfWeek';
@@ -612,11 +612,13 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   // the Outcome column on the Pipeline list stays consistent across both
   // capture surfaces. outcomeBadge() in lib/format.ts pattern-matches these
   // strings to badge colors.
-  const friendlyOutcome = ({
+  const friendlyOutcome = body.outcome === 'bad_contact'
+    ? unableToReachReasonLabel(body.badContactReason ?? 'no_contact')
+    : ({
     no_answer: 'No Answer',
     voicemail: 'Voicemail Left',
     not_interested: 'Not Interested',
-    bad_contact: 'Bad Contact',
+    bad_contact: 'Unable to Reach',
     callback: 'Callback Requested',
     booked: 'Demo Booked',
     skipped: '',  // unused; skipped never writes to call_log or lead.outcome
@@ -672,8 +674,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
       now,
     });
   } else if (body.outcome === 'bad_contact') {
-    const validReasons = ['disconnected', 'wrong_number', 'no_contact', 'business_closed'];
-    const reason = validReasons.includes(body.badContactReason ?? '') ? body.badContactReason! : 'no_contact';
+    const reason = UNABLE_TO_REACH_REASONS.has(body.badContactReason ?? '') ? body.badContactReason! : 'no_contact';
     await closeLeadBadContact(c.env.DB, body.leadId, reason, now);
   } else if (body.outcome === 'booked') {
     // Demo + project handled below. Lead's status + demo pointers updated
