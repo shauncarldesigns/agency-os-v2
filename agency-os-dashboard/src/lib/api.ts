@@ -684,6 +684,7 @@ export const api = {
       apiFetch<PipelineKpisResponse>(`/api/dashboard/pipeline-kpis?engagement_range=${engagementRange}`),
   },
   sessions: {
+    approachStats: () => apiFetch<{ approaches: Array<{ approach: 'direct' | 'question_based' | 'gap_based'; calls: number; positive: number; notInterested: number; positiveRate: number }> }>('/api/sessions/approach-stats'),
     today: () => apiFetch<{ date: string; mode: string; sessions: Session[] }>('/api/sessions/today'),
     week: (date?: string) =>
       apiFetch<{ week: WeekDates; sessions: SessionWithProgress[]; activeSession: SessionWithProgress | null }>(`/api/sessions/week${qs({ date })}`),
@@ -1208,7 +1209,7 @@ export interface SessionOutcomeBody {
   receptionistEmail?: string;
   notInterestedReason?: string;
   badContactReason?: 'disconnected' | 'wrong_number' | 'no_contact' | 'business_closed' | 'call_screening';
-  callApproach?: 'direct' | 'question_based';
+  callApproach?: 'direct' | 'question_based' | 'gap_based';
 }
 
 export { API_BASE, TRACKING_BASE };

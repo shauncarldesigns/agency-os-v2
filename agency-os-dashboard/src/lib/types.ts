@@ -156,7 +156,7 @@ export interface CallEntry {
   outcome: string;
   notes: string;
   followup_date: string | null;
-  call_approach: 'direct' | 'question_based' | null;
+  call_approach: 'direct' | 'question_based' | 'gap_based' | null;
   recording_url: string | null;     // Authenticated API URL when operator recorded this call
   created_at: string;
 }

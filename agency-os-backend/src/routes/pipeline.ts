@@ -891,7 +891,7 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
 
     if (action === 'call_outcome' && body.meta && typeof body.meta === 'object') {
       const meta = body.meta as Record<string, unknown>;
-      const callApproach = meta.call_approach === 'direct' || meta.call_approach === 'question_based'
+      const callApproach = meta.call_approach === 'direct' || meta.call_approach === 'question_based' || meta.call_approach === 'gap_based'
         ? meta.call_approach
         : null;
       const recordingCallId = Number(meta.recording_call_id);

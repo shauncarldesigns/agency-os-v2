@@ -71,7 +71,13 @@ interface Props {
 }
 
 type CardTone = 'emerald' | 'amber' | 'blue' | 'rose' | 'slate';
-type CallApproach = 'direct' | 'question_based';
+type CallApproach = 'direct' | 'question_based' | 'gap_based';
+type CallApproachStat = { approach: CallApproach; calls: number; positive: number; notInterested: number; positiveRate: number };
+const DEV_CALL_APPROACH_STATS: CallApproachStat[] = [
+  { approach: 'direct', calls: 18, positive: 5, notInterested: 8, positiveRate: 28 },
+  { approach: 'question_based', calls: 14, positive: 6, notInterested: 4, positiveRate: 43 },
+  { approach: 'gap_based', calls: 11, positive: 6, notInterested: 2, positiveRate: 55 },
+];
 
 type BoardItem = {
   id: string;
@@ -763,6 +769,7 @@ function CallOutreachModal({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const [callApproach, setCallApproach] = useState<CallApproach>('direct');
+  const [approachStats, setApproachStats] = useState<CallApproachStat[]>([]);
 
   useEffect(() => {
     if (!lead) return;
@@ -774,6 +781,18 @@ function CallOutreachModal({
       .finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => { cancelled = true; };
   }, [lead?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.sessions.approachStats()
+      .then((response) => {
+        if (cancelled) return;
+        const hasRecordedCalls = response.approaches.some((item) => item.calls > 0);
+        setApproachStats(import.meta.env.DEV && !hasRecordedCalls ? DEV_CALL_APPROACH_STATS : response.approaches);
+      })
+      .catch(() => { if (!cancelled) setApproachStats(import.meta.env.DEV ? DEV_CALL_APPROACH_STATS : []); });
+    return () => { cancelled = true; };
+  }, []);
 
   if (!lead) return null;
 
@@ -1027,6 +1046,7 @@ function CallOutreachModal({
                 recordingOutcome={recordingOutcome}
                 sendingIntro={sendingIntro}
                 callApproach={callApproach}
+                approachStats={approachStats}
                 onCallApproachChange={setCallApproach}
                 onEmailChange={setEmail}
                 onCallbackDateChange={setCallbackDate}
@@ -1166,14 +1186,14 @@ function CallOutreachModal({
   );
 }
 
-type QuestionPath = 'opening' | 'more_work' | 'busy' | 'voicemail' | 'covered' | 'referrals' | 'referrals_yes' | 'not_interested';
+type QuestionPath = 'opening' | 'more_work' | 'busy' | 'voicemail' | 'covered' | 'referrals' | 'referrals_yes' | 'not_interested' | 'outreach_resistance' | 'cold_calls';
 
 const QUESTION_BASED_COPY = {
   moreWork: 'Okay, then I’ll be straight with you—a website by itself isn’t going to magically make your phone ring. But when someone gets your name from a referral, sees your truck, picks up your business card, or finds your reviews, it gives them somewhere to see your work, understand what you do, and feel confident calling you.',
   busy: 'Got it. Then I’m not going to pretend a website should be your biggest priority. When you’re working and can’t answer a new customer call, does someone else pick it up, or does it usually go to voicemail?',
   voicemail: 'That may actually be the bigger opportunity. I’m developing an automated receptionist that answers when you can’t, gathers the customer’s information, and makes sure you know what they need. When the demo is ready, I can send you a number you can call and test as if you were one of your own customers.',
   referrals: 'That’s actually why I asked whether you want more work. I’m not suggesting you replace referrals. If referrals keep you completely full, I’m not going to tell you that you desperately need a website. But if you want more of the right jobs, the website gives every referral, truck impression, and business card somewhere to learn more before deciding who to call.',
-  coldCalls: 'That’s actually something I’m developing—a receptionist that can answer those calls, figure out what the caller needs, and capture their information without interrupting you. I can send you a demo number to test when it’s ready.',
+  coldCalls: 'That’s actually something we specialize in. We build systems for service businesses that capture customer information, screen out sales calls, and make sure real opportunities don’t get missed. I can set up a demo number for your business so you can call in and experience it like a customer.',
 } as const;
 
 function QuestionBasedEmailScript({
@@ -1204,8 +1224,8 @@ function QuestionBasedEmailScript({
   onSaveReceptionist: () => void;
 }) {
   const [path, setPath] = useState<QuestionPath>('opening');
-  const websiteOffer = path === 'more_work' || path === 'referrals_yes';
-  const receptionistOffer = path === 'voicemail' || path === 'not_interested';
+  const websiteOffer = path === 'more_work' || path === 'referrals_yes' || path === 'outreach_resistance';
+  const receptionistOffer = path === 'voicemail' || path === 'cold_calls';
 
   const reset = () => setPath('opening');
 
@@ -1220,7 +1240,7 @@ function QuestionBasedEmailScript({
 
       {path === 'opening' && <section className="mt-5 border-l-2 border-violet-200 pl-4 sm:pl-5">
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Opening</p>
-        <p className="text-[17px] leading-8 text-slate-700">Hey {firstName}, this is Shaun Gehrke. I run a small digital agency here in Wisconsin. I was looking at {company} online and noticed you don’t have a website.</p>
+        <p className="text-[17px] leading-8 text-slate-700">Hey {firstName}, this is Shaun Gehrke. I run a small digital agency here in Wisconsin. I was looking at your business online and noticed you don’t have a website.</p>
         <p className="mt-3 text-[17px] leading-8 text-slate-700">But before I assume that’s something you even need—are you looking to bring in more work right now, or are you already about as busy as you want to be?</p>
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <QuestionPathButton label="They want more work" onClick={() => setPath('more_work')} />
@@ -1259,11 +1279,18 @@ function QuestionBasedEmailScript({
 
       {path === 'referrals_yes' && <ScriptBranch label="They would take the right work" body="Then let me send you what I put together. What’s the best email?" />}
 
-      {path === 'not_interested' && <ScriptBranch label="If they immediately say “Not interested”" body="Totally fair. One quick question before I let you go—do you deal with cold calls like this all day?">
-        <div className="mt-3 rounded-lg border border-violet-200 bg-white p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">After they answer</p>
-          <p className="mt-1 text-[17px] leading-8 text-slate-800">{QUESTION_BASED_COPY.coldCalls} What’s the best email for you?</p>
+      {path === 'not_interested' && <ScriptBranch label="If they sound suspicious" body="Totally understandable. Is it more that you’re not looking for a website, or you just get too many calls like this?">
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">They rule out the website</button>
+          <QuestionPathButton label="The call is the issue—website still possible" onClick={() => setPath('outreach_resistance')} />
+          <QuestionPathButton label="Pivot to the receptionist" onClick={() => setPath('cold_calls')} />
         </div>
+      </ScriptBranch>}
+
+      {path === 'outreach_resistance' && <ScriptBranch label="If they don’t rule out the website" body="That’s fair—it sounds like the call is the issue, not necessarily the website. Since I already put it together, would you be open to judging it for yourself? What’s the best email to send it to?" />}
+
+      {path === 'cold_calls' && <ScriptBranch label="If too many calls are the real problem" body={QUESTION_BASED_COPY.coldCalls}>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email for you?</p>
       </ScriptBranch>}
 
       {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1274,6 +1301,7 @@ function QuestionBasedEmailScript({
           <button type="button" onClick={onSave} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingEmail ? 'Saving…' : 'Save and send to follow-up'}</button>
         </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
       </div>}
+      {websiteOffer && <AfterWebsiteEmailScript />}
     </div>
   );
 }
@@ -1288,6 +1316,112 @@ function ScriptBranch({ label, body, children }: { label: string; body: string; 
 
 function QuestionPathButton({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
+}
+
+type GapPath = 'opening' | 'lookup' | 'referrals' | 'referral_lookup' | 'offer' | 'accept' | 'concern' | 'calls' | 'website_no' | 'final_no';
+
+function GapBasedEmailScript({
+  firstName,
+  leadId,
+  email,
+  savingEmail,
+  sendingIntro,
+  recordingOutcome,
+  onEmailChange,
+  onSave,
+  onAdvanceToSalesFlow,
+  onArchiveRejection,
+  onSaveReceptionist,
+}: {
+  firstName: string;
+  leadId: number;
+  email: string;
+  savingEmail: boolean;
+  sendingIntro: boolean;
+  recordingOutcome: CallOutcome | null;
+  onEmailChange: (value: string) => void;
+  onSave: () => void;
+  onAdvanceToSalesFlow: () => void;
+  onArchiveRejection: () => void;
+  onSaveReceptionist: () => void;
+}) {
+  const [path, setPath] = useState<GapPath>('opening');
+  const websiteOffer = path === 'accept';
+  const receptionistOffer = path === 'calls';
+
+  return <div>
+    <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">Gap-based call</p>
+    <h3 className="mt-1 text-lg font-semibold text-slate-900">Expose the referral credibility gap.</h3>
+
+    {path !== 'opening' && <button type="button" onClick={() => setPath('opening')} className="mt-4 text-xs font-semibold text-teal-700 hover:text-teal-900">← Back to opening</button>}
+
+    {path === 'opening' && <GapScriptBranch label="Opening" body={`Hey ${firstName}, this is Shaun. I’m looking at your business on Google right now—could you help me with something quick?`}>
+      <GapPathButton label="Continue" onClick={() => setPath('lookup')} />
+    </GapScriptBranch>}
+
+    {path === 'lookup' && <GapScriptBranch label="Find the visibility gap" body="I’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.">
+      <GapPathButton label="Ask about referrals" onClick={() => setPath('referrals')} />
+    </GapScriptBranch>}
+
+    {path === 'referrals' && <GapScriptBranch label="Confirm the source" body="Are most of your customers coming through referrals?">
+      <GapPathButton label="Yes—mostly referrals" onClick={() => setPath('referral_lookup')} />
+      <GapPathButton label="They still need somewhere credible to look" onClick={() => setPath('referral_lookup')} />
+    </GapScriptBranch>}
+
+    {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap" body="Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?">
+      <GapPathButton label="Connect the sample website" onClick={() => setPath('offer')} />
+    </GapScriptBranch>}
+
+    {path === 'offer' && <GapScriptBranch label="Make the offer" body="That’s actually why I called. I put together a sample website so those people have something credible to find. It’s nothing live, and there’s no obligation. Would you be against taking a look?">
+      <GapPathButton label="They’ll take a look" onClick={() => setPath('accept')} />
+      <GapPathButton label="They hesitate or say no" onClick={() => setPath('concern')} />
+    </GapScriptBranch>}
+
+    {path === 'concern' && <GapScriptBranch label="Clarify the real objection" body="Totally understandable. Is it more that you’re not looking for a website, or you just get too many calls like this?">
+      <GapPathButton label="They get too many calls" onClick={() => setPath('calls')} />
+      <GapPathButton label="They’re not looking for a website" onClick={() => setPath('website_no')} />
+    </GapScriptBranch>}
+
+    {path === 'website_no' && <GapScriptBranch label="One last low-risk offer" body="There’s no cost to take a look. Worst case scenario, you hate it and tell me to go pound sand. Best case scenario, you like it, we can move forward, and you can turn these cold calls into customer calls.">
+      <GapPathButton label="They’ll take a look" onClick={() => setPath('accept')} />
+      <GapPathButton label="Still not interested" onClick={() => setPath('final_no')} />
+    </GapScriptBranch>}
+
+    {path === 'final_no' && <GapScriptBranch label="Close the website opportunity" body="No problem at all. I appreciate your time. Have a good one.">
+      <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">Record why they declined</button>
+    </GapScriptBranch>}
+
+    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body={QUESTION_BASED_COPY.coldCalls} />}
+
+    {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <label htmlFor={`gap-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{receptionistOffer ? 'Where should the receptionist demo be sent?' : 'Capture email'}</label>
+      <input id={`gap-call-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-100" />
+      {websiteOffer ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <button type="button" onClick={onAdvanceToSalesFlow} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-teal-50 disabled:opacity-50">{sendingIntro ? 'Sending intro email…' : 'Send now and stay on the call'}</button>
+        <button type="button" onClick={onSave} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">{savingEmail ? 'Saving…' : 'Save and send to follow-up'}</button>
+      </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
+    </div>}
+    {websiteOffer && <AfterWebsiteEmailScript />}
+  </div>;
+}
+
+function AfterWebsiteEmailScript() {
+  return <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
+    <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
+  </div>;
+}
+
+function GapScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
+  return <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50 p-4">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">{label}</p>
+    <p className="mt-2 border-l-2 border-teal-200 pl-3 text-[17px] leading-8 text-slate-800">{body}</p>
+    {children && <div className="mt-4 grid gap-2 sm:grid-cols-2">{children}</div>}
+  </section>;
+}
+
+function GapPathButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="rounded-lg border border-teal-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-teal-800 transition hover:bg-teal-50">{label}</button>;
 }
 
 const EMAIL_CAPTURE_RESPONSES = [
@@ -1323,6 +1457,7 @@ function EmailCaptureSplitScript({
   recordingOutcome,
   sendingIntro,
   callApproach,
+  approachStats,
   onCallApproachChange,
   onEmailChange,
   onCallbackDateChange,
@@ -1346,6 +1481,7 @@ function EmailCaptureSplitScript({
   recordingOutcome: CallOutcome | null;
   sendingIntro: boolean;
   callApproach: CallApproach;
+  approachStats: CallApproachStat[];
   onCallApproachChange: (approach: CallApproach) => void;
   onEmailChange: (value: string) => void;
   onCallbackDateChange: (value: string) => void;
@@ -1370,18 +1506,25 @@ function EmailCaptureSplitScript({
             {([
               ['direct', 'Direct'],
               ['question_based', 'Question-based'],
+              ['gap_based', 'Gap-based'],
             ] as const).map(([value, label]) => (
+              (() => {
+                const stats = approachStats.find((item) => item.approach === value);
+                return (
               <button
                 key={value}
                 type="button"
                 onClick={() => onCallApproachChange(value)}
                 aria-pressed={callApproach === value}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${callApproach === value
-                  ? `bg-white shadow-sm ${value === 'question_based' ? 'text-violet-700' : 'text-blue-700'}`
+                  ? `bg-white shadow-sm ${value === 'question_based' ? 'text-violet-700' : value === 'gap_based' ? 'text-teal-700' : 'text-blue-700'}`
                   : 'text-slate-500 hover:text-slate-700'}`}
               >
-                {label}
+                <span className="block">{label}</span>
+                {stats && stats.calls > 0 && <span className="mt-0.5 block text-[9px] font-medium opacity-70">{stats.positive}/{stats.calls} positive · {stats.positiveRate}% · {stats.notInterested} declined</span>}
               </button>
+                );
+              })()
             ))}
           </div>
 
@@ -1389,6 +1532,20 @@ function EmailCaptureSplitScript({
             <QuestionBasedEmailScript
               firstName={firstName}
               company={lead.company}
+              leadId={leadId}
+              email={email}
+              savingEmail={savingEmail}
+              sendingIntro={sendingIntro}
+              recordingOutcome={recordingOutcome}
+              onEmailChange={onEmailChange}
+              onSave={onSave}
+              onAdvanceToSalesFlow={onAdvanceToSalesFlow}
+              onArchiveRejection={onArchiveRejection}
+              onSaveReceptionist={onSaveReceptionist}
+            />
+          ) : callApproach === 'gap_based' ? (
+            <GapBasedEmailScript
+              firstName={firstName}
               leadId={leadId}
               email={email}
               savingEmail={savingEmail}
@@ -1424,6 +1581,13 @@ function EmailCaptureSplitScript({
               <p className="mt-1 text-[17px] leading-7 text-slate-700">
                 Listen, there’s no cost to take a look. Worst case scenario, you hate it and you tell me to go pound sand. Best case scenario, you like it and we can move forward and turn the cold calls into customer calls.
               </p>
+            </div>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">If they sound suspicious</p>
+              <p className="mt-1 text-[17px] leading-7 text-slate-700">
+                Totally understandable. Is it more that you’re not looking for a website, or you just get too many calls like this?
+              </p>
+              <p className="mt-2 text-[11px] leading-4 text-amber-700">If they don’t rule out the website, keep qualifying. If they do, use the receptionist pivot or end the call and record the reason.</p>
             </div>
             <div className="mt-3 grid gap-2 lg:grid-cols-3">
               <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-rose-200 hover:bg-rose-50">
@@ -1470,7 +1634,7 @@ function EmailCaptureSplitScript({
               </>}
               {receptionistStage === 'interested' && <>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">If yes</p>
-                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s actually something I’m developing—an automated receptionist that captures real customer information while screening out cold calls. I can set up a demo number for your business so you can call it and experience it like a customer. What’s the best email to send it to when it’s ready?</p>
+                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s actually something we specialize in. We build systems for service businesses that capture customer information, screen out sales calls, and make sure real opportunities don’t get missed. I can set up a demo number for your business so you can call in and experience it like a customer. What’s the best email to send it to?</p>
                 <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the receptionist question</button>
               </>}
               {receptionistStage === 'irony_offer' && <>
@@ -1580,7 +1744,7 @@ function EmailCaptureSplitScript({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                       {latestCall.outcome}
-                      {latestCall.call_approach && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-700">{latestCall.call_approach === 'question_based' ? 'Question-based' : 'Direct'}</span>}
+                      {latestCall.call_approach && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-700">{latestCall.call_approach === 'question_based' ? 'Question-based' : latestCall.call_approach === 'gap_based' ? 'Gap-based' : 'Direct'}</span>}
                     </span>
                     <span className="text-[10px] text-slate-400">{new Date(latestCall.created_at).toLocaleDateString()}</span>
                   </div>
