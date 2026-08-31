@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, Loader2, Volume2 } from 'lucide-react';
 import { api } from '../../lib/api';
 
-export function AuthenticatedAudioPlayer({ url, compact = false }: { url: string; compact?: boolean }) {
+export function AuthenticatedAudioPlayer({ url, compact = false, lazy = false }: { url: string; compact?: boolean; lazy?: boolean }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [requested, setRequested] = useState(!lazy);
 
   useEffect(() => {
+    if (!requested) return;
     let cancelled = false;
     let nextObjectUrl: string | null = null;
     setObjectUrl(null);
@@ -26,7 +28,16 @@ export function AuthenticatedAudioPlayer({ url, compact = false }: { url: string
       cancelled = true;
       if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
     };
-  }, [url]);
+  }, [requested, url]);
+
+  if (!requested) {
+    return (
+      <button type="button" onClick={() => setRequested(true)} className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50">
+        <Volume2 className="h-3.5 w-3.5" />
+        Listen to recording
+      </button>
+    );
+  }
 
   if (error) {
     return (
