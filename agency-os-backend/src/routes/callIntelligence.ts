@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound, serverError } from '../utils/errors';
 import { enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs } from '../services/callIntelligence';
+import { recordingResponseUrl } from '../utils/recordings';
 
 export const callIntelligenceRouter = new Hono<{ Bindings: Env }>();
 
@@ -81,10 +82,10 @@ callIntelligenceRouter.get('/insights', async c => {
   const summary = await c.env.DB.prepare(`SELECT COUNT(*) calls_analyzed, SUM(CASE WHEN a.outcome='meeting_booked' THEN 1 ELSE 0 END) meetings_booked, SUM(CASE WHEN a.outcome='sold' THEN 1 ELSE 0 END) sold, SUM(CASE WHEN a.outcome='rejected' OR LOWER(REPLACE(c.outcome,'_',' '))='not interested' THEN 1 ELSE 0 END) not_interested FROM call_analyses a JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where}`).bind(...values).first();
   const outcomes = await c.env.DB.prepare(`SELECT a.outcome label,COUNT(*) count FROM call_analyses a JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where} GROUP BY a.outcome ORDER BY count DESC`).bind(...values).all();
   const facts = await c.env.DB.prepare(`SELECT f.fact_type,f.category,f.reaction,COUNT(DISTINCT f.call_id) supporting_calls,ROUND(100.0*COUNT(DISTINCT f.call_id)/(SELECT MAX(1,COUNT(DISTINCT a2.call_id)) FROM call_analyses a2 JOIN call_log c2 ON c2.id=a2.call_id JOIN leads l2 ON l2.id=c2.lead_id WHERE a2.superseded_at IS NULL),1) percentage,MIN(f.call_id) representative_call_id,MIN(f.quote) quote,MIN(f.timestamp) timestamp FROM call_analysis_facts f JOIN call_analyses a ON a.id=f.analysis_id JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where} GROUP BY f.fact_type,f.category,f.reaction ORDER BY supporting_calls DESC LIMIT 100`).bind(...values).all();
-  const jobs = await c.env.DB.prepare(`SELECT j.id,j.call_id,j.status,j.attempt_count,j.error,j.updated_at,l.id lead_id,l.company,c.outcome,a.analysis_json FROM call_intelligence_jobs j JOIN call_log c ON c.id=j.call_id JOIN leads l ON l.id=c.lead_id LEFT JOIN call_analyses a ON a.call_id=j.call_id AND a.superseded_at IS NULL ORDER BY j.updated_at DESC LIMIT 25`).all<Record<string, unknown>>();
+  const jobs = await c.env.DB.prepare(`SELECT j.id,j.call_id,j.status,j.attempt_count,j.error,j.updated_at,l.id lead_id,l.company,c.outcome,c.recording_url,a.analysis_json FROM call_intelligence_jobs j JOIN call_log c ON c.id=j.call_id JOIN leads l ON l.id=c.lead_id LEFT JOIN call_analyses a ON a.call_id=j.call_id AND a.superseded_at IS NULL ORDER BY j.updated_at DESC LIMIT 25`).all<Record<string, unknown>>();
   const jobRows = (jobs.results ?? []).map(row => {
     const analysis = row.analysis_json ? JSON.parse(String(row.analysis_json)) as Record<string, unknown> : null;
-    return { ...row, analysis, outcome_reconciliation: reconcileOutcome(row.outcome, analysis), analysis_json: undefined };
+    return { ...row, recording_url: recordingResponseUrl(c.req.url, row.recording_url as string | null), analysis, outcome_reconciliation: reconcileOutcome(row.outcome, analysis), analysis_json: undefined };
   });
   return c.json({ summary, outcomes: outcomes.results, findings: facts.results, jobs: jobRows, sample: { call_type: callType ?? null, industry: industry ?? null, outcome: outcome ?? null, from: from ?? null, to: to ?? null }, directional: Number((summary as { calls_analyzed?: number } | null)?.calls_analyzed ?? 0) < 20 });
 });
