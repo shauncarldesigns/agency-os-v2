@@ -1307,9 +1307,9 @@ function QuestionBasedEmailScript({
 }
 
 function ScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
-  return <section className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">{label}</p>
-    <p className="mt-2 border-l-2 border-violet-200 pl-3 text-[17px] leading-8 text-slate-800">{body}</p>
+  return <section className="mt-5 border-l-2 border-violet-200 pl-4 sm:pl-5">
+    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-violet-700">{label}</p>
+    <p className="text-[17px] leading-8 text-slate-800">{body}</p>
     {children}
   </section>;
 }
@@ -1413,9 +1413,9 @@ function AfterWebsiteEmailScript() {
 }
 
 function GapScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
-  return <section className="mt-5 rounded-xl border border-teal-200 bg-teal-50 p-4">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">{label}</p>
-    <p className="mt-2 border-l-2 border-teal-200 pl-3 text-[17px] leading-8 text-slate-800">{body}</p>
+  return <section className="mt-5 border-l-2 border-teal-200 pl-4 sm:pl-5">
+    <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-teal-700">{label}</p>
+    <p className="text-[17px] leading-8 text-slate-800">{body}</p>
     {children && <div className="mt-4 grid gap-2 sm:grid-cols-2">{children}</div>}
   </section>;
 }
