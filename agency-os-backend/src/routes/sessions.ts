@@ -31,6 +31,34 @@ import {
 
 export const sessionsRouter = new Hono<{ Bindings: Env }>();
 
+// Compare Email Outreach script approaches using their recorded call results.
+sessionsRouter.get('/approach-stats', async (c) => {
+  const rows = await c.env.DB.prepare(`
+    SELECT
+      call_approach AS approach,
+      COUNT(*) AS calls,
+      SUM(CASE WHEN lower(outcome) IN ('review later', 'feedback only', 'interested') THEN 1 ELSE 0 END) AS positive,
+      SUM(CASE WHEN lower(outcome) = 'not interested' THEN 1 ELSE 0 END) AS not_interested
+    FROM call_log
+    WHERE call_approach IN ('direct', 'question_based', 'gap_based')
+    GROUP BY call_approach
+  `).all<{ approach: 'direct' | 'question_based' | 'gap_based'; calls: number; positive: number; not_interested: number }>();
+  const byApproach = new Map((rows.results ?? []).map((row) => [row.approach, row]));
+  const approaches = (['direct', 'question_based', 'gap_based'] as const).map((approach) => {
+    const row = byApproach.get(approach);
+    const calls = Number(row?.calls ?? 0);
+    const positive = Number(row?.positive ?? 0);
+    return {
+      approach,
+      calls,
+      positive,
+      notInterested: Number(row?.not_interested ?? 0),
+      positiveRate: calls ? Math.round((positive / calls) * 100) : 0,
+    };
+  });
+  return c.json({ approaches });
+});
+
 // --------------------------------------------------------------------
 // GET /today — sessions scheduled for today
 // --------------------------------------------------------------------
@@ -576,7 +604,7 @@ interface OutcomeBody {
   receptionistEmail?: string;
   notInterestedReason?: string;
   badContactReason?: string;
-  callApproach?: 'direct' | 'question_based';
+  callApproach?: 'direct' | 'question_based' | 'gap_based';
 }
 sessionsRouter.post('/:id/outcome', async (c) => {
   const sessionId = parseInt(c.req.param('id'), 10);
@@ -591,7 +619,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
   if (!VALID.includes(body.outcome)) {
     return c.json(badRequest(`Invalid outcome '${body.outcome}'`), 400);
   }
-  if (body.callApproach && !['direct', 'question_based'].includes(body.callApproach)) {
+  if (body.callApproach && !['direct', 'question_based', 'gap_based'].includes(body.callApproach)) {
     return c.json(badRequest(`Invalid call approach '${body.callApproach}'`), 400);
   }
 

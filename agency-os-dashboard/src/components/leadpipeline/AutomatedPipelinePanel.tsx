@@ -1521,7 +1521,7 @@ export function OpenSalesCallModal({
   showToast: ShowToast;
   initialWarm?: boolean;
   initialEmailBridge?: boolean;
-  callApproach?: 'direct' | 'question_based';
+  callApproach?: 'direct' | 'question_based' | 'gap_based';
   externalRecorderRef: RefObject<RecordButtonHandle | null>;
   externalNotes?: string;
   onExternalNotesChange?: (value: string) => void;

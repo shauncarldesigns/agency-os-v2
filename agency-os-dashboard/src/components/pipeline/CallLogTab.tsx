@@ -187,7 +187,7 @@ export function CallLogTab({ leadId, calls, showToast, onCallsChanged }: CallLog
                     </span>
                     {c.call_approach && (
                       <span style={{ marginLeft: 6 }}>
-                        <Badge color="blue">{c.call_approach === 'question_based' ? 'Question-based' : 'Direct'}</Badge>
+                        <Badge color="blue">{c.call_approach === 'question_based' ? 'Question-based' : c.call_approach === 'gap_based' ? 'Gap-based' : 'Direct'}</Badge>
                       </span>
                     )}
                   </div>
