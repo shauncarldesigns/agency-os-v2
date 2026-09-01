@@ -1186,7 +1186,7 @@ function CallOutreachModal({
   );
 }
 
-type QuestionPath = 'opening' | 'more_work' | 'busy' | 'voicemail' | 'covered' | 'referrals' | 'not_interested' | 'outreach_resistance' | 'cold_calls';
+type QuestionPath = 'opening' | 'more_work' | 'busy' | 'voicemail' | 'covered' | 'referrals' | 'not_interested' | 'outreach_resistance' | 'cold_calls_interest' | 'cold_calls';
 
 const QUESTION_PATH_LABELS: Record<QuestionPath, string> = {
   opening: 'opening',
@@ -1197,6 +1197,7 @@ const QUESTION_PATH_LABELS: Record<QuestionPath, string> = {
   referrals: 'referral response',
   not_interested: 'objection question',
   outreach_resistance: 'website decision',
+  cold_calls_interest: 'receptionist question',
   cold_calls: 'receptionist pivot',
 };
 
@@ -1301,11 +1302,18 @@ function QuestionBasedEmailScript({
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">They rule out the website</button>
           <QuestionPathButton label="The call is the issue—website still possible" onClick={() => navigate('outreach_resistance')} />
-          <QuestionPathButton label="Pivot to the receptionist" onClick={() => navigate('cold_calls')} />
+          <QuestionPathButton label="Pivot to the receptionist" onClick={() => navigate('cold_calls_interest')} />
         </div>
       </ScriptBranch>}
 
-      {path === 'outreach_resistance' && <ScriptBranch label="If they don’t rule out the website" body="That’s fair—it sounds like the call is the issue, not necessarily the website. Since I already put it together, would you be open to judging it for yourself? What’s the best email to send it to?" />}
+      {path === 'outreach_resistance' && <ScriptBranch label="If they don’t rule out the website" body="That’s fair—it sounds like the call is the issue, not necessarily the website. I actually put together a sample homepage for your business so you can judge it for yourself. Would you be open to taking a look? What’s the best email to send it to?" />}
+
+      {path === 'cold_calls_interest' && <ScriptBranch label="Test interest in call screening" body="Sounds like you get these calls all the time. Would it be useful to have an answering service that screens them out for you?">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <QuestionPathButton label="Yes—explain the receptionist" onClick={() => navigate('cold_calls')} />
+          <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">No—not interested</button>
+        </div>
+      </ScriptBranch>}
 
       {path === 'cold_calls' && <ScriptBranch label="If too many calls are the real problem" body={QUESTION_BASED_COPY.coldCalls}>
         <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email for you?</p>
@@ -1320,6 +1328,7 @@ function QuestionBasedEmailScript({
         </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
       </div>}
       {websiteOffer && <AfterWebsiteEmailScript />}
+      {receptionistOffer && <AfterReceptionistEmailScript />}
       {previousPath && previousPath !== 'opening' && <button type="button" onClick={goBack} className="mt-4 text-xs font-semibold text-violet-700 hover:text-violet-900">← Back to {QUESTION_PATH_LABELS[previousPath]}</button>}
     </div>
   );
@@ -1337,16 +1346,19 @@ function QuestionPathButton({ label, onClick }: { label: string; onClick: () => 
   return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
 }
 
-type GapPath = 'opening' | 'lookup' | 'referrals' | 'referral_lookup' | 'offer' | 'accept' | 'concern' | 'calls' | 'website_no' | 'final_no';
+type GapPath = 'opening' | 'lookup' | 'referral_lookup' | 'offer' | 'capacity' | 'overflow' | 'missed_call_offer' | 'accept' | 'concern' | 'calls_interest' | 'calls' | 'website_no' | 'final_no';
 
 const GAP_PATH_LABELS: Record<GapPath, string> = {
   opening: 'opening',
   lookup: 'visibility-gap question',
-  referrals: 'referral question',
   referral_lookup: 'referral lookup',
   offer: 'website offer',
+  capacity: 'capacity question',
+  overflow: 'overflow question',
+  missed_call_offer: 'missed-call opportunity',
   accept: 'email capture',
   concern: 'objection question',
+  calls_interest: 'receptionist question',
   calls: 'receptionist pivot',
   website_no: 'low-risk offer',
   final_no: 'website closeout',
@@ -1380,7 +1392,7 @@ function GapBasedEmailScript({
   const [path, setPath] = useState<GapPath>('opening');
   const [pathHistory, setPathHistory] = useState<GapPath[]>([]);
   const websiteOffer = path === 'accept';
-  const receptionistOffer = path === 'calls';
+  const receptionistOffer = path === 'calls' || path === 'missed_call_offer';
   const previousPath = pathHistory[pathHistory.length - 1];
   const navigate = (nextPath: GapPath) => {
     setPathHistory((history) => [...history, path]);
@@ -1407,28 +1419,45 @@ function GapBasedEmailScript({
     </GapScriptBranch>}
 
     {path === 'lookup' && <GapScriptBranch label="Find the visibility gap" body="I’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.">
-      <GapPathButton label="Ask about referrals" onClick={() => navigate('referrals')} />
-    </GapScriptBranch>}
-
-    {path === 'referrals' && <GapScriptBranch label="Confirm the source" body="Are most of your customers coming through referrals?">
-      <GapPathButton label="Continue" onClick={() => navigate('referral_lookup')} />
+      <GapPathButton label="They don’t have anywhere to go—make the offer" onClick={() => navigate('offer')} />
+      <GapPathButton label="Their answer is vague or referral-based" onClick={() => navigate('referral_lookup')} />
+      <GapPathButton label="They rely on customers calling—make the offer" onClick={() => navigate('offer')} />
     </GapScriptBranch>}
 
     {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap" body="Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?">
       <GapPathButton label="Connect the sample website" onClick={() => navigate('offer')} />
     </GapScriptBranch>}
 
-    {path === 'offer' && <GapScriptBranch label="Make the offer" body="That’s actually why I called. I put together a sample website so those people have something credible to find. It’s nothing live, and there’s no obligation. Would you be against taking a look?">
+    {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body={QUESTION_BASED_COPY.voicemail}>
+      <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email to send it to?</p>
+    </GapScriptBranch>}
+
+    {path === 'offer' && <GapScriptBranch label="Make the offer" body="That’s actually why I called. I put together a sample website so those people have something credible to find. It’s nothing live, and there’s no obligation. Would you be open to taking a look?">
       <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
-      <GapPathButton label="They hesitate or say no" onClick={() => navigate('concern')} />
+      <GapPathButton label="They hesitate or say no" onClick={() => navigate('capacity')} />
     </GapScriptBranch>}
 
-    {path === 'concern' && <GapScriptBranch label="Clarify the real objection" body="Totally understandable. Is it more that you’re not looking for a website, or you just get too many calls like this?">
-      <GapPathButton label="They get too many calls" onClick={() => navigate('calls')} />
-      <GapPathButton label="They’re not looking for a website" onClick={() => navigate('website_no')} />
+    {path === 'capacity' && <GapScriptBranch label="Find out whether capacity is the real issue" body="Totally fair. Are you already too busy to take on more work, or would you still take on more of the right jobs if they came in?">
+      <GapPathButton label="They’re already too busy" onClick={() => navigate('overflow')} />
+      <GapPathButton label="They would take on the right work" onClick={() => navigate('concern')} />
     </GapScriptBranch>}
 
-    {path === 'website_no' && <GapScriptBranch label="One last low-risk offer" body="There’s no cost to take a look. Worst case scenario, you hate it and tell me to go pound sand. Best case scenario, you like it, we can move forward, and you can turn these cold calls into customer calls.">
+    {path === 'concern' && <GapScriptBranch label="Clarify the real objection" body="Got it. Is it more that you don’t think you need a website, or that you get too many calls like this?">
+      <GapPathButton label="They get too many calls" onClick={() => navigate('calls_interest')} />
+      <GapPathButton label="They don’t need a website" onClick={() => navigate('website_no')} />
+    </GapScriptBranch>}
+
+    {path === 'calls_interest' && <GapScriptBranch label="Test interest in call screening" body="Sounds like you get these calls all the time. Would it be useful to have an answering service that screens them out for you?">
+      <GapPathButton label="Yes—explain the receptionist" onClick={() => navigate('calls')} />
+      <GapPathButton label="No—not interested" onClick={() => navigate('final_no')} />
+    </GapScriptBranch>}
+
+    {path === 'overflow' && <GapScriptBranch label="Ask how they handle overflow" body="Got it. Then I’m not going to pretend a website should be your biggest priority then. I’m curious though—when you’re busy working and can’t answer the phone, does someone else pick it up, or does it usually go to voicemail?">
+      <GapPathButton label="Calls are missed or go to voicemail" onClick={() => navigate('missed_call_offer')} />
+      <GapPathButton label="Someone handles the overflow" onClick={() => navigate('final_no')} />
+    </GapScriptBranch>}
+
+    {path === 'website_no' && <GapScriptBranch label="One last low-risk offer" body="Listen, there’s no cost to take a look. Worst case scenario, you hate it and tell me to go pound sand. Best case scenario, you like it, we can move forward, and you can turn these cold calls into customer calls.">
       <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
       <GapPathButton label="Still not interested" onClick={() => navigate('final_no')} />
     </GapScriptBranch>}
@@ -1437,7 +1466,9 @@ function GapBasedEmailScript({
       <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">Record why they declined</button>
     </GapScriptBranch>}
 
-    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body={QUESTION_BASED_COPY.coldCalls} />}
+    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body="That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a demo number so you can try it yourself.">
+      <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email to send it to?</p>
+    </GapScriptBranch>}
 
     {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <label htmlFor={`gap-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{receptionistOffer ? 'Where should the receptionist demo be sent?' : 'Capture email'}</label>
@@ -1448,6 +1479,7 @@ function GapBasedEmailScript({
       </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
     </div>}
     {websiteOffer && <AfterWebsiteEmailScript />}
+    {receptionistOffer && <AfterReceptionistEmailScript />}
     {previousPath && previousPath !== 'opening' && <button type="button" onClick={goBack} className="mt-4 text-xs font-semibold text-teal-700 hover:text-teal-900">← Back to {GAP_PATH_LABELS[previousPath]}</button>}
   </div>;
 }
@@ -1456,6 +1488,13 @@ function AfterWebsiteEmailScript() {
   return <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
     <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
     <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.</p>
+  </div>;
+}
+
+function AfterReceptionistEmailScript() {
+  return <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
+    <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll save your email and send you the demo number as soon as it’s ready. I really appreciate your interest—I think this could be a useful way to protect your time without missing real customer calls.</p>
   </div>;
 }
 
