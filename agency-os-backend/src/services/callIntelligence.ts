@@ -105,6 +105,8 @@ async function normalizeFacts(db: D1Database, analysisId: number, callId: number
 }
 
 export async function enqueueCallAnalysis(db: D1Database, callId: number, force = false): Promise<number> {
+  const exclusion = await db.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(callId).first();
+  if (exclusion) throw new Error('Call was removed from Sales Intelligence');
   if (force) await db.prepare('DELETE FROM call_intelligence_jobs WHERE call_id = ? AND requested_prompt_version = ?').bind(callId, CALL_ANALYSIS_PROMPT_VERSION).run();
   await db.prepare(`INSERT OR IGNORE INTO call_intelligence_jobs (call_id, requested_prompt_version) VALUES (?, ?)`).bind(callId, CALL_ANALYSIS_PROMPT_VERSION).run();
   const row = await db.prepare('SELECT id FROM call_intelligence_jobs WHERE call_id = ? AND requested_prompt_version = ?').bind(callId, CALL_ANALYSIS_PROMPT_VERSION).first<{ id: number }>();
@@ -119,6 +121,7 @@ export async function enqueueUnprocessedRecordings(db: D1Database): Promise<numb
       FROM call_log c
      WHERE c.recording_url IS NOT NULL
        AND TRIM(c.recording_url) <> ''
+       AND NOT EXISTS (SELECT 1 FROM call_intelligence_exclusions x WHERE x.call_id=c.id)
   `).bind(CALL_ANALYSIS_PROMPT_VERSION).run();
   return result.meta.changes ?? 0;
 }
@@ -132,15 +135,22 @@ export async function processCallIntelligenceJobs(env: Env, limit = 2, allowWhen
     try {
       const claim = await env.DB.prepare(`UPDATE call_intelligence_jobs SET status='transcribing', locked_at=datetime('now'), started_at=COALESCE(started_at,datetime('now')), attempt_count=attempt_count+1, error=NULL, updated_at=datetime('now') WHERE id=? AND status='queued'`).bind(job.id).run();
       if (!claim.meta.changes) continue;
+      const exclusion = await env.DB.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(job.call_id).first();
+      if (exclusion) {
+        await env.DB.prepare('DELETE FROM call_intelligence_jobs WHERE id=?').bind(job.id).run();
+        continue;
+      }
       const call = await env.DB.prepare(`SELECT c.*, l.company, l.contact, l.industry, l.city, l.state, l.status, l.pipeline_status FROM call_log c JOIN leads l ON l.id=c.lead_id WHERE c.id=?`).bind(job.call_id).first<CallContext>();
       if (!call) throw new Error('Call or lead not found');
       const transcript = await existingTranscript(env.DB, call.id) ?? await transcribe(env, call);
       const text = transcriptText(transcript);
+      if (await env.DB.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(call.id).first()) continue;
       await env.DB.prepare(`INSERT INTO call_transcripts (call_id,provider,model,language,duration_seconds,shaun_speaker,transcript_json,transcript_text) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(call_id) DO UPDATE SET provider=excluded.provider,model=excluded.model,language=excluded.language,duration_seconds=excluded.duration_seconds,shaun_speaker=excluded.shaun_speaker,transcript_json=excluded.transcript_json,transcript_text=excluded.transcript_text,updated_at=datetime('now')`).bind(call.id, transcript.provider, transcript.model, transcript.language, transcript.duration, transcript.shaunSpeaker, JSON.stringify(transcript.utterances), text).run();
       await env.DB.prepare(`UPDATE call_intelligence_jobs SET status='analyzing', locked_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).bind(job.id).run();
       const metadata = { call_id: call.id, lead_id: call.lead_id, business_name: call.company, contact_name: call.contact, industry: call.industry, city: call.city, state: call.state, call_date: call.created_at, pipeline_stage: call.pipeline_status || call.status, known_outcome: call.outcome, script_opener_version: call.call_approach };
       const raw = env.CALL_INTELLIGENCE_TEST_MODE === 'mock' ? MOCK_ANALYSIS : await callClaudeJson(env.CLAUDE_API_KEY, buildCallAnalysisPrompt(metadata, text), { model: CALL_ANALYSIS_MODEL, systemPrompt: callAnalysisSystemPrompt, maxTokens: 8000, temperature: 0, timeoutMs: 90_000 });
       const analysis = validateCallAnalysis(raw);
+      if (await env.DB.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(call.id).first()) continue;
       const transcriptRow = await env.DB.prepare('SELECT id FROM call_transcripts WHERE call_id=?').bind(call.id).first<{ id: number }>();
       if (!transcriptRow) throw new Error('Transcript save failed');
       await env.DB.prepare(`UPDATE call_analyses SET superseded_at=datetime('now') WHERE call_id=? AND superseded_at IS NULL`).bind(call.id).run();
