@@ -55,6 +55,9 @@ separate CRM.
 - `agency-os-backend/src/index.ts` — routes and five-minute recovery processing.
 - `agency-os-backend/src/db/migrations/2026-08-28-call-intelligence.sql` — D1
   tables and indexes.
+- `agency-os-backend/src/db/migrations/2026-09-05-call-intelligence-exclusions.sql`
+  — operator exclusions that keep test or false-start calls out of reporting
+  and future backfills.
 
 ### Dashboard
 
@@ -87,6 +90,13 @@ The migration is manual and must be applied before deploying backend code:
 cd agency-os-backend
 npx wrangler d1 execute agency-os-v2 --remote \
   --file=src/db/migrations/2026-08-28-call-intelligence.sql
+```
+
+For releases containing operator removal, also apply:
+
+```bash
+npx wrangler d1 execute agency-os-v2 --remote \
+  --file=src/db/migrations/2026-09-05-call-intelligence-exclusions.sql
 ```
 
 If the call-approach work is part of the same release, apply first:
@@ -177,5 +187,10 @@ conclusion, missed objection, incorrect outcome, generic coaching, or UI issue.
 - Reanalysis remains the same call and must not inflate aggregate call counts.
 - Failed jobs retain their error and attempt count. Recordings are never deleted
   because processing failed.
+- **Remove analysis only** deletes the transcript, analyses, normalized facts,
+  and processing job while preserving `call_log` and the R2 recording.
+  **Delete analysis + recording** also permanently deletes the R2 object and
+  clears `call_log.recording_url`. Both choices preserve the call-history row,
+  and their exclusion row prevents future backfills from restoring the call.
 - The first live rollout should process new recordings only. Use production
   backfill deliberately after reviewing early live results and expected cost.

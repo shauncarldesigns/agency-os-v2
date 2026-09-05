@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound, serverError } from '../utils/errors';
 import { enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs } from '../services/callIntelligence';
-import { recordingResponseUrl } from '../utils/recordings';
+import { recordingKeyFromValue, recordingResponseUrl } from '../utils/recordings';
 
 export const callIntelligenceRouter = new Hono<{ Bindings: Env }>();
 
@@ -63,6 +63,35 @@ callIntelligenceRouter.get('/calls/:id/report', async c => {
   const transcript = await c.env.DB.prepare(`SELECT provider,model,language,duration_seconds,shaun_speaker,transcript_json,transcript_text,updated_at FROM call_transcripts WHERE call_id=?`).bind(callId).first<Record<string, unknown>>();
   const analysis = await c.env.DB.prepare(`SELECT id,provider,model,analysis_prompt_version,analysis_schema_version,analysis_json,created_at FROM call_analyses WHERE call_id=? AND superseded_at IS NULL ORDER BY created_at DESC LIMIT 1`).bind(callId).first<Record<string, unknown>>();
   return c.json({ job, transcript: transcript ? { ...transcript, transcript_json: JSON.parse(String(transcript.transcript_json)) } : null, analysis: analysis ? { ...analysis, analysis_json: JSON.parse(String(analysis.analysis_json)) } : null });
+});
+
+callIntelligenceRouter.delete('/calls/:id/report', async c => {
+  const callId = Number(c.req.param('id'));
+  if (!Number.isInteger(callId) || callId < 1) return c.json(badRequest('Invalid call ID'), 400);
+  const call = await c.env.DB.prepare('SELECT id,recording_url FROM call_log WHERE id=?').bind(callId).first<{ id:number; recording_url:string|null }>();
+  if (!call) return c.json(notFound('Call'), 404);
+  const body = await c.req.json().catch(() => ({})) as { delete_recording?: boolean };
+  const deleteRecording = body.delete_recording === true;
+  const recordingKey = deleteRecording ? recordingKeyFromValue(call.recording_url) : null;
+
+  if (recordingKey) {
+    const references = await c.env.DB.prepare('SELECT id,recording_url FROM call_log WHERE id<>? AND recording_url IS NOT NULL').bind(callId).all<{ id:number; recording_url:string }>();
+    const shared = (references.results ?? []).some(row => recordingKeyFromValue(row.recording_url) === recordingKey);
+    if (!shared) await c.env.RECORDINGS.delete(recordingKey);
+  }
+
+  // The exclusion is written first so an in-flight worker sees it before it
+  // can recreate the transcript or analysis. The recording and call_log row
+  // deliberately remain intact.
+  await c.env.DB.batch([
+    c.env.DB.prepare(`INSERT INTO call_intelligence_exclusions (call_id) VALUES (?) ON CONFLICT(call_id) DO UPDATE SET reason='operator_removed', excluded_at=datetime('now')`).bind(callId),
+    c.env.DB.prepare('DELETE FROM call_analysis_facts WHERE call_id=?').bind(callId),
+    c.env.DB.prepare('DELETE FROM call_analyses WHERE call_id=?').bind(callId),
+    c.env.DB.prepare('DELETE FROM call_transcripts WHERE call_id=?').bind(callId),
+    c.env.DB.prepare('DELETE FROM call_intelligence_jobs WHERE call_id=?').bind(callId),
+    ...(deleteRecording ? [c.env.DB.prepare('UPDATE call_log SET recording_url=NULL WHERE id=?').bind(callId)] : []),
+  ]);
+  return c.json({ removed: true, recording_deleted: deleteRecording });
 });
 
 callIntelligenceRouter.get('/insights', async c => {
