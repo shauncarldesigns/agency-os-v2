@@ -42,6 +42,11 @@ export interface Env {
   CALL_INTELLIGENCE_TEST_MODE?: 'mock';
   OPENAI_API_KEY?: string;
   CALL_TRANSCRIPTION_MODEL?: string;
+  RETELL_MODE?: 'mock' | 'live';
+  RETELL_API_KEY?: string;
+  RETELL_DEFAULT_AGENT_ID?: string;
+  RETELL_SHARED_PHONE_NUMBER?: string;
+  VOICE_PREVIEW_MODEL?: string;
 }
 
 export interface Lead {

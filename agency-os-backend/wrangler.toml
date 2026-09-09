@@ -58,6 +58,10 @@ GOOGLE_ADS_LOGIN_CUSTOMER_ID = "1493697645"
 KEYWORD_VOLUME_PROVIDER = "google_ads"
 CALL_INTELLIGENCE_ENABLED = "true"
 CALL_TRANSCRIPTION_MODEL = "gpt-4o-transcribe-diarize"
+RETELL_MODE = "live"
+RETELL_DEFAULT_AGENT_ID = "agent_2bff6d65c5e1fd0f36c1f33e57"
+RETELL_SHARED_PHONE_NUMBER = "+19207648610"
+VOICE_PREVIEW_MODEL = "gpt-4.1-mini"
 OUTREACH_EMAIL_FROM = "Shaun Gehrke <info@shauncarldesigns.com>"
 OUTREACH_EMAIL_REPLY_TO = "info@shauncarldesigns.com"
 OUTREACH_PUBLIC_URL = "https://try.shauncarldesigns.com"
@@ -97,3 +101,6 @@ DASHBOARD_ORIGIN = "https://app.shauncarldesigns.com"
 # BUILDER_API_TOKEN           (random bearer token used only by the local
 #                              Playwright Builder Employee)
 # OPENAI_API_KEY              (speaker-separated call transcription)
+# RETELL_API_KEY              (Retell API access and webhook signature verification)
+# RETELL_DEFAULT_AGENT_ID     (non-secret agent id is currently set in [vars])
+# RETELL_SHARED_PHONE_NUMBER  (Retell-managed shared demo number, E.164)
