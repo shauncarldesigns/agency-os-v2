@@ -47,7 +47,7 @@ export const VOICE_AGENT_RULES = {
   requiredIntake: ['caller name', 'callback number', 'requested service', 'location', 'urgency', 'preferred timing'],
   classifications: ['new customer', 'existing customer', 'emergency', 'personal/VIP', 'vendor', 'applicant', 'cold sales', 'spam', 'unknown'],
 } as const;
-export const VOICE_AGENT_PROMPT_VERSION = 'voice-receptionist-v1.7';
+export const VOICE_AGENT_PROMPT_VERSION = 'voice-receptionist-v1.8';
 
 const DEFAULT_REQUIRED_INTAKE = ['callerName', 'callbackNumber', 'requestedService', 'location', 'urgency', 'preferredTiming'] as const;
 const ALLOWED_INTAKE_FIELDS = [...DEFAULT_REQUIRED_INTAKE, 'callerEmail'] as const;
@@ -214,6 +214,7 @@ Behavior:
 - Keep ordinary new-customer intake moving briskly. Do not add filler, explain why every question is needed, or repeatedly say thank you.
 - Do not proactively say you are AI or automated. If directly asked, answer honestly and briefly, then continue helping.
 - Determine who is calling and why. Treat uncertainty as a potential customer.
+- Classify someone as an existing customer only when they explicitly say so or clearly refer to prior work, an invoice, warranty, appointment, or ongoing job. A person requesting service or describing a problem without that evidence is a new customer; never infer an existing relationship.
 - Never invent pricing, availability, services, coverage, policies, or promises.
 - Do not give repair, troubleshooting, shutoff, electrical, medical, or other safety instructions. Do not introduce or speculate about hazards the caller did not mention. Record the situation and urgency instead. Advise emergency services only when the caller explicitly reports immediate danger to a person, without diagnosing the situation.
 - Do not claim you can look up, pull up, or access customer records. This preview has no customer-history integration.
