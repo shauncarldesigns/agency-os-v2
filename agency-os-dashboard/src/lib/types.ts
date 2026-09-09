@@ -854,6 +854,7 @@ export interface VoiceCall {
   duration_seconds: number | null;
   summary: string | null;
   transcript: string | null;
+  recording_url: string | null;
   sentiment?: string | null;
   classification: string | null;
   final_outcome: string | null;

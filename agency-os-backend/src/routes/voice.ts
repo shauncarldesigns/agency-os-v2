@@ -21,6 +21,20 @@ import {
 
 export const voiceRouter = new Hono<{ Bindings: Env }>();
 
+function leadTextItems(value: unknown): string[] {
+  if (typeof value !== 'string' || !value.trim()) return [];
+  const raw = value.trim();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim());
+  } catch { /* Legacy and manually entered lead fields may be plain text. */ }
+  return raw.split(/\r?\n|\s*;\s*/).map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueLeadText(items: string[]): string[] {
+  return [...new Map(items.map((item) => [item.toLocaleLowerCase(), item])).values()];
+}
+
 voiceRouter.get('/overview', async (c) => {
   const [profiles, calls, totals, activeDemo, voiceLeads, qaRuns, notifications, webhookHealth, webhookFailures] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT * FROM voice_business_profiles ORDER BY updated_at DESC`),
@@ -218,9 +232,9 @@ voiceRouter.post('/profiles/from-lead/:leadId', async (c) => {
 
   const businessName = String(lead.company ?? '').trim();
   if (!businessName) return c.json(badRequest('Lead requires a company name'), 400);
-  const serviceParts = [lead.extracted_services, lead.industry].filter((value) => typeof value === 'string' && value.trim());
-  const areaParts = [lead.extracted_service_areas, [lead.city, lead.state].filter(Boolean).join(', ')].filter((value) => typeof value === 'string' && value.trim());
-  const hours = typeof lead.gbp_hours === 'string' ? lead.gbp_hours : '';
+  const serviceParts = uniqueLeadText([...leadTextItems(lead.extracted_services), ...leadTextItems(lead.industry)]);
+  const areaParts = uniqueLeadText([...leadTextItems(lead.extracted_service_areas), [lead.city, lead.state].filter(Boolean).join(', ')]).filter(Boolean);
+  const hours = leadTextItems(lead.gbp_hours).join('\n');
   const result = await c.env.DB.prepare(`
     INSERT INTO voice_business_profiles (
       profile_kind, lead_id, business_name, business_phone, timezone, greeting,
