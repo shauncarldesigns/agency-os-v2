@@ -10,7 +10,7 @@ const agentName = 'Agency OS Service Business Receptionist';
 const inboundWebhookUrl = 'https://agency-os-v2-api.lively-morning-d9de.workers.dev/webhooks/retell/inbound';
 const eventsWebhookUrl = 'https://agency-os-v2-api.lively-morning-d9de.workers.dev/webhooks/retell/events';
 const postCallAnalysisData = [
-  ['caller_classification', 'Classify the caller as new_customer, existing_customer, emergency, personal_vip, vendor, applicant, cold_sales, spam, or unknown.'],
+  ['caller_classification', 'Classify from explicit transcript evidence. Use existing_customer only when the caller clearly says they are already a customer or refers to prior work, an invoice, warranty, appointment, or ongoing job. A caller requesting service, asking about services, or describing a problem without that evidence is new_customer. Never infer existing_customer merely because the caller sounds familiar with the business. Other values: emergency, personal_vip, vendor, applicant, cold_sales, spam, or unknown.'],
   ['caller_name', 'Caller name, or an empty string if it was not provided.'],
   ['callback_number', 'Best callback number, or an empty string if it was not provided.'],
   ['caller_email', 'Caller email address, or an empty string if it was not provided.'],

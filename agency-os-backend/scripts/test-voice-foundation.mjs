@@ -43,6 +43,7 @@ const liveInstructions = buildAgentInstructions({ businessName: 'Acme Plumbing',
 assert.match(liveInstructions, /Ask exactly one question at a time/);
 assert.match(liveInstructions, /Never combine name, callback number, location, urgency, timing/);
 assert.match(liveInstructions, /Do not ask hypothetical questions/);
+assert.match(liveInstructions, /existing customer only when they explicitly say so/);
 
 const sales = simulateReceptionistTurn({
   businessName: 'Acme Plumbing', services: 'Plumbing', history: [],
@@ -71,6 +72,8 @@ assert.match(emailRequired.reply, /email address/i);
 
 const existing = simulateReceptionistTurn({ businessName: 'Acme Plumbing', services: 'Plumbing', history: [], message: 'I am an existing customer calling about last week.', classification: 'unknown', intake: {} });
 assert.equal(existing.classification, 'existing_customer');
+const unprovenExisting = simulateReceptionistTurn({ businessName: 'Acme Plumbing', services: 'Plumbing', history: [], message: 'My water heater is leaking and I need someone Friday.', classification: 'unknown', intake: {} });
+assert.equal(unprovenExisting.classification, 'new_customer');
 assert.equal(existing.intake.callerName, undefined);
 const emergency = simulateReceptionistTurn({ businessName: 'Acme Plumbing', services: 'Plumbing', history: [], message: 'This is an emergency. A pipe burst.', classification: 'unknown', intake: {} });
 assert.equal(emergency.classification, 'emergency');

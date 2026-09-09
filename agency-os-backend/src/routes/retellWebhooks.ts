@@ -83,6 +83,15 @@ export async function processRetellEventPayload(env: Env, payload: Record<string
   const metadata = objectOrEmpty(call.metadata);
   const analysis = objectOrEmpty(call.call_analysis);
   const custom = objectOrEmpty(analysis.custom_analysis_data);
+  const extractedIntake: VoiceIntake = {
+    callerName: stringOrNull(custom.caller_name) ?? undefined,
+    callbackNumber: stringOrNull(custom.callback_number) ?? undefined,
+    callerEmail: stringOrNull(custom.caller_email) ?? undefined,
+    requestedService: stringOrNull(custom.service_requested) ?? undefined,
+    location: stringOrNull(custom.location) ?? undefined,
+    urgency: stringOrNull(custom.urgency) ?? undefined,
+    preferredTiming: stringOrNull(custom.preferred_timing) ?? undefined,
+  };
   const profileId = numberOrNull(metadata.voice_business_profile_id);
   const demoSessionId = numberOrNull(metadata.demo_session_id);
   const prospectId = numberOrNull(metadata.prospect_id);
@@ -121,18 +130,12 @@ export async function processRetellEventPayload(env: Env, payload: Record<string
     stringOrNull(call.disconnection_reason), typeof analysis.call_successful === 'boolean' ? (analysis.call_successful ? 1 : 0) : null,
     stringOrNull(analysis.user_sentiment), stringOrNull(analysis.call_summary), stringOrNull(call.transcript),
     stringOrNull(call.recording_url), numberOrNull(call.call_cost), stringOrNull(custom.caller_classification),
-    stringOrNull(custom.final_outcome), JSON.stringify(metadata),
+    stringOrNull(custom.final_outcome), JSON.stringify({ ...metadata, intake: extractedIntake }),
   ).run();
   const storedCall = await env.DB.prepare(`SELECT id FROM voice_calls WHERE retell_call_id=?`).bind(callId).first<{ id: number }>();
   const classification = voiceClassification(custom.caller_classification);
   if (storedCall && stringOrNull(custom.caller_classification)) {
-    const intake: VoiceIntake = {
-      callerName: stringOrNull(custom.caller_name) ?? undefined, callbackNumber: stringOrNull(custom.callback_number) ?? undefined,
-      callerEmail: stringOrNull(custom.caller_email) ?? undefined, requestedService: stringOrNull(custom.service_requested) ?? undefined,
-      location: stringOrNull(custom.location) ?? undefined, urgency: stringOrNull(custom.urgency) ?? undefined,
-      preferredTiming: stringOrNull(custom.preferred_timing) ?? undefined,
-    };
-    const voiceLeadId = await syncVoiceLeadFromCall(env.DB, { callId: storedCall.id, profileId, classification, callerPhone: stringOrNull(call.from_number), intake, notes: stringOrNull(analysis.call_summary) });
+    const voiceLeadId = await syncVoiceLeadFromCall(env.DB, { callId: storedCall.id, profileId, classification, callerPhone: stringOrNull(call.from_number), intake: extractedIntake, notes: stringOrNull(analysis.call_summary) });
     if (voiceLeadId) waitUntil(notifyVoiceLead(env, voiceLeadId));
   }
   if (storedCall && eventType === 'transfer_cancelled') waitUntil(notifyFailedTransfer(env, storedCall.id));
