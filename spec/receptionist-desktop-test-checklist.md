@@ -25,7 +25,7 @@ Use synthetic names, phone numbers, and emails while the integration remains in 
 - Run one conversation each for: new customer, existing customer, emergency, normal after-hours lead, cold salesperson, and uncertain caller.
 - Expected: questions are asked one at a time; it never invents prices, coverage, availability, records, response times, troubleshooting, shutoff steps, or safety instructions.
 - Expected: cold sales/spam is screened; uncertain callers are treated as possible customers; emergencies are marked urgent without claiming a transfer.
-- Run the six-case QA suite in rules mode. Expected: 6/6 and a saved history row with prompt version `voice-receptionist-v1.8`.
+- Run the six-case QA suite in rules mode. Expected: 6/6 and a saved history row with prompt version `voice-receptionist-v1.10`.
 - Optional: explicitly enable the OpenAI preview and repeat using synthetic information only. Expected: 6/6; inspect the saved case details.
 
 ## 4. Calls, Voice Leads, and alerts

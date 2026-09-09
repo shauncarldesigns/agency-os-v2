@@ -44,6 +44,12 @@ assert.match(liveInstructions, /Ask exactly one question at a time/);
 assert.match(liveInstructions, /Never combine name, callback number, location, urgency, timing/);
 assert.match(liveInstructions, /Do not ask hypothetical questions/);
 assert.match(liveInstructions, /existing customer only when they explicitly say so/);
+assert.match(liveInstructions, /A confirmation is a question and must occupy its own turn/);
+assert.match(liveInstructions, /Did I get that right/);
+assert.match(liveInstructions, /without a pause between the number and A\.M\. or P\.M\./);
+assert.match(liveInstructions, /Always deliver the complete opening greeting/);
+assert.match(liveInstructions, /After three consecutive failed attempts/);
+assert.match(liveInstructions, /Never classify, reject, screen, or end a call merely because speech was unclear/);
 
 const sales = simulateReceptionistTurn({
   businessName: 'Acme Plumbing', services: 'Plumbing', history: [],
