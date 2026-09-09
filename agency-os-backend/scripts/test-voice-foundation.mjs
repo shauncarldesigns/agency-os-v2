@@ -50,6 +50,9 @@ assert.match(liveInstructions, /without a pause between the number and A\.M\. or
 assert.match(liveInstructions, /Always deliver the complete opening greeting/);
 assert.match(liveInstructions, /After three consecutive failed attempts/);
 assert.match(liveInstructions, /Never classify, reject, screen, or end a call merely because speech was unclear/);
+assert.match(liveInstructions, /Speak at a normal conversational pace/);
+assert.match(liveInstructions, /name no more than three broad, relevant services/);
+assert.match(liveInstructions, /Pronounce every service clearly/);
 
 const sales = simulateReceptionistTurn({
   businessName: 'Acme Plumbing', services: 'Plumbing', history: [],

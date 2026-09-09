@@ -94,7 +94,7 @@ if (existing) {
   await request('PATCH', `/update-retell-llm/${encodeURIComponent(llmId)}`, llmConfig);
   const updated = await request('PATCH', `/update-agent/${encodeURIComponent(existing.agent_id)}`, {
     version_description: `MVP draft using ${VOICE_AGENT_PROMPT_VERSION}; generic plumber defaults; transfers disabled`,
-    voice_speed: 0.96,
+    voice_speed: 1,
     enable_dynamic_voice_speed: false,
     responsiveness: 0.82,
     enable_dynamic_responsiveness: true,
@@ -120,7 +120,7 @@ const agent = await request('POST', '/create-agent', {
   agent_name: agentName,
   version_description: `MVP draft using ${VOICE_AGENT_PROMPT_VERSION}; generic plumber defaults; transfers disabled`,
   language: 'en-US',
-  voice_speed: 0.96,
+  voice_speed: 1,
   enable_dynamic_voice_speed: false,
   responsiveness: 0.82,
   enable_dynamic_responsiveness: true,

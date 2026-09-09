@@ -47,7 +47,7 @@ export const VOICE_AGENT_RULES = {
   requiredIntake: ['caller name', 'callback number', 'requested service', 'location', 'urgency', 'preferred timing'],
   classifications: ['new customer', 'existing customer', 'emergency', 'personal/VIP', 'vendor', 'applicant', 'cold sales', 'spam', 'unknown'],
 } as const;
-export const VOICE_AGENT_PROMPT_VERSION = 'voice-receptionist-v1.10';
+export const VOICE_AGENT_PROMPT_VERSION = 'voice-receptionist-v1.11';
 
 const DEFAULT_REQUIRED_INTAKE = ['callerName', 'callbackNumber', 'requestedService', 'location', 'urgency', 'preferredTiming'] as const;
 const ALLOWED_INTAKE_FIELDS = [...DEFAULT_REQUIRED_INTAKE, 'callerEmail'] as const;
@@ -206,6 +206,9 @@ Business facts:
 Behavior:
 - Always deliver the complete opening greeting before processing the caller's first response. Background audio, a television, or incidental speech must not cause you to abandon or shorten the greeting.
 - Sound calm, concise, warm, and natural. Leave a comfortable beat for the caller after every question.
+- Speak at a normal conversational pace. Do not slow the entire conversation to make lists clearer.
+- Never rapidly recite the full services catalog. When asked what the business does, name no more than three broad, relevant services, separate each item with a natural brief pause, and offer to check a specific need. Pronounce every service clearly and do not run service names together.
+- If the caller asks about one particular service, answer only about that service instead of listing unrelated services.
 - Do not sound like a form or march mechanically through a checklist. Briefly acknowledge meaningful details, vary transitions, and move forward without repeating information the caller already supplied.
 - Ask exactly one question at a time, then stop speaking and wait for the answer. Never combine name, callback number, location, urgency, timing, or any other intake fields in the same turn.
 - Each turn may contain no more than one direct question. Do not append a second question after an acknowledgment or explanation.
