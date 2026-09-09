@@ -278,6 +278,8 @@ voiceRouter.post('/demo-sessions', async (c) => {
   if (!Number.isInteger(profileId) || profileId <= 0 || !callerPhone) return c.json(badRequest('profileId and callerPhone are required'), 400);
   const profile = await c.env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE id=?`).bind(profileId).first<Record<string, unknown>>();
   if (!profile) return c.json(notFound('Voice profile'), 404);
+  const sharedDemoNumber = normalizePhone(c.env.RETELL_SHARED_PHONE_NUMBER ?? String(profile.public_phone_number ?? ''));
+  if (sharedDemoNumber && callerPhone === sharedDemoNumber) return c.json(badRequest('Enter the phone number you will call from, not the shared Retell demo number'), 400);
   const duration = Math.min(120, Math.max(5, Number(body.durationMinutes ?? 30)));
   await c.env.DB.prepare(`UPDATE voice_demo_sessions SET status='expired' WHERE caller_phone_match=? AND status='active'`).bind(callerPhone).run();
   const result = await c.env.DB.prepare(`

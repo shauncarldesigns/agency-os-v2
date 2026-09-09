@@ -8,6 +8,7 @@ import type { VoiceClassification, VoiceIntake } from '../services/voiceAgent';
 
 export const retellWebhookRouter = new Hono<{ Bindings: Env }>();
 const MAX_WEBHOOK_BYTES = 1_000_000;
+const INBOUND_SECOND_RING_DELAY_MS = 5_500;
 
 function isoFromMilliseconds(value: unknown): string | null {
   const milliseconds = Number(value);
@@ -56,6 +57,11 @@ retellWebhookRouter.post('/webhooks/retell/inbound', async (c) => {
   const fromNumber = stringOrNull(inbound.from_number);
   const toNumber = stringOrNull(inbound.to_number);
   if (!fromNumber || !toNumber) return c.text('Missing call numbers', 400);
+
+  // Retell keeps the inbound call ringing while awaiting this response.
+  // This targets a second-ring pickup while remaining below its 10-second
+  // inbound webhook timeout.
+  await new Promise((resolve) => setTimeout(resolve, INBOUND_SECOND_RING_DELAY_MS));
 
   const resolved = await resolveVoiceDemo(c.env.DB, fromNumber, toNumber);
   if (!resolved) return c.json({ call_inbound: {} });
