@@ -36,6 +36,9 @@ import { recordApplicationEvent } from './services/applicationEvents';
 import { builderAdminRouter, builderWorkerRouter } from './routes/builder';
 import { callIntelligenceRouter } from './routes/callIntelligence';
 import { processCallIntelligenceJobs } from './services/callIntelligence';
+import { retellWebhookRouter } from './routes/retellWebhooks';
+import { voiceRouter } from './routes/voice';
+import { purgeExpiredVoiceContent } from './services/voiceRetention';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -69,6 +72,9 @@ app.route('/', redirectRouter);
 // Public Resend webhook + first-party open pixel. Signature/token validation
 // happens inside the router, so these must remain ahead of /api authentication.
 app.route('/', publicEmailRouter);
+// Retell signs the raw request body. These public telephony webhooks must be
+// mounted before operator auth and verify every request inside the router.
+app.route('/', retellWebhookRouter);
 
 // Local Builder Employee uses a dedicated bearer token, not an operator's
 // browser session. It is deliberately isolated from the administrative API.
@@ -160,6 +166,7 @@ app.route('/api/settings', settingsRouter);
 app.route('/api/research', researchRouter);
 app.route('/api/builder', builderAdminRouter);
 app.route('/api/call-intelligence', callIntelligenceRouter);
+app.route('/api/voice', voiceRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {
@@ -201,6 +208,9 @@ export default {
       ctx.waitUntil(env.DB.prepare(
         "DELETE FROM application_events WHERE created_at < datetime('now', '-30 days')",
       ).run());
+      ctx.waitUntil(purgeExpiredVoiceContent(env.DB).then(count => {
+        if (count) log('info', 'cron', 'Expired receptionist call content removed', { count });
+      }));
       // Daily 6am — refresh PageSpeed for live Tier 3 sites. On the first
       // of each month, also finalize the prior-month snapshots. Combining
       // these keeps the Worker within Cloudflare's five-trigger limit.

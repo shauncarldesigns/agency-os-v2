@@ -7,7 +7,9 @@
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit",
     "db:migrate": "wrangler d1 execute agency-os-v2 --file=src/db/schema.sql",
-    "db:migrate:remote": "wrangler d1 execute agency-os-v2 --remote --file=src/db/schema.sql"
+    "db:migrate:remote": "wrangler d1 execute agency-os-v2 --remote --file=src/db/schema.sql",
+    "test:voice": "node --experimental-strip-types scripts/test-voice-foundation.mjs",
+    "retell:provision:receptionist": "node --experimental-strip-types scripts/provision-retell-receptionist.mjs"
   },
   "dependencies": {
     "hono": "^4.12.33",

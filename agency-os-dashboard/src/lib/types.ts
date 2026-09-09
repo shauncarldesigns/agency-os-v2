@@ -761,6 +761,177 @@ export interface ApplicationEvent {
   details_json: string | null;
   created_at: string;
 }
+
+export interface VoiceBusinessProfile {
+  id: number;
+  profile_kind: 'test' | 'prospect' | 'customer';
+  lead_id: number | null;
+  project_id: number | null;
+  business_name: string;
+  business_phone: string | null;
+  timezone: string;
+  greeting: string;
+  services_text: string;
+  service_area_text: string;
+  hours_text: string;
+  default_mode: 'receptionist' | 'after_hours' | 'intake_only' | 'bypass' | 'paused';
+  transfer_enabled: number;
+  private_transfer_destination: string | null;
+  public_phone_number: string | null;
+  retell_agent_id: string | null;
+  retell_agent_version: number | null;
+  notification_email: string;
+  recording_retention_days: number;
+  configuration_json: string;
+  status: 'draft' | 'testing' | 'ready' | 'live' | 'paused' | 'error';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceProfileConfiguration {
+  servicesNotOffered?: string;
+  emergencyDefinition?: string;
+  afterHoursInstructions?: string;
+  requiredIntakeFields?: string[];
+  approvedAnswers?: string;
+  prohibitedPromises?: string;
+  solicitationMessages?: boolean;
+}
+
+export interface RetellSetupPackage {
+  generatedAt: string;
+  promptVersion: string;
+  profile: { id: number; kind?: string; businessName: string; timezone: string; greeting: string };
+  preflight: {
+    ready: boolean;
+    blockers: string[];
+    warnings: string[];
+    checks: Array<{ key: string; label: string; ready: boolean; severity: 'blocker' | 'warning' }>;
+  };
+  retellAgent: {
+    agentName: string;
+    openingMessage: string;
+    generalPrompt: string;
+    dynamicVariables: Array<{ name: string; exampleValue: string }>;
+    recommendedSettings: Record<string, string | number | boolean>;
+  };
+  postCallAnalysis: Array<{ name: string; type: string; values?: string[]; description: string }>;
+  webhooks: { inboundCall: string; callEvents: string; subscribedEvents: string[]; verification: string };
+  manualSetupChecklist: string[];
+  privacy: { applicationRetentionDays: number; note: string };
+}
+
+export interface VoiceReadinessResult {
+  ready: boolean;
+  checkedAt: string;
+  checks: Array<{ key: string; label: string; status: 'pass' | 'warn' | 'fail'; detail: string }>;
+}
+
+export interface RetellResourceInventory {
+  agents: Array<{ id: string; name: string; version: number | null; published: boolean | null; voiceId: string | null; language: string | null }>;
+  phoneNumbers: Array<{ number: string; pretty: string | null; nickname: string | null; type: string | null; inboundAgentIds: string[] }>;
+}
+
+export interface VoiceDemoSession {
+  id: number;
+  voice_business_profile_id: number;
+  prospect_id: number | null;
+  demo_phone_number: string | null;
+  caller_phone_match: string | null;
+  status: 'active' | 'expired' | 'completed' | 'canceled';
+  activated_at: string;
+  expires_at: string;
+}
+
+export interface VoiceCall {
+  id: number;
+  business_name?: string | null;
+  voice_business_profile_id: number | null;
+  retell_call_id: string;
+  environment: 'demo' | 'live' | 'mock';
+  from_number: string | null;
+  to_number: string | null;
+  duration_seconds: number | null;
+  summary: string | null;
+  transcript: string | null;
+  sentiment?: string | null;
+  classification: string | null;
+  final_outcome: string | null;
+  raw_metadata_json?: string | null;
+  created_at: string;
+}
+
+export interface VoiceOverview {
+  health: { mode: 'mock' | 'live'; apiKeyConfigured: boolean; defaultAgentConfigured: boolean; defaultAgentId: string | null; sharedNumberConfigured: boolean; readyForLiveCalls: boolean; inboundWebhookUrl: string; eventsWebhookUrl: string; previewModel: string };
+  profiles: VoiceBusinessProfile[];
+  calls: VoiceCall[];
+  totals: { calls_answered: number; opportunities: number; screened: number };
+  activeDemo: VoiceDemoSession | null;
+  voiceLeads: VoiceLead[];
+  qaRuns: VoiceQaRun[];
+  notifications: VoiceNotification[];
+  webhookHealth: { last_success_at: string | null; failed_count: number; total_events: number };
+  webhookFailures: VoiceWebhookFailure[];
+  retention: { retainedCalls: number; expiredPendingPurge: number; nextExpirationAt: string | null };
+}
+
+export interface VoiceLead {
+  id: number;
+  voice_business_profile_id: number;
+  source_call_id: number;
+  business_name?: string;
+  caller_name: string | null;
+  caller_phone: string | null;
+  caller_email: string | null;
+  service_requested: string | null;
+  service_address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  urgency: string;
+  preferred_timing: string | null;
+  intake_notes: string | null;
+  status: 'new' | 'contacted' | 'appointment' | 'booked' | 'won' | 'lost' | 'spam';
+  estimated_value: number | null;
+  confirmed_revenue: number | null;
+  created_at: string;
+}
+
+export type VoiceClassification = 'new_customer' | 'existing_customer' | 'emergency' | 'personal_vip' | 'vendor' | 'applicant' | 'cold_sales' | 'spam' | 'unknown';
+export interface VoiceIntake {
+  callerName?: string;
+  callbackNumber?: string;
+  callerEmail?: string;
+  requestedService?: string;
+  location?: string;
+  urgency?: string;
+  preferredTiming?: string;
+  permissionToText?: boolean;
+}
+export interface VoiceSimulatorTurn { role: 'receptionist' | 'caller'; text: string }
+export interface VoiceSimulatorResult {
+  reply: string;
+  classification: VoiceClassification;
+  confidence: 'low' | 'medium' | 'high';
+  intake: VoiceIntake;
+  outcome: 'continue_intake' | 'callback_requested' | 'screened' | 'message_taken';
+  complete: boolean;
+  engine?: 'openai' | 'rules';
+}
+export interface VoiceAgentSpec {
+  rules: { identity: string; goals: readonly string[]; requiredIntake: readonly string[]; classifications: readonly string[] };
+  scenarios: Array<{ id: string; label: string; opening: string }>;
+}
+export interface VoiceCallMetadata {
+  source?: string;
+  confidence?: string;
+  intake?: VoiceIntake;
+  review?: { status: 'unreviewed' | 'passed' | 'needs_work'; notes: string; reviewed_at: string };
+}
+export interface VoiceQaResult { id: string; label: string; expected: VoiceClassification; actual: VoiceClassification; expectedOutcome: string | null; actualOutcome: string; passed: boolean; engine: 'openai' | 'rules'; reply: string; issues: string[] }
+export interface VoiceQaRun { id: number; voice_business_profile_id: number; business_name: string; requested_engine: 'openai' | 'rules'; model: string | null; prompt_version: string; passed_count: number; total_count: number; created_at: string }
+export interface VoiceNotification { id: number; voice_lead_id: number | null; voice_call_id: number | null; notification_type: 'new_lead' | 'emergency' | 'failed_transfer'; recipient: string; delivery_status: 'pending' | 'sent' | 'simulated' | 'failed'; error_message: string | null; business_name: string | null; created_at: string }
+export interface VoiceQaCase { id: number; qa_run_id: number; case_key: string; label: string; expected_classification: string; actual_classification: string; expected_outcome: string | null; actual_outcome: string | null; engine: string; passed: number; reply: string; issues_json: string }
+export interface VoiceWebhookFailure { id: number; event_type: string; provider_call_id: string | null; processing_attempts: number; received_at: string; error_message: string | null }
 export type CallbackStatus = 'pending' | 'completed' | 'missed' | 'cancelled';
 
 export type SessionKind = 'auto' | 'hot';

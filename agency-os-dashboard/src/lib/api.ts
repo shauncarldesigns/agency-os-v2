@@ -7,6 +7,8 @@ import type {
   GrowthCycle, GrowthWorkItem, GrowthPhase, GrowthWorkCategory, GrowthWorkStatus, GrowthStrategy, OnboardingItem, PageSearchMetrics, PageInsights,
   SeoAuditRun, SeoAuditFinding, ApplicationEvent, ProjectActivityEvent,
   Market, MarketListRow, MarketKeyword, MapPackRow, ResearchRun, ResearchRunSummary,
+  VoiceAgentSpec, VoiceBusinessProfile, VoiceCall, VoiceClassification, VoiceDemoSession,
+  RetellResourceInventory, RetellSetupPackage, VoiceIntake, VoiceLead, VoiceNotification, VoiceOverview, VoiceProfileConfiguration, VoiceQaCase, VoiceQaResult, VoiceQaRun, VoiceReadinessResult, VoiceSimulatorResult, VoiceSimulatorTurn, VoiceWebhookFailure,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -916,6 +918,37 @@ export const api = {
         '/api/email/automations/run-due',
         { method: 'POST' },
       ),
+  },
+  voice: {
+    overview: () => apiFetch<VoiceOverview>('/api/voice/overview'),
+    testConnection: () => apiFetch<{ connection: { agent: { ok: boolean; id: string | null; version: number | null; published: boolean | null }; phone: { ok: boolean; number: string | null; type: string | null; inboundAgentId: string | null } }; checkedAt: string }>('/api/voice/connection/test', { method: 'POST' }),
+    testRetellAuthentication: () => apiFetch<{ authentication: { ok: true; reachable: true; agentSampleCount: number }; checkedAt: string }>('/api/voice/connection/auth-test', { method: 'POST' }),
+    retellResources: () => apiFetch<{ resources: RetellResourceInventory; checkedAt: string }>('/api/voice/connection/resources'),
+    resetDemoSessions: () => apiFetch<{ canceled: number }>('/api/voice/demo-sessions/reset', { method: 'POST' }),
+    runRetention: () => apiFetch<{ purged: number; retention: VoiceOverview['retention'] }>('/api/voice/retention/run', { method: 'POST' }),
+    testFallback: () => apiFetch<{ ok: true; profileId: number; businessName: string }>('/api/voice/fallback/test', { method: 'POST' }),
+    testReadiness: () => apiFetch<VoiceReadinessResult>('/api/voice/readiness/test', { method: 'POST' }),
+    qaRun: (id: number) => apiFetch<{ run: VoiceQaRun; cases: VoiceQaCase[] }>(`/api/voice/qa-runs/${id}`),
+    retryNotification: (id: number) => apiFetch<{ notification: VoiceNotification }>(`/api/voice/notifications/${id}/retry`, { method: 'POST' }),
+    retryWebhookEvent: (id: number) => apiFetch<{ event: VoiceWebhookFailure & { processing_status: string; processed_at: string | null } }>(`/api/voice/webhook-events/${id}/retry`, { method: 'POST' }),
+    createTestProfile: () => apiFetch<{ profile: VoiceBusinessProfile }>('/api/voice/test-profile', { method: 'POST' }),
+    createProfileFromLead: (leadId: number) => apiFetch<{ profile: VoiceBusinessProfile }>(`/api/voice/profiles/from-lead/${leadId}`, { method: 'POST' }),
+    updateProfile: (id: number, body: Partial<VoiceBusinessProfile> & { configuration?: VoiceProfileConfiguration }) => apiFetch<{ profile: VoiceBusinessProfile }>(`/api/voice/profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    retellSetupPackage: (id: number) => apiFetch<{ setupPackage: RetellSetupPackage }>(`/api/voice/profiles/${id}/retell-package`),
+    activateDemo: (profileId: number, callerPhone: string, durationMinutes = 30) => apiFetch<{ session: VoiceDemoSession }>('/api/voice/demo-sessions', { method: 'POST', body: JSON.stringify({ profileId, callerPhone, durationMinutes }) }),
+    createMockCall: (profileId: number, classification: 'new_customer' | 'cold_sales') => apiFetch<{ call: VoiceCall }>('/api/voice/mock-calls', { method: 'POST', body: JSON.stringify({ profileId, classification }) }),
+    createMockTransferFailure: (profileId: number) => apiFetch<{ call: VoiceCall }>('/api/voice/mock-transfer-failures', { method: 'POST', body: JSON.stringify({ profileId }) }),
+    createMockWebhookFailure: () => apiFetch<{ event: VoiceWebhookFailure }>('/api/voice/mock-webhook-failures', { method: 'POST' }),
+    agentSpec: () => apiFetch<VoiceAgentSpec>('/api/voice/agent-spec'),
+    simulatorRespond: (body: { profileId: number; history: VoiceSimulatorTurn[]; message: string; classification: VoiceClassification; intake: VoiceIntake; useAi: boolean }) =>
+      apiFetch<{ result: VoiceSimulatorResult }>('/api/voice/simulator/respond', { method: 'POST', body: JSON.stringify(body) }),
+    runQaSuite: (profileId: number, useAi: boolean) => apiFetch<{ runId: number; results: VoiceQaResult[]; passed: number; total: number }>('/api/voice/simulator/qa', { method: 'POST', body: JSON.stringify({ profileId, useAi }) }),
+    completeSimulation: (body: { profileId: number; history: VoiceSimulatorTurn[]; classification: VoiceClassification; confidence: string; intake: VoiceIntake; outcome: string }) =>
+      apiFetch<{ call: VoiceCall }>('/api/voice/simulator/complete', { method: 'POST', body: JSON.stringify(body) }),
+    reviewCall: (id: number, body: { classification: VoiceClassification; finalOutcome: string; summary: string; reviewStatus: 'unreviewed' | 'passed' | 'needs_work'; reviewNotes: string }) =>
+      apiFetch<{ call: VoiceCall }>(`/api/voice/calls/${id}/review`, { method: 'PUT', body: JSON.stringify(body) }),
+    updateLead: (id: number, body: { status?: VoiceLead['status']; estimatedValue?: number | null; confirmedRevenue?: number | null; intakeNotes?: string }) =>
+      apiFetch<{ lead: VoiceLead }>(`/api/voice/leads/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   },
   playbook: {
     scripts: () => apiFetch<{ scripts: ScriptSummary[] }>('/api/playbook/scripts'),

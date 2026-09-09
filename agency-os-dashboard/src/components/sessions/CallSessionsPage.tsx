@@ -1739,7 +1739,11 @@ function EmailCaptureSplitScript({
                 type="email"
                 value={email}
                 onChange={(event) => onEmailChange(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter' && email.trim()) onSave(); }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || !email.trim()) return;
+                  if (callPath === 'receptionist') onSaveReceptionist();
+                  else onSave();
+                }}
                 placeholder="owner@business.com"
                 className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
