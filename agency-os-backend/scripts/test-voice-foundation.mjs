@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { verifyRetellSignature } from '../src/services/retellSignature.ts';
 import { normalizePhone, voiceDynamicVariables } from '../src/services/voiceDemo.ts';
-import { simulateReceptionistTurn, voicePolicyFromConfiguration } from '../src/services/voiceAgent.ts';
+import { buildAgentInstructions, simulateReceptionistTurn, voicePolicyFromConfiguration } from '../src/services/voiceAgent.ts';
 
 const key = 'retell_test_key';
 const raw = '{"event":"call_ended","call":{"call_id":"call_test"}}';
@@ -38,6 +38,11 @@ assert.deepEqual(defaultPolicy.requiredIntakeFields, ['callerName', 'callbackNum
 const customPolicy = voicePolicyFromConfiguration(JSON.stringify({ requiredIntakeFields: ['callerName', 'callerEmail', 'notAField'], solicitationMessages: true }));
 assert.deepEqual(customPolicy.requiredIntakeFields, ['callerName', 'callerEmail']);
 assert.equal(customPolicy.solicitationMessages, true);
+
+const liveInstructions = buildAgentInstructions({ businessName: 'Acme Plumbing', services: 'Plumbing', serviceArea: 'Green Bay', hours: '8–5' });
+assert.match(liveInstructions, /Ask exactly one question at a time/);
+assert.match(liveInstructions, /Never combine name, callback number, location, urgency, timing/);
+assert.match(liveInstructions, /Do not ask hypothetical questions/);
 
 const sales = simulateReceptionistTurn({
   businessName: 'Acme Plumbing', services: 'Plumbing', history: [],

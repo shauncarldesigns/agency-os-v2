@@ -65,7 +65,7 @@ Maintain one service-business receptionist behavior core. Plumbing, HVAC, constr
 ## MVP Retell resource (created September 8, 2026)
 
 - Draft voice agent: **Agency OS Service Business Receptionist** (`agent_2bff6d65c5e1fd0f36c1f33e57`, V0).
-- Response engine: `llm_fc4fbf18daa259b0269a7ba868c2` using the Agency OS `voice-receptionist-v1.6` prompt contract.
+- Response engine: `llm_fc4fbf18daa259b0269a7ba868c2` using the Agency OS `voice-receptionist-v1.7` prompt contract.
 - Default test persona: **Lakeside Plumbing & Drain**. These are fallback test values, not a separate plumber-specific behavior fork.
 - Business identity, services, service area, hours, operating mode, transfer policy, and attribution identifiers are dynamic variables.
 - Voice: `retell-Cimo`; language: US English; transfers disabled; unpublished.
