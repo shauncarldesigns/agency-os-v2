@@ -8,7 +8,7 @@ import type { VoiceClassification, VoiceIntake } from '../services/voiceAgent';
 
 export const retellWebhookRouter = new Hono<{ Bindings: Env }>();
 const MAX_WEBHOOK_BYTES = 1_000_000;
-const INBOUND_SECOND_RING_DELAY_MS = 5_500;
+const INBOUND_SECOND_RING_DELAY_MS = 7_000;
 
 function isoFromMilliseconds(value: unknown): string | null {
   const milliseconds = Number(value);
@@ -67,18 +67,57 @@ retellWebhookRouter.post('/webhooks/retell/inbound', async (c) => {
   if (!resolved) return c.json({ call_inbound: {} });
   const agentId = resolved.profile.retell_agent_id || c.env.RETELL_DEFAULT_AGENT_ID;
   if (!agentId) return c.json({ call_inbound: {} });
+  const requiresAccessCode = resolved.demoSessionId === null && resolved.profile.profile_kind === 'test';
 
   return c.json({
     call_inbound: {
       override_agent_id: agentId,
       ...(resolved.profile.retell_agent_version ? { override_agent_version: resolved.profile.retell_agent_version } : {}),
-      dynamic_variables: voiceDynamicVariables(resolved),
+      ...(requiresAccessCode ? { agent_override: { retell_llm: { begin_message: 'Thanks for calling the automated receptionist demo line. What is your six-digit access code?' } } } : {}),
+      dynamic_variables: { ...voiceDynamicVariables(resolved), access_code_required: requiresAccessCode ? 'true' : 'false' },
       metadata: {
         voice_business_profile_id: resolved.profile.id,
         demo_session_id: resolved.demoSessionId,
         prospect_id: resolved.prospectId,
       },
     },
+  });
+});
+
+retellWebhookRouter.post('/webhooks/retell/demo-code', async (c) => {
+  const verified = await verifiedPayload(c);
+  if (verified instanceof Response) return verified;
+  const args = objectOrEmpty(verified.payload.args);
+  const call = objectOrEmpty(verified.payload.call);
+  const accessCode = String(args.access_code ?? '').replace(/\D/g, '');
+  if (accessCode.length !== 6) return c.json({ valid: false, message: 'That code should contain six digits. Ask the caller to repeat it once.' });
+  const invitation = await c.env.DB.prepare(`
+    SELECT i.*, p.retell_agent_id
+      FROM voice_demo_invitations i
+      JOIN voice_business_profiles p ON p.id=i.voice_business_profile_id
+     WHERE i.access_code=? AND i.status='active' AND i.expires_at > datetime('now')
+     LIMIT 1
+  `).bind(accessCode).first<Record<string, unknown>>();
+  if (!invitation) return c.json({ valid: false, message: 'That code is invalid or expired. Ask the caller to check the email and repeat it once. Do not reveal any business information.' });
+  let profile: Record<string, unknown>;
+  try { profile = JSON.parse(String(invitation.profile_snapshot_json)) as Record<string, unknown>; } catch { return c.json({ valid: false, message: 'The demo profile could not be loaded. Ask the caller to contact Shaun Carl Designs.' }); }
+  const callId = stringOrNull(call.call_id);
+  if (callId) {
+    const used = await c.env.DB.prepare(`INSERT OR IGNORE INTO voice_demo_invitation_uses (invitation_id, retell_call_id, caller_phone) VALUES (?, ?, ?)`).bind(invitation.id, callId, stringOrNull(call.from_number)).run();
+    if ((used.meta.changes ?? 0) > 0) await c.env.DB.prepare(`UPDATE voice_demo_invitations SET use_count=use_count+1, last_used_at=datetime('now') WHERE id=?`).bind(invitation.id).run();
+  }
+  return c.json({
+    valid: true,
+    invitation_id: invitation.id,
+    profile_id: invitation.voice_business_profile_id,
+    prospect_id: invitation.prospect_id,
+    business_name: profile.business_name,
+    greeting: profile.greeting,
+    services: profile.services_text,
+    service_area: profile.service_area_text,
+    business_hours: profile.hours_text,
+    business_rules: profile.configuration_json ?? '{}',
+    message: `The code is valid. Introduce the personalized demo for ${String(profile.business_name)} and invite the caller to pretend they are a customer calling that business.`,
   });
 });
 
@@ -98,9 +137,10 @@ export async function processRetellEventPayload(env: Env, payload: Record<string
     urgency: stringOrNull(custom.urgency) ?? undefined,
     preferredTiming: stringOrNull(custom.preferred_timing) ?? undefined,
   };
-  const profileId = numberOrNull(metadata.voice_business_profile_id);
+  const invitationUse = await env.DB.prepare(`SELECT i.id AS invitation_id, i.voice_business_profile_id, i.prospect_id FROM voice_demo_invitation_uses u JOIN voice_demo_invitations i ON i.id=u.invitation_id WHERE u.retell_call_id=? ORDER BY u.id DESC LIMIT 1`).bind(callId).first<{ invitation_id: number; voice_business_profile_id: number; prospect_id: number | null }>();
+  const profileId = invitationUse?.voice_business_profile_id ?? numberOrNull(metadata.voice_business_profile_id);
   const demoSessionId = numberOrNull(metadata.demo_session_id);
-  const prospectId = numberOrNull(metadata.prospect_id);
+  const prospectId = invitationUse?.prospect_id ?? numberOrNull(metadata.prospect_id);
   const startedAt = isoFromMilliseconds(call.start_timestamp);
   const endedAt = isoFromMilliseconds(call.end_timestamp);
   const durationSeconds = startedAt && endedAt ? Math.max(0, Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 1000)) : null;
@@ -136,7 +176,7 @@ export async function processRetellEventPayload(env: Env, payload: Record<string
     stringOrNull(call.disconnection_reason), typeof analysis.call_successful === 'boolean' ? (analysis.call_successful ? 1 : 0) : null,
     stringOrNull(analysis.user_sentiment), stringOrNull(analysis.call_summary), stringOrNull(call.transcript),
     stringOrNull(call.recording_url), numberOrNull(call.call_cost), stringOrNull(custom.caller_classification),
-    stringOrNull(custom.final_outcome), JSON.stringify({ ...metadata, intake: extractedIntake }),
+    stringOrNull(custom.final_outcome), JSON.stringify({ ...metadata, invitation_id: invitationUse?.invitation_id ?? null, intake: extractedIntake }),
   ).run();
   const storedCall = await env.DB.prepare(`SELECT id FROM voice_calls WHERE retell_call_id=?`).bind(callId).first<{ id: number }>();
   const classification = voiceClassification(custom.caller_classification);

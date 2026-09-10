@@ -843,6 +843,22 @@ export interface VoiceDemoSession {
   expires_at: string;
 }
 
+export interface VoiceDemoInvitation {
+  id: number;
+  voice_business_profile_id: number;
+  prospect_id: number | null;
+  business_name?: string | null;
+  access_code: string;
+  recipient_email: string;
+  demo_phone_number: string;
+  status: 'active' | 'expired' | 'revoked';
+  expires_at: string;
+  sent_at: string | null;
+  use_count: number;
+  last_used_at: string | null;
+  created_at: string;
+}
+
 export interface VoiceCall {
   id: number;
   business_name?: string | null;
@@ -868,6 +884,7 @@ export interface VoiceOverview {
   calls: VoiceCall[];
   totals: { calls_answered: number; opportunities: number; screened: number };
   activeDemo: VoiceDemoSession | null;
+  invitations: VoiceDemoInvitation[];
   voiceLeads: VoiceLead[];
   qaRuns: VoiceQaRun[];
   notifications: VoiceNotification[];

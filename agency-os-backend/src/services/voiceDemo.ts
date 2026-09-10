@@ -84,5 +84,6 @@ export function voiceDynamicVariables(resolved: ResolvedVoiceDemo): Record<strin
     service_area: profile.service_area_text,
     business_hours: profile.hours_text,
     business_rules: profile.configuration_json ?? '{}',
+    access_code_required: 'false',
   };
 }

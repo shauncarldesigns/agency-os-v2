@@ -53,6 +53,8 @@ assert.match(liveInstructions, /Never classify, reject, screen, or end a call me
 assert.match(liveInstructions, /Speak at a normal conversational pace/);
 assert.match(liveInstructions, /name no more than three broad, relevant services/);
 assert.match(liveInstructions, /Pronounce every service clearly/);
+assert.match(liveInstructions, /call lookup_demo_access_code/);
+assert.match(liveInstructions, /allow one retry/);
 
 const sales = simulateReceptionistTurn({
   businessName: 'Acme Plumbing', services: 'Plumbing', history: [],
