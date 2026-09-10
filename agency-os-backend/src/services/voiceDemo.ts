@@ -66,6 +66,11 @@ export async function resolveVoiceDemo(db: D1Database, fromNumber: string, toNum
 
 export function voiceDynamicVariables(resolved: ResolvedVoiceDemo): Record<string, string> {
   const { profile } = resolved;
+  let receptionistName = 'Claire';
+  try {
+    const configuration = JSON.parse(profile.configuration_json ?? '{}') as { receptionistName?: unknown };
+    if (typeof configuration.receptionistName === 'string' && configuration.receptionistName.trim()) receptionistName = configuration.receptionistName.trim().slice(0, 40);
+  } catch { /* Legacy malformed configuration uses the safe default. */ }
   return {
     business_id: String(profile.id),
     business_name: profile.business_name,
@@ -85,5 +90,7 @@ export function voiceDynamicVariables(resolved: ResolvedVoiceDemo): Record<strin
     business_hours: profile.hours_text,
     business_rules: profile.configuration_json ?? '{}',
     access_code_required: 'false',
+    receptionist_name: receptionistName,
+    conference_demo_mode: resolved.demoSessionId == null ? 'false' : 'true',
   };
 }

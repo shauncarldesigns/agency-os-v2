@@ -68,13 +68,20 @@ retellWebhookRouter.post('/webhooks/retell/inbound', async (c) => {
   const agentId = resolved.profile.retell_agent_id || c.env.RETELL_DEFAULT_AGENT_ID;
   if (!agentId) return c.json({ call_inbound: {} });
   const requiresAccessCode = resolved.demoSessionId === null && resolved.profile.profile_kind === 'test';
+  const variables = voiceDynamicVariables(resolved);
+  const conferenceDemo = resolved.demoSessionId !== null;
+  const beginMessage = requiresAccessCode
+    ? 'Thanks for calling the automated receptionist demo line. What is your six-digit access code?'
+    : conferenceDemo
+      ? `Hi, this is ${variables.receptionist_name}. Your demo receptionist is ready. Merge the calls, then say, “${variables.receptionist_name}, we’re ready to start the demo.”`
+      : null;
 
   return c.json({
     call_inbound: {
       override_agent_id: agentId,
       ...(resolved.profile.retell_agent_version ? { override_agent_version: resolved.profile.retell_agent_version } : {}),
-      ...(requiresAccessCode ? { agent_override: { retell_llm: { begin_message: 'Thanks for calling the automated receptionist demo line. What is your six-digit access code?' } } } : {}),
-      dynamic_variables: { ...voiceDynamicVariables(resolved), access_code_required: requiresAccessCode ? 'true' : 'false' },
+      ...(beginMessage ? { agent_override: { retell_llm: { begin_message: beginMessage } } } : {}),
+      dynamic_variables: { ...variables, access_code_required: requiresAccessCode ? 'true' : 'false' },
       metadata: {
         voice_business_profile_id: resolved.profile.id,
         demo_session_id: resolved.demoSessionId,
