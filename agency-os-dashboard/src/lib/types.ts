@@ -777,6 +777,7 @@ export interface VoiceBusinessProfile {
   id: number;
   profile_kind: 'test' | 'prospect' | 'customer';
   lead_id: number | null;
+  lead_source?: string | null;
   project_id: number | null;
   business_name: string;
   business_phone: string | null;

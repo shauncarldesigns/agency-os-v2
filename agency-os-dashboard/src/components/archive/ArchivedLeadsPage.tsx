@@ -123,11 +123,13 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
           const route = archiveRoute(lead);
           const latestTouch = archiveLatestTouch(lead);
           const isNotInterested = lead.status === 'not_interested';
-          return <article key={lead.id} className={`rounded-2xl border bg-white p-4 shadow-sm ${cleanupNeeded ? 'border-amber-200' : 'border-slate-200'}`}>
+          const isTestLead = lead.source === 'local-receptionist-flow-test';
+          return <article key={lead.id} className={`rounded-2xl border bg-white p-4 shadow-sm ${isTestLead ? 'border-violet-400 ring-1 ring-violet-100' : cleanupNeeded ? 'border-amber-200' : 'border-slate-200'}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="truncate text-base font-bold text-slate-900">{lead.company}</h3>
+                  {isTestLead && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Test lead</span>}
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cleanupNeeded ? 'bg-amber-100 text-amber-700' : lead.demo_site_status === 'deleted' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{cleanupNeeded ? 'Cleanup required' : lead.demo_site_status === 'deleted' ? 'Site deleted' : 'No demo site'}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{[lead.city, lead.state].filter(Boolean).join(', ') || 'Location unavailable'} · {lead.outcome || 'Archived'}</p>
