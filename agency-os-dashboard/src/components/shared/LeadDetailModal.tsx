@@ -36,7 +36,7 @@ import { type Tier, tierPitchBlurb } from '../../lib/pricing';
 // `pipelineContext` adds an Activity tab with the text+site outreach trail.
 // ---------------------------------------------------------------------------
 
-type DetailTab = 'overview' | 'notes' | 'reviews' | 'pitch' | 'call' | 'activity';
+type DetailTab = 'overview' | 'notes' | 'reviews' | 'pitch' | 'call' | 'activity' | 'edit';
 
 interface Props {
   leadId: number;
@@ -239,6 +239,7 @@ export function LeadDetailModal({
     { key: 'pitch', label: 'Pitch Prep' },
     { key: 'call', label: 'Call Log', badge: calls.length || undefined },
     ...(pipelineContext ? [{ key: 'activity' as DetailTab, label: 'Activity' }] : []),
+    { key: 'edit', label: 'Edit' },
   ];
 
   return (
@@ -399,6 +400,16 @@ export function LeadDetailModal({
                   showToast={showToast}
                 />
               )}
+              {tab === 'edit' && (
+                <EditLeadPane
+                  lead={lead}
+                  showToast={showToast}
+                  onSaved={(updated) => {
+                    setLead(updated);
+                    onLeadUpdated?.();
+                  }}
+                />
+              )}
             </div>
 
             {/* Footer.
@@ -469,6 +480,205 @@ export function LeadDetailModal({
         )}
       </div>
     </div>
+  );
+}
+
+// ---------- Edit ----------
+
+function EditLeadPane({
+  lead,
+  showToast,
+  onSaved,
+}: {
+  lead: Lead;
+  showToast: ShowToast;
+  onSaved: (lead: Lead) => void;
+}) {
+  const [company, setCompany] = useState(lead.company);
+  const [contact, setContact] = useState(lead.contact ?? '');
+  const [phone, setPhone] = useState(lead.phone ?? '');
+  const [email, setEmail] = useState(lead.email ?? '');
+  const [phoneRoute, setPhoneRoute] = useState<NonNullable<Lead['phone_route']>>(lead.phone_route ?? 'unknown');
+  const [status, setStatus] = useState<Lead['status']>(lead.status);
+  const [pipelineStatus, setPipelineStatus] = useState<Lead['pipeline_status']>(lead.pipeline_status);
+  const [resetOutcome, setResetOutcome] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmingSave, setConfirmingSave] = useState(false);
+
+  useEffect(() => {
+    setCompany(lead.company);
+    setContact(lead.contact ?? '');
+    setPhone(lead.phone ?? '');
+    setEmail(lead.email ?? '');
+    setPhoneRoute(lead.phone_route ?? 'unknown');
+    setStatus(lead.status);
+    setPipelineStatus(lead.pipeline_status);
+    setResetOutcome(false);
+    setConfirmingSave(false);
+  }, [lead]);
+
+  const placeInToCall = () => {
+    setEmail('');
+    setPhoneRoute('call');
+    setStatus('contacted');
+    setPipelineStatus('ready_to_send');
+    setResetOutcome(true);
+  };
+
+  const changeWarnings = (() => {
+    const warnings: string[] = [];
+    if (resetOutcome) {
+      warnings.push('Reopens this lead in Email Outreach → To Call, clears its saved email and latest outcome, and resumes outreach eligibility.');
+    } else {
+      if (phoneRoute !== (lead.phone_route ?? 'unknown')) {
+        warnings.push(`Changes the phone route from ${lead.phone_route ?? 'Unknown'} to ${phoneRoute}; this can move the lead into a different outreach workflow.`);
+      }
+      if (status !== lead.status) {
+        warnings.push(`Changes the CRM stage from ${lead.status} to ${status}; this can move the lead between CRM and client views.`);
+      }
+      if (pipelineStatus !== lead.pipeline_status) {
+        warnings.push(`Changes the outreach stage from ${lead.pipeline_status} to ${pipelineStatus}; active automation or board placement may change.`);
+      }
+      if ((lead.email ?? '').trim() && !email.trim()) {
+        warnings.push('Removes the saved email address; email outreach and follow-up may no longer be deliverable.');
+      }
+    }
+    if ((lead.phone ?? '').trim() && !phone.trim()) {
+      warnings.push('Removes the saved phone number; calling and text outreach will no longer be available.');
+    }
+    return warnings;
+  })();
+
+  const requestSave = () => {
+    if (!company.trim()) {
+      showToast('Company name is required', 'error');
+      return;
+    }
+    if (changeWarnings.length > 0) {
+      setConfirmingSave(true);
+      return;
+    }
+    void save();
+  };
+
+  const save = async () => {
+    if (!company.trim()) {
+      showToast('Company name is required', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await api.leads.update(lead.id, {
+        company: company.trim(),
+        contact: contact.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        phone_route: phoneRoute,
+        status,
+        pipeline_status: pipelineStatus,
+        ...(resetOutcome ? { outcome: null } : {}),
+      });
+      onSaved(result.lead);
+      setResetOutcome(false);
+      setConfirmingSave(false);
+      showToast(`${result.lead.company} updated`, 'success');
+    } catch (err) {
+      showToast(`Could not update lead: ${err instanceof ApiError ? err.message : (err as Error).message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <button type="button" onClick={placeInToCall} disabled={saving} className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100 disabled:opacity-60">
+        <span className="block text-sm font-semibold text-blue-900">Put this lead back in Email Outreach → To Call</span>
+        <span className="mt-0.5 block text-xs leading-5 text-blue-700">Sets the phone route to Call, clears the email and latest outcome, and reopens the lead for outreach.</span>
+      </button>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <EditLeadField label="Company" value={company} onChange={setCompany} />
+        <EditLeadField label="Contact" value={contact} onChange={setContact} />
+        <EditLeadField label="Phone" value={phone} onChange={setPhone} type="tel" />
+        <EditLeadField label="Email" value={email} onChange={setEmail} type="email" />
+        <EditLeadSelect label="Phone route" value={phoneRoute} onChange={(value) => setPhoneRoute(value as NonNullable<Lead['phone_route']>)} options={[
+          ['call', 'Call'], ['text', 'Text'], ['review', 'Review'], ['unknown', 'Unknown'],
+        ]} />
+        <EditLeadSelect label="CRM stage" value={status} onChange={(value) => setStatus(value as Lead['status'])} options={[
+          ['cold', 'Cold'], ['contacted', 'Contacted'], ['qualified', 'Qualified'], ['client', 'Client'], ['not_interested', 'Not interested'], ['dead', 'Dead'],
+        ]} />
+        <div className="sm:col-span-2">
+          <EditLeadSelect label="Outreach stage" value={pipelineStatus} onChange={(value) => setPipelineStatus(value as Lead['pipeline_status'])} options={[
+            ['awaiting_build', 'Awaiting build'], ['built_needs_review', 'Built — needs review'], ['ready_to_send', 'Ready to send / To Call'], ['sent_no_reply', 'Sent — no reply'], ['engaged', 'Engaged'], ['booked', 'Booked'], ['archived', 'Archived'],
+          ]} />
+        </div>
+      </div>
+
+      {confirmingSave && changeWarnings.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <h4 className="text-sm font-semibold text-amber-900">Review changes that affect this lead</h4>
+              <p className="mt-1 text-xs leading-5 text-amber-700">You can still make these changes as a super admin. Confirm that the workflow effects below are intentional.</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-amber-800">
+                {changeWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setConfirmingSave(false)} disabled={saving} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Go back</button>
+                <button type="button" onClick={() => void save()} disabled={saving} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60">{saving ? 'Saving…' : 'Save anyway'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end border-t border-slate-100 pt-4">
+        <button type="button" onClick={requestSave} disabled={saving || confirmingSave} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md disabled:cursor-wait disabled:opacity-60">
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditLeadField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: 'text' | 'email' | 'tel';
+}) {
+  return (
+    <label className="block text-xs font-semibold text-slate-700">
+      {label}
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+    </label>
+  );
+}
+
+function EditLeadSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <label className="block text-xs font-semibold text-slate-700">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100">
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+    </label>
   );
 }
 
