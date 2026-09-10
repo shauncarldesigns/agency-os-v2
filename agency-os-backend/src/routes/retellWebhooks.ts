@@ -186,6 +186,9 @@ export async function processRetellEventPayload(env: Env, payload: Record<string
     stringOrNull(custom.final_outcome), JSON.stringify({ ...metadata, invitation_id: invitationUse?.invitation_id ?? null, intake: extractedIntake }),
   ).run();
   const storedCall = await env.DB.prepare(`SELECT id FROM voice_calls WHERE retell_call_id=?`).bind(callId).first<{ id: number }>();
+  if (demoSessionId && (eventType === 'call_ended' || eventType === 'call_analyzed')) {
+    await env.DB.prepare(`UPDATE voice_demo_sessions SET status='completed' WHERE id=? AND status='active'`).bind(demoSessionId).run();
+  }
   const classification = voiceClassification(custom.caller_classification);
   if (storedCall && stringOrNull(custom.caller_classification)) {
     const voiceLeadId = await syncVoiceLeadFromCall(env.DB, { callId: storedCall.id, profileId, classification, callerPhone: stringOrNull(call.from_number), intake: extractedIntake, notes: stringOrNull(analysis.call_summary) });
