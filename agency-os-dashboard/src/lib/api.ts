@@ -9,6 +9,7 @@ import type {
   Market, MarketListRow, MarketKeyword, MapPackRow, ResearchRun, ResearchRunSummary,
   VoiceAgentSpec, VoiceBusinessProfile, VoiceCall, VoiceClassification, VoiceDemoInvitation, VoiceDemoSession,
   RetellResourceInventory, RetellSetupPackage, VoiceIntake, VoiceLead, VoiceNotification, VoiceOverview, VoiceProfileConfiguration, VoiceQaCase, VoiceQaResult, VoiceQaRun, VoiceReadinessResult, VoiceSimulatorResult, VoiceSimulatorTurn, VoiceWebhookFailure,
+  LeadCounts, CallCenterLead,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -325,6 +326,8 @@ export const api = {
   leads: {
     list: (filters?: { status?: string; pipeline_status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>
       apiFetch<{ leads: Lead[]; total: number }>(`/api/leads${qs(filters)}`),
+    counts: (today: string) => apiFetch<{ counts: LeadCounts }>(`/api/leads/counts${qs({ today })}`),
+    callCenter: () => apiFetch<{ leads: CallCenterLead[] }>('/api/leads/call-center'),
     industries: () => apiFetch<{ industries: string[] }>('/api/leads/industries'),
     get: (id: number) => apiFetch<{ lead: Lead; calls: CallEntry[] }>(`/api/leads/${id}`),
     create: (data: Partial<Lead>) =>

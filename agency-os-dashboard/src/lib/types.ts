@@ -300,6 +300,17 @@ export interface NavCounts {
   sites: number;
 }
 
+export interface LeadCounts {
+  pipeline: number;
+  awaiting_build: number;
+  call_outreach: number;
+  receptionist_interest: number;
+  archived_cleanup: number;
+  trash: number;
+}
+
+export type CallCenterLead = Pick<Lead, 'id' | 'company' | 'phone' | 'industry' | 'city' | 'state'>;
+
 export type PageStatus = 'planned' | 'briefed' | 'in_progress' | 'complete' | 'archived';
 
 export interface Page {

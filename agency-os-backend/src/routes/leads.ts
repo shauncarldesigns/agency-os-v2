@@ -25,102 +25,126 @@ const LEAD_FIELDS = [
 leadsRouter.get('/', async (c) => {
   try {
     const { status, pipeline_status, tier, enrichment, search, industry, include_deleted, only_deleted } = c.req.query();
-    let query = `
-      SELECT leads.*,
-             (
-               SELECT COUNT(*)
-                 FROM lead_activity
-                WHERE lead_activity.lead_id = leads.id
-                  AND lead_activity.action IN ('email_followed_up', 'email_final_touch')
-                  AND lead_activity.from_status = 'sent_no_reply'
-                  AND NOT EXISTS (
-                    SELECT 1
-                      FROM lead_activity AS undo_activity
-                     WHERE undo_activity.action = 'undo'
-                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
-                  )
-             ) AS pipeline_no_reply_step,
-             (
-               SELECT COUNT(*)
-                 FROM lead_activity
-                WHERE lead_activity.lead_id = leads.id
-                  AND lead_activity.action IN ('email_followed_up', 'email_final_touch')
-                  AND lead_activity.from_status = 'engaged'
-                  AND NOT EXISTS (
-                    SELECT 1
-                      FROM lead_activity AS undo_activity
-                     WHERE undo_activity.action = 'undo'
-                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = lead_activity.id
-                  )
-             ) AS pipeline_followup_step,
-             (
-               SELECT latest_activity.action
-                 FROM lead_activity AS latest_activity
-                WHERE latest_activity.lead_id = leads.id
-                  AND latest_activity.action != 'undo'
-                  AND NOT EXISTS (
-                    SELECT 1
-                      FROM lead_activity AS undo_activity
-                     WHERE undo_activity.action = 'undo'
-                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
-                  )
-                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
-               LIMIT 1
-             ) AS pipeline_last_action,
-             (
-               SELECT latest_activity.meta
-                 FROM lead_activity AS latest_activity
-                WHERE latest_activity.lead_id = leads.id
-                  AND latest_activity.action != 'undo'
-                  AND NOT EXISTS (
-                    SELECT 1 FROM lead_activity AS undo_activity
-                     WHERE undo_activity.action = 'undo'
-                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
-                  )
-                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
-                LIMIT 1
-             ) AS pipeline_last_action_meta,
-             (
-               SELECT latest_activity.created_at
-                 FROM lead_activity AS latest_activity
-                WHERE latest_activity.lead_id = leads.id
-                  AND latest_activity.action != 'undo'
-                  AND NOT EXISTS (
-                    SELECT 1 FROM lead_activity AS undo_activity
-                     WHERE undo_activity.action = 'undo'
-                       AND json_extract(undo_activity.meta, '$.undid_activity_id') = latest_activity.id
-                  )
-                ORDER BY latest_activity.created_at DESC, latest_activity.id DESC
-                LIMIT 1
-             ) AS pipeline_last_action_created_at
-        FROM leads
-       WHERE 1=1`;
+    let where = '1=1';
     const params: unknown[] = [];
 
-    // Soft-delete handling: default to active rows. `only_deleted=true` flips
-    // to the trash view; `include_deleted=true` shows both.
     if (only_deleted === 'true' || only_deleted === '1') {
-      query += ' AND deleted_at IS NOT NULL';
+      where += ' AND deleted_at IS NOT NULL';
     } else if (include_deleted !== 'true' && include_deleted !== '1') {
-      query += ' AND deleted_at IS NULL';
+      where += ' AND deleted_at IS NULL';
     }
 
-    if (status) { query += ' AND status = ?'; params.push(status); }
-    if (pipeline_status) { query += ' AND pipeline_status = ?'; params.push(pipeline_status); }
-    if (tier) { query += ' AND recommended_tier = ?'; params.push(parseInt(tier, 10)); }
-    if (enrichment) { query += ' AND enrichment_status = ?'; params.push(enrichment); }
-    if (industry) { query += ' AND industry = ?'; params.push(industry); }
+    if (status) { where += ' AND status = ?'; params.push(status); }
+    if (pipeline_status) { where += ' AND pipeline_status = ?'; params.push(pipeline_status); }
+    if (tier) { where += ' AND recommended_tier = ?'; params.push(parseInt(tier, 10)); }
+    if (enrichment) { where += ' AND enrichment_status = ?'; params.push(enrichment); }
+    if (industry) { where += ' AND industry = ?'; params.push(industry); }
     if (search) {
-      query += ' AND (company LIKE ? OR contact LIKE ? OR phone LIKE ? OR city LIKE ?)';
+      where += ' AND (company LIKE ? OR contact LIKE ? OR phone LIKE ? OR city LIKE ?)';
       const like = `%${search}%`;
       params.push(like, like, like, like);
     }
 
-    query += ' ORDER BY updated_at DESC LIMIT 500';
+    // Select the page first, then calculate activity once for only those leads.
+    const query = `
+      WITH selected_leads AS MATERIALIZED (
+        SELECT * FROM leads WHERE ${where}
+         ORDER BY updated_at DESC LIMIT 500
+      ),
+      effective_activity AS MATERIALIZED (
+        SELECT activity.*
+          FROM selected_leads
+          CROSS JOIN lead_activity AS activity INDEXED BY idx_lead_activity_effective_latest
+            ON activity.lead_id = selected_leads.id
+          LEFT JOIN lead_activity AS undo_activity INDEXED BY idx_lead_activity_undo_target
+            ON CAST(json_extract(undo_activity.meta, '$.undid_activity_id') AS INTEGER) = activity.id
+           AND undo_activity.action = 'undo'
+         WHERE activity.action != 'undo' AND undo_activity.id IS NULL
+      ),
+      activity_summary AS (
+        SELECT lead_id,
+               SUM(CASE WHEN action IN ('email_followed_up', 'email_final_touch')
+                              AND from_status = 'sent_no_reply' THEN 1 ELSE 0 END) AS pipeline_no_reply_step,
+               SUM(CASE WHEN action IN ('email_followed_up', 'email_final_touch')
+                              AND from_status = 'engaged' THEN 1 ELSE 0 END) AS pipeline_followup_step
+          FROM effective_activity GROUP BY lead_id
+      ),
+      latest_activity AS (
+        SELECT lead_id, action, meta, created_at,
+               ROW_NUMBER() OVER (PARTITION BY lead_id ORDER BY created_at DESC, id DESC) AS activity_rank
+          FROM effective_activity
+      )
+      SELECT selected_leads.*,
+             COALESCE(activity_summary.pipeline_no_reply_step, 0) AS pipeline_no_reply_step,
+             COALESCE(activity_summary.pipeline_followup_step, 0) AS pipeline_followup_step,
+             latest_activity.action AS pipeline_last_action,
+             latest_activity.meta AS pipeline_last_action_meta,
+             latest_activity.created_at AS pipeline_last_action_created_at
+        FROM selected_leads
+        LEFT JOIN activity_summary ON activity_summary.lead_id = selected_leads.id
+        LEFT JOIN latest_activity ON latest_activity.lead_id = selected_leads.id
+                                  AND latest_activity.activity_rank = 1
+       ORDER BY selected_leads.updated_at DESC`;
     const result = await c.env.DB.prepare(query).bind(...params).all();
     return c.json({ leads: result.results, total: result.results.length });
   } catch (err) {
     log('error', 'leads', 'GET /leads failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+leadsRouter.get('/counts', async (c) => {
+  const today = c.req.query('today');
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return c.json(badRequest('today must be YYYY-MM-DD'), 400);
+
+  try {
+    const counts = await c.env.DB.prepare(`
+      SELECT
+        SUM(CASE WHEN deleted_at IS NULL AND status NOT IN ('qualified', 'client', 'not_interested', 'dead') THEN 1 ELSE 0 END) AS pipeline,
+        SUM(CASE WHEN deleted_at IS NULL AND pipeline_status = 'awaiting_build'
+                  AND COALESCE(phone_route, 'unknown') IN ('unknown', 'text')
+                  AND has_website = 0 AND enrichment_status = 'enriched'
+                  AND status IN ('cold', 'contacted') THEN 1 ELSE 0 END) AS awaiting_build,
+        SUM(CASE WHEN deleted_at IS NULL AND pipeline_status NOT IN ('booked', 'archived')
+                  AND COALESCE(phone_route, 'unknown') NOT IN ('text', 'review')
+                  AND (status = 'cold' OR (status = 'contacted' AND NOT EXISTS (
+                    SELECT 1 FROM callbacks WHERE callbacks.lead_id = leads.id
+                      AND callbacks.status = 'pending' AND callbacks.due_date > ?
+                  ))) THEN 1 ELSE 0 END) AS call_outreach,
+        SUM(CASE WHEN deleted_at IS NULL AND receptionist_interested = 1 THEN 1 ELSE 0 END) AS receptionist_interest,
+        SUM(CASE WHEN deleted_at IS NULL AND pipeline_status = 'archived'
+                  AND demo_site_status = 'cleanup_needed' AND receptionist_interested != 1 THEN 1 ELSE 0 END) AS archived_cleanup,
+        SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS trash
+      FROM leads
+    `).bind(today).first<Record<string, number | null>>();
+
+    return c.json({ counts: {
+      pipeline: Number(counts?.pipeline ?? 0),
+      awaiting_build: Number(counts?.awaiting_build ?? 0),
+      call_outreach: Number(counts?.call_outreach ?? 0),
+      receptionist_interest: Number(counts?.receptionist_interest ?? 0),
+      archived_cleanup: Number(counts?.archived_cleanup ?? 0),
+      trash: Number(counts?.trash ?? 0),
+    } });
+  } catch (err) {
+    log('error', 'leads', 'GET /leads/counts failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+leadsRouter.get('/call-center', async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT id, company, phone, industry, city, state
+        FROM leads
+       WHERE deleted_at IS NULL
+         AND status NOT IN ('dead', 'not_interested')
+         AND COALESCE(phone_route, 'unknown') NOT IN ('text', 'review')
+       ORDER BY company COLLATE NOCASE, id
+    `).all();
+    return c.json({ leads: result.results ?? [] });
+  } catch (err) {
+    log('error', 'leads', 'GET /leads/call-center failed', err);
     return c.json(serverError(), 500);
   }
 });

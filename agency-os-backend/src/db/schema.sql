@@ -151,6 +151,15 @@ CREATE INDEX IF NOT EXISTS idx_leads_pipeline_status
 CREATE INDEX IF NOT EXISTS idx_leads_engagement_score
   ON leads(engagement_score)
   WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_active_updated
+  ON leads(updated_at DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_deleted_updated
+  ON leads(updated_at DESC)
+  WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_leads_call_center_company
+  ON leads(company COLLATE NOCASE, id)
+  WHERE deleted_at IS NULL;
 
 -- Builder Employee — local Playwright employee queue + operator controls.
 CREATE TABLE IF NOT EXISTS builder_runs (
@@ -679,6 +688,9 @@ CREATE TABLE IF NOT EXISTS callbacks (
 CREATE INDEX IF NOT EXISTS idx_callback_due ON callbacks(due_date, status);
 CREATE INDEX IF NOT EXISTS idx_callback_lead ON callbacks(lead_id);
 CREATE INDEX IF NOT EXISTS idx_callback_pending ON callbacks(due_date) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_callback_pending_lead_due
+  ON callbacks(lead_id, due_date)
+  WHERE status = 'pending';
 
 CREATE TABLE IF NOT EXISTS demos (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
