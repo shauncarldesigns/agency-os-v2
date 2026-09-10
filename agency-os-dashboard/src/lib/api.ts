@@ -945,6 +945,7 @@ export const api = {
     runQaSuite: (profileId: number, useAi: boolean) => apiFetch<{ runId: number; results: VoiceQaResult[]; passed: number; total: number }>('/api/voice/simulator/qa', { method: 'POST', body: JSON.stringify({ profileId, useAi }) }),
     completeSimulation: (body: { profileId: number; history: VoiceSimulatorTurn[]; classification: VoiceClassification; confidence: string; intake: VoiceIntake; outcome: string }) =>
       apiFetch<{ call: VoiceCall }>('/api/voice/simulator/complete', { method: 'POST', body: JSON.stringify(body) }),
+    recordingUrl: (id: number) => `${API_BASE.replace(/\/$/, '')}/api/voice/calls/${id}/recording`,
     reviewCall: (id: number, body: { classification: VoiceClassification; finalOutcome: string; summary: string; reviewStatus: 'unreviewed' | 'passed' | 'needs_work'; reviewNotes: string }) =>
       apiFetch<{ call: VoiceCall }>(`/api/voice/calls/${id}/review`, { method: 'PUT', body: JSON.stringify(body) }),
     updateLead: (id: number, body: { status?: VoiceLead['status']; estimatedValue?: number | null; confirmedRevenue?: number | null; intakeNotes?: string }) =>
