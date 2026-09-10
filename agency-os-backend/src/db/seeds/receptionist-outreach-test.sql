@@ -2,13 +2,15 @@
 -- Safe to rerun. This intentionally has no email so it appears in To Call.
 
 INSERT INTO leads (company, phone, source)
-SELECT 'Receptionist Flow Test - Plumber', '(920) 555-0142', 'local-receptionist-flow-test'
+SELECT 'Receptionist Flow Test - Plumber', '+1 920-660-9545', 'local-receptionist-flow-test'
 WHERE NOT EXISTS (
   SELECT 1 FROM leads WHERE source = 'local-receptionist-flow-test'
 );
 
 UPDATE leads SET
   contact = 'Jordan',
+  phone = '+1 920-660-9545',
+  phone_e164 = '+19206609545',
   email = NULL,
   industry = 'Plumbing',
   city = 'Green Bay',

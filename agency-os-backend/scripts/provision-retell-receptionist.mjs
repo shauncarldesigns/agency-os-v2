@@ -63,6 +63,8 @@ const defaultDynamicVariables = {
   prospect_id: '',
   caller_type_if_known: 'unknown',
   access_code_required: 'false',
+  receptionist_name: 'Claire',
+  conference_demo_mode: 'false',
   greeting: 'Thanks for calling Lakeside Plumbing & Drain. How can I help you today?',
   services: 'Residential plumbing repairs, drain cleaning, water heater service, fixture installation, leak diagnosis, and emergency plumbing intake.',
   service_area: 'The greater Green Bay, Wisconsin area. Do not promise coverage until the caller provides a location.',

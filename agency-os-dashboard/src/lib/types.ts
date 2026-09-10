@@ -800,6 +800,7 @@ export interface VoiceBusinessProfile {
 }
 
 export interface VoiceProfileConfiguration {
+  receptionistName?: string;
   servicesNotOffered?: string;
   emergencyDefinition?: string;
   afterHoursInstructions?: string;
