@@ -1254,6 +1254,10 @@ function QuestionBasedEmailScript({
   onAdvanceToSalesFlow,
   onArchiveRejection,
   onSaveReceptionist,
+  lead,
+  preparingLiveDemo,
+  onPrepareLiveDemo,
+  operatorPhone,
 }: {
   firstName: string;
   leadId: number;
@@ -1266,6 +1270,10 @@ function QuestionBasedEmailScript({
   onAdvanceToSalesFlow: () => void;
   onArchiveRejection: () => void;
   onSaveReceptionist: () => void;
+  lead: Lead;
+  preparingLiveDemo: boolean;
+  onPrepareLiveDemo: (callerPhone: string) => Promise<{ demoPhoneNumber: string; session: { expires_at: string } } | null>;
+  operatorPhone: string;
 }) {
   const [path, setPath] = useState<QuestionPath>('opening');
   const [pathHistory, setPathHistory] = useState<QuestionPath[]>([]);
@@ -1320,7 +1328,7 @@ function QuestionBasedEmailScript({
       </ScriptBranch>}
 
       {path === 'voicemail' && <ScriptBranch label="Calls go to voicemail" body={QUESTION_BASED_COPY.voicemail}>
-        <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email to send it to?</p>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
       </ScriptBranch>}
 
       {path === 'covered' && <ScriptBranch label="Someone already handles calls" body={`Then it sounds like you have that covered. I appreciate you answering the question, ${firstName}. Have a good one.`}>
@@ -1349,19 +1357,19 @@ function QuestionBasedEmailScript({
       </ScriptBranch>}
 
       {path === 'cold_calls' && <ScriptBranch label="If too many calls are the real problem" body={QUESTION_BASED_COPY.coldCalls}>
-        <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email for you?</p>
+        <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
       </ScriptBranch>}
 
-      {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      {websiteOffer && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <label htmlFor={`question-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{receptionistOffer ? 'Where should the receptionist demo be sent?' : 'Capture email'}</label>
         <input id={`question-call-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
-        {websiteOffer ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <button type="button" onClick={onAdvanceToSalesFlow} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 disabled:opacity-50">{sendingIntro ? 'Sending intro email…' : 'Send now and stay on the call'}</button>
           <button type="button" onClick={onSave} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingEmail ? 'Saving…' : 'Save and send to follow-up'}</button>
-        </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
+        </div>
       </div>}
+      {receptionistOffer && <ReceptionistDemoDecision lead={lead} leadId={leadId} email={email} recordingOutcome={recordingOutcome} preparingLiveDemo={preparingLiveDemo} operatorPhone={operatorPhone} onEmailChange={onEmailChange} onPrepareLiveDemo={onPrepareLiveDemo} onSaveReceptionist={onSaveReceptionist} />}
       {websiteOffer && <AfterWebsiteEmailScript />}
-      {receptionistOffer && <AfterReceptionistEmailScript />}
       {previousPath && previousPath !== 'opening' && <button type="button" onClick={goBack} className="mt-4 text-xs font-semibold text-violet-700 hover:text-violet-900">← Back to {QUESTION_PATH_LABELS[previousPath]}</button>}
     </div>
   );
@@ -1409,6 +1417,10 @@ function GapBasedEmailScript({
   onAdvanceToSalesFlow,
   onArchiveRejection,
   onSaveReceptionist,
+  lead,
+  preparingLiveDemo,
+  onPrepareLiveDemo,
+  operatorPhone,
 }: {
   firstName: string;
   leadId: number;
@@ -1421,6 +1433,10 @@ function GapBasedEmailScript({
   onAdvanceToSalesFlow: () => void;
   onArchiveRejection: () => void;
   onSaveReceptionist: () => void;
+  lead: Lead;
+  preparingLiveDemo: boolean;
+  onPrepareLiveDemo: (callerPhone: string) => Promise<{ demoPhoneNumber: string; session: { expires_at: string } } | null>;
+  operatorPhone: string;
 }) {
   const [path, setPath] = useState<GapPath>('opening');
   const [pathHistory, setPathHistory] = useState<GapPath[]>([]);
@@ -1462,7 +1478,7 @@ function GapBasedEmailScript({
     </GapScriptBranch>}
 
     {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body={QUESTION_BASED_COPY.voicemail}>
-      <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email to send it to?</p>
+      <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
     </GapScriptBranch>}
 
     {path === 'offer' && <GapScriptBranch label="Make the offer" body="That’s actually why I called. I put together a sample website so those people have something credible to find. It’s nothing live, and there’s no obligation. Would you be open to taking a look?">
@@ -1499,20 +1515,20 @@ function GapBasedEmailScript({
       <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">Record why they declined</button>
     </GapScriptBranch>}
 
-    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body="That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a demo number so you can try it yourself.">
-      <p className="mt-3 text-[17px] leading-8 text-slate-800">What’s the best email to send it to?</p>
+    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body="That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a quick version for your business.">
+      <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
     </GapScriptBranch>}
 
-    {(websiteOffer || receptionistOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    {websiteOffer && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <label htmlFor={`gap-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{receptionistOffer ? 'Where should the receptionist demo be sent?' : 'Capture email'}</label>
       <input id={`gap-call-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-100" />
-      {websiteOffer ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <button type="button" onClick={onAdvanceToSalesFlow} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-teal-50 disabled:opacity-50">{sendingIntro ? 'Sending intro email…' : 'Send now and stay on the call'}</button>
         <button type="button" onClick={onSave} disabled={savingEmail || sendingIntro || !email.trim()} className="rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">{savingEmail ? 'Saving…' : 'Save and send to follow-up'}</button>
-      </div> : <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">Save email & add to Receptionist Interest</button>}
+      </div>
     </div>}
+    {receptionistOffer && <ReceptionistDemoDecision lead={lead} leadId={leadId} email={email} recordingOutcome={recordingOutcome} preparingLiveDemo={preparingLiveDemo} operatorPhone={operatorPhone} onEmailChange={onEmailChange} onPrepareLiveDemo={onPrepareLiveDemo} onSaveReceptionist={onSaveReceptionist} />}
     {websiteOffer && <AfterWebsiteEmailScript />}
-    {receptionistOffer && <AfterReceptionistEmailScript />}
     {previousPath && previousPath !== 'opening' && <button type="button" onClick={goBack} className="mt-4 text-xs font-semibold text-teal-700 hover:text-teal-900">← Back to {GAP_PATH_LABELS[previousPath]}</button>}
   </div>;
 }
@@ -1524,11 +1540,57 @@ function AfterWebsiteEmailScript() {
   </div>;
 }
 
-function AfterReceptionistEmailScript() {
-  return <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
-    <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">Perfect, thank you. I’ll save your email and send you the demo number as soon as it’s ready. I really appreciate your interest—I think this could be a useful way to protect your time without missing real customer calls.</p>
-  </div>;
+function ReceptionistDemoDecision({ lead, leadId, email, recordingOutcome, preparingLiveDemo, operatorPhone, onEmailChange, onPrepareLiveDemo, onSaveReceptionist }: {
+  lead: Lead;
+  leadId: number;
+  email: string;
+  recordingOutcome: CallOutcome | null;
+  preparingLiveDemo: boolean;
+  operatorPhone: string;
+  onEmailChange: (value: string) => void;
+  onPrepareLiveDemo: (callerPhone: string) => Promise<{ demoPhoneNumber: string; session: { expires_at: string } } | null>;
+  onSaveReceptionist: () => void;
+}) {
+  const [choice, setChoice] = useState<'now' | 'later' | null>(null);
+  const [phone, setPhone] = useState(operatorPhone);
+  const [ready, setReady] = useState<{ demoPhoneNumber: string; expiresAt: string } | null>(null);
+  useEffect(() => { if (!phone && operatorPhone) setPhone(operatorPhone); }, [operatorPhone, phone]);
+
+  return <>
+  <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    {!ready && choice === null && <div className="grid gap-2 sm:grid-cols-2">
+      <button type="button" onClick={() => setChoice('now')} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"><PhoneCall className="h-4 w-4" />Try it together now</button>
+      <button type="button" onClick={() => setChoice('later')} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-3 text-xs font-semibold text-blue-700 shadow-sm hover:bg-blue-50"><Mail className="h-4 w-4" />Email it for later</button>
+    </div>}
+    {!ready && choice === 'later' && <div>
+      <label htmlFor={`receptionist-later-email-${leadId}`} className="text-xs font-semibold text-slate-700">Where should the demo be sent?</label>
+      <input id={`receptionist-later-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+      <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">Save email & send demo later</button>
+      <button type="button" onClick={() => setChoice(null)} className="mt-2 text-[11px] font-semibold text-slate-500">← Change their choice</button>
+    </div>}
+    {!ready && choice === 'now' && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+      <p className="text-xs font-semibold text-emerald-900">Ready to prepare {lead.company}</p>
+      <p className="mt-1 text-[11px] leading-5 text-emerald-700">Retell will identify this demo from your saved conference number <strong>{phone || 'not configured'}</strong>.</p>
+      <details className="mt-2"><summary className="cursor-pointer text-[10px] font-semibold text-emerald-800">Use a different conference phone</summary><input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone Retell will see" className="mt-2 h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100" /></details>
+      <button type="button" onClick={async () => { const result = await onPrepareLiveDemo(phone); if (result) setReady({ demoPhoneNumber: result.demoPhoneNumber, expiresAt: result.session.expires_at }); }} disabled={recordingOutcome !== null || preparingLiveDemo || !phone.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{preparingLiveDemo ? <Spinner /> : <Play className="h-4 w-4" />}{preparingLiveDemo ? 'Preparing live demo…' : 'Prepare live demo'}</button>
+      <button type="button" onClick={() => setChoice(null)} className="mt-2 text-[11px] font-semibold text-emerald-800">← Change their choice</button>
+    </div>}
+    {ready && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+      <p className="text-xs font-semibold text-emerald-900">Live demo is ready—keep this call open</p>
+      <ol className="mt-2 space-y-1 text-[11px] leading-5 text-emerald-800"><li>1. Add <a href={`tel:${ready.demoPhoneNumber}`} className="font-bold underline">{ready.demoPhoneNumber}</a> to this call.</li><li>2. Merge the calls after the receptionist answers.</li><li>3. Let the prospect speak as one of their customers.</li></ol>
+      <p className="mt-2 text-[10px] text-emerald-700">Routing is active until {new Date(`${ready.expiresAt.replace(' ', 'T')}Z`).toLocaleTimeString()}.</p>
+      <label htmlFor={`receptionist-followup-email-${leadId}`} className="mt-3 block text-xs font-semibold text-emerald-900">Where should I send the follow-up?</label>
+      <input id={`receptionist-followup-email-${leadId}`} type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="owner@business.com" className="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100" />
+      <button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">Save follow-up email & finish call</button>
+    </div>}
+  </div>
+  {(choice === 'later' || ready) && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{ready ? 'After the live demo' : 'After they give their email'}</p>
+    <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">{ready
+      ? 'That gives you a feel for how it works. I’ll send you the demo details so you can try it again later, and then we can talk about what you’d want it to handle for your business.'
+      : 'Perfect, thank you. I’ll send you the demo number so you can try it when you have a minute. I think this could be a useful way to protect your time without missing real customer calls.'}</p>
+  </div>}
+  </>;
 }
 
 function GapScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
@@ -1670,6 +1732,10 @@ function EmailCaptureSplitScript({
               onAdvanceToSalesFlow={onAdvanceToSalesFlow}
               onArchiveRejection={onArchiveRejection}
               onSaveReceptionist={onSaveReceptionist}
+              lead={lead}
+              preparingLiveDemo={preparingLiveDemo}
+              onPrepareLiveDemo={onPrepareLiveDemo}
+              operatorPhone={operatorPhone}
             />
           ) : callApproach === 'gap_based' ? (
             <GapBasedEmailScript
@@ -1684,6 +1750,10 @@ function EmailCaptureSplitScript({
               onAdvanceToSalesFlow={onAdvanceToSalesFlow}
               onArchiveRejection={onArchiveRejection}
               onSaveReceptionist={onSaveReceptionist}
+              lead={lead}
+              preparingLiveDemo={preparingLiveDemo}
+              onPrepareLiveDemo={onPrepareLiveDemo}
+              operatorPhone={operatorPhone}
             />
           ) : <>
           <div>
