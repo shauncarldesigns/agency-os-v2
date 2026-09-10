@@ -21,7 +21,6 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
       const { leads: rows } = await api.leads.list({ pipeline_status: 'archived' });
       setLeads(rows.filter((lead) =>
         lead.pipeline_status === 'archived'
-        && lead.receptionist_interested !== 1
         && lead.status !== 'client'
         && lead.status !== 'qualified'
         && !lead.project_id
