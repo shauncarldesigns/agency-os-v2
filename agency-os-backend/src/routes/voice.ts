@@ -8,6 +8,7 @@ import { notifyFailedTransfer, notifyVoiceLead } from '../services/voiceNotifica
 import { buildRetellSetupPackage } from '../services/retellSetupPackage';
 import { purgeExpiredVoiceContent, voiceRetentionStatus } from '../services/voiceRetention';
 import { processRetellEventPayload } from './retellWebhooks';
+import { sendEmail } from '../services/email';
 import {
   simulateReceptionistTurn,
   simulateReceptionistTurnAI,
@@ -36,7 +37,7 @@ function uniqueLeadText(items: string[]): string[] {
 }
 
 voiceRouter.get('/overview', async (c) => {
-  const [profiles, calls, totals, activeDemo, voiceLeads, qaRuns, notifications, webhookHealth, webhookFailures] = await c.env.DB.batch([
+  const [profiles, calls, totals, activeDemo, voiceLeads, qaRuns, notifications, webhookHealth, webhookFailures, invitations] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT * FROM voice_business_profiles ORDER BY updated_at DESC`),
     c.env.DB.prepare(`SELECT c.*, p.business_name FROM voice_calls c LEFT JOIN voice_business_profiles p ON p.id=c.voice_business_profile_id ORDER BY c.created_at DESC LIMIT 25`),
     c.env.DB.prepare(`SELECT COUNT(*) calls_answered, COALESCE(SUM(CASE WHEN classification='new_customer' THEN 1 ELSE 0 END),0) opportunities, COALESCE(SUM(CASE WHEN classification IN ('cold_sales','spam') THEN 1 ELSE 0 END),0) screened FROM voice_calls`),
@@ -46,6 +47,7 @@ voiceRouter.get('/overview', async (c) => {
     c.env.DB.prepare(`SELECT n.*, COALESCE(lp.business_name, cp.business_name) AS business_name FROM voice_notifications n LEFT JOIN voice_leads v ON v.id=n.voice_lead_id LEFT JOIN voice_business_profiles lp ON lp.id=v.voice_business_profile_id LEFT JOIN voice_calls c ON c.id=n.voice_call_id LEFT JOIN voice_business_profiles cp ON cp.id=c.voice_business_profile_id ORDER BY n.created_at DESC, n.id DESC LIMIT 20`),
     c.env.DB.prepare(`SELECT MAX(CASE WHEN processing_status='processed' THEN processed_at END) AS last_success_at, COALESCE(SUM(CASE WHEN processing_status='failed' THEN 1 ELSE 0 END),0) AS failed_count, COUNT(*) AS total_events FROM voice_webhook_events`),
     c.env.DB.prepare(`SELECT id, event_type, provider_call_id, processing_attempts, received_at, error_message FROM voice_webhook_events WHERE processing_status='failed' ORDER BY received_at DESC LIMIT 10`),
+    c.env.DB.prepare(`SELECT i.*, p.business_name FROM voice_demo_invitations i JOIN voice_business_profiles p ON p.id=i.voice_business_profile_id ORDER BY i.created_at DESC LIMIT 100`),
   ]);
   const retention = await voiceRetentionStatus(c.env.DB);
   return c.json({
@@ -64,6 +66,7 @@ voiceRouter.get('/overview', async (c) => {
     notifications: notifications.results,
     webhookHealth: webhookHealth.results[0] ?? { last_success_at: null, failed_count: 0, total_events: 0 },
     webhookFailures: webhookFailures.results,
+    invitations: invitations.results,
     retention,
   });
 });
@@ -288,6 +291,46 @@ voiceRouter.post('/demo-sessions', async (c) => {
   `).bind(profileId, profile.lead_id ?? null, profile.public_phone_number ?? c.env.RETELL_SHARED_PHONE_NUMBER ?? null, callerPhone, JSON.stringify(profile), `+${duration} minutes`).run();
   const session = await c.env.DB.prepare(`SELECT * FROM voice_demo_sessions WHERE id=?`).bind(result.meta.last_row_id).first();
   return c.json({ session }, 201);
+});
+
+voiceRouter.post('/profiles/:id/invitations', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json(badRequest('Invalid profile ID'), 400);
+  const body = await c.req.json().catch(() => ({})) as { recipientEmail?: string; expiresInDays?: number };
+  const recipientEmail = String(body.recipientEmail ?? '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) return c.json(badRequest('A valid recipient email is required'), 400);
+  const profile = await c.env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE id=?`).bind(id).first<Record<string, unknown>>();
+  if (!profile) return c.json(notFound('Voice profile'), 404);
+  const demoNumber = normalizePhone(c.env.RETELL_SHARED_PHONE_NUMBER ?? String(profile.public_phone_number ?? ''));
+  if (!demoNumber) return c.json(badRequest('The shared Retell demo number is not configured'), 400);
+  const expiresInDays = Math.min(30, Math.max(1, Math.round(Number(body.expiresInDays ?? 7))));
+  let accessCode = '';
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const bytes = crypto.getRandomValues(new Uint8Array(4));
+    accessCode = String((bytes[0] * 0x1000000 + bytes[1] * 0x10000 + bytes[2] * 0x100 + bytes[3]) % 900000 + 100000);
+    const collision = await c.env.DB.prepare(`SELECT id FROM voice_demo_invitations WHERE access_code=?`).bind(accessCode).first();
+    if (!collision) break;
+    accessCode = '';
+  }
+  if (!accessCode) return c.text('Could not allocate a demo access code', 503);
+  const inserted = await c.env.DB.prepare(`
+    INSERT INTO voice_demo_invitations
+      (voice_business_profile_id, prospect_id, access_code, recipient_email, demo_phone_number, profile_snapshot_json, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))
+  `).bind(id, profile.lead_id ?? null, accessCode, recipientEmail, demoNumber, JSON.stringify(profile), `+${expiresInDays} days`).run();
+  const invitationId = Number(inserted.meta.last_row_id);
+  const prettyNumber = demoNumber.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '($1) $2-$3');
+  const subject = `Your ${String(profile.business_name)} receptionist demo`;
+  const text = [`Your personalized automated receptionist demo is ready.`, '', `Call: ${prettyNumber}`, `Access code: ${accessCode}`, '', `When prompted, enter or say the six-digit code. This invitation expires in ${expiresInDays} days.`, '', 'Shaun Carl Designs'].join('\n');
+  try {
+    await sendEmail(c.env.RESEND_API_KEY, { to: recipientEmail, from: c.env.OUTREACH_EMAIL_FROM || 'Shaun Carl Designs <info@shauncarldesigns.com>', replyTo: c.env.OUTREACH_EMAIL_REPLY_TO, subject, text, html: `<h2>Your personalized automated receptionist demo is ready</h2><p><strong>Call:</strong> ${prettyNumber}</p><p><strong>Access code:</strong> <span style="font-size:22px;letter-spacing:3px">${accessCode}</span></p><p>When prompted, enter or say the six-digit code. This invitation expires in ${expiresInDays} days.</p><p>Shaun Carl Designs</p>`, tags: [{ name: 'voice_demo_invitation_id', value: String(invitationId) }] });
+    await c.env.DB.prepare(`UPDATE voice_demo_invitations SET sent_at=datetime('now') WHERE id=?`).bind(invitationId).run();
+  } catch (error) {
+    await c.env.DB.prepare(`DELETE FROM voice_demo_invitations WHERE id=?`).bind(invitationId).run();
+    throw error;
+  }
+  const invitation = await c.env.DB.prepare(`SELECT * FROM voice_demo_invitations WHERE id=?`).bind(invitationId).first();
+  return c.json({ invitation }, 201);
 });
 
 voiceRouter.post('/mock-calls', async (c) => {

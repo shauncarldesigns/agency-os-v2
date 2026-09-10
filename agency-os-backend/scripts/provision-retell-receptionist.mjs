@@ -9,6 +9,7 @@ const apiBase = 'https://api.retellai.com';
 const agentName = 'Agency OS Service Business Receptionist';
 const inboundWebhookUrl = 'https://agency-os-v2-api.lively-morning-d9de.workers.dev/webhooks/retell/inbound';
 const eventsWebhookUrl = 'https://agency-os-v2-api.lively-morning-d9de.workers.dev/webhooks/retell/events';
+const demoCodeWebhookUrl = 'https://agency-os-v2-api.lively-morning-d9de.workers.dev/webhooks/retell/demo-code';
 const postCallAnalysisData = [
   ['caller_classification', 'Classify from explicit transcript evidence. Use existing_customer only when the caller clearly says they are already a customer or refers to prior work, an invoice, warranty, appointment, or ongoing job. A caller requesting service, asking about services, or describing a problem without that evidence is new_customer. Never infer existing_customer merely because the caller sounds familiar with the business. Other values: emergency, personal_vip, vendor, applicant, cold_sales, spam, or unknown.'],
   ['caller_name', 'Caller name, or an empty string if it was not provided.'],
@@ -61,6 +62,7 @@ const defaultDynamicVariables = {
   demo_session_id: '',
   prospect_id: '',
   caller_type_if_known: 'unknown',
+  access_code_required: 'false',
   greeting: 'Thanks for calling Lakeside Plumbing & Drain. How can I help you today?',
   services: 'Residential plumbing repairs, drain cleaning, water heater service, fixture installation, leak diagnosis, and emergency plumbing intake.',
   service_area: 'The greater Green Bay, Wisconsin area. Do not promise coverage until the caller provides a location.',
@@ -83,7 +85,21 @@ const llmConfig = {
   begin_message: '{{greeting}}',
   general_prompt: generalPrompt,
   default_dynamic_variables: defaultDynamicVariables,
-  general_tools: [{ type: 'end_call', name: 'end_call', description: 'End the call after the caller confirms there is nothing else they need or after a sales or spam call has been politely screened.' }],
+  general_tools: [
+    { type: 'end_call', name: 'end_call', description: 'End the call after the caller confirms there is nothing else they need or after a sales or spam call has been politely screened.' },
+    {
+      type: 'custom',
+      name: 'lookup_demo_access_code',
+      description: 'Validate a six-digit Agency OS demo access code. Call this immediately after a demo-line caller provides their code. Use the returned frozen business facts for the personalized receptionist demonstration.',
+      url: demoCodeWebhookUrl,
+      method: 'POST',
+      parameters: {
+        type: 'object',
+        properties: { access_code: { type: 'string', description: 'The six-digit access code supplied by the caller, digits only.' } },
+        required: ['access_code'],
+      },
+    },
+  ],
 };
 
 const agents = await request('GET', '/list-agents?limit=100&is_latest=true');
