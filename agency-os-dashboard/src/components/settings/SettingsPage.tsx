@@ -153,6 +153,7 @@ function General({ settings: s, patch }: { settings: AgencySettings; patch: Patc
       <Field label="Default service area"><Input value={s.general.defaultServiceArea} placeholder="e.g. Greater Chicago" onChange={v => patch('general', { defaultServiceArea: v })} /></Field>
       <Field label="Operator name"><Input value={s.general.operatorName} onChange={v => patch('general', { operatorName: v })} /></Field>
       <Field label="Operator email"><Input type="email" value={s.general.operatorEmail} onChange={v => patch('general', { operatorEmail: v })} /></Field>
+      <Field label="Conference-call phone"><Input type="tel" value={s.general.operatorPhone} placeholder="e.g. +19205550123" onChange={v => patch('general', { operatorPhone: v })} /></Field>
       <Field label="Profile initials"><Input value={s.general.initials} maxLength={3} onChange={v => patch('general', { initials: v.toUpperCase() })} /></Field>
       <Field label="Time zone"><Select value={s.general.timezone} options={timezones} onChange={v => patch('general', { timezone: v })} /></Field>
       <Field label="Currency"><Select value={s.general.currency} options={['USD', 'CAD', 'GBP', 'EUR']} onChange={v => patch('general', { currency: v })} /></Field>

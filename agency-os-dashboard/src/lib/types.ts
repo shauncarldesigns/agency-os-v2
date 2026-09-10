@@ -594,7 +594,7 @@ export type Tab =
 
 export interface AgencySettings {
   general: {
-    agencyName: string; operatorName: string; operatorEmail: string; initials: string;
+    agencyName: string; operatorName: string; operatorEmail: string; operatorPhone: string; initials: string;
     timezone: string; currency: string; dateFormat: string; defaultServiceArea: string;
     appearance: 'light' | 'system';
   };

@@ -936,6 +936,7 @@ export const api = {
     retryWebhookEvent: (id: number) => apiFetch<{ event: VoiceWebhookFailure & { processing_status: string; processed_at: string | null } }>(`/api/voice/webhook-events/${id}/retry`, { method: 'POST' }),
     createTestProfile: () => apiFetch<{ profile: VoiceBusinessProfile }>('/api/voice/test-profile', { method: 'POST' }),
     createProfileFromLead: (leadId: number) => apiFetch<{ profile: VoiceBusinessProfile }>(`/api/voice/profiles/from-lead/${leadId}`, { method: 'POST' }),
+    prepareLiveDemo: (leadId: number, callerPhone: string, email?: string, durationMinutes = 15) => apiFetch<{ profile: VoiceBusinessProfile; session: VoiceDemoSession; demoPhoneNumber: string }>(`/api/voice/live-demo/from-lead/${leadId}`, { method: 'POST', body: JSON.stringify({ email, callerPhone, durationMinutes }) }),
     updateProfile: (id: number, body: Partial<VoiceBusinessProfile> & { configuration?: VoiceProfileConfiguration }) => apiFetch<{ profile: VoiceBusinessProfile }>(`/api/voice/profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     retellSetupPackage: (id: number) => apiFetch<{ setupPackage: RetellSetupPackage }>(`/api/voice/profiles/${id}/retell-package`),
     activateDemo: (profileId: number, callerPhone: string, durationMinutes = 30) => apiFetch<{ session: VoiceDemoSession }>('/api/voice/demo-sessions', { method: 'POST', body: JSON.stringify({ profileId, callerPhone, durationMinutes }) }),

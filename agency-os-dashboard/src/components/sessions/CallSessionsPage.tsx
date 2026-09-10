@@ -770,6 +770,8 @@ function CallOutreachModal({
   const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const [callApproach, setCallApproach] = useState<CallApproach>('direct');
   const [approachStats, setApproachStats] = useState<CallApproachStat[]>([]);
+  const [preparingLiveDemo, setPreparingLiveDemo] = useState(false);
+  const [operatorPhone, setOperatorPhone] = useState('');
 
   useEffect(() => {
     if (!lead) return;
@@ -791,6 +793,14 @@ function CallOutreachModal({
         setApproachStats(import.meta.env.DEV && !hasRecordedCalls ? DEV_CALL_APPROACH_STATS : response.approaches);
       })
       .catch(() => { if (!cancelled) setApproachStats(import.meta.env.DEV ? DEV_CALL_APPROACH_STATS : []); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.settings.get()
+      .then(({ settings }) => { if (!cancelled) setOperatorPhone(settings.general.operatorPhone ?? ''); })
+      .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
 
@@ -969,6 +979,26 @@ function CallOutreachModal({
     });
   }
 
+  async function prepareReceptionistLiveDemo(callerPhone: string) {
+    const nextEmail = email.trim();
+    if (!callerPhone.trim()) {
+      showToast('Enter the phone number that will place the conference call', 'error');
+      return null;
+    }
+    setPreparingLiveDemo(true);
+    try {
+      const result = await api.voice.prepareLiveDemo(activeLeadId, callerPhone, nextEmail || undefined, 15);
+      showToast(`${lead?.company ?? 'This company'} is ready for a live demo`, 'success');
+      return result;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not prepare live demo: ${msg}`, 'error');
+      return null;
+    } finally {
+      setPreparingLiveDemo(false);
+    }
+  }
+
   async function archiveLead() {
     if (!previousAutomation || recordingOutcome !== null) return;
     if (!window.confirm('Archive this lead? It will leave the active outreach board.')) return;
@@ -1056,6 +1086,9 @@ function CallOutreachModal({
                 onRecordOutcome={(outcome, reason) => void recordOutcome(outcome, undefined, reason)}
                 onArchiveRejection={() => setNotInterestedOpen(true)}
                 onSaveReceptionist={() => void saveReceptionistInterest()}
+                preparingLiveDemo={preparingLiveDemo}
+                onPrepareLiveDemo={prepareReceptionistLiveDemo}
+                operatorPhone={operatorPhone}
               />
             )}
 
@@ -1553,6 +1586,9 @@ function EmailCaptureSplitScript({
   onRecordOutcome,
   onArchiveRejection,
   onSaveReceptionist,
+  preparingLiveDemo,
+  onPrepareLiveDemo,
+  operatorPhone,
 }: {
   firstName: string;
   leadId: number;
@@ -1577,10 +1613,17 @@ function EmailCaptureSplitScript({
   onRecordOutcome: (outcome: CallOutcome, reason?: SessionOutcomeBody['badContactReason']) => void;
   onArchiveRejection: () => void;
   onSaveReceptionist: () => void;
+  preparingLiveDemo: boolean;
+  onPrepareLiveDemo: (callerPhone: string) => Promise<{ demoPhoneNumber: string; session: { expires_at: string } } | null>;
+  operatorPhone: string;
 }) {
   const latestCall = callHistory[0] ?? null;
   const [callPath, setCallPath] = useState<'website' | 'receptionist' | null>(null);
   const [receptionistStage, setReceptionistStage] = useState<'question' | 'irony' | 'interested' | 'irony_offer'>('question');
+  const [demoChoice, setDemoChoice] = useState<'now' | 'later' | null>(null);
+  const [liveDemoPhone, setLiveDemoPhone] = useState(operatorPhone);
+  const [liveDemoReady, setLiveDemoReady] = useState<{ demoPhoneNumber: string; expiresAt: string } | null>(null);
+  useEffect(() => { if (!liveDemoPhone && operatorPhone) setLiveDemoPhone(operatorPhone); }, [operatorPhone, liveDemoPhone]);
   const showingReceptionistDemoOffer = callPath === 'receptionist'
     && (receptionistStage === 'interested' || receptionistStage === 'irony_offer');
 
@@ -1718,20 +1761,20 @@ function EmailCaptureSplitScript({
               </>}
               {receptionistStage === 'interested' && <>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">If yes</p>
-                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a demo number so you can try it yourself. What’s the best email to send it to?</p>
+                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a quick version for your business. If you have another minute, we can try it together right now—or I can email it to you to try later. Which would you prefer?</p>
                 <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the receptionist question</button>
               </>}
               {receptionistStage === 'irony_offer' && <>
-                <p className="mt-2 text-[17px] leading-8 text-slate-800">The automated receptionist asks who’s calling and what they need, lets customers through, and handles sales calls without interrupting you. I can set up a demo number so you can try it yourself. What’s the best email to send it to?</p>
+                <p className="mt-2 text-[17px] leading-8 text-slate-800">The automated receptionist asks who’s calling and what they need, lets customers through, and handles sales calls without interrupting you. If you have another minute, we can try a version for your business together right now—or I can email it to you for later. Which would you prefer?</p>
                 <button type="button" onClick={() => setReceptionistStage('irony')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the irony response</button>
               </>}
             </section>
           )}
 
           {(callPath === 'website' || showingReceptionistDemoOffer) && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-2 flex items-center gap-2">
+            {(callPath === 'website' || demoChoice === 'later' || liveDemoReady) && <><div className="mb-2 flex items-center gap-2">
               <Mail className="h-3.5 w-3.5 text-slate-500" />
-              <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{callPath === 'receptionist' ? 'Where should the demo number be sent?' : 'Capture email'}</label>
+              <label htmlFor={`split-call-email-${leadId}`} className="text-xs font-semibold text-slate-700">{liveDemoReady ? 'Where should I send the follow-up?' : callPath === 'receptionist' ? 'Where should the demo be sent?' : 'Capture email'}</label>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -1747,7 +1790,7 @@ function EmailCaptureSplitScript({
                 placeholder="owner@business.com"
                 className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
-            </div>
+            </div></>}
             {callPath === 'website' ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -1767,25 +1810,22 @@ function EmailCaptureSplitScript({
                 {savingEmail ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
                 Save and send to follow-up
               </button>
-            </div> : <button
-              type="button"
-              onClick={onSaveReceptionist}
-              disabled={recordingOutcome !== null || !email.trim()}
-              className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
-            >
-              {recordingOutcome === 'not_interested' ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
-              {recordingOutcome === 'not_interested' ? 'Saving interest…' : 'Save email & add to Receptionist Interest'}
-            </button>}
+            </div> : <div className="mt-2 space-y-2">
+              {!liveDemoReady && demoChoice === null && <div className="grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => setDemoChoice('now')} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"><PhoneCall className="h-4 w-4" />Try it together now</button><button type="button" onClick={() => setDemoChoice('later')} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-3 text-xs font-semibold text-blue-700 shadow-sm hover:bg-blue-50"><Mail className="h-4 w-4" />Email it for later</button></div>}
+              {!liveDemoReady && demoChoice === 'later' && <div><button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{recordingOutcome === 'not_interested' ? <Spinner /> : <Mail className="h-4 w-4" />}{recordingOutcome === 'not_interested' ? 'Saving interest…' : 'Save email & send demo later'}</button><button type="button" onClick={() => setDemoChoice(null)} className="mt-2 text-[11px] font-semibold text-slate-500">← Change their choice</button></div>}
+              {!liveDemoReady && demoChoice === 'now' && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-xs font-semibold text-emerald-900">Ready to prepare {lead.company}</p><p className="mt-1 text-[11px] leading-5 text-emerald-700">When you add Retell to the current call, it will route from your saved conference number <strong>{liveDemoPhone || 'not configured'}</strong>.</p><details className="mt-2"><summary className="cursor-pointer text-[10px] font-semibold text-emerald-800">Use a different conference phone</summary><input type="tel" value={liveDemoPhone} onChange={(event) => setLiveDemoPhone(event.target.value)} placeholder="Phone Retell will see" className="mt-2 h-10 w-full rounded-xl border border-emerald-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100" /></details><button type="button" onClick={async () => { const result = await onPrepareLiveDemo(liveDemoPhone); if (result) setLiveDemoReady({ demoPhoneNumber: result.demoPhoneNumber, expiresAt: result.session.expires_at }); }} disabled={recordingOutcome !== null || preparingLiveDemo || !liveDemoPhone.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{preparingLiveDemo ? <Spinner /> : <Play className="h-4 w-4" />}{preparingLiveDemo ? 'Preparing live demo…' : 'Prepare live demo'}</button><button type="button" onClick={() => setDemoChoice(null)} className="mt-2 text-[11px] font-semibold text-emerald-800">← Change their choice</button></div>}
+              {liveDemoReady && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-semibold text-emerald-900">Live demo is ready—keep this call open</p><ol className="mt-2 space-y-1 text-[11px] leading-5 text-emerald-800"><li>1. Add <a href={`tel:${liveDemoReady.demoPhoneNumber}`} className="font-bold underline">{liveDemoReady.demoPhoneNumber}</a> to this call.</li><li>2. Merge the calls after the receptionist answers.</li><li>3. Let the prospect speak as one of their customers.</li></ol><p className="mt-2 text-[10px] text-emerald-700">Routing is active until {new Date(`${liveDemoReady.expiresAt.replace(' ', 'T')}Z`).toLocaleTimeString()}.</p><button type="button" onClick={onSaveReceptionist} disabled={recordingOutcome !== null || !email.trim()} className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-50">Save follow-up email & finish call</button><p className="mt-1 text-[10px] text-emerald-700">Capture their email above after the demonstration.</p></div>}
+            </div>}
             <p className="mt-2 text-[11px] leading-4 text-slate-400">
-              {callPath === 'website' ? 'Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.' : 'This closes website outreach as Not interested and moves the business to Receptionist Interest as its active workspace.'}
+              {callPath === 'website' ? 'Follow-up saves the call and queues the normal email workflow. Send now keeps the conversation open and moves to the inbox-and-reaction bridge—not the sales close.' : liveDemoReady ? 'The company profile is prepared and the demo route is active. The current sales-call recording stays open until you finish the call.' : 'Send later completes the call and moves the business to Receptionist Interest. Try together prepares the demo without ending this call.'}
             </p>
           </div>}
 
           {(callPath === 'website' || showingReceptionistDemoOffer) && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">After they give their email</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{callPath === 'receptionist' ? liveDemoReady ? 'After the live demo' : demoChoice === 'later' ? 'After they give their email' : 'Offer the choice' : 'After they give their email'}</p>
             <p className="mt-1.5 text-[17px] leading-7 text-emerald-900">
               {callPath === 'receptionist'
-                ? 'Perfect, thank you. I’ll save your email and send you the demo number as soon as it’s ready. I really appreciate your interest—I think this could be a useful way to protect your time without missing real customer calls.'
+                ? liveDemoReady ? 'That gives you a feel for it. If this looks useful, what’s the best email for me to send the demo details and follow up with you?' : demoChoice === 'later' ? 'Perfect, thank you. I’ll send you the demo number so you can try it when you have a minute.' : 'If you have another minute, we can try it together right now—or I can email it to you to try later. Which would you prefer?'
                 : 'Perfect, thank you. I’ll send it over as soon as we hang up. Take a look whenever you have a few minutes, and let me know what stands out—or what you’d change. I’d genuinely appreciate your feedback.'}
             </p>
           </div>}
