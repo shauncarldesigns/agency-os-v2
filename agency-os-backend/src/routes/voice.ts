@@ -72,7 +72,7 @@ async function ensureProfileFromLead(env: Env, leadId: number) {
 
 voiceRouter.get('/overview', async (c) => {
   const [profiles, calls, totals, activeDemo, voiceLeads, qaRuns, notifications, webhookHealth, webhookFailures, invitations] = await c.env.DB.batch([
-    c.env.DB.prepare(`SELECT * FROM voice_business_profiles ORDER BY updated_at DESC`),
+    c.env.DB.prepare(`SELECT p.*, l.source AS lead_source FROM voice_business_profiles p LEFT JOIN leads l ON l.id=p.lead_id ORDER BY p.updated_at DESC`),
     c.env.DB.prepare(`SELECT c.*, p.business_name FROM voice_calls c LEFT JOIN voice_business_profiles p ON p.id=c.voice_business_profile_id ORDER BY c.created_at DESC LIMIT 25`),
     c.env.DB.prepare(`SELECT COUNT(*) calls_answered, COALESCE(SUM(CASE WHEN classification='new_customer' THEN 1 ELSE 0 END),0) opportunities, COALESCE(SUM(CASE WHEN classification IN ('cold_sales','spam') THEN 1 ELSE 0 END),0) screened FROM voice_calls`),
     c.env.DB.prepare(`SELECT * FROM voice_demo_sessions WHERE status='active' AND expires_at > datetime('now') ORDER BY activated_at DESC LIMIT 1`),

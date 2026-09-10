@@ -82,6 +82,7 @@ const DEV_CALL_APPROACH_STATS: CallApproachStat[] = [
 type BoardItem = {
   id: string;
   leadId: number;
+  isTestLead: boolean;
   title: string;
   email: string | null;
   phone: string | null;
@@ -3799,6 +3800,7 @@ function leadItem(
   return {
     id: `${lead.id}-${overrides.eyebrow}`,
     leadId: lead.id,
+    isTestLead: lead.source === 'local-receptionist-flow-test',
     title: lead.company,
     email: lead.email,
     phone: lead.phone,
@@ -3946,10 +3948,10 @@ function BoardCard({
           (onCardOpen ?? onOpen)();
         }
       }}
-      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60 transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${item.isTestLead ? 'border-violet-400 shadow-violet-100 ring-1 ring-violet-100' : 'border-slate-200 shadow-slate-200/60'}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h4 className="min-w-0 truncate text-sm font-semibold text-slate-900">{item.title}</h4>
+        <div className="min-w-0"><h4 className="truncate text-sm font-semibold text-slate-900">{item.title}</h4>{item.isTestLead && <span className="mt-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">Test lead</span>}</div>
         <div className="flex shrink-0 items-center gap-1.5">
           {item.engagementScore > 0 && (
             <CompactEngagementScore score={item.engagementScore} grade={item.engagementGrade} />
