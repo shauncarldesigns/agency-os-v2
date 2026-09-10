@@ -34,6 +34,13 @@ export function normalizePhone(value: string | null | undefined): string {
   return trimmed.startsWith('+') ? `+${digits}` : digits;
 }
 
+export function spokenBusinessNameForLead(lead: Record<string, unknown>): string {
+  // Keep the operator-facing label for the reusable outreach fixture while
+  // giving callers a believable company identity during the voice demo.
+  if (lead.source === 'local-receptionist-flow-test') return 'Northstar Plumbing and Drain';
+  return String(lead.company ?? '').trim();
+}
+
 export async function resolveVoiceDemo(db: D1Database, fromNumber: string, toNumber: string): Promise<ResolvedVoiceDemo | null> {
   const caller = normalizePhone(fromNumber);
   const destination = normalizePhone(toNumber);

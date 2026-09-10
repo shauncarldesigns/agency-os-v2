@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound } from '../utils/errors';
 import { discoverRetellResources, retellHealth, retellMode, validateRetellApiKey, validateRetellConnection } from '../services/retellClient';
-import { normalizePhone, resolveVoiceDemo, type VoiceProfileRow } from '../services/voiceDemo';
+import { normalizePhone, resolveVoiceDemo, spokenBusinessNameForLead, type VoiceProfileRow } from '../services/voiceDemo';
 import { syncVoiceLeadFromCall } from '../services/voiceLead';
 import { notifyFailedTransfer, notifyVoiceLead } from '../services/voiceNotification';
 import { buildRetellSetupPackage } from '../services/retellSetupPackage';
@@ -40,9 +40,17 @@ async function ensureProfileFromLead(env: Env, leadId: number) {
   const lead = await env.DB.prepare(`SELECT * FROM leads WHERE id=? AND deleted_at IS NULL`).bind(leadId).first<Record<string, unknown>>();
   if (!lead) return null;
   const existing = await env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE lead_id=? ORDER BY id DESC LIMIT 1`).bind(leadId).first<Record<string, unknown>>();
-  if (existing) return { lead, profile: existing };
-  const businessName = String(lead.company ?? '').trim();
+  const businessName = spokenBusinessNameForLead(lead);
   if (!businessName) return { lead, profile: null };
+  if (existing) {
+    if (lead.source === 'local-receptionist-flow-test' && existing.business_name !== businessName) {
+      const greeting = `Thanks for calling ${businessName}. This is Claire. How can I help you today?`;
+      await env.DB.prepare(`UPDATE voice_business_profiles SET business_name=?, greeting=?, updated_at=datetime('now') WHERE id=?`)
+        .bind(businessName, greeting, existing.id).run();
+      return { lead, profile: { ...existing, business_name: businessName, greeting } };
+    }
+    return { lead, profile: existing };
+  }
   const serviceParts = uniqueLeadText([...leadTextItems(lead.extracted_services), ...leadTextItems(lead.industry)]);
   const areaParts = uniqueLeadText([...leadTextItems(lead.extracted_service_areas), [lead.city, lead.state].filter(Boolean).join(', ')]).filter(Boolean);
   const hours = leadTextItems(lead.gbp_hours).join('\n');
