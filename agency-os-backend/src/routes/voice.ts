@@ -54,7 +54,7 @@ async function ensureProfileFromLead(env: Env, leadId: number) {
       status, public_phone_number, retell_agent_id
     ) VALUES ('prospect', ?, ?, ?, 'America/Chicago', ?, ?, ?, ?, 'intake_only', 0, 0, ?, 30, 'testing', ?, ?)
   `).bind(
-    leadId, businessName, lead.phone ?? null, `Thanks for calling ${businessName}. How can I help you today?`,
+    leadId, businessName, lead.phone ?? null, `Thanks for calling ${businessName}. This is Claire. How can I help you today?`,
     serviceParts.join('\n'), areaParts.join('\n'), hours,
     'info@shauncarldesigns.com', env.RETELL_SHARED_PHONE_NUMBER ?? null, env.RETELL_DEFAULT_AGENT_ID ?? null,
   ).run();
@@ -242,7 +242,7 @@ voiceRouter.post('/test-profile', async (c) => {
       service_area_text, hours_text, default_mode, transfer_enabled, emergency_transfer_enabled,
       notification_email, recording_retention_days, status, public_phone_number, retell_agent_id
     ) VALUES ('test', 'Shaun Carl Designs Receptionist Demo', NULL, 'America/Chicago',
-      'Thanks for calling Shaun Carl Designs. How can I help you today?',
+      'Thanks for calling Shaun Carl Designs. This is Claire. How can I help you today?',
       'Website design and digital services for local service businesses.',
       'Wisconsin and remote clients.', 'By appointment.', 'intake_only', 0, 0,
       'info@shauncarldesigns.com', 30, 'testing', ?, ?)
