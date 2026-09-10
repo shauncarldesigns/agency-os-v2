@@ -156,6 +156,14 @@ voiceRouter.post('/demo-sessions/reset', async (c) => {
   return c.json({ canceled: result.meta.changes ?? 0 });
 });
 
+voiceRouter.post('/demo-sessions/code-mode', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { callerPhone?: string };
+  const callerPhone = normalizePhone(body.callerPhone);
+  if (!callerPhone) return c.json(badRequest('The phone that will place the access-code call is required'), 400);
+  const result = await c.env.DB.prepare(`UPDATE voice_demo_sessions SET status='canceled' WHERE caller_phone_match=? AND status='active'`).bind(callerPhone).run();
+  return c.json({ canceled: result.meta.changes ?? 0, callerPhone, mode: 'access_code' });
+});
+
 voiceRouter.post('/profiles/:id/demo-sessions/cancel', async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isInteger(id) || id <= 0) return c.json(badRequest('Invalid profile ID'), 400);
