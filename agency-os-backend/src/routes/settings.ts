@@ -27,7 +27,7 @@ export const HOME_SERVICE_INDUSTRIES = [
 const DEFAULTS = {
   general: {
     agencyName: 'Shaun Carl Designs', operatorName: 'Shaun Gehrke',
-    operatorEmail: 'info@shauncarldesigns.com', initials: 'SG',
+    operatorEmail: 'info@shauncarldesigns.com', operatorPhone: '+19208198098', initials: 'SG',
     timezone: 'America/Chicago', currency: 'USD', dateFormat: 'MM/DD/YYYY',
     defaultServiceArea: '', appearance: 'system',
   },

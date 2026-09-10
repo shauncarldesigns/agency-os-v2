@@ -36,6 +36,32 @@ function uniqueLeadText(items: string[]): string[] {
   return [...new Map(items.map((item) => [item.toLocaleLowerCase(), item])).values()];
 }
 
+async function ensureProfileFromLead(env: Env, leadId: number) {
+  const lead = await env.DB.prepare(`SELECT * FROM leads WHERE id=? AND deleted_at IS NULL`).bind(leadId).first<Record<string, unknown>>();
+  if (!lead) return null;
+  const existing = await env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE lead_id=? ORDER BY id DESC LIMIT 1`).bind(leadId).first<Record<string, unknown>>();
+  if (existing) return { lead, profile: existing };
+  const businessName = String(lead.company ?? '').trim();
+  if (!businessName) return { lead, profile: null };
+  const serviceParts = uniqueLeadText([...leadTextItems(lead.extracted_services), ...leadTextItems(lead.industry)]);
+  const areaParts = uniqueLeadText([...leadTextItems(lead.extracted_service_areas), [lead.city, lead.state].filter(Boolean).join(', ')]).filter(Boolean);
+  const hours = leadTextItems(lead.gbp_hours).join('\n');
+  const result = await env.DB.prepare(`
+    INSERT INTO voice_business_profiles (
+      profile_kind, lead_id, business_name, business_phone, timezone, greeting,
+      services_text, service_area_text, hours_text, default_mode, transfer_enabled,
+      emergency_transfer_enabled, notification_email, recording_retention_days,
+      status, public_phone_number, retell_agent_id
+    ) VALUES ('prospect', ?, ?, ?, 'America/Chicago', ?, ?, ?, ?, 'intake_only', 0, 0, ?, 30, 'testing', ?, ?)
+  `).bind(
+    leadId, businessName, lead.phone ?? null, `Thanks for calling ${businessName}. How can I help you today?`,
+    serviceParts.join('\n'), areaParts.join('\n'), hours,
+    'info@shauncarldesigns.com', env.RETELL_SHARED_PHONE_NUMBER ?? null, env.RETELL_DEFAULT_AGENT_ID ?? null,
+  ).run();
+  const profile = await env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE id=?`).bind(result.meta.last_row_id).first<Record<string, unknown>>();
+  return { lead, profile };
+}
+
 voiceRouter.get('/overview', async (c) => {
   const [profiles, calls, totals, activeDemo, voiceLeads, qaRuns, notifications, webhookHealth, webhookFailures, invitations] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT * FROM voice_business_profiles ORDER BY updated_at DESC`),
@@ -228,30 +254,38 @@ voiceRouter.post('/test-profile', async (c) => {
 voiceRouter.post('/profiles/from-lead/:leadId', async (c) => {
   const leadId = Number(c.req.param('leadId'));
   if (!Number.isInteger(leadId) || leadId <= 0) return c.json(badRequest('Invalid lead ID'), 400);
-  const lead = await c.env.DB.prepare(`SELECT * FROM leads WHERE id=? AND deleted_at IS NULL`).bind(leadId).first<Record<string, unknown>>();
-  if (!lead) return c.json(notFound('Lead'), 404);
-  const existing = await c.env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE lead_id=? ORDER BY id DESC LIMIT 1`).bind(leadId).first();
-  if (existing) return c.json({ profile: existing });
+  const result = await ensureProfileFromLead(c.env, leadId);
+  if (!result) return c.json(notFound('Lead'), 404);
+  if (!result.profile) return c.json(badRequest('Lead requires a company name'), 400);
+  return c.json({ profile: result.profile }, 201);
+});
 
-  const businessName = String(lead.company ?? '').trim();
-  if (!businessName) return c.json(badRequest('Lead requires a company name'), 400);
-  const serviceParts = uniqueLeadText([...leadTextItems(lead.extracted_services), ...leadTextItems(lead.industry)]);
-  const areaParts = uniqueLeadText([...leadTextItems(lead.extracted_service_areas), [lead.city, lead.state].filter(Boolean).join(', ')]).filter(Boolean);
-  const hours = leadTextItems(lead.gbp_hours).join('\n');
-  const result = await c.env.DB.prepare(`
-    INSERT INTO voice_business_profiles (
-      profile_kind, lead_id, business_name, business_phone, timezone, greeting,
-      services_text, service_area_text, hours_text, default_mode, transfer_enabled,
-      emergency_transfer_enabled, notification_email, recording_retention_days,
-      status, public_phone_number, retell_agent_id
-    ) VALUES ('prospect', ?, ?, ?, 'America/Chicago', ?, ?, ?, ?, 'intake_only', 0, 0, ?, 30, 'testing', ?, ?)
-  `).bind(
-    leadId, businessName, lead.phone ?? null, `Thanks for calling ${businessName}. How can I help you today?`,
-    serviceParts.join('\n'), areaParts.join('\n'), hours,
-    'info@shauncarldesigns.com', c.env.RETELL_SHARED_PHONE_NUMBER ?? null, c.env.RETELL_DEFAULT_AGENT_ID ?? null,
-  ).run();
-  const profile = await c.env.DB.prepare(`SELECT * FROM voice_business_profiles WHERE id=?`).bind(result.meta.last_row_id).first();
-  return c.json({ profile }, 201);
+voiceRouter.post('/live-demo/from-lead/:leadId', async (c) => {
+  const leadId = Number(c.req.param('leadId'));
+  if (!Number.isInteger(leadId) || leadId <= 0) return c.json(badRequest('Invalid lead ID'), 400);
+  const body = await c.req.json().catch(() => ({})) as { email?: string; callerPhone?: string; durationMinutes?: number };
+  const email = String(body.email ?? '').trim().toLowerCase();
+  const callerPhone = normalizePhone(body.callerPhone);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.json(badRequest('Enter a valid prospect email or leave it blank'), 400);
+  if (!callerPhone) return c.json(badRequest('The phone that will place the demo call is required'), 400);
+  const prepared = await ensureProfileFromLead(c.env, leadId);
+  if (!prepared) return c.json(notFound('Lead'), 404);
+  if (!prepared.profile) return c.json(badRequest('Lead requires a company name'), 400);
+  const profileId = Number(prepared.profile.id);
+  const sharedDemoNumber = normalizePhone(c.env.RETELL_SHARED_PHONE_NUMBER ?? String(prepared.profile.public_phone_number ?? ''));
+  if (!sharedDemoNumber) return c.json(badRequest('The shared Retell demo number is not configured'), 400);
+  if (callerPhone === sharedDemoNumber) return c.json(badRequest('Enter the phone number placing the demo call, not the shared demo number'), 400);
+  const duration = Math.min(60, Math.max(5, Number(body.durationMinutes ?? 15)));
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE leads SET email=COALESCE(?, email), receptionist_interested=1, receptionist_interested_at=COALESCE(receptionist_interested_at, datetime('now')), outcome='Receptionist live demo prepared', updated_at=datetime('now') WHERE id=?`).bind(email || null, leadId),
+    c.env.DB.prepare(`UPDATE voice_demo_sessions SET status='expired' WHERE caller_phone_match=? AND status='active'`).bind(callerPhone),
+  ]);
+  const inserted = await c.env.DB.prepare(`
+    INSERT INTO voice_demo_sessions (voice_business_profile_id, prospect_id, demo_phone_number, caller_phone_match, profile_snapshot_json, expires_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now', ?))
+  `).bind(profileId, leadId, sharedDemoNumber, callerPhone, JSON.stringify(prepared.profile), `+${duration} minutes`).run();
+  const session = await c.env.DB.prepare(`SELECT * FROM voice_demo_sessions WHERE id=?`).bind(inserted.meta.last_row_id).first();
+  return c.json({ profile: prepared.profile, session, demoPhoneNumber: sharedDemoNumber }, 201);
 });
 
 voiceRouter.put('/profiles/:id', async (c) => {
