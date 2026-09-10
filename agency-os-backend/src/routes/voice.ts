@@ -490,6 +490,32 @@ voiceRouter.post('/simulator/complete', async (c) => {
   return c.json({ call }, 201);
 });
 
+voiceRouter.get('/calls/:id/recording', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json(badRequest('Invalid call ID'), 400);
+  const call = await c.env.DB.prepare(`SELECT recording_url FROM voice_calls WHERE id=?`).bind(id).first<{ recording_url: string | null }>();
+  if (!call) return c.json(notFound('Voice call'), 404);
+  if (!call.recording_url) return c.json(notFound('Call recording'), 404);
+
+  let recordingUrl: URL;
+  try { recordingUrl = new URL(call.recording_url); } catch { return c.text('Invalid recording location', 502); }
+  if (recordingUrl.protocol !== 'https:' || !recordingUrl.hostname.endsWith('.cloudfront.net')) return c.text('Untrusted recording location', 502);
+
+  const range = c.req.header('range');
+  const upstream = await fetch(recordingUrl.toString(), { headers: range ? { Range: range } : undefined });
+  if (!upstream.ok && upstream.status !== 206) return c.text(`Recording provider returned ${upstream.status}`, 502);
+  const headers = new Headers({
+    'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
+    'Cache-Control': 'private, max-age=300',
+    'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
+  });
+  for (const name of ['content-length', 'content-range']) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers });
+});
+
 voiceRouter.put('/calls/:id/review', async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isInteger(id) || id <= 0) return c.json(badRequest('Invalid call ID'), 400);
