@@ -928,6 +928,7 @@ export const api = {
     testRetellAuthentication: () => apiFetch<{ authentication: { ok: true; reachable: true; agentSampleCount: number }; checkedAt: string }>('/api/voice/connection/auth-test', { method: 'POST' }),
     retellResources: () => apiFetch<{ resources: RetellResourceInventory; checkedAt: string }>('/api/voice/connection/resources'),
     resetDemoSessions: () => apiFetch<{ canceled: number }>('/api/voice/demo-sessions/reset', { method: 'POST' }),
+    useAccessCodeMode: (callerPhone: string) => apiFetch<{ canceled: number; callerPhone: string; mode: 'access_code' }>('/api/voice/demo-sessions/code-mode', { method: 'POST', body: JSON.stringify({ callerPhone }) }),
     runRetention: () => apiFetch<{ purged: number; retention: VoiceOverview['retention'] }>('/api/voice/retention/run', { method: 'POST' }),
     testFallback: () => apiFetch<{ ok: true; profileId: number; businessName: string }>('/api/voice/fallback/test', { method: 'POST' }),
     testReadiness: () => apiFetch<VoiceReadinessResult>('/api/voice/readiness/test', { method: 'POST' }),
