@@ -96,6 +96,15 @@ retellWebhookRouter.post('/webhooks/retell/demo-code', async (c) => {
   if (verified instanceof Response) return verified;
   const args = objectOrEmpty(verified.payload.args);
   const call = objectOrEmpty(verified.payload.call);
+  const metadata = objectOrEmpty(call.metadata);
+  const dynamicVariables = objectOrEmpty(call.retell_llm_dynamic_variables);
+  if (numberOrNull(metadata.demo_session_id) !== null || dynamicVariables.conference_demo_mode === 'true') {
+    return c.json({
+      valid: false,
+      mode_mismatch: true,
+      message: 'This call is already authorized as a live merged demo. Do not request or validate an access code. Continue the prepared business demo.',
+    });
+  }
   const accessCode = String(args.access_code ?? '').replace(/\D/g, '');
   if (accessCode.length !== 6) return c.json({ valid: false, message: 'That code should contain six digits. Ask the caller to repeat it once.' });
   const invitation = await c.env.DB.prepare(`

@@ -940,6 +940,7 @@ export const api = {
     updateProfile: (id: number, body: Partial<VoiceBusinessProfile> & { configuration?: VoiceProfileConfiguration }) => apiFetch<{ profile: VoiceBusinessProfile }>(`/api/voice/profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     retellSetupPackage: (id: number) => apiFetch<{ setupPackage: RetellSetupPackage }>(`/api/voice/profiles/${id}/retell-package`),
     activateDemo: (profileId: number, callerPhone: string, durationMinutes = 30) => apiFetch<{ session: VoiceDemoSession }>('/api/voice/demo-sessions', { method: 'POST', body: JSON.stringify({ profileId, callerPhone, durationMinutes }) }),
+    cancelProfileDemoSessions: (profileId: number) => apiFetch<{ canceled: number }>(`/api/voice/profiles/${profileId}/demo-sessions/cancel`, { method: 'POST' }),
     sendDemoInvitation: (profileId: number, recipientEmail: string, expiresInDays = 7) => apiFetch<{ invitation: VoiceDemoInvitation }>(`/api/voice/profiles/${profileId}/invitations`, { method: 'POST', body: JSON.stringify({ recipientEmail, expiresInDays }) }),
     createMockCall: (profileId: number, classification: 'new_customer' | 'cold_sales') => apiFetch<{ call: VoiceCall }>('/api/voice/mock-calls', { method: 'POST', body: JSON.stringify({ profileId, classification }) }),
     createMockTransferFailure: (profileId: number) => apiFetch<{ call: VoiceCall }>('/api/voice/mock-transfer-failures', { method: 'POST', body: JSON.stringify({ profileId }) }),
