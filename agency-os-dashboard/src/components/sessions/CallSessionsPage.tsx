@@ -970,13 +970,21 @@ function CallOutreachModal({
       showToast('Capture a valid email for the receptionist demo', 'error');
       return;
     }
-    await recordOutcome('not_interested', {
-      reason: 'different_service',
-      note: callNotes.trim() || 'Interested in the automated receptionist demo.',
-      receptionistInterested: true,
-      email: nextEmail,
-      archive: true,
-    });
+    try {
+      const { profile } = await api.voice.createProfileFromLead(activeLeadId);
+      const { invitation } = await api.voice.sendDemoInvitation(profile.id, nextEmail, 7);
+      await recordOutcome('not_interested', {
+        reason: 'different_service',
+        note: callNotes.trim() || `Interested in the automated receptionist demo. Access code ${invitation.access_code} sent to ${nextEmail}.`,
+        receptionistInterested: true,
+        email: nextEmail,
+        archive: true,
+      });
+      showToast(`Demo code ${invitation.access_code} sent to ${nextEmail}`, 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not send receptionist demo: ${msg}`, 'error');
+    }
   }
 
   async function prepareReceptionistLiveDemo(callerPhone: string) {

@@ -69,6 +69,18 @@ export function ReceptionistInterestPage({ showToast }: { showToast: ShowToast }
     } finally { setWorking(false); }
   };
 
+  const restoreToEmailOutreach = async (lead: Lead) => {
+    if (!window.confirm(`Return ${lead.company} to Email Outreach → To Call? Receptionist interest will be cleared.`)) return;
+    setWorking(true);
+    try {
+      await api.leads.reactivate(lead.id, { workspace: 'email', destination: 'ready_to_send' });
+      await load();
+      showToast(`${lead.company} returned to Email Outreach → To Call`, 'success');
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not restore lead', 'error');
+    } finally { setWorking(false); }
+  };
+
   const openProfile = (profile: VoiceBusinessProfile, target: 'overview' | 'editor' | 'demo' | 'calls' = 'editor') => {
     setSelectedProfile(profile);
     setActiveSection(target === 'calls' ? 'calls' : target === 'demo' ? 'demo' : target === 'overview' ? 'overview' : 'setup');
@@ -138,11 +150,11 @@ export function ReceptionistInterestPage({ showToast }: { showToast: ShowToast }
         <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">{interestedLeads.length} interested</span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {interestedLeads.length ? interestedLeads.map((lead) => { const profile = overview?.profiles.find((item) => item.lead_id === lead.id); return <div key={lead.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{lead.company}</p><p className="mt-0.5 text-xs text-slate-500">{[lead.industry, lead.city, lead.state].filter(Boolean).join(' · ') || 'Business details need review'}</p></div><ProfileStateBadge label={profile ? `Demo: ${profile.status}` : 'Demo: not prepared'} tone={profile ? 'blue' : 'amber'} /></div><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => profile ? openProfile(profile) : void prepareLead(lead)} disabled={working} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{profile ? 'Open demo profile' : 'Prepare demo'}</button>{profile ? <button type="button" onClick={() => openProfile(profile, 'calls')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">View activity</button> : <button type="button" disabled className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-300">No activity yet</button>}</div></div>; }) : <p className="col-span-full rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">Interested website declines will appear here.</p>}
+        {interestedLeads.length ? interestedLeads.map((lead) => { const profile = overview?.profiles.find((item) => item.lead_id === lead.id); return <div key={lead.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{lead.company}</p><p className="mt-0.5 text-xs text-slate-500">{[lead.industry, lead.city, lead.state].filter(Boolean).join(' · ') || 'Business details need review'}</p><p className="mt-1 text-[11px] text-slate-500">{lead.email || 'No email captured'} · {lead.phone || 'No phone captured'}</p></div><ProfileStateBadge label={profile ? `Demo: ${profile.status}` : 'Demo: not prepared'} tone={profile ? 'blue' : 'amber'} /></div><div className="mt-3 grid grid-cols-3 gap-2"><button type="button" onClick={() => profile ? openProfile(profile) : void prepareLead(lead)} disabled={working} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{profile ? 'Open demo profile' : 'Prepare demo'}</button>{profile ? <button type="button" onClick={() => openProfile(profile, 'calls')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">View activity</button> : <button type="button" disabled className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-300">No activity yet</button>}<button type="button" onClick={() => void restoreToEmailOutreach(lead)} disabled={working} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 disabled:opacity-50">Restore to call</button></div></div>; }) : <p className="col-span-full rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">Interested website declines will appear here.</p>}
       </div>
     </section>}
 
-    {(activeSection === 'setup' || activeSection === 'demo') && selectedProfile && <section id="profile-editor" className="scroll-mt-5"><ProfileDemoPanel mode={activeSection} profile={selectedProfile} overview={overview} working={working} setWorking={setWorking} onChanged={load} showToast={showToast} /></section>}
+    {(activeSection === 'setup' || activeSection === 'demo') && selectedProfile && <section id="profile-editor" className="scroll-mt-5"><ProfileDemoPanel mode={activeSection} profile={selectedProfile} sourceLead={[...interestedLeads, ...archivedLeads].find((lead) => lead.id === selectedProfile.lead_id) ?? null} overview={overview} working={working} setWorking={setWorking} onChanged={load} showToast={showToast} /></section>}
 
     {activeSection === 'qa' && selectedProfile && <><AgentSimulator profile={selectedProfile} onCompleted={load} showToast={showToast} /><DesktopTestChecklist /><OperationalHistory overview={overview} onChanged={load} showToast={showToast} /></>}
 
@@ -321,18 +333,18 @@ function parseProfileConfiguration(value: string): VoiceProfileConfiguration {
   try { const parsed = JSON.parse(value) as unknown; return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as VoiceProfileConfiguration : {}; } catch { return {}; }
 }
 
-function ProfileDemoPanel({ mode, profile, overview, working, setWorking, onChanged, showToast }: { mode: 'setup' | 'demo'; profile: VoiceBusinessProfile; overview: VoiceOverview | null; working: boolean; setWorking: (value: boolean) => void; onChanged: () => Promise<void>; showToast: ShowToast }) {
+function ProfileDemoPanel({ mode, profile, sourceLead, overview, working, setWorking, onChanged, showToast }: { mode: 'setup' | 'demo'; profile: VoiceBusinessProfile; sourceLead: Lead | null; overview: VoiceOverview | null; working: boolean; setWorking: (value: boolean) => void; onChanged: () => Promise<void>; showToast: ShowToast }) {
   const [businessName, setBusinessName] = useState(profile.business_name);
   const [greeting, setGreeting] = useState(profile.greeting);
   const [services, setServices] = useState(profile.services_text);
   const [serviceArea, setServiceArea] = useState(profile.service_area_text);
   const [hours, setHours] = useState(profile.hours_text);
   const [configuration, setConfiguration] = useState<VoiceProfileConfiguration>(() => parseProfileConfiguration(profile.configuration_json));
-  const [callerPhone, setCallerPhone] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [callerPhone, setCallerPhone] = useState(sourceLead?.phone_e164 || sourceLead?.phone || '');
+  const [inviteEmail, setInviteEmail] = useState(sourceLead?.email || '');
   const [sendingInvitation, setSendingInvitation] = useState(false);
   const [retellPackage, setRetellPackage] = useState<RetellSetupPackage | null>(null);
-  useEffect(() => { setBusinessName(profile.business_name); setGreeting(profile.greeting); setServices(profile.services_text); setServiceArea(profile.service_area_text); setHours(profile.hours_text); setConfiguration(parseProfileConfiguration(profile.configuration_json)); setRetellPackage(null); }, [profile]);
+  useEffect(() => { setBusinessName(profile.business_name); setGreeting(profile.greeting); setServices(profile.services_text); setServiceArea(profile.service_area_text); setHours(profile.hours_text); setConfiguration(parseProfileConfiguration(profile.configuration_json)); setCallerPhone(sourceLead?.phone_e164 || sourceLead?.phone || ''); setInviteEmail(sourceLead?.email || ''); setRetellPackage(null); }, [profile, sourceLead]);
 
   const save = async () => {
     await api.voice.updateProfile(profile.id, { business_name: businessName, greeting, services_text: services, service_area_text: serviceArea, hours_text: hours, configuration });
