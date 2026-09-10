@@ -827,6 +827,11 @@ leadsRouter.post('/:id/reactivate', async (c) => {
       INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta)
       VALUES (?, 'reactivated', 'archived', ?, ?)
     `).bind(id, pipelineStatus, JSON.stringify({ workspace, previous_status: lead.status, previous_demo_site_status: lead.demo_site_status })),
+    c.env.DB.prepare(`
+      UPDATE voice_demo_sessions
+         SET status = 'canceled'
+       WHERE prospect_id = ? AND status = 'active'
+    `).bind(id),
   ]);
 
   const updated = await c.env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(id).first<Lead>();

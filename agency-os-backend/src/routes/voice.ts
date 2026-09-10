@@ -156,6 +156,15 @@ voiceRouter.post('/demo-sessions/reset', async (c) => {
   return c.json({ canceled: result.meta.changes ?? 0 });
 });
 
+voiceRouter.post('/profiles/:id/demo-sessions/cancel', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json(badRequest('Invalid profile ID'), 400);
+  const profile = await c.env.DB.prepare(`SELECT id FROM voice_business_profiles WHERE id=?`).bind(id).first();
+  if (!profile) return c.json(notFound('Voice profile'), 404);
+  const result = await c.env.DB.prepare(`UPDATE voice_demo_sessions SET status='canceled' WHERE voice_business_profile_id=? AND status='active'`).bind(id).run();
+  return c.json({ canceled: result.meta.changes ?? 0 });
+});
+
 voiceRouter.post('/fallback/test', async (c) => {
   const resolved = await resolveVoiceDemo(c.env.DB, '+10000000000', c.env.RETELL_SHARED_PHONE_NUMBER || '+19999999999');
   if (!resolved || resolved.profile.profile_kind !== 'test') return c.json({ ok: false, error: 'No eligible standalone fallback profile is configured' }, 409);
@@ -355,6 +364,10 @@ voiceRouter.post('/profiles/:id/invitations', async (c) => {
     accessCode = '';
   }
   if (!accessCode) return c.text('Could not allocate a demo access code', 503);
+  // Email/access-code mode supersedes caller-ID conference access for this
+  // profile. This prevents an operator's phone from silently bypassing the
+  // code after switching the prospect from a live demo to an emailed demo.
+  await c.env.DB.prepare(`UPDATE voice_demo_sessions SET status='canceled' WHERE voice_business_profile_id=? AND status='active'`).bind(id).run();
   const inserted = await c.env.DB.prepare(`
     INSERT INTO voice_demo_invitations
       (voice_business_profile_id, prospect_id, access_code, recipient_email, demo_phone_number, profile_snapshot_json, expires_at)
