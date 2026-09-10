@@ -28,8 +28,7 @@ export default function App() {
   const [receptionistInterestCount, setReceptionistInterestCount] = useState(0);
   const [archivedCleanupCount, setArchivedCleanupCount] = useState(0);
   // Count of automated-pipeline leads still awaiting a site build — drives
-  // the sidebar badge. Computed from the same leads fetch as the other nav
-  // counts (leads.list returns pipeline_status).
+  // the sidebar badge and comes from the lightweight lead counts endpoint.
   const [awaitingBuildCount, setAwaitingBuildCount] = useState(0);
   // When the Pipeline qualifies a Tier 3 lead we deep-link the operator into
   // the new project's Brief Studio on the Sites tab. The id sticks around
@@ -54,60 +53,23 @@ export default function App() {
 
   async function loadStats() {
     try {
-      const [leadsRes, projectsRes] = await Promise.all([
-        api.leads.list(),
+      const [leadCountsRes, projectsRes] = await Promise.all([
+        api.leads.counts(todayIso()),
         api.projects.list().catch(() => ({ projects: [], total: 0 })),
       ]);
-      const callbacksRes = await api.callbacks.list({ status: 'pending' }).catch(() => ({ callbacks: [] }));
-      // Active = still in the calling pool. Excludes qualified (demo booked,
-      // managed from Sites), client (signed), not_interested, and dead.
-      const activeLeads = leadsRes.leads.filter(l =>
-        l.status !== 'qualified'
-        && l.status !== 'client'
-        && l.status !== 'not_interested'
-        && l.status !== 'dead'
-      ).length;
-      const awaitingBuild = leadsRes.leads.filter(l =>
-        l.pipeline_status === 'awaiting_build'
-        && (l.phone_route === null || l.phone_route === 'unknown' || l.phone_route === 'text')
-        && l.has_website === 0
-        && l.enrichment_status === 'enriched'
-        && (l.status === 'cold' || l.status === 'contacted')
-        && l.deleted_at === null
-      ).length;
-      const futureCallbackLeadIds = new Set(
-        callbacksRes.callbacks
-          .filter((cb) => cb.status === 'pending' && cb.due_date > todayIso())
-          .map((cb) => cb.lead_id),
-      );
-      const callOutreach = leadsRes.leads.filter(l =>
-        l.deleted_at === null
-        && l.pipeline_status !== 'booked'
-        && l.pipeline_status !== 'archived'
-        && l.phone_route !== 'text'
-        && l.phone_route !== 'review'
-        && (
-          l.status === 'cold'
-          || (l.status === 'contacted' && !futureCallbackLeadIds.has(l.id))
-        )
-      ).length;
+      const leadCounts = leadCountsRes.counts;
       const clients = projectsRes.projects.filter(p => p.is_internal !== 1 && (p.status === 'live' || p.status === 'building'));
       const mrr = clients.reduce((sum, p) => sum + (TIER_MRR[p.tier] ?? 0), 0);
       setStats({ totalClients: clients.length, mrrUsd: mrr });
       setNavCounts({
         prospect: null,
-        callOutreach,
-        pipeline: activeLeads,
+        callOutreach: leadCounts.call_outreach,
+        pipeline: leadCounts.pipeline,
         sites: clients.length,
       });
-      setAwaitingBuildCount(awaitingBuild);
-      setReceptionistInterestCount(leadsRes.leads.filter((lead) => lead.receptionist_interested === 1 && lead.deleted_at === null).length);
-      setArchivedCleanupCount(leadsRes.leads.filter((lead) =>
-        lead.pipeline_status === 'archived'
-        && lead.demo_site_status === 'cleanup_needed'
-        && lead.receptionist_interested !== 1
-        && lead.deleted_at === null
-      ).length);
+      setAwaitingBuildCount(leadCounts.awaiting_build);
+      setReceptionistInterestCount(leadCounts.receptionist_interest);
+      setArchivedCleanupCount(leadCounts.archived_cleanup);
     } catch {
       showToast('Could not reach API', 'error');
     }

@@ -12,6 +12,7 @@ import { ImportCsvModal } from './ImportCsvModal';
 import { AddLeadModal } from './AddLeadModal';
 import { QualifyLeadModal } from './QualifyLeadModal';
 import { ArrowLeft, FileUp, PhoneCall, Plus, Trash2 } from 'lucide-react';
+import { todayIso } from '../../lib/format';
 
 interface PipelinePanelProps {
   showToast: ShowToast;
@@ -68,7 +69,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
         api.leads.list(params),
         api.leads.industries().catch(() => ({ industries: [] })),
         view === 'active'
-          ? api.leads.list({ only_deleted: true }).then((r) => r.total).catch(() => 0)
+          ? api.leads.counts(todayIso()).then((r) => r.counts.trash).catch(() => 0)
           : Promise.resolve(trashCount),
       ]);
       setLeads(listRes.leads);

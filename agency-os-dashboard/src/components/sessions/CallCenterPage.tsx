@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, Headphones, Play, Search } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
-import type { Lead, ShowToast } from '../../lib/types';
+import type { CallCenterLead, ShowToast } from '../../lib/types';
 import { ExecutionView } from '../dashboard/ExecutionView';
 import { Spinner } from '../shared/Spinner';
 
@@ -20,7 +20,7 @@ export function CallCenterPage({
   onCloseSession,
   onPauseAndBuild,
 }: Props) {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<CallCenterLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(session?.leadId ?? null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export function CallCenterPage({
 
   useEffect(() => {
     let cancelled = false;
-    api.leads.list()
+    api.leads.callCenter()
       .then((res) => {
         if (!cancelled) setLeads(res.leads);
       })
@@ -49,13 +49,6 @@ export function CallCenterPage({
   const companies = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return leads
-      .filter((lead) =>
-        lead.deleted_at === null
-        && lead.status !== 'dead'
-        && lead.status !== 'not_interested'
-        && lead.phone_route !== 'text'
-        && lead.phone_route !== 'review'
-      )
       .filter((lead) => {
         if (!needle) return true;
         return [lead.company, lead.city, lead.state, lead.phone]
