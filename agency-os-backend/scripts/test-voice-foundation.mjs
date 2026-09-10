@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { verifyRetellSignature } from '../src/services/retellSignature.ts';
-import { normalizePhone, voiceDynamicVariables } from '../src/services/voiceDemo.ts';
+import { normalizePhone, spokenBusinessNameForLead, voiceDynamicVariables } from '../src/services/voiceDemo.ts';
 import { buildAgentInstructions, simulateReceptionistTurn, voicePolicyFromConfiguration } from '../src/services/voiceAgent.ts';
 
 const key = 'retell_test_key';
@@ -14,6 +14,8 @@ assert.equal(await verifyRetellSignature(raw, `v=${timestamp},d=${hex}`, key, ti
 assert.equal(await verifyRetellSignature(`${raw} `, `v=${timestamp},d=${hex}`, key, timestamp), false);
 assert.equal(await verifyRetellSignature(raw, `v=${timestamp - 360_000},d=${hex}`, key, timestamp), false);
 assert.equal(normalizePhone('(920) 555-0199'), '+19205550199');
+assert.equal(spokenBusinessNameForLead({ company: 'Receptionist Flow Test - Plumber', source: 'local-receptionist-flow-test' }), 'Northstar Plumbing and Drain');
+assert.equal(spokenBusinessNameForLead({ company: 'Ace Sewer and Water', source: 'Google Places' }), 'Ace Sewer and Water');
 
 const variables = voiceDynamicVariables({
   demoSessionId: 22,
