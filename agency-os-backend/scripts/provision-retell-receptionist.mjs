@@ -65,7 +65,7 @@ const defaultDynamicVariables = {
   access_code_required: 'false',
   receptionist_name: 'Claire',
   conference_demo_mode: 'false',
-  greeting: 'Thanks for calling Lakeside Plumbing & Drain. How can I help you today?',
+  greeting: 'Thanks for calling Lakeside Plumbing & Drain. This is Claire. How can I help you today?',
   services: 'Residential plumbing repairs, drain cleaning, water heater service, fixture installation, leak diagnosis, and emergency plumbing intake.',
   service_area: 'The greater Green Bay, Wisconsin area. Do not promise coverage until the caller provides a location.',
   business_hours: 'Monday through Friday, 7:30 AM to 5:00 PM Central. After-hours calls are recorded for follow-up.',
