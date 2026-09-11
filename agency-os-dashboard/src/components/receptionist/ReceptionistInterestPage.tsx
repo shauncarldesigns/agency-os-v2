@@ -86,6 +86,23 @@ export function ReceptionistInterestPage({ showToast }: { showToast: ShowToast }
     setActiveSection(target === 'calls' ? 'calls' : target === 'demo' ? 'demo' : target === 'overview' ? 'overview' : 'setup');
   };
 
+  const interestQueue = interestedLeads.map((lead) => {
+    const profile = overview?.profiles.find((item) => item.lead_id === lead.id);
+    const invitations = (overview?.invitations ?? []).filter((invitation) => invitation.prospect_id === lead.id);
+    const latestInvitation = invitations[0] ?? null;
+    const demoCalls = invitations.reduce((total, invitation) => total + invitation.use_count, 0);
+    const lastUsedAt = invitations.reduce<string | null>((latest, invitation) => {
+      if (!invitation.last_used_at) return latest;
+      return !latest || invitation.last_used_at > latest ? invitation.last_used_at : latest;
+    }, null);
+    return { lead, profile, latestInvitation, demoCalls, lastUsedAt };
+  }).sort((a, b) => {
+    if (a.lastUsedAt && b.lastUsedAt) return b.lastUsedAt.localeCompare(a.lastUsedAt);
+    if (a.lastUsedAt) return -1;
+    if (b.lastUsedAt) return 1;
+    return (b.latestInvitation?.created_at ?? b.lead.receptionist_interested_at ?? '').localeCompare(a.latestInvitation?.created_at ?? a.lead.receptionist_interested_at ?? '');
+  });
+
   if (loading && !overview) return <div className="main py-16 text-center text-sm text-slate-400">Loading receptionist workspace…</div>;
 
   return <div className="main"><div className="mx-auto max-w-6xl space-y-5">
@@ -151,7 +168,15 @@ export function ReceptionistInterestPage({ showToast }: { showToast: ShowToast }
         <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">{interestedLeads.length} interested</span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {interestedLeads.length ? interestedLeads.map((lead) => { const profile = overview?.profiles.find((item) => item.lead_id === lead.id); const isTestLead = lead.source === 'local-receptionist-flow-test'; return <div key={lead.id} className={`rounded-xl border p-4 ${isTestLead ? 'border-violet-400 bg-violet-50/30 ring-1 ring-violet-100' : 'border-slate-200'}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold text-slate-900">{lead.company}</p>{isTestLead && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">Test lead</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[lead.industry, lead.city, lead.state].filter(Boolean).join(' · ') || 'Business details need review'}</p><p className="mt-1 text-[11px] text-slate-500">{lead.email || 'No email captured'} · {lead.phone || 'No phone captured'}</p></div><ProfileStateBadge label={profile ? `Demo: ${profile.status}` : 'Demo: not prepared'} tone={profile ? 'blue' : 'amber'} /></div><div className="mt-3 grid grid-cols-3 gap-2"><button type="button" onClick={() => profile ? openProfile(profile) : void prepareLead(lead)} disabled={working} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{profile ? 'Open demo profile' : 'Prepare demo'}</button>{profile ? <button type="button" onClick={() => openProfile(profile, 'calls')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">View activity</button> : <button type="button" disabled className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-300">No activity yet</button>}<button type="button" onClick={() => void restoreToEmailOutreach(lead)} disabled={working} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 disabled:opacity-50">Restore to call</button></div></div>; }) : <p className="col-span-full rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">Interested website declines will appear here.</p>}
+        {interestQueue.length ? interestQueue.map(({ lead, profile, latestInvitation, demoCalls, lastUsedAt }) => {
+          const isTestLead = lead.source === 'local-receptionist-flow-test';
+          const engagementLabel = demoCalls > 0 ? 'Code used' : latestInvitation?.sent_at ? 'Demo sent' : 'Not sent';
+          return <div key={lead.id} className={`rounded-xl border p-4 ${isTestLead ? 'border-violet-400 bg-violet-50/30 ring-1 ring-violet-100' : demoCalls > 0 ? 'border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-100' : 'border-slate-200'}`}>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold text-slate-900">{lead.company}</p>{isTestLead && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">Test lead</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[lead.industry, lead.city, lead.state].filter(Boolean).join(' · ') || 'Business details need review'}</p><p className="mt-1 text-[11px] text-slate-500">{lead.email || 'No email captured'} · {lead.phone || 'No phone captured'}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${demoCalls > 0 ? 'bg-emerald-100 text-emerald-700' : latestInvitation?.sent_at ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{engagementLabel}</span></div>
+            <div className={`mt-3 rounded-xl border p-3 ${demoCalls > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}><div className="flex items-center justify-between gap-3"><div><p className={`text-xs font-semibold ${demoCalls > 0 ? 'text-emerald-900' : 'text-slate-700'}`}>{demoCalls > 0 ? `${demoCalls} demo call${demoCalls === 1 ? '' : 's'}` : latestInvitation ? 'Waiting for them to call' : 'Demo invitation not sent'}</p><p className="mt-0.5 text-[10px] text-slate-500">{lastUsedAt ? `Last used ${new Date(`${lastUsedAt.replace(' ', 'T')}Z`).toLocaleString()}` : latestInvitation?.sent_at ? `Sent ${new Date(`${latestInvitation.sent_at.replace(' ', 'T')}Z`).toLocaleString()}` : 'Prepare the profile and send their code'}</p></div>{demoCalls > 0 && <span className="rounded-full bg-emerald-600 px-2 py-1 text-[9px] font-bold uppercase text-white">Follow up</span>}</div></div>
+            <div className="mt-3 grid grid-cols-3 gap-2"><button type="button" onClick={() => profile ? openProfile(profile) : void prepareLead(lead)} disabled={working} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{profile ? 'Open demo profile' : 'Prepare demo'}</button>{profile ? <button type="button" onClick={() => openProfile(profile, 'calls')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${demoCalls > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600'}`}>{demoCalls > 0 ? 'View demo call' : 'View activity'}</button> : <button type="button" disabled className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-300">No activity yet</button>}<button type="button" onClick={() => void restoreToEmailOutreach(lead)} disabled={working} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 disabled:opacity-50">Restore to call</button></div>
+          </div>;
+        }) : <p className="col-span-full rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">Interested website declines will appear here.</p>}
       </div>
     </section>}
 
