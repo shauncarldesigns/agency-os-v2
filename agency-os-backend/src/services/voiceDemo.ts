@@ -101,3 +101,33 @@ export function voiceDynamicVariables(resolved: ResolvedVoiceDemo): Record<strin
     conference_demo_mode: resolved.demoSessionId == null ? 'false' : 'true',
   };
 }
+
+/**
+ * Access-code calls must not receive the fallback test company's identity or
+ * operating facts. The lookup tool is the only source allowed to unlock a
+ * personalized profile after it validates an invitation.
+ */
+export function lockedDemoDynamicVariables(receptionistName = 'Claire'): Record<string, string> {
+  return {
+    business_id: '',
+    business_name: 'the requested business',
+    business_phone: '',
+    business_timezone: 'America/Chicago',
+    operating_mode: 'demo_access_locked',
+    current_hours_status: 'unknown',
+    transfer_destination: '',
+    transfer_enabled: 'false',
+    emergency_transfer_enabled: 'false',
+    demo_session_id: '',
+    prospect_id: '',
+    caller_type_if_known: 'unknown',
+    greeting: 'Thanks for calling the automated receptionist demo line. What is your six-digit access code?',
+    services: '',
+    service_area: '',
+    business_hours: '',
+    business_rules: '{}',
+    access_code_required: 'true',
+    receptionist_name: receptionistName,
+    conference_demo_mode: 'false',
+  };
+}
