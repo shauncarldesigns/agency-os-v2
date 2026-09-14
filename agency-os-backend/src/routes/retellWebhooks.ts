@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from '../types';
 import { verifyRetellSignature } from '../services/retellSignature';
-import { resolveVoiceDemo, voiceDynamicVariables } from '../services/voiceDemo';
+import { lockedDemoDynamicVariables, resolveVoiceDemo, voiceDynamicVariables } from '../services/voiceDemo';
 import { syncVoiceLeadFromCall } from '../services/voiceLead';
 import { notifyFailedTransfer, notifyVoiceLead } from '../services/voiceNotification';
 import type { VoiceClassification, VoiceIntake } from '../services/voiceAgent';
@@ -68,7 +68,10 @@ retellWebhookRouter.post('/webhooks/retell/inbound', async (c) => {
   const agentId = resolved.profile.retell_agent_id || c.env.RETELL_DEFAULT_AGENT_ID;
   if (!agentId) return c.json({ call_inbound: {} });
   const requiresAccessCode = resolved.demoSessionId === null && resolved.profile.profile_kind === 'test';
-  const variables = voiceDynamicVariables(resolved);
+  const resolvedVariables = voiceDynamicVariables(resolved);
+  const variables = requiresAccessCode
+    ? lockedDemoDynamicVariables(resolvedVariables.receptionist_name)
+    : resolvedVariables;
   const conferenceDemo = resolved.demoSessionId !== null;
   const beginMessage = requiresAccessCode
     ? 'Thanks for calling the automated receptionist demo line. What is your six-digit access code?'
@@ -81,9 +84,11 @@ retellWebhookRouter.post('/webhooks/retell/inbound', async (c) => {
       override_agent_id: agentId,
       ...(resolved.profile.retell_agent_version ? { override_agent_version: resolved.profile.retell_agent_version } : {}),
       ...(beginMessage ? { agent_override: { retell_llm: { begin_message: beginMessage } } } : {}),
-      dynamic_variables: { ...variables, access_code_required: requiresAccessCode ? 'true' : 'false' },
+      dynamic_variables: variables,
       metadata: {
-        voice_business_profile_id: resolved.profile.id,
+        // Do not associate a locked call with the fallback test company. The
+        // validated invitation is recorded by the lookup endpoint instead.
+        voice_business_profile_id: requiresAccessCode ? null : resolved.profile.id,
         demo_session_id: resolved.demoSessionId,
         prospect_id: resolved.prospectId,
       },
