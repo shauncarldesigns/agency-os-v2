@@ -104,8 +104,30 @@ const llmConfig = {
   ],
 };
 
-const agents = await request('GET', '/list-agents?limit=100&is_latest=true');
-const existing = Array.isArray(agents) ? agents.find((agent) => agent?.agent_name === agentName) : null;
+async function listVoiceAgents() {
+  const agents = [];
+  let paginationKey;
+  do {
+    const page = await request('POST', '/v2/list-agents', {
+      filter_criteria: { channel: { type: 'string', op: 'eq', value: 'voice' } },
+      limit: 1_000,
+      ...(paginationKey ? { pagination_key: paginationKey } : {}),
+    });
+    if (Array.isArray(page.items)) agents.push(...page.items);
+    paginationKey = page.has_more === true && typeof page.pagination_key === 'string' && page.pagination_key
+      ? page.pagination_key
+      : undefined;
+  } while (paginationKey);
+  return agents;
+}
+
+const agents = await listVoiceAgents();
+const existingSummary = agents.find((agent) => agent?.agent_name === agentName) ?? null;
+// The unified list endpoint intentionally returns compact summaries. Fetch the
+// selected voice agent before reading version and response-engine details.
+const existing = existingSummary?.agent_id
+  ? await request('GET', `/get-agent/${encodeURIComponent(existingSummary.agent_id)}`)
+  : null;
 if (existing) {
   const llmId = existing.response_engine?.type === 'retell-llm' ? existing.response_engine.llm_id : null;
   if (!llmId) throw new Error('Existing receptionist is not attached to a Retell LLM response engine');

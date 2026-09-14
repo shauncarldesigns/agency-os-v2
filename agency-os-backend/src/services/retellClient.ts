@@ -55,19 +55,54 @@ async function retellGet(apiKey: string, path: string): Promise<Record<string, u
   return body;
 }
 
+async function retellPost(apiKey: string, path: string, requestBody: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const response = await fetch(`${RETELL_API_BASE}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body: Record<string, unknown> = await boundedJson(response).catch(() => ({}));
+  if (!response.ok) {
+    const providerMessage = typeof body.message === 'string' ? body.message : `HTTP ${response.status}`;
+    throw new Error(`Retell connection failed: ${providerMessage.slice(0, 200)}`);
+  }
+  return body;
+}
+
+const VOICE_AGENT_FILTER = { channel: { type: 'string', op: 'eq', value: 'voice' } } as const;
+
+async function listVoiceAgents(apiKey: string, limit = 1_000): Promise<Record<string, unknown>[]> {
+  const agents: Record<string, unknown>[] = [];
+  let paginationKey: string | undefined;
+  do {
+    const payload = await retellPost(apiKey, '/v2/list-agents', {
+      filter_criteria: VOICE_AGENT_FILTER,
+      limit: Math.min(1_000, Math.max(1, limit - agents.length)),
+      ...(paginationKey ? { pagination_key: paginationKey } : {}),
+    });
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    agents.push(...items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object'));
+    paginationKey = payload.has_more === true && typeof payload.pagination_key === 'string' && payload.pagination_key
+      ? payload.pagination_key
+      : undefined;
+  } while (paginationKey && agents.length < limit);
+  return agents.slice(0, limit);
+}
+
 export async function validateRetellApiKey(env: Env): Promise<{ ok: true; reachable: true; agentSampleCount: number }> {
   if (!env.RETELL_API_KEY) throw new Error('RETELL_API_KEY is not configured');
-  const result = await retellGet(env.RETELL_API_KEY, '/list-agents?limit=1&is_latest=true') as unknown;
-  return { ok: true, reachable: true, agentSampleCount: Array.isArray(result) ? result.length : 0 };
+  const agents = await listVoiceAgents(env.RETELL_API_KEY, 1);
+  return { ok: true, reachable: true, agentSampleCount: agents.length };
 }
 
 export async function discoverRetellResources(env: Env) {
   if (!env.RETELL_API_KEY) throw new Error('RETELL_API_KEY is not configured');
   const [agentPayload, phonePayload] = await Promise.all([
-    retellGet(env.RETELL_API_KEY, '/list-agents?limit=50&is_latest=true') as unknown,
+    listVoiceAgents(env.RETELL_API_KEY, 1_000),
     retellGet(env.RETELL_API_KEY, '/v2/list-phone-numbers?limit=50') as unknown,
   ]);
-  const agents = Array.isArray(agentPayload) ? agentPayload : [];
+  const agents = agentPayload;
   const phones = phonePayload && typeof phonePayload === 'object' && Array.isArray((phonePayload as { items?: unknown }).items) ? (phonePayload as { items: unknown[] }).items : [];
   return {
     agents: agents.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object').map((agent) => ({
