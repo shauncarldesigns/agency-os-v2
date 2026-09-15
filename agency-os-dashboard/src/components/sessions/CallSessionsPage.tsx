@@ -130,6 +130,16 @@ const ALL = 'all';
 const CALL_OUTREACH_VIEW_KEY = 'agency-os-call-outreach-view';
 type CallOutreachView = 'automation' | 'board';
 
+function reviewMentionSuggestion(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && typeof parsed[0] === 'string' && parsed[0].trim()) return parsed[0].trim();
+  } catch { /* Legacy values may be stored as delimited text. */ }
+  const first = raw.split(/[,;/]/)[0]?.replace(/["'[\]]/g, '').trim();
+  return first || null;
+}
+
 export function CallSessionsPage({ showToast, onStateChanged, onQualified }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [fixTarget, setFixTarget] = useState<Lead | null>(null);
@@ -774,6 +784,14 @@ function CallOutreachModal({
   const [approachStats, setApproachStats] = useState<CallApproachStat[]>([]);
   const [preparingLiveDemo, setPreparingLiveDemo] = useState(false);
   const [operatorPhone, setOperatorPhone] = useState('');
+  const [contactName, setContactName] = useState(lead?.contact ?? '');
+  const [savedContactName, setSavedContactName] = useState(lead?.contact ?? '');
+  const [savingContact, setSavingContact] = useState(false);
+
+  useEffect(() => {
+    setContactName(lead?.contact ?? '');
+    setSavedContactName(lead?.contact ?? '');
+  }, [lead?.id, lead?.contact]);
 
   useEffect(() => {
     if (!lead) return;
@@ -809,7 +827,8 @@ function CallOutreachModal({
   if (!lead) return null;
 
   const activeLeadId = lead.id;
-  const firstName = lead.contact?.trim().split(/\s+/)[0] || 'there';
+  const firstName = contactName.trim().split(/\s+/)[0] || 'there';
+  const suggestedContact = reviewMentionSuggestion(lead.owner_names);
   const place = formatPlace(lead.city, lead.state);
   const opener = lead.pitch_card_text?.trim()
     || `Hi ${firstName}, this is Shaun. I was looking at ${lead.company}${place ? ` in ${place}` : ''} and had a quick idea that could help you turn more local searches into calls. Did I catch you at a bad time?`;
@@ -820,6 +839,25 @@ function CallOutreachModal({
       || lead.outcome === 'Awaiting Final Review'
     ),
   );
+
+  async function saveContactName(value = contactName) {
+    const normalized = value.trim();
+    if (normalized === savedContactName.trim()) return;
+    setSavingContact(true);
+    try {
+      const { lead: updated } = await api.leads.update(activeLeadId, { contact: normalized || null });
+      const persisted = updated.contact ?? '';
+      setContactName(persisted);
+      setSavedContactName(persisted);
+      showToast(persisted ? `Contact saved as ${persisted}` : 'Contact name cleared', 'success');
+      onSaved(false, true);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not save contact: ${msg}`, 'error');
+    } finally {
+      setSavingContact(false);
+    }
+  }
 
   async function saveEmail(keepOpen = false): Promise<boolean> {
     if (!lead) return false;
@@ -1099,6 +1137,12 @@ function CallOutreachModal({
                 preparingLiveDemo={preparingLiveDemo}
                 onPrepareLiveDemo={prepareReceptionistLiveDemo}
                 operatorPhone={operatorPhone}
+                contactName={contactName}
+                savedContactName={savedContactName}
+                savingContact={savingContact}
+                suggestedContact={suggestedContact}
+                onContactNameChange={setContactName}
+                onSaveContactName={saveContactName}
               />
             )}
 
@@ -1661,6 +1705,12 @@ function EmailCaptureSplitScript({
   preparingLiveDemo,
   onPrepareLiveDemo,
   operatorPhone,
+  contactName,
+  savedContactName,
+  savingContact,
+  suggestedContact,
+  onContactNameChange,
+  onSaveContactName,
 }: {
   firstName: string;
   leadId: number;
@@ -1688,6 +1738,12 @@ function EmailCaptureSplitScript({
   preparingLiveDemo: boolean;
   onPrepareLiveDemo: (callerPhone: string) => Promise<{ demoPhoneNumber: string; session: { expires_at: string } } | null>;
   operatorPhone: string;
+  contactName: string;
+  savedContactName: string;
+  savingContact: boolean;
+  suggestedContact: string | null;
+  onContactNameChange: (value: string) => void;
+  onSaveContactName: (value?: string) => Promise<void>;
 }) {
   const latestCall = callHistory[0] ?? null;
   const [callPath, setCallPath] = useState<'website' | 'receptionist' | null>(null);
@@ -1917,6 +1973,33 @@ function EmailCaptureSplitScript({
         </div>
 
         <aside className="overflow-visible border-t border-slate-200 bg-slate-50/80 p-4 lg:border-l lg:border-t-0">
+          <section className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+            <label htmlFor={`email-call-contact-${lead.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Contact name</label>
+            <p className="mt-1 text-[11px] leading-4 text-slate-400">Confirm who you are speaking with. This name is shared by text and email outreach.</p>
+            <div className="mt-2 flex gap-2">
+              <input
+                id={`email-call-contact-${lead.id}`}
+                value={contactName}
+                onChange={(event) => onContactNameChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void onSaveContactName();
+                  }
+                }}
+                placeholder="Add contact name"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => void onSaveContactName()} disabled={savingContact || contactName.trim() === savedContactName.trim()} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-40">
+                {savingContact ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+            {suggestedContact && suggestedContact.toLowerCase() !== contactName.trim().toLowerCase() && (
+              <button type="button" onClick={() => { onContactNameChange(suggestedContact); void onSaveContactName(suggestedContact); }} disabled={savingContact} className="mt-2 text-left text-[11px] text-blue-700 hover:text-blue-800 disabled:opacity-50">
+                Suggested from reviews: <strong>{suggestedContact}</strong> · Use as contact
+              </button>
+            )}
+          </section>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Objection responses</p>
           <p className="mt-1 text-[11px] leading-4 text-slate-400">Click a response to see what to say.</p>
           <div className="mt-3 space-y-1.5">
