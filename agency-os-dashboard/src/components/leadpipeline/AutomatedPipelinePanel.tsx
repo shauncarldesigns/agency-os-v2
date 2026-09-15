@@ -170,6 +170,8 @@ export interface PipelineLead {
   followupStep: number;
   noReplyStep: number;
   replied: boolean;
+  contactName: string | null;
+  suggestedContactName: string | null;
   ownerFirst: string;
   lastAction: string;                 // pre-formatted display string
   initials: string;
@@ -201,13 +203,11 @@ function deriveInitials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-// First given name from owner_names. The column usually holds a JSON array
-// string (e.g. `["Chad", "Matt", "Bill"]` from enrichment) but may be a
-// plain comma-separated string on hand-entered leads — parse JSON first,
-// fall back to splitting. A naive split previously leaked `["Chad` into
-// the SMS composer. Falls back to 'there' (friendly, non-personalized).
-function deriveOwnerFirst(ownerNames: string | null): string {
-  if (!ownerNames) return 'there';
+// First review-mentioned person from owner_names. Enrichment may find staff,
+// technicians, or an owner, so this remains an unconfirmed suggestion and is
+// never used for message personalization until saved to Lead.contact.
+function deriveContactSuggestion(ownerNames: string | null): string | null {
+  if (!ownerNames) return null;
   let first: string | undefined;
   try {
     const arr = JSON.parse(ownerNames);
@@ -218,8 +218,11 @@ function deriveOwnerFirst(ownerNames: string | null): string {
   if (!first) first = ownerNames.split(/[,;/]/)[0]?.trim();
   // Belt and braces: strip any stray JSON punctuation that survived.
   first = first?.replace(/["'[\]]/g, '').trim();
-  if (!first) return 'there';
-  return first.split(/\s+/)[0] || 'there';
+  return first || null;
+}
+
+function contactFirstName(contactName: string | null | undefined): string {
+  return contactName?.trim().split(/\s+/)[0] || 'there';
 }
 
 // Human-readable relative time. Server sends ISO; UI shows "Sent 3 days ago".
@@ -326,7 +329,9 @@ export function mapLeadRow(l: Lead, lastActionAction: string | null = null): Pip
     followupStep: l.pipeline_followup_step ?? 0,
     noReplyStep: l.pipeline_no_reply_step ?? 0,
     replied: (l.pipeline_replied ?? 0) === 1,
-    ownerFirst: deriveOwnerFirst(l.owner_names),
+    contactName: l.contact,
+    suggestedContactName: deriveContactSuggestion(l.owner_names),
+    ownerFirst: contactFirstName(l.contact),
     lastAction,
     initials: deriveInitials(l.company ?? ''),
     url: l.site_url,
@@ -1499,6 +1504,7 @@ export function OpenSalesCallModal({
   onNotInterested,
   onFollowUpSent,
   onEmailCaptured,
+  onContactUpdated,
   showToast,
   initialWarm = false,
   initialEmailBridge = false,
@@ -1518,6 +1524,7 @@ export function OpenSalesCallModal({
   // reuses this modal and omits them, which hides the recovery section.
   onFollowUpSent?: (leadId: number, messageBody: string) => Promise<void>;
   onEmailCaptured?: () => void;
+  onContactUpdated?: (leadId: number, contactName: string | null) => void;
   showToast: ShowToast;
   initialWarm?: boolean;
   initialEmailBridge?: boolean;
@@ -1537,6 +1544,9 @@ export function OpenSalesCallModal({
   const [commitmentTerm, setCommitmentTerm] = useState<'ongoing_hosting' | '6_months' | '12_months' | ''>('');
   const [internalNotes, setInternalNotes] = useState('');
   const [openResponse, setOpenResponse] = useState<string | null>(null);
+  const [contactName, setContactName] = useState(lead.contactName ?? '');
+  const [savedContactName, setSavedContactName] = useState(lead.contactName ?? '');
+  const [savingContact, setSavingContact] = useState(false);
   const [archivingNotInterested, setArchivingNotInterested] = useState(false);
   const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const recorderRef = externalRecorderRef;
@@ -1566,6 +1576,27 @@ export function OpenSalesCallModal({
   // "email track" bridge stage — walk them to their inbox and onto the site
   // before asking for their reaction.
   const [emailBridgeDone, setEmailBridgeDone] = useState(false);
+
+  const saveContactName = async (value = contactName) => {
+    const normalized = value.trim();
+    if (normalized === savedContactName.trim()) return;
+    setSavingContact(true);
+    try {
+      const { lead: updated } = await api.leads.update(lead.id, { contact: normalized || null });
+      const persisted = updated.contact ?? '';
+      setContactName(persisted);
+      setSavedContactName(persisted);
+      onContactUpdated?.(lead.id, updated.contact);
+      showToast(persisted ? `Contact saved as ${persisted}` : 'Contact name cleared', 'success');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      showToast(`Could not save contact: ${msg}`, 'error');
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
+  const activeContactFirst = contactFirstName(contactName);
 
   const captureEmailAndSwitch = async () => {
     const nextEmail = recoverEmail.trim();
@@ -1882,7 +1913,7 @@ export function OpenSalesCallModal({
                     <div className="border-l-2 border-blue-200 pl-4 text-[17px] leading-8 text-slate-700 sm:pl-5">
                       {interpolate(stageBody, {
                         company: lead.name,
-                        contact_name: lead.ownerFirst,
+                        contact_name: activeContactFirst,
                         city: lead.city,
                         trade: lead.category,
                       }).split(/\n{2,}/).map((paragraph) => <ScriptParagraph key={paragraph}>{paragraph}</ScriptParagraph>)}
@@ -1903,7 +1934,7 @@ export function OpenSalesCallModal({
               <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Last-attempt call</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">Confirm interest before closing the outreach loop.</h3>
               <div className="mt-5 border-l-2 border-rose-200 pl-5 text-[17px] leading-8 text-slate-700">
-                <ScriptParagraph>{`“Hey ${lead.ownerFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for ${lead.name} before I close this out.”`}</ScriptParagraph>
+                <ScriptParagraph>{`“Hey ${activeContactFirst}, it’s Shaun. I wanted to make one quick call about the homepage I put together for ${lead.name} before I close this out.”`}</ScriptParagraph>
                 <ScriptParagraph>“Did you get a chance to take a look, and is it worth having a quick conversation about?”</ScriptParagraph>
               </div>
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">If they are interested, use <strong>“They’re interested — open the sales script”</strong> below to continue into the warm sales conversation. If they are not interested or do not answer, record that outcome in the sidebar.</div>
@@ -1960,6 +1991,33 @@ export function OpenSalesCallModal({
         </div>
 
         <aside className="bg-slate-50/70 px-5 py-5">
+          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-3.5">
+            <label htmlFor={`call-contact-${lead.id}`} className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Contact name</label>
+            <p className="mt-1 text-[11px] leading-4 text-slate-400">Confirm who you are speaking with. This name is shared by text and email outreach.</p>
+            <div className="mt-2 flex gap-2">
+              <input
+                id={`call-contact-${lead.id}`}
+                value={contactName}
+                onChange={(event) => setContactName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void saveContactName();
+                  }
+                }}
+                placeholder="Add contact name"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => void saveContactName()} disabled={savingContact || contactName.trim() === savedContactName.trim()} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-40">
+                {savingContact ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+            {lead.suggestedContactName && lead.suggestedContactName.toLowerCase() !== contactName.trim().toLowerCase() && (
+              <button type="button" onClick={() => { setContactName(lead.suggestedContactName ?? ''); void saveContactName(lead.suggestedContactName ?? ''); }} disabled={savingContact} className="mt-2 text-left text-[11px] text-blue-700 hover:text-blue-800 disabled:opacity-50">
+                Suggested from reviews: <strong>{lead.suggestedContactName}</strong> · Use as contact
+              </button>
+            )}
+          </section>
           {isWarm && (
             <>
               {selectedPlan && (
@@ -3025,6 +3083,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
           onNotInterested={markNotInterested}
           onFollowUpSent={markFollowedUp}
           onEmailCaptured={() => void loadLeads()}
+          onContactUpdated={(leadId, contactName) => setLeads((current) => current.map((item) => item.id === leadId ? { ...item, contactName, ownerFirst: contactFirstName(contactName) } : item))}
           showToast={showToast}
           externalRecorderRef={pipelineCallRecorderRef}
           externalRecordingCallId={pipelineCallRecordingId}
