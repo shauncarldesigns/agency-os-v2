@@ -725,6 +725,7 @@ function EmailEngagedSalesCall({
       onCallOutcome={recordCall}
       onMoveToClients={moveToClients}
       onNotInterested={markNotInterested}
+      onContactUpdated={() => onChanged()}
       showToast={showToast}
       externalRecorderRef={recorderRef}
       externalNotes={callNotes}

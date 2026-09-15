@@ -504,6 +504,7 @@ function EditLeadPane({
   const [resetOutcome, setResetOutcome] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmingSave, setConfirmingSave] = useState(false);
+  const suggestedContact = parseList<string>(lead.owner_names)[0]?.trim() || null;
 
   useEffect(() => {
     setCompany(lead.company);
@@ -598,7 +599,14 @@ function EditLeadPane({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <EditLeadField label="Company" value={company} onChange={setCompany} />
-        <EditLeadField label="Contact" value={contact} onChange={setContact} />
+        <div>
+          <EditLeadField label="Contact" value={contact} onChange={setContact} />
+          {suggestedContact && suggestedContact.toLowerCase() !== contact.trim().toLowerCase() && (
+            <button type="button" onClick={() => setContact(suggestedContact)} className="mt-1.5 text-left text-[11px] font-medium text-blue-700 hover:text-blue-800">
+              Suggested from reviews: <strong>{suggestedContact}</strong> · Use as contact
+            </button>
+          )}
+        </div>
         <EditLeadField label="Phone" value={phone} onChange={setPhone} type="tel" />
         <EditLeadField label="Email" value={email} onChange={setEmail} type="email" />
         <EditLeadSelect label="Phone route" value={phoneRoute} onChange={(value) => setPhoneRoute(value as NonNullable<Lead['phone_route']>)} options={[
@@ -864,7 +872,7 @@ function OverviewPane({
           </span>
         </div>
         <div>
-          <FieldLabel>Owner Names (mined)</FieldLabel>
+          <FieldLabel>Names mentioned in reviews</FieldLabel>
           <span className="text-sm text-slate-600">
             {ownerNames.length > 0 ? ownerNames.join(', ') : <span className="text-slate-400">—</span>}
           </span>
