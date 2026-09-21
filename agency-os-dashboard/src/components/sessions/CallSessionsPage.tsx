@@ -1877,7 +1877,7 @@ function EmailCaptureSplitScript({
               {receptionistStage === 'question' && <>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Pivot option 1</p>
                 <div className="mt-2 border-l-2 border-blue-200 pl-3">
-                  <p className="text-[17px] leading-8 text-slate-800">Would you be interested in an automated receptionist that captures customer details and filters out sales calls like this?</p>
+                  <p className="text-[17px] leading-8 text-slate-800">Yeah, I hear that a lot on these calls, and that actually might be the bigger problem to solve here. Have you ever thought about an automated answering service that filters out calls like this while still catching your customer calls?</p>
                 </div>
                 <div className="mt-4 rounded-lg border border-blue-200 bg-white px-3 py-2.5">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Pivot option 2</p>
@@ -1898,7 +1898,7 @@ function EmailCaptureSplitScript({
               </>}
               {receptionistStage === 'interested' && <>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">If yes</p>
-                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s also something we specialize in—I can set up a quick version for your business. If you have another minute, we can try it together right now—or I can email it to you to try later. Which would you prefer?</p>
+                <p className="mt-2 border-l-2 border-emerald-200 pl-3 text-[17px] leading-8 text-slate-800">That’s also something we specialize in—I can set up a quick demo version for your business. If you have another minute, we can try it together right now—or I can email it to you to try later if you prefer.</p>
                 <button type="button" onClick={() => setReceptionistStage('question')} className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900">← Back to the receptionist question</button>
               </>}
               {receptionistStage === 'irony_offer' && <>
