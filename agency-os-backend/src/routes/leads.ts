@@ -79,7 +79,11 @@ leadsRouter.get('/', async (c) => {
              COALESCE(activity_summary.pipeline_followup_step, 0) AS pipeline_followup_step,
              latest_activity.action AS pipeline_last_action,
              latest_activity.meta AS pipeline_last_action_meta,
-             latest_activity.created_at AS pipeline_last_action_created_at
+             latest_activity.created_at AS pipeline_last_action_created_at,
+             (SELECT id FROM design_references WHERE source_lead_id=selected_leads.id AND status!='archived' ORDER BY id DESC LIMIT 1) AS saved_design_reference_id,
+             (SELECT status FROM design_references WHERE source_lead_id=selected_leads.id AND status!='archived' ORDER BY id DESC LIMIT 1) AS saved_design_status,
+             (SELECT j.status FROM design_capture_jobs j JOIN design_references d ON d.id=j.design_reference_id
+               WHERE d.source_lead_id=selected_leads.id AND d.status!='archived' ORDER BY j.id DESC LIMIT 1) AS design_capture_status
         FROM selected_leads
         LEFT JOIN activity_summary ON activity_summary.lead_id = selected_leads.id
         LEFT JOIN latest_activity ON latest_activity.lead_id = selected_leads.id

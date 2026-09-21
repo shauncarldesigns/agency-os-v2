@@ -148,6 +148,18 @@ const PIPELINE_LEAD_SELECT = `
                   AND json_extract(undo_activity.meta, '$.undid_activity_id') = scheduling_followup_activity.id
              )
          ) AS pipeline_scheduling_followup_sent,
+         EXISTS (
+           SELECT 1 FROM lead_activity AS text_handoff_activity
+            WHERE text_handoff_activity.lead_id = leads.id
+              AND text_handoff_activity.action = 'followed_up'
+              AND json_extract(text_handoff_activity.meta, '$.text_outreach_handoff') = 1
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM lead_activity AS undo_activity
+                 WHERE undo_activity.action = 'undo'
+                   AND json_extract(undo_activity.meta, '$.undid_activity_id') = text_handoff_activity.id
+              )
+         ) AS pipeline_text_handoff,
          (
            SELECT latest_activity.action
              FROM lead_activity AS latest_activity
@@ -801,6 +813,39 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
     const toStatus = rules.to ?? fromStatus;
     const sets = ["pipeline_last_action_at = datetime('now')", "updated_at = datetime('now')"];
     const params: unknown[] = [];
+    let activityMeta = body.meta;
+    let isTextNoEngagementHandoff = false;
+
+    if (action === 'followed_up' && lead.pipeline_status === 'sent_no_reply' && lead.phone_route !== 'call') {
+      const priorNoReplySteps = await c.env.DB.prepare(`
+        SELECT COUNT(*) AS count
+          FROM lead_activity AS followup_activity
+         WHERE followup_activity.lead_id = ?
+           AND followup_activity.action = 'followed_up'
+           AND followup_activity.from_status = 'sent_no_reply'
+           AND NOT EXISTS (
+             SELECT 1
+               FROM lead_activity AS undo_activity
+              WHERE undo_activity.action = 'undo'
+                AND json_extract(undo_activity.meta, '$.undid_activity_id') = followup_activity.id
+           )
+      `).bind(id).first<{ count: number }>();
+      isTextNoEngagementHandoff = Number(priorNoReplySteps?.count ?? 0) >= 1;
+      if (isTextNoEngagementHandoff) {
+        const handoffNote = '[Text outreach completed — no response] Intro, reminder, and final nudge sent. Moved to Email Outreach → To Call to capture an email address.';
+        sets.push(
+          "phone_route = 'call'",
+          "notes = CASE WHEN COALESCE(trim(notes), '') = '' THEN ? ELSE ? || char(10) || char(10) || notes END",
+        );
+        params.push(handoffNote, handoffNote);
+        activityMeta = {
+          ...(actionMeta ?? {}),
+          text_outreach_handoff: true,
+          previous_phone_route: lead.phone_route,
+          previous_notes: lead.notes,
+        };
+      }
+    }
     if (toStatus !== fromStatus) {
       sets.push('pipeline_status = ?');
       params.push(toStatus);
@@ -937,7 +982,7 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
                 previous_engagement_grade: lead.engagement_grade,
                 previous_engagement_reasons: lead.engagement_reasons,
               }
-          : body.meta,
+          : activityMeta,
     });
 
     const updated = await c.env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
@@ -960,12 +1005,31 @@ export async function ensurePipelineBrief(
   env: Env,
   id: number,
   regenerate = false,
+  requestedDesignReferenceId?: number | null,
 ): Promise<Lead | null> {
   const lead = await env.DB.prepare(
     'SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL',
   ).bind(id).first<Lead>();
   if (!lead) return null;
-  if (lead.pipeline_brief && !regenerate) return lead;
+  if (lead.pipeline_brief && !regenerate && requestedDesignReferenceId === undefined) return lead;
+
+  const designReferenceId = requestedDesignReferenceId === undefined
+    ? lead.design_reference_id
+    : requestedDesignReferenceId;
+  let designRecipe: string | null = null;
+  let designName: string | null = null;
+  let designIndustry: string | null = null;
+  let technicalTokens: string | null = null;
+  if (designReferenceId != null) {
+    const design = await env.DB.prepare(
+      "SELECT name, industry, design_recipe, technical_tokens FROM design_references WHERE id = ? AND status = 'ready'",
+    ).bind(designReferenceId).first<{ name: string; industry: string | null; design_recipe: string; technical_tokens: string }>();
+    if (!design) throw new BriefGenerationError('The selected design reference is not available or not ready');
+    designName = design.name;
+    designIndustry = design.industry;
+    designRecipe = design.design_recipe;
+    technicalTokens = design.technical_tokens;
+  }
 
   const prompt = buildPipelineBriefPrompt({
     lead_id: lead.id,
@@ -1050,18 +1114,30 @@ export async function ensurePipelineBrief(
   if (!briefText) throw new BriefGenerationError('Claude returned an empty brief');
   const strayReviews = briefText.search(/^\s*(#+\s*)?CUSTOMER REVIEWS/m);
   if (strayReviews !== -1) briefText = briefText.slice(0, strayReviews).replace(/[\s-]+$/, '');
+  if (designRecipe) {
+    briefText = `${briefText}\n\nTARGET-INDUSTRY ADAPTATION — HIGHEST PRIORITY\nReference source industry: ${designIndustry || 'General / unspecified'}\nTarget company industry: ${lead.industry || 'Unspecified'}\nPreserve the reference's composition, spacing, typography, colors, surfaces, border treatment, and overall visual character. Replace every source-industry-specific photograph, icon, service example, label, and visual metaphor with an equivalent appropriate to the target company's industry. If the reference recipe or technical tokens mention HVAC, plumbing, electrical, roofing, or another trade that differs from the target, treat only the visual treatment as reusable—not the subject matter. Never place source-industry equipment or workers into an unrelated target-industry website.\n\nDESIGN REFERENCE (USE FOR VISUAL DIRECTION)\nReference: ${designIndustry ? `${designIndustry} · ` : ''}${designName}\n\n${designRecipe}`;
+    if (technicalTokens?.trim()) {
+      briefText = `${briefText}\n\nTECHNICAL TOKENS (USE THESE VALUES VERBATIM)\n${technicalTokens.trim()}`;
+    }
+  }
   briefText = `${briefText}\n\n${formatVerbatimContact(lead)}`;
   briefText = `${briefText}\n\n${formatClarityInstallBlock(env, lead)}`;
   const reviewsBlock = formatVerbatimReviews(refreshedReviews ?? lead.google_reviews);
   if (reviewsBlock) briefText = `${briefText}\n\n${reviewsBlock}`;
 
   await env.DB.prepare(
-    `UPDATE leads SET pipeline_brief = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).bind(briefText, id).run();
+    `UPDATE leads SET pipeline_brief = ?, design_reference_id = ?, design_recipe_snapshot = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).bind(briefText, designReferenceId, designRecipe
+    ? `${designRecipe}${technicalTokens?.trim() ? `\n\nTECHNICAL TOKENS\n${technicalTokens.trim()}` : ''}`
+    : null, id).run();
+  if (designReferenceId != null && designReferenceId !== lead.design_reference_id) {
+    await env.DB.prepare('UPDATE design_references SET reuse_count = reuse_count + 1, updated_at = datetime(\'now\') WHERE id = ?')
+      .bind(designReferenceId).run();
+  }
   await writeActivity(env.DB, {
     leadId: id,
     action: 'brief_generated',
-    meta: { model: BRIEF_MODEL, regenerated: regenerate },
+    meta: { model: BRIEF_MODEL, regenerated: regenerate, design_reference_id: designReferenceId, design_reference_name: designName },
   });
   const updated = await env.DB.prepare(`${PIPELINE_LEAD_SELECT} WHERE leads.id = ?`)
     .bind(id).first<Lead>();
@@ -1078,9 +1154,9 @@ export async function ensurePipelineBrief(
 pipelineRouter.post('/leads/:id/brief', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) return c.json(badRequest('Invalid lead ID'), 400);
-  const body = (await c.req.json().catch(() => ({}))) as { regenerate?: boolean };
+  const body = (await c.req.json().catch(() => ({}))) as { regenerate?: boolean; design_reference_id?: number | null };
   try {
-    const lead = await ensurePipelineBrief(c.env, id, !!body.regenerate);
+    const lead = await ensurePipelineBrief(c.env, id, !!body.regenerate, body.design_reference_id);
     if (!lead) return c.json(notFound('Lead'), 404);
     return c.json({ lead });
   } catch (err) {
@@ -1239,6 +1315,24 @@ pipelineRouter.post('/leads/:id/undo', async (c) => {
           "engagement_grade = 'nurture'",
           'engagement_reasons = NULL',
         );
+      }
+    }
+    if (target.action === 'followed_up') {
+      try {
+        const parsed = target.meta ? JSON.parse(target.meta) as {
+          text_outreach_handoff?: unknown;
+          previous_phone_route?: unknown;
+          previous_notes?: unknown;
+        } : null;
+        if (parsed?.text_outreach_handoff === true) {
+          sets.push('phone_route = ?', 'notes = ?');
+          params.push(
+            typeof parsed.previous_phone_route === 'string' ? parsed.previous_phone_route : 'text',
+            typeof parsed.previous_notes === 'string' ? parsed.previous_notes : null,
+          );
+        }
+      } catch {
+        // A normal text follow-up has no handoff state to restore.
       }
     }
     // pipeline_last_action_at is intentionally NOT rolled back to the prior

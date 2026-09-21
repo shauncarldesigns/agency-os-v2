@@ -9,7 +9,7 @@ import type {
   Market, MarketListRow, MarketKeyword, MapPackRow, ResearchRun, ResearchRunSummary,
   VoiceAgentSpec, VoiceBusinessProfile, VoiceCall, VoiceClassification, VoiceDemoInvitation, VoiceDemoSession,
   RetellResourceInventory, RetellSetupPackage, VoiceIntake, VoiceLead, VoiceNotification, VoiceOverview, VoiceProfileConfiguration, VoiceQaCase, VoiceQaResult, VoiceQaRun, VoiceReadinessResult, VoiceSimulatorResult, VoiceSimulatorTurn, VoiceWebhookFailure,
-  LeadCounts, CallCenterLead,
+  LeadCounts, CallCenterLead, DesignReference, DesignAsset, DesignCaptureJob,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -290,6 +290,26 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 export const api = {
+  designLibrary: {
+    list: () => apiFetch<{ designs: DesignReference[] }>('/api/design-references'),
+    get: (id: number) => apiFetch<{ design: DesignReference }>(`/api/design-references/${id}`),
+    create: (body: Partial<DesignReference> & { name: string; design_recipe: string; style_tags?: string[] | string }) =>
+      apiFetch<{ design: DesignReference }>('/api/design-references', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id: number, body: Partial<DesignReference> & { style_tags?: string[] | string }) =>
+      apiFetch<{ design: DesignReference }>(`/api/design-references/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    capture: (id: number) => apiFetch<{ job: DesignCaptureJob }>(`/api/design-references/${id}/capture`, { method: 'POST' }),
+    saveFromLead: (leadId: number) => apiFetch<{ design: DesignReference; job: DesignCaptureJob }>(`/api/design-references/from-lead/${leadId}`, { method: 'POST' }),
+    snapshot: (body: {name:string;source_url:string;industry?:string}) => apiFetch<{design:DesignReference;job:DesignCaptureJob}>('/api/design-references/snapshot',{method:'POST',body:JSON.stringify(body)}),
+    captures: (id: number) => apiFetch<{ job: DesignCaptureJob | null; assets: DesignAsset[]; history: DesignCaptureJob[] }>(`/api/design-references/${id}/captures`),
+    generateRecipe: (id:number) => apiFetch<{design:DesignReference}>(`/api/design-references/${id}/generate-recipe`,{method:'POST'}),
+    approve: (id:number) => apiFetch<{design:DesignReference}>(`/api/design-references/${id}/approve`,{method:'POST'}),
+    remove: (id:number) => apiFetch<void>(`/api/design-references/${id}`,{method:'DELETE'}),
+    assetBlob: async (id: number) => {
+      const res = await fetch(`${API_BASE}/api/design-assets/${id}`, { credentials: 'include', headers: authHeaders() });
+      if (!res.ok) throw new ApiError('Could not load design screenshot', res.status);
+      return res.blob();
+    },
+  },
   research: {
     markets: () => apiFetch<{ markets: MarketListRow[] }>('/api/research/markets'),
     market: (id: number) =>
@@ -849,10 +869,13 @@ export const api = {
     // Generates + caches a landingsite-ready brief. Idempotent unless
     // { regenerate: true } is passed; a second call otherwise returns
     // the cached brief without re-billing Claude.
-    generateBrief: (id: number, opts?: { regenerate?: boolean }) =>
+    generateBrief: (id: number, opts?: { regenerate?: boolean; designReferenceId?: number | null }) =>
       apiFetch<{ lead: Lead }>(`/api/pipeline/leads/${id}/brief`, {
         method: 'POST',
-        body: JSON.stringify({ regenerate: !!opts?.regenerate }),
+        body: JSON.stringify({
+          regenerate: !!opts?.regenerate,
+          ...(opts && 'designReferenceId' in opts ? { design_reference_id: opts.designReferenceId } : {}),
+        }),
       }),
   },
   builder: {

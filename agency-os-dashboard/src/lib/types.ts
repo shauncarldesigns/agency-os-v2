@@ -78,6 +78,8 @@ export interface Lead {
   site_review_updated_at: string | null;
   site_review_approved_at: string | null;
   pipeline_brief: string | null;               // landingsite brief for this lead's site
+  design_reference_id: number | null;
+  design_recipe_snapshot: string | null;
   campaign_slug: string | null;                // slugified name used in the UTM campaign
   clarity_tag: string | null;                  // Clarity custom-tag id
   pipeline_sessions: number;                   // engagement counter (click-tracker + Clarity)
@@ -91,6 +93,7 @@ export interface Lead {
   pipeline_calendar_sent?: number;
   pipeline_calendar_clicked?: number;
   pipeline_scheduling_followup_sent?: number;
+  pipeline_text_handoff?: number;               // moved from completed no-response text outreach
   engagement_score: number;
   engagement_grade: 'hot' | 'walkthrough' | 'follow_up' | 'nurture' | string;
   engagement_reasons: string | null;
@@ -99,6 +102,9 @@ export interface Lead {
   clarity_ignore_until: string | null;
   created_at: string;
   updated_at: string;
+  saved_design_reference_id?: number | null;
+  saved_design_status?: 'draft' | 'ready' | 'archived' | null;
+  design_capture_status?: 'queued' | 'capturing' | 'completed' | 'failed' | null;
 }
 
 // One row per pipeline action. Backs the `/undo` endpoint and the lead
@@ -588,9 +594,49 @@ export type Tab =
   | 'receptionist-interest'
   | 'sales-intelligence'
   | 'sites'
+  | 'design-library'
   | 'docs'
   | 'playbook'
   | 'settings';
+
+export interface DesignReference {
+  id: number;
+  name: string;
+  description: string | null;
+  source_lead_id: number | null;
+  source_project_id: number | null;
+  source_url: string | null;
+  industry: string | null;
+  status: 'draft' | 'ready' | 'archived';
+  notes: string | null;
+  style_tags: string;
+  design_recipe: string;
+  technical_tokens: string;
+  source_brief_snapshot: string | null;
+  recipe_generated_at: string | null;
+  recipe_generation_error: string | null;
+  reuse_count: number;
+  created_at: string;
+  updated_at: string;
+  preview_asset_id?: number | null;
+}
+
+export interface DesignCaptureJob {
+  id: number;
+  status: 'queued' | 'capturing' | 'completed' | 'failed';
+  error?: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+}
+
+export interface DesignAsset {
+  id: number;
+  design_reference_id: number;
+  kind: 'desktop_full' | 'mobile_full';
+  viewport_width: number;
+  viewport_height: number;
+  created_at: string;
+}
 
 export interface AgencySettings {
   general: {

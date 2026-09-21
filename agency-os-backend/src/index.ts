@@ -39,6 +39,7 @@ import { processCallIntelligenceJobs } from './services/callIntelligence';
 import { retellWebhookRouter } from './routes/retellWebhooks';
 import { voiceRouter } from './routes/voice';
 import { purgeExpiredVoiceContent } from './services/voiceRetention';
+import { designLibraryRouter } from './routes/designLibrary';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -167,6 +168,7 @@ app.route('/api/research', researchRouter);
 app.route('/api/builder', builderAdminRouter);
 app.route('/api/call-intelligence', callIntelligenceRouter);
 app.route('/api/voice', voiceRouter);
+app.route('/api', designLibraryRouter);
 
 app.notFound(c => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
 app.onError(async (err, c) => {

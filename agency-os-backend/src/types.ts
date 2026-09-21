@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
   RECORDINGS: R2Bucket;       // agency-os-recordings — call audio captures
+  DESIGN_ASSETS: R2Bucket;    // agency-os-design-assets — reusable design screenshots
   ENV: string;
   CLAUDE_API_KEY: string;
   GOOGLE_PLACES_API_KEY: string;
@@ -122,10 +123,13 @@ export interface Lead {
   site_review_updated_at: string | null;
   site_review_approved_at: string | null;
   pipeline_brief: string | null;
+  design_reference_id: number | null;
+  design_recipe_snapshot: string | null;
   campaign_slug: string | null;
   clarity_tag: string | null;
   pipeline_sessions: number;
   pipeline_last_action_at: string | null;
+  pipeline_text_handoff?: number;
   engagement_score: number;
   engagement_grade: string;
   engagement_reasons: string | null;

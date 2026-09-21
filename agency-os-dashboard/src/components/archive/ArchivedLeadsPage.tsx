@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Ban, BarChart3, CheckCircle2, Eye, Globe2, Link2, PhoneOff, RefreshCw, RotateCcw, Search, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { Archive, Ban, BarChart3, CheckCircle2, Eye, Globe2, Library, Link2, PhoneOff, RefreshCw, RotateCcw, Search, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { Lead, ShowToast } from '../../lib/types';
 import { api, ApiError } from '../../lib/api';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
@@ -7,16 +7,18 @@ import { NOT_INTERESTED_REASONS } from '../shared/NotInterestedModal';
 
 type ArchiveFilter = 'all' | 'cleanup_needed' | 'deleted' | 'no_site';
 
-export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToast; onChanged?: () => void }) {
+export function ArchivedLeadsPage({ showToast, onChanged, onOpenDesign }: { showToast: ShowToast; onChanged?: () => void; onOpenDesign?: (id:number) => void }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ArchiveFilter>('all');
   const [openLeadId, setOpenLeadId] = useState<number | null>(null);
   const [reactivateLead, setReactivateLead] = useState<Lead | null>(null);
+  const [savingDesignIds, setSavingDesignIds] = useState<Set<number>>(new Set());
+  const [keptLeadIds, setKeptLeadIds] = useState<Set<number>>(new Set());
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { leads: rows } = await api.leads.list({ pipeline_status: 'archived' });
       setLeads(rows.filter((lead) =>
@@ -28,11 +30,16 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Could not load archived leads', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!leads.some((lead) => lead.design_capture_status === 'queued' || lead.design_capture_status === 'capturing')) return;
+    const timer = window.setTimeout(() => void load(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, [leads, load]);
 
   const cleanupCount = leads.filter((lead) => lead.demo_site_status === 'cleanup_needed').length;
   const declineStats = useMemo(() => {
@@ -59,8 +66,11 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
     return true;
   }), [leads, query, filter]);
 
-  const completeCleanup = async (lead: Lead) => {
-    if (!window.confirm(`Confirm that the demo site for "${lead.company}" has been deleted in LandingSite.`)) return;
+  const completeCleanup = async (lead: Lead, withoutSaving = false) => {
+    const warning = withoutSaving
+      ? `Delete the ${lead.company} LandingSite project without saving this design? This cannot be captured afterward.`
+      : `Confirm that the demo site for "${lead.company}" has been deleted in LandingSite.`;
+    if (!window.confirm(warning)) return;
     try {
       const { lead: updated } = await api.pipeline.updateDemoSiteStatus(lead.id, 'deleted');
       setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -68,6 +78,23 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
       onChanged?.();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Could not complete cleanup', 'error');
+    }
+  };
+
+  const saveDesign = async (lead: Lead) => {
+    if (!window.confirm(`Save ${lead.company} to the Design Library? Agency OS will capture the site and send its screenshots, technical audit, and saved source brief to Anthropic to draft a reusable recipe automatically.`)) return;
+    setSavingDesignIds((current) => new Set(current).add(lead.id));
+    try {
+      const { design, job } = await api.designLibrary.saveFromLead(lead.id);
+      setLeads((current) => current.map((item) => item.id === lead.id ? {
+        ...item, saved_design_reference_id: design.id, design_capture_status: job.status,
+        saved_design_status: design.status,
+      } : item));
+      showToast(`${lead.company} design capture started`, 'success');
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'Could not save design', 'error');
+    } finally {
+      setSavingDesignIds((current) => { const next = new Set(current); next.delete(lead.id); return next; });
     }
   };
 
@@ -124,13 +151,18 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
           const latestTouch = archiveLatestTouch(lead);
           const isNotInterested = lead.status === 'not_interested';
           const isTestLead = lead.source === 'local-receptionist-flow-test';
+          const designSaving = savingDesignIds.has(lead.id) || lead.design_capture_status === 'queued' || lead.design_capture_status === 'capturing';
+          const designCaptured = lead.design_capture_status === 'completed';
+          const designSaved = designCaptured && lead.saved_design_status === 'ready';
+          const designFailed = lead.design_capture_status === 'failed';
+          const keptForNow = keptLeadIds.has(lead.id);
           return <article key={lead.id} className={`rounded-2xl border bg-white p-4 shadow-sm ${isTestLead ? 'border-violet-400 ring-1 ring-violet-100' : cleanupNeeded ? 'border-amber-200' : 'border-slate-200'}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="truncate text-base font-bold text-slate-900">{lead.company}</h3>
                   {isTestLead && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Test lead</span>}
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cleanupNeeded ? 'bg-amber-100 text-amber-700' : lead.demo_site_status === 'deleted' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{cleanupNeeded ? 'Cleanup required' : lead.demo_site_status === 'deleted' ? 'Site deleted' : 'No demo site'}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${designSaved ? 'bg-emerald-100 text-emerald-700' : designCaptured ? 'bg-blue-100 text-blue-700' : cleanupNeeded ? 'bg-amber-100 text-amber-700' : lead.demo_site_status === 'deleted' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{designSaved ? 'Design saved · Safe to delete' : designCaptured ? 'Design captured · Review required' : designSaving ? 'Saving design…' : cleanupNeeded ? 'Cleanup required' : lead.demo_site_status === 'deleted' ? 'Site deleted' : 'No demo site'}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{[lead.city, lead.state].filter(Boolean).join(', ') || 'Location unavailable'} · {lead.outcome || 'Archived'}</p>
               </div>
@@ -144,7 +176,14 @@ export function ArchivedLeadsPage({ showToast, onChanged }: { showToast: ShowToa
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {cleanupNeeded && siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"><Link2 className="h-3.5 w-3.5" /> Open demo</a>}
-              {cleanupNeeded && <button type="button" onClick={() => void completeCleanup(lead)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600"><Trash2 className="h-3.5 w-3.5" /> Mark site deleted</button>}
+              {cleanupNeeded && !designCaptured && !keptForNow && <button type="button" onClick={() => void saveDesign(lead)} disabled={designSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"><Library className="h-3.5 w-3.5" /> {designSaving ? 'Saving design…' : designFailed ? 'Retry save to Design Library' : 'Save to Design Library'}</button>}
+              {cleanupNeeded && !designCaptured && !designSaving && !keptForNow && <button type="button" onClick={() => void completeCleanup(lead, true)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> Delete without saving</button>}
+              {cleanupNeeded && !designCaptured && !designSaving && !keptForNow && <button type="button" onClick={() => setKeptLeadIds((current) => new Set(current).add(lead.id))} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Keep for now</button>}
+              {cleanupNeeded && designCaptured && !designSaved && <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><Library className="h-3.5 w-3.5" /> Review draft in Design Library and mark Ready</span>}
+              {cleanupNeeded && lead.saved_design_reference_id && <button type="button" onClick={() => onOpenDesign?.(lead.saved_design_reference_id!)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">Open design draft</button>}
+              {cleanupNeeded && keptForNow && <span className="inline-flex items-center px-2 py-2 text-xs font-semibold text-slate-500">Kept for now</span>}
+              {cleanupNeeded && keptForNow && <button type="button" onClick={() => setKeptLeadIds((current) => { const next = new Set(current); next.delete(lead.id); return next; })} className="rounded-lg px-2 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50">Show choices</button>}
+              {cleanupNeeded && designSaved && <button type="button" onClick={() => void completeCleanup(lead)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><Trash2 className="h-3.5 w-3.5" /> Mark site deleted</button>}
               {lead.demo_site_status === 'deleted' && <span className="inline-flex items-center gap-1.5 px-2 py-2 text-xs font-semibold text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Cleanup complete</span>}
               <button type="button" onClick={() => setReactivateLead(lead)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Reactivate</button>
             </div>

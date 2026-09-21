@@ -89,3 +89,35 @@ export async function callClaudeJson<T = unknown>(
     return JSON.parse(match[0]) as T;
   }
 }
+
+export async function callClaudeVisionJson<T = unknown>(
+  apiKey: string,
+  prompt: string,
+  images: Array<{ mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }>,
+  opts: ClaudeCallOptions = {},
+): Promise<T> {
+  const model = opts.model ?? 'claude-sonnet-4-6';
+  const content = [
+    ...images.map((image) => ({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } })),
+    { type: 'text', text: prompt },
+  ];
+  const body: Record<string, unknown> = {
+    model, max_tokens: opts.maxTokens ?? 7000,
+    messages: [{ role: 'user', content }],
+  };
+  if (opts.systemPrompt) body.system = opts.systemPrompt;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
+  });
+  if (!res.ok) throw new Error(`Claude API error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json() as { content: Array<{type:string;text?:string}> };
+  const raw = data.content.find((block) => block.type === 'text')?.text ?? '';
+  try { return JSON.parse(raw) as T; }
+  catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Claude did not return valid JSON');
+    return JSON.parse(match[0]) as T;
+  }
+}

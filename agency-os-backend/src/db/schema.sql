@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS leads (
   site_review_updated_at TEXT,
   site_review_approved_at TEXT,
   pipeline_brief  TEXT,
+  design_reference_id INTEGER REFERENCES design_references(id) ON DELETE SET NULL,
+  design_recipe_snapshot TEXT,
   campaign_slug   TEXT,
   clarity_tag     TEXT,
   pipeline_sessions INTEGER NOT NULL DEFAULT 0,
@@ -354,6 +356,61 @@ CREATE INDEX IF NOT EXISTS idx_proj_tier ON projects(tier);
 CREATE INDEX IF NOT EXISTS idx_proj_status ON projects(status);
 -- Lets the hourly DNS poll cron cheaply find zones still awaiting nameserver delegation.
 CREATE INDEX IF NOT EXISTS idx_projects_dns_pending ON projects(dns_status) WHERE dns_status = 'pending';
+
+-- ==================================================
+-- DESIGN LIBRARY — reusable visual recipes for briefs
+-- ==================================================
+CREATE TABLE IF NOT EXISTS design_references (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  source_lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+  source_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+  source_url TEXT,
+  industry TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','ready','archived')),
+  notes TEXT,
+  style_tags TEXT NOT NULL DEFAULT '[]',
+  design_recipe TEXT NOT NULL,
+  technical_tokens TEXT NOT NULL DEFAULT '{}',
+  source_brief_snapshot TEXT,
+  recipe_generated_at TEXT,
+  recipe_generation_error TEXT,
+  reuse_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_design_references_status
+  ON design_references(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS design_capture_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  design_reference_id INTEGER NOT NULL REFERENCES design_references(id) ON DELETE CASCADE,
+  source_url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','capturing','completed','failed')),
+  lock_token TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  started_at TEXT,
+  completed_at TEXT,
+  desktop_analysis_key TEXT,
+  mobile_analysis_key TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_design_capture_jobs_status ON design_capture_jobs(status, created_at);
+
+CREATE TABLE IF NOT EXISTS design_reference_assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  design_reference_id INTEGER NOT NULL REFERENCES design_references(id) ON DELETE CASCADE,
+  capture_job_id INTEGER NOT NULL REFERENCES design_capture_jobs(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK(kind IN ('desktop_full','mobile_full')),
+  storage_key TEXT NOT NULL UNIQUE,
+  viewport_width INTEGER NOT NULL,
+  viewport_height INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(capture_job_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_design_reference_assets_design ON design_reference_assets(design_reference_id, created_at);
 
 -- ==================================================
 -- PROJECT DISCOVERY — client-supplied planning answers
