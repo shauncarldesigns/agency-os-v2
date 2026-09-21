@@ -151,8 +151,13 @@ const PIPELINE_LEAD_SELECT = `
          EXISTS (
            SELECT 1 FROM lead_activity AS text_handoff_activity
             WHERE text_handoff_activity.lead_id = leads.id
-              AND text_handoff_activity.action = 'followed_up'
-              AND json_extract(text_handoff_activity.meta, '$.text_outreach_handoff') = 1
+              AND (
+                text_handoff_activity.action = 'text_outreach_handoff'
+                OR (
+                  text_handoff_activity.action = 'followed_up'
+                  AND json_extract(text_handoff_activity.meta, '$.text_outreach_handoff') = 1
+                )
+              )
               AND NOT EXISTS (
                 SELECT 1
                   FROM lead_activity AS undo_activity
