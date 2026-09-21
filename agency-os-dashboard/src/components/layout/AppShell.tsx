@@ -22,6 +22,7 @@ import {
   PhoneIncoming,
   BrainCircuit,
   Archive,
+  Palette,
 } from 'lucide-react';
 import type { AgencySettings, Tab } from '../../lib/types';
 import { endAccessSession, signBackIn } from '../../lib/accessSession';
@@ -70,6 +71,7 @@ const NAV: Array<{ section: string; items: NavItem[] }> = [
     section: 'Work',
     items: [
       { key: 'sites', label: 'Clients & Sites', icon: Globe, badgeKey: 'sites' },
+      { key: 'design-library', label: 'Design Library', icon: Palette },
       { key: 'docs', label: 'Docs', icon: Library },
       { key: 'playbook', label: 'Playbook', icon: BookOpen },
     ],
@@ -89,6 +91,7 @@ const PAGE_TITLES: Record<Tab, { title: string; subtitle: string }> = {
   builder: { title: 'Builder Employee', subtitle: 'Bulk LandingSite.ai website production' },
   prospect: { title: 'Lead Finder', subtitle: 'Search Google Places for new leads' },
   sites: { title: 'Clients & Sites', subtitle: 'Projects, briefs, and live sites' },
+  'design-library': { title: 'Design Library', subtitle: 'Reusable visual recipes for new site briefs' },
   docs: { title: 'Docs', subtitle: 'Agency wiki and operating checklists' },
   playbook: { title: 'Playbook', subtitle: 'Scripts, objections, and follow-ups' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences, integrations, and system health' },

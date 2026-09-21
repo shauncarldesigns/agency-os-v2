@@ -96,6 +96,22 @@ async function api(path, body, retries = 20) {
   }
 }
 
+async function uploadCaptureAsset(job, kind, buffer, viewport) {
+  const response = await fetch(`${API_URL}/api/builder-worker/capture-assets/${job.id}/${kind}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      'Content-Type': 'image/png',
+      'X-Capture-Lock': job.lockToken,
+      'X-Viewport-Width': String(viewport.width),
+      'X-Viewport-Height': String(viewport.height),
+    },
+    body: buffer,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`${response.status}: ${payload.error ?? response.statusText}`);
+}
+
 const waitForPoll = () => new Promise(resolvePromise => setTimeout(resolvePromise, POLL_MS));
 
 let context;
@@ -255,6 +271,83 @@ async function build(job) {
   }
 }
 
+async function captureDesign(job) {
+  const browser = await browserContext();
+  const page = await browser.newPage();
+  try {
+    let technicalAudit;
+    console.log(`Capturing design reference ${job.designReferenceId}: ${job.sourceUrl}`);
+    for (const target of [
+      { kind: 'desktop_full', width: 1440, height: 1000 },
+      { kind: 'mobile_full', width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize({ width: target.width, height: target.height });
+      const response = await page.goto(job.sourceUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+      await page.waitForTimeout(2500);
+      const pageTitle = await page.title();
+      const pageText = (await page.locator('body').innerText().catch(() => '')).slice(0, 2000);
+      if ((response && response.status() >= 400) || /preview not found|site not found|project not found|404\s*(?:not found)?/i.test(`${pageTitle}\n${pageText}`)) {
+        throw new Error(`Source website is unavailable${response ? ` (HTTP ${response.status()})` : ''}: ${pageTitle || 'missing preview'}`);
+      }
+      await page.evaluate(async () => {
+        const step = Math.max(400, Math.floor(window.innerHeight * 0.75));
+        for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
+          window.scrollTo(0, y);
+          await new Promise(resolvePromise => setTimeout(resolvePromise, 120));
+        }
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(750);
+      if (target.kind === 'desktop_full') {
+        technicalAudit = await page.evaluate(() => {
+          const visible = [...document.querySelectorAll('body *')].filter(element => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+          });
+          const frequent = (values, limit = 12) => [...values.reduce((map, value) => {
+            if (value) map.set(value, (map.get(value) || 0) + 1); return map;
+          }, new Map()).entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([value, count]) => ({ value, count }));
+          const styles = visible.map(element => getComputedStyle(element));
+          const mainCandidates = visible.filter(element => ['MAIN','SECTION','HEADER','FOOTER'].includes(element.tagName));
+          return {
+            auditedAt: new Date().toISOString(), viewport: { width: innerWidth, height: innerHeight },
+            document: { title: document.title, fullHeight: document.documentElement.scrollHeight },
+            typography: {
+              fontFamilies: frequent(styles.map(style => style.fontFamily), 8),
+              headingScale: [...document.querySelectorAll('h1,h2,h3')].slice(0, 24).map(element => { const style = getComputedStyle(element); return { tag: element.tagName.toLowerCase(), fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }; }),
+            },
+            colors: { backgrounds: frequent(styles.map(style => style.backgroundColor)), text: frequent(styles.map(style => style.color)) },
+            surfaces: { borderRadii: frequent(styles.map(style => style.borderRadius), 10), borders: frequent(styles.map(style => style.borderColor), 10) },
+            layout: {
+              widestContentPixels: Math.round(Math.max(0, ...mainCandidates.map(element => element.getBoundingClientRect().width))),
+              sections: mainCandidates.slice(0, 40).map(element => ({ tag: element.tagName.toLowerCase(), id: element.id || null, classes: String(element.className || '').slice(0, 180), height: Math.round(element.getBoundingClientRect().height) })),
+            },
+          };
+        });
+      }
+      const screenshot = await page.screenshot({ fullPage: true, type: 'png' });
+      await uploadCaptureAsset(job, target.kind, screenshot, target);
+      const analysisHeight = Math.min(7600, await page.evaluate(() => document.documentElement.scrollHeight));
+      const analysis = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: target.width, height: analysisHeight } });
+      await uploadCaptureAsset(job, target.kind.replace('_full', '_analysis'), analysis, { width: target.width, height: analysisHeight });
+    }
+    const completion = await api('/capture-result', { jobId: job.id, lockToken: job.lockToken, success: true, technicalAudit }, Number.MAX_SAFE_INTEGER);
+    if (completion.autoGenerate) {
+      console.log(`Drafting reusable recipe for design reference ${job.designReferenceId}`);
+      await api('/generate-design-recipe', { designReferenceId: job.designReferenceId }, Number.MAX_SAFE_INTEGER);
+      console.log(`Draft recipe ready for design reference ${job.designReferenceId}`);
+    }
+    console.log(`Captured design reference ${job.designReferenceId}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await api('/capture-result', { jobId: job.id, lockToken: job.lockToken, success: false, error: message }, Number.MAX_SAFE_INTEGER).catch(() => undefined);
+    console.error(`Design capture failed: ${message}`);
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 async function main() {
   console.log(`Builder Employee online. Profile: ${PROFILE_DIR}`);
   const browser = await browserContext();
@@ -264,6 +357,11 @@ async function main() {
   if (editorPage) await authPage.close().catch(() => undefined);
   while (true) {
     try {
+      const { capture } = await api('/capture-claim');
+      if (capture) {
+        await captureDesign(capture);
+        continue;
+      }
       const { paused, prepare, job } = await api('/claim');
       if (paused) await api('/heartbeat', { state: 'paused', message: 'Paused by operator' });
       else if (prepare) {

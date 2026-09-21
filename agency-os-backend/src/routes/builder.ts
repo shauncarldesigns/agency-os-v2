@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import type { Env, Lead } from '../types';
 import { completePipelineBuild, ensurePipelineBrief } from './pipeline';
+import { generateDesignRecipe } from './designLibrary';
 import { builderEligibleLeadSql } from '../services/outreachEligibility';
+import { log } from '../utils/errors';
 
 type WorkerState = 'idle' | 'starting' | 'running' | 'building' | 'login_required' | 'paused' | 'error';
 interface Job { id: number; lead_id: number; run_id: number; status: string; attempt_count: number; lock_token: string | null }
@@ -217,6 +219,67 @@ builderWorkerRouter.post('/result', async (c) => {
   if(control?.stop_requested) await stopRunAfterCurrent(c.env.DB,job.run_id);
   else if(!b.systemError) await finishRunIfDrained(c.env.DB,job.run_id);
   return c.json({success:!!b.success,leadId:job.lead_id,demoUrl:b.demoUrl,reason:b.reason});
+});
+
+builderWorkerRouter.post('/capture-claim', async (c) => {
+  await c.env.DB.prepare("UPDATE design_capture_jobs SET status='queued',lock_token=NULL,error='Capture lease expired',updated_at=datetime('now') WHERE status='capturing' AND started_at<datetime('now','-20 minutes')").run();
+  const candidate = await c.env.DB.prepare("SELECT id,design_reference_id designReferenceId,source_url sourceUrl FROM design_capture_jobs WHERE status='queued' ORDER BY id LIMIT 1").first<{id:number;designReferenceId:number;sourceUrl:string}>();
+  if (!candidate) return c.json({ capture: null });
+  const lockToken = crypto.randomUUID();
+  const claimed = await c.env.DB.prepare("UPDATE design_capture_jobs SET status='capturing',lock_token=?,started_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status='queued'").bind(lockToken,candidate.id).run();
+  return c.json({ capture: claimed.meta.changes ? { ...candidate, lockToken } : null });
+});
+
+builderWorkerRouter.post('/capture-assets/:jobId/:kind', async (c) => {
+  const jobId = Number(c.req.param('jobId'));
+  const kind = c.req.param('kind');
+  const lockToken = c.req.header('X-Capture-Lock') ?? '';
+  if (!Number.isInteger(jobId) || !['desktop_full','mobile_full','desktop_analysis','mobile_analysis'].includes(kind)) return c.json({error:'Invalid capture asset'},400);
+  const job = await c.env.DB.prepare("SELECT id,design_reference_id FROM design_capture_jobs WHERE id=? AND lock_token=? AND status='capturing'").bind(jobId,lockToken).first<{id:number;design_reference_id:number}>();
+  if (!job) return c.json({error:'Capture lock is no longer valid'},409);
+  const bytes = await c.req.arrayBuffer();
+  if (!bytes.byteLength || bytes.byteLength > 20 * 1024 * 1024) return c.json({error:'Screenshot must be between 1 byte and 20 MB'},413);
+  const width = Number(c.req.header('X-Viewport-Width'));
+  const height = Number(c.req.header('X-Viewport-Height'));
+  const key = `designs/${job.design_reference_id}/capture-${jobId}-${kind}.png`;
+  await c.env.DESIGN_ASSETS.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+  if (kind === 'desktop_analysis' || kind === 'mobile_analysis') {
+    const column = kind === 'desktop_analysis' ? 'desktop_analysis_key' : 'mobile_analysis_key';
+    await c.env.DB.prepare(`UPDATE design_capture_jobs SET ${column}=?,updated_at=datetime('now') WHERE id=?`).bind(key,jobId).run();
+    return c.json({ok:true});
+  }
+  await c.env.DB.prepare(`INSERT INTO design_reference_assets(design_reference_id,capture_job_id,kind,storage_key,viewport_width,viewport_height)
+    VALUES(?,?,?,?,?,?) ON CONFLICT(capture_job_id,kind) DO UPDATE SET storage_key=excluded.storage_key,viewport_width=excluded.viewport_width,viewport_height=excluded.viewport_height,created_at=datetime('now')`)
+    .bind(job.design_reference_id,jobId,kind,key,width || 0,height || 0).run();
+  return c.json({ok:true});
+});
+
+builderWorkerRouter.post('/capture-result', async (c) => {
+  const body = await c.req.json<{jobId?:number;lockToken?:string;success?:boolean;error?:string;technicalAudit?:unknown}>();
+  const job = await c.env.DB.prepare("SELECT id,design_reference_id FROM design_capture_jobs WHERE id=? AND lock_token=? AND status='capturing'").bind(body.jobId,body.lockToken).first<{id:number;design_reference_id:number}>();
+  if (!job) return c.json({error:'Capture lock is no longer valid'},409);
+  if (body.success) {
+    const count = await c.env.DB.prepare('SELECT COUNT(*) count FROM design_reference_assets WHERE capture_job_id=?').bind(body.jobId).first<{count:number}>();
+    if ((count?.count ?? 0) !== 2) return c.json({error:'Both desktop and mobile assets are required'},400);
+  }
+  await c.env.DB.prepare("UPDATE design_capture_jobs SET status=?,error=?,completed_at=datetime('now'),lock_token=NULL,updated_at=datetime('now') WHERE id=?")
+    .bind(body.success?'completed':'failed',body.success?null:(body.error ?? 'Capture failed').slice(0,2000),body.jobId).run();
+  const design = await c.env.DB.prepare('SELECT status FROM design_references WHERE id=?').bind(job.design_reference_id).first<{status:string}>();
+  if (body.success && body.technicalAudit && design?.status === 'draft') {
+    await c.env.DB.prepare("UPDATE design_references SET technical_tokens=?,notes='Desktop and mobile snapshots plus technical browser audit captured. Review the recipe before marking Ready.',updated_at=datetime('now') WHERE id=?")
+      .bind(JSON.stringify(body.technicalAudit),job.design_reference_id).run();
+  }
+  return c.json({ok:true,autoGenerate:body.success && design?.status === 'draft',designReferenceId:job.design_reference_id});
+});
+
+builderWorkerRouter.post('/generate-design-recipe', async (c) => {
+  const body = await c.req.json<{designReferenceId?:number}>();
+  if (!body.designReferenceId) return c.json({error:'designReferenceId is required'},400);
+  try { await generateDesignRecipe(c.env,body.designReferenceId); return c.json({ok:true}); }
+  catch (error) {
+    log('error','builder-worker',`Automatic recipe generation failed for design ${body.designReferenceId}`,error);
+    return c.json({error:error instanceof Error?error.message:'Recipe generation failed'},500);
+  }
 });
 
 export const builderAdminRouter = new Hono<{ Bindings: Env }>();

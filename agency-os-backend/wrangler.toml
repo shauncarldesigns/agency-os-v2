@@ -21,6 +21,10 @@ database_id = "dfe72eea-8a18-47ce-a806-2cbd13139c04"
 binding = "RECORDINGS"
 bucket_name = "agency-os-recordings"
 
+[[r2_buckets]]
+binding = "DESIGN_ASSETS"
+bucket_name = "agency-os-design-assets"
+
 [[ratelimits]]
 name = "CLICK_RATE_LIMITER"
 namespace_id = "19601"

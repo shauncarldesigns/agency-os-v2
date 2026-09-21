@@ -28,7 +28,7 @@ import {
   Mail,
   type LucideIcon,
 } from 'lucide-react';
-import type { Lead, Project, ShowToast } from '../../lib/types';
+import type { DesignReference, Lead, Project, ShowToast } from '../../lib/types';
 import { api, TRACKING_BASE, ApiError } from '../../lib/api';
 import { LeadDetailModal as SharedLeadDetailModal } from '../shared/LeadDetailModal';
 import { StarRating } from '../shared/StarRating';
@@ -183,6 +183,7 @@ export interface PipelineLead {
   clarityTag: string | null;
   trackerUrl: string;                 // /r/:id link — this is what gets texted
   brief: string | null;
+  designReferenceId: number | null;
 }
 
 // `sms:` deep link — `?&body=` is the variant most broadly honored across
@@ -342,6 +343,7 @@ export function mapLeadRow(l: Lead, lastActionAction: string | null = null): Pip
     clarityTag: l.clarity_tag,
     trackerUrl: `${TRACKING_BASE}/r/${l.id}`,
     brief: l.pipeline_brief,
+    designReferenceId: l.design_reference_id,
   };
 }
 
@@ -677,14 +679,6 @@ function getNoReplyProgress(lead: PipelineLead): {
     action: 'text',
     tone: 'border-blue-200 bg-blue-50 text-blue-700',
   };
-}
-
-// A sent_no_reply lead whose text sequence is exhausted — the only move left
-// is the last-chance call. Surfaced as its own board column + filter pill so
-// the texting queue in Sent — no reply stays clean. Purely derived; the lead's
-// pipeline_status stays sent_no_reply.
-function isLastChanceNoReply(lead: PipelineLead): boolean {
-  return getNoReplyProgress(lead)?.action === 'call';
 }
 
 function NoReplyProgressPanel({ lead, compact = false }: { lead: PipelineLead; compact?: boolean }) {
@@ -1038,13 +1032,18 @@ function BriefModal({
   const [briefText, setBriefText] = useState<string | null>(lead.brief);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [designs, setDesigns] = useState<DesignReference[]>([]);
+  const [selectedDesignId, setSelectedDesignId] = useState<number | null>(lead.designReferenceId);
 
   const runGenerate = useCallback(
-    async (regenerate: boolean) => {
+    async (regenerate: boolean, designReferenceId?: number | null) => {
       setBriefLoading(true);
       setBriefError(null);
       try {
-        const { lead: updated } = await api.pipeline.generateBrief(lead.id, { regenerate });
+        const { lead: updated } = await api.pipeline.generateBrief(lead.id, {
+          regenerate,
+          ...(designReferenceId !== undefined ? { designReferenceId } : {}),
+        });
         const nextBrief = updated.pipeline_brief ?? '';
         setBriefText(nextBrief);
         onBriefGenerated(lead.id, nextBrief);
@@ -1067,6 +1066,12 @@ function BriefModal({
     }
     // Only meant to fire on mount — deps intentionally empty.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    api.designLibrary.list()
+      .then(({ designs: rows }) => setDesigns(rows.filter((design) => design.status === 'ready')))
+      .catch(() => undefined);
   }, []);
 
   const handleCopy = async () => {
@@ -1164,6 +1169,19 @@ function BriefModal({
           <>
             {/* Actions live ABOVE the brief so the operator doesn't have to
                 scroll a long brief to reach Copy / Regenerate. */}
+            <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+              <label className="text-xs font-semibold text-slate-700">Design direction</label>
+              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                <select value={selectedDesignId ?? ''} onChange={(e) => setSelectedDesignId(e.target.value ? Number(e.target.value) : null)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <option value="">Let LandingSite design it</option>
+                  {designs.map((design) => <option key={design.id} value={design.id}>{design.industry || 'General'} · {design.name}</option>)}
+                </select>
+                <button type="button" onClick={() => void runGenerate(true, selectedDesignId)} disabled={briefLoading || selectedDesignId === lead.designReferenceId} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                  Apply & regenerate
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">The saved visual recipe is appended to this company’s facts. It never copies the source company’s identity.</p>
+            </div>
             <div className="mb-3 flex gap-2">
               <button
                 onClick={handleCopy}
@@ -2262,7 +2280,7 @@ function ArchiveNoteModal({
 
 // ---------- Page ----------
 
-type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'needs_fix' | 'ready_to_send' | 'sent_no_reply' | 'last_chance' | 'engaged';
+type FilterKey = 'all' | 'awaiting_build' | 'built_needs_review' | 'needs_fix' | 'ready_to_send' | 'sent_no_reply' | 'engaged';
 
 function localDateIso(): string {
   const now = new Date();
@@ -2277,7 +2295,6 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'needs_fix', label: 'Needs fix' },
   { key: 'ready_to_send', label: 'Ready to send' },
   { key: 'sent_no_reply', label: 'Sent — no reply' },
-  { key: 'last_chance', label: 'Last chance — call' },
   { key: 'engaged', label: 'Engaged' },
 ];
 
@@ -2287,12 +2304,8 @@ type ModalState = { type: ModalType; lead: PipelineLead } | null;
 type ViewMode = 'grid' | 'board';
 const VIEW_KEY = 'agency-os-pipeline-view';
 
-// Kanban columns — the active stages in flow order, plus one DERIVED column:
-// "No engagement — last chance" splits out sent_no_reply leads whose text
-// sequence is exhausted (next action = call) so the texting queue stays
-// clean. Membership is a predicate, not a status; drops still route through
-// handleBoardDrop with the column's underlying status. booked/archived stay
-// off the board until they get real UI.
+// Kanban columns for the active text stages. A no-response lead leaves this
+// board after the final nudge and enters Email Outreach → To Call.
 const BOARD_COLUMNS: Array<{
   key: string;
   label: string;
@@ -2319,17 +2332,12 @@ const BOARD_COLUMNS: Array<{
   {
     key: 'sent_no_reply', label: 'Sent — no reply',
     icon: STATUS_CONFIG.sent_no_reply.icon, iconBg: STATUS_CONFIG.sent_no_reply.iconBg,
-    dropStatus: 'sent_no_reply', match: (l) => l.status === 'sent_no_reply' && !isLastChanceNoReply(l),
+    dropStatus: 'sent_no_reply', match: (l) => l.status === 'sent_no_reply',
   },
   {
     key: 'engaged', label: 'Engaged',
     icon: STATUS_CONFIG.engaged.icon, iconBg: STATUS_CONFIG.engaged.iconBg,
     dropStatus: 'engaged', match: (l) => l.status === 'engaged',
-  },
-  {
-    key: 'last_chance', label: 'No engagement — last chance',
-    icon: PhoneCall, iconBg: 'bg-gradient-to-br from-rose-500 to-red-600',
-    dropStatus: 'sent_no_reply', match: isLastChanceNoReply,
   },
 ];
 
@@ -2819,10 +2827,9 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const filtered = useMemo(
     () => visibleLeads.filter((l) => {
       if (filter === 'all') return true;
-      if (filter === 'last_chance') return isLastChanceNoReply(l);
       if (filter === 'needs_fix') return l.status === 'built_needs_review' && l.reviewStatus === 'needs_fix';
       if (filter === 'built_needs_review') return l.status === 'built_needs_review' && l.reviewStatus !== 'needs_fix';
-      if (filter === 'sent_no_reply') return l.status === 'sent_no_reply' && !isLastChanceNoReply(l);
+      if (filter === 'sent_no_reply') return l.status === 'sent_no_reply';
       return l.status === filter;
     }),
     [visibleLeads, filter],
@@ -2831,7 +2838,7 @@ export default function AutomatedPipelinePanel({ showToast, onQualified }: Props
   const counts = useMemo(
     () =>
       visibleLeads.reduce<Record<string, number>>((acc, l) => {
-        const key = isLastChanceNoReply(l) ? 'last_chance' : l.status;
+        const key = l.status;
         if (l.status === 'built_needs_review' && l.reviewStatus === 'needs_fix') {
           acc.needs_fix = (acc.needs_fix || 0) + 1;
         } else {

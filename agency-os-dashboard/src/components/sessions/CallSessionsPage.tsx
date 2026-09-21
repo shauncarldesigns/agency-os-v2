@@ -42,7 +42,7 @@ import {
   type EmailAutomationSummary,
   type SessionOutcomeBody,
 } from '../../lib/api';
-import type { CallEntry, Lead, Project } from '../../lib/types';
+import type { CallEntry, DesignReference, Lead, Project } from '../../lib/types';
 import type { CallOutcome, ShowToast } from '../../lib/types';
 import { LeadDetailModal } from '../shared/LeadDetailModal';
 import { QualifyLeadModal } from '../pipeline/QualifyLeadModal';
@@ -113,6 +113,7 @@ type BoardItem = {
   lastActionAt: string | null;
   lastAction: string;
   pipelineStatus: Lead['pipeline_status'];
+  fromTextOutreach: boolean;
   tone: CardTone;
   sortAt?: string | null;
 };
@@ -2543,15 +2544,19 @@ function SiteUrlCaptureModal({
   const [briefText, setBriefText] = useState<string | null>(lead?.pipeline_brief ?? null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [designs, setDesigns] = useState<DesignReference[]>([]);
+  const [selectedDesignId, setSelectedDesignId] = useState<number | null>(lead?.design_reference_id ?? null);
+  const [appliedDesignId, setAppliedDesignId] = useState<number | null>(lead?.design_reference_id ?? null);
 
   const leadId = lead?.id;
-  const runGenerate = useCallback(async (regenerate: boolean) => {
+  const runGenerate = useCallback(async (regenerate: boolean, designReferenceId?: number | null) => {
     if (!leadId) return;
     setBriefLoading(true);
     setBriefError(null);
     try {
-      const { lead: updated } = await api.pipeline.generateBrief(leadId, { regenerate });
+      const { lead: updated } = await api.pipeline.generateBrief(leadId, { regenerate, ...(designReferenceId !== undefined ? { designReferenceId } : {}) });
       setBriefText(updated.pipeline_brief ?? '');
+      setAppliedDesignId(updated.design_reference_id ?? null);
     } catch (error) {
       const msg = error instanceof ApiError ? error.message : 'Brief generation failed';
       setBriefError(msg);
@@ -2559,6 +2564,10 @@ function SiteUrlCaptureModal({
       setBriefLoading(false);
     }
   }, [leadId]);
+
+  useEffect(() => {
+    api.designLibrary.list().then(({designs:rows}) => setDesigns(rows.filter((design)=>design.status==='ready'))).catch(()=>undefined);
+  }, []);
 
   useEffect(() => {
     if (briefText === null && !briefLoading && !briefError) {
@@ -2666,7 +2675,7 @@ function SiteUrlCaptureModal({
                     <p className="mt-0.5 text-xs text-rose-600">{briefError}</p>
                     <button
                       type="button"
-                      onClick={() => void runGenerate(true)}
+                      onClick={() => void runGenerate(true, selectedDesignId)}
                       className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-white"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -2677,6 +2686,17 @@ function SiteUrlCaptureModal({
               </div>
             ) : (
               <>
+                <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                  <label className="text-xs font-semibold text-slate-700">Design direction</label>
+                  <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                    <select value={selectedDesignId ?? ''} onChange={(event) => setSelectedDesignId(event.target.value ? Number(event.target.value) : null)} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <option value="">Let LandingSite design it</option>
+                      {designs.map((design) => <option key={design.id} value={design.id}>{design.industry || 'General'} · {design.name}</option>)}
+                    </select>
+                    <button type="button" onClick={() => void runGenerate(true, selectedDesignId)} disabled={briefLoading || selectedDesignId === appliedDesignId} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Apply & regenerate</button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">The selected visual recipe is appended to this company’s facts. Source-company identity is never copied.</p>
+                </div>
                 <div className="mb-3 flex gap-2">
                   <button
                     type="button"
@@ -2698,7 +2718,7 @@ function SiteUrlCaptureModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => void runGenerate(true)}
+                    onClick={() => void runGenerate(true, selectedDesignId)}
                     disabled={briefLoading}
                     className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-40"
                     title="Generate a fresh brief"
@@ -3913,6 +3933,7 @@ function leadItem(
       ?? (lead.outcome === 'Email Captured' ? lead.updated_at : null),
     lastAction: emailLastActionLabel(lead),
     pipelineStatus: lead.pipeline_status,
+    fromTextOutreach: Boolean(lead.pipeline_text_handoff),
     ...overrides,
   };
 }
@@ -4049,6 +4070,12 @@ function BoardCard({
         <span className="text-slate-300">·</span>
         <RatingSummary rating={item.rating} reviews={item.reviews} />
       </div>
+
+      {item.fromTextOutreach && (
+        <div className="mt-2 w-fit rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700">
+          Text outreach completed
+        </div>
+      )}
 
       {item.siteUrl && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -4375,7 +4402,7 @@ function emailLastActionLabel(lead: Lead): string {
     case 'site_approved': return 'Site approved';
     case 'intro_sent': return 'Email sent';
     case 'followed_up':
-      return `Email follow-up #${Math.max(1, lead.pipeline_no_reply_step ?? lead.pipeline_followup_step ?? 1)} sent`;
+      return lead.pipeline_text_handoff ? 'No email outreach yet' : 'Follow-up sent';
     case 'reply_received': return 'Reply received';
     case 'called': return 'Called';
     case 'call_outcome': return callOutcomeLabel(lead) ?? 'Call outcome recorded';

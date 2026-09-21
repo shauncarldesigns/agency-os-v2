@@ -20,6 +20,7 @@ import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel
 import { ReceptionistInterestPage } from './components/receptionist/ReceptionistInterestPage';
 import { ArchivedLeadsPage } from './components/archive/ArchivedLeadsPage';
 import { SalesIntelligencePage } from './components/intelligence/SalesIntelligencePage';
+import { DesignLibraryPage } from './components/designs/DesignLibraryPage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -34,6 +35,7 @@ export default function App() {
   // the new project's Brief Studio on the Sites tab. The id sticks around
   // until SitesPanel consumes it (then clears it via the callback).
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState<number | null>(null);
+  const [pendingOpenDesignId, setPendingOpenDesignId] = useState<number | null>(null);
   // Since the Phase 3 shell migration, an open calling session renders
   // INSIDE the shell's <main> (sidebar stays visible) instead of taking
   // over the whole viewport.
@@ -171,7 +173,7 @@ export default function App() {
                 />
               </div>
             )}
-            {activeTab === 'archived-leads' && <ArchivedLeadsPage showToast={showToast} onChanged={loadStats} />}
+            {activeTab === 'archived-leads' && <ArchivedLeadsPage showToast={showToast} onChanged={loadStats} onOpenDesign={(id) => { setPendingOpenDesignId(id); setActiveTab('design-library'); }} />}
             {activeTab === 'automated-pipeline' && (
               <AutomatedPipelinePanel
                 showToast={showToast}
@@ -198,6 +200,7 @@ export default function App() {
                 />
               </div>
             )}
+            {activeTab === 'design-library' && <DesignLibraryPage showToast={showToast} initialDesignId={pendingOpenDesignId} onInitialDesignConsumed={() => setPendingOpenDesignId(null)} />}
             {activeTab === 'docs' && <DocsPage />}
             {activeTab === 'playbook' && <PlaybookPage showToast={showToast} />}
             {activeTab === 'settings' && (
