@@ -112,20 +112,37 @@ const NORTHTOWN_TOKENS = JSON.stringify({
 
 async function ensureStarterReference(db: D1Database) {
   const count = await db.prepare('SELECT COUNT(*) AS count FROM design_references').first<{ count: number }>();
-  if (Number(count?.count ?? 0) > 0) return;
-  await db.prepare(`INSERT INTO design_references
-    (name, description, source_url, industry, status, notes, style_tags, design_recipe, technical_tokens)
-    VALUES (?, ?, ?, ?, 'ready', ?, ?, ?, ?)`)
-    .bind(
-      'Dark Emergency Service',
-      'Northtown-inspired operational service design with deep layered surfaces, visible cool borders, and a photographic service-area treatment.',
-      'https://northtown-heating-air-conditioning.agcy.dev/',
-      'HVAC',
-      'Validated through two LandingSite test generations. Container rule corrected to max-width: 96rem.',
-      JSON.stringify(['dark', 'emergency', 'local service', 'operational', 'editorial']),
-      NORTHTOWN_RECIPE,
-      NORTHTOWN_TOKENS,
-    ).run();
+  if (Number(count?.count ?? 0) === 0) {
+    await db.prepare(`INSERT INTO design_references
+      (name, description, source_url, industry, status, notes, style_tags, design_recipe, technical_tokens)
+      VALUES (?, ?, ?, ?, 'ready', ?, ?, ?, ?)`)
+      .bind(
+        'Dark Emergency Service',
+        'Northtown-inspired operational service design with deep layered surfaces, visible cool borders, and a photographic service-area treatment.',
+        'https://northtown-heating-air-conditioning.agcy.dev/',
+        'HVAC',
+        'Validated through two LandingSite test generations. Container rule corrected to max-width: 96rem.',
+        JSON.stringify(['dark', 'emergency', 'local service', 'operational', 'editorial']),
+        NORTHTOWN_RECIPE,
+        NORTHTOWN_TOKENS,
+      ).run();
+  }
+
+  // Standalone references can predate their archived lead relationship. Link
+  // matching source URLs so cleanup cards recognize that the design is saved.
+  await db.prepare(`UPDATE design_references
+    SET source_lead_id = (
+      SELECT leads.id FROM leads
+      WHERE leads.deleted_at IS NULL
+        AND rtrim(COALESCE(NULLIF(trim(leads.site_url_raw), ''), leads.site_url), '/') = rtrim(design_references.source_url, '/')
+      ORDER BY leads.id DESC LIMIT 1
+    )
+    WHERE source_lead_id IS NULL AND source_url IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM leads
+        WHERE leads.deleted_at IS NULL
+          AND rtrim(COALESCE(NULLIF(trim(leads.site_url_raw), ''), leads.site_url), '/') = rtrim(design_references.source_url, '/')
+      )`).run();
 }
 
 designLibraryRouter.get('/design-references', async (c) => {
