@@ -26,8 +26,11 @@ function stamp(seconds: number): string {
   const value = Math.max(0, Math.floor(seconds));
   return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 }
+export function renderSpeakerTranscript(utterances: Utterance[], shaunSpeaker: number): string {
+  return utterances.map(u => `[${stamp(u.start)}] ${u.speaker === shaunSpeaker ? 'Shaun' : 'Prospect'}: ${u.transcript}`).join('\n');
+}
 function transcriptText(result: TranscriptResult): string {
-  return result.utterances.map(u => `[${stamp(u.start)}] ${u.speaker === result.shaunSpeaker ? 'Shaun' : 'Prospect'}: ${u.transcript}`).join('\n');
+  return renderSpeakerTranscript(result.utterances, result.shaunSpeaker);
 }
 
 async function existingTranscript(db: D1Database, callId: number): Promise<TranscriptResult | null> {
@@ -85,10 +88,11 @@ async function transcribe(env: Env, call: CallContext): Promise<TranscriptResult
     return [{ speaker: speakerIds.get(label)!, start: segment.start ?? 0, end: segment.end ?? segment.start ?? 0, transcript: text }];
   });
   if (!utterances.length) throw new Error('OpenAI transcription returned no usable speaker segments');
-  // These recordings are operator-initiated outbound calls. Retain the
-  // assignment in call_transcripts so it can be inspected and corrected if a
-  // call begins with the prospect or a recording starts late.
-  const shaunSpeaker = utterances[0].speaker;
+  // These are outbound calls: the person answering (or their automated
+  // greeting) speaks first. Shaun is the first different diarized speaker.
+  // Persist the assignment so the operator can still correct edge cases.
+  const firstSpeaker = utterances[0].speaker;
+  const shaunSpeaker = utterances.find(row => row.speaker !== firstSpeaker)?.speaker ?? firstSpeaker;
   const duration = data.duration ?? utterances.reduce((max, row) => Math.max(max, row.end), 0);
   return { provider: 'openai', model, language: data.language ?? null, duration, shaunSpeaker, utterances };
 }
