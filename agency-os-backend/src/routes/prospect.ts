@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, serverError, log } from '../utils/errors';
 import { searchPlaces, getPlaceDetails, type PlaceResult } from '../services/places';
-import { approveCandidates, discoverCandidates, previewDiscoverySchedule, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
+import { approveCandidates, discoverCandidates, discoveryCombinations, previewDiscoverySchedule, toProspectResult, type DiscoverySettings } from '../services/prospectDiscovery';
 import { readSettings } from './settings';
+import { findKnownLeads } from '../services/knownLead';
 
 export const prospectRouter = new Hono<{ Bindings: Env }>();
 
@@ -33,19 +34,10 @@ prospectRouter.post('/search', async (c) => {
       maxPages: body.maxPages ?? 3,
     });
 
-    // Look up which place_ids are already in pipeline (don't filter — flag them)
-    const placeIds = search.places.map(p => p.placeId).filter(Boolean);
-    let existing = new Set<string>();
-    if (placeIds.length > 0) {
-      const placeholders = placeIds.map(() => '?').join(',');
-      const rows = await c.env.DB
-        .prepare(`SELECT place_id FROM leads WHERE place_id IN (${placeholders}) AND deleted_at IS NULL`)
-        .bind(...placeIds)
-        .all();
-      existing = new Set((rows.results as Array<{ place_id: string }>).map(r => r.place_id));
-    }
-
-    const results: ProspectSearchResult[] = search.places.map(p => toProspectResult(p, existing.has(p.placeId)));
+    const known = await findKnownLeads(c.env.DB, search.places);
+    const results: ProspectSearchResult[] = search.places
+      .filter((_, index) => !known.has(index))
+      .map((p) => toProspectResult(p, false));
 
     // Sort by opportunity score desc, then unclaimed first
     results.sort((a, b) => {
@@ -58,6 +50,7 @@ prospectRouter.post('/search', async (c) => {
       total: results.length,
       nextPageToken: search.nextPageToken,
       pagesFetched: search.pagesFetched,
+      filteredExisting: known.size,
     });
   } catch (err) {
     log('error', 'prospect', 'POST /prospect/search failed', err);
@@ -89,7 +82,7 @@ prospectRouter.get('/inbox-summary', async (c) => {
         SUM(CASE WHEN status='approved' AND approved_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS approvedThisWeek,
         SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejected
         FROM prospect_candidates`),
-      c.env.DB.prepare(`SELECT id, status, trigger_type, industry, search_location, started_at,
+      c.env.DB.prepare(`SELECT id, status, trigger_type, industry, search_keyword, search_location, started_at,
         results_found, new_candidates, refreshed_candidates, skipped_existing, skipped_ineligible, error_message
         FROM prospect_search_runs ORDER BY started_at DESC LIMIT 1`),
       c.env.DB.prepare("SELECT COUNT(*) AS n FROM prospect_search_runs WHERE trigger_type='scheduled' AND status='completed'"),
@@ -148,11 +141,13 @@ prospectRouter.post('/run-now', async (c) => {
     const settings = await readSettings(c.env.DB);
     const discovery = settings.discovery as unknown as DiscoverySettings;
     const industry = body.industry ?? discovery.industries[0];
-    const location = body.location ?? discovery.locations[0];
-    if (!discovery.industries.includes(industry) || !discovery.locations.includes(location)) {
+    const combinations = discoveryCombinations(discovery);
+    const location = body.location ?? combinations.find((item) => item.industry === industry)?.location;
+    const selected = combinations.find((item) => item.industry === industry && item.location === location);
+    if (!selected) {
       return c.json(badRequest('Choose an enabled home-service industry and location'), 400);
     }
-    return c.json(await discoverCandidates(c.env, { industry, location, triggerType: 'manual', settings: discovery }));
+    return c.json(await discoverCandidates(c.env, { industry, location: selected.location, searchKeyword: selected.keyword, triggerType: 'manual', settings: discovery }));
   } catch (err) {
     log('error', 'prospect', 'POST /prospect/run-now failed', err);
     return c.json(serverError(`Discovery failed: ${(err as Error).message}`), 500);
@@ -207,23 +202,17 @@ prospectRouter.post('/add-to-pipeline', async (c) => {
     const errors: string[] = [];
 
     for (const placeId of body.placeIds) {
-      // Already in pipeline?
-      const dupe = await c.env.DB
-        .prepare('SELECT id FROM leads WHERE place_id = ?')
-        .bind(placeId)
-        .first();
-      if (dupe) { skipped++; continue; }
-
       try {
         const details = await getPlaceDetails(c.env.GOOGLE_PLACES_API_KEY, placeId);
+        if ((await findKnownLeads(c.env.DB, [details])).has(0)) { skipped++; continue; }
 
         await c.env.DB.prepare(
           `INSERT INTO leads (
             company, phone, website, has_website, address, city, state,
             place_id, gbp_claimed, gbp_photos_count, gbp_hours,
             google_rating, google_review_count, google_reviews, reviews_fetched_at,
-            source, status, enrichment_status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 'prospect', 'cold', 'pending')`
+            source, status, enrichment_status, outreach_enabled
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 'prospect', 'cold', 'pending', 0)`
         ).bind(
           details.name,
           details.phone,

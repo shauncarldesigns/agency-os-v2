@@ -97,7 +97,7 @@ export function CandidateInbox({
             ) : (
               <>
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="text-sm font-semibold text-slate-900">{summary.lastRun.industry} · {summary.lastRun.search_location}</span>
+                  <span className="text-sm font-semibold text-slate-900">{summary.lastRun.industry} · {summary.lastRun.search_keyword || summary.lastRun.industry} · {summary.lastRun.search_location}</span>
                   {summary.lastRun.status !== 'failed' && (
                     <span className={`text-sm font-bold ${summary.lastRun.new_candidates > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
                       {summary.lastRun.new_candidates > 0 ? `+${summary.lastRun.new_candidates} new candidate${summary.lastRun.new_candidates === 1 ? '' : 's'}` : 'nothing new'}
@@ -153,10 +153,10 @@ export function CandidateInbox({
             {summary?.schedule?.enabled && summary.schedule.upcoming.length ? (
               <ul className="mt-2.5 space-y-2">
                 {summary.schedule.upcoming.map((run, index) => (
-                  <li key={`${run.industry}-${run.location}-${index}`} className="flex items-center gap-2.5">
+                  <li key={`${run.industry}-${run.keyword}-${run.location}-${index}`} className="flex items-center gap-2.5">
                     <span className={`w-24 shrink-0 text-xs font-semibold ${index === 0 ? 'text-blue-600' : 'text-slate-500'}`}>{runDateLabel(run.date)}</span>
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${index === 0 ? 'bg-blue-500' : 'bg-slate-300'}`} />
-                    <span className={`truncate text-xs ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{run.industry} · {run.location}</span>
+                    <span className={`truncate text-xs ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{run.industry} · “{run.keyword}” · {run.location}</span>
                   </li>
                 ))}
               </ul>

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS leads (
   phone_line_type TEXT,                          -- mobile / landline / fixedVoip / nonFixedVoip / unknown / etc.
   phone_carrier   TEXT,
   phone_route     TEXT DEFAULT 'unknown',         -- text / call / review / unknown
+  outreach_enabled INTEGER NOT NULL DEFAULT 1,    -- explicit admission gate for call/text outreach
   phone_lookup_error TEXT,
   phone_lookup_at TEXT,
   email           TEXT,
@@ -112,6 +113,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_receptionist_interested
   ON leads(receptionist_interested, receptionist_interested_at)
   WHERE receptionist_interested = 1 AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_phone_route ON leads(phone_route);
+CREATE INDEX IF NOT EXISTS idx_leads_outreach_enabled ON leads(outreach_enabled, deleted_at, pipeline_status);
 CREATE INDEX IF NOT EXISTS idx_leads_demo_site_status
   ON leads(demo_site_status) WHERE deleted_at IS NULL;
 CREATE TRIGGER IF NOT EXISTS leads_demo_site_saved
@@ -806,6 +808,7 @@ CREATE TABLE IF NOT EXISTS prospect_candidates (
   city TEXT,
   state TEXT,
   industry TEXT NOT NULL,
+  search_keyword TEXT,
   search_location TEXT NOT NULL,
   google_rating REAL,
   google_review_count INTEGER,

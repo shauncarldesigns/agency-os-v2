@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound, serverError, log } from '../utils/error
 import { generateProjectSlug } from '../utils/slug';
 import { classifyPhoneNumber, savePhoneClassification } from '../services/twilioLookup';
 import { closeLeadNotInterested } from '../services/leadCloseout';
+import { readSettings } from './settings';
 
 export const leadsRouter = new Hono<{ Bindings: Env }>();
 
@@ -13,6 +14,7 @@ const LEAD_FIELDS = [
   'company', 'contact', 'phone', 'email', 'industry', 'city', 'state', 'address',
   'phone_e164', 'phone_valid', 'phone_line_type', 'phone_carrier', 'phone_route',
   'phone_lookup_error', 'phone_lookup_at',
+  'outreach_enabled',
   'place_id', 'gbp_claimed', 'gbp_completeness', 'gbp_photos_count', 'gbp_categories',
   'gbp_hours', 'google_rating', 'google_review_count', 'google_reviews', 'reviews_fetched_at',
   'website', 'has_website', 'pagespeed_desktop', 'pagespeed_mobile',
@@ -106,10 +108,12 @@ leadsRouter.get('/counts', async (c) => {
       SELECT
         SUM(CASE WHEN deleted_at IS NULL AND status NOT IN ('qualified', 'client', 'not_interested', 'dead') THEN 1 ELSE 0 END) AS pipeline,
         SUM(CASE WHEN deleted_at IS NULL AND pipeline_status = 'awaiting_build'
+                  AND COALESCE(outreach_enabled, 1) = 1
                   AND COALESCE(phone_route, 'unknown') IN ('unknown', 'text')
                   AND has_website = 0 AND enrichment_status = 'enriched'
                   AND status IN ('cold', 'contacted') THEN 1 ELSE 0 END) AS awaiting_build,
         SUM(CASE WHEN deleted_at IS NULL AND pipeline_status NOT IN ('booked', 'archived')
+                  AND COALESCE(outreach_enabled, 1) = 1
                   AND COALESCE(phone_route, 'unknown') NOT IN ('text', 'review')
                   AND (status = 'cold' OR (status = 'contacted' AND NOT EXISTS (
                     SELECT 1 FROM callbacks WHERE callbacks.lead_id = leads.id
@@ -142,6 +146,7 @@ leadsRouter.get('/call-center', async (c) => {
       SELECT id, company, phone, industry, city, state
         FROM leads
        WHERE deleted_at IS NULL
+         AND COALESCE(outreach_enabled, 1) = 1
          AND status NOT IN ('dead', 'not_interested')
          AND COALESCE(phone_route, 'unknown') NOT IN ('text', 'review')
        ORDER BY company COLLATE NOCASE, id
@@ -162,6 +167,34 @@ leadsRouter.get('/industries', async (c) => {
     return c.json({ industries: (result.results ?? []).map((r) => r.industry) });
   } catch (err) {
     log('error', 'leads', 'GET /leads/industries failed', err);
+    return c.json(serverError(), 500);
+  }
+});
+
+// Explicit admission gate between the Leads page and every outreach workflow.
+leadsRouter.post('/outreach', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as { ids?: number[]; enabled?: boolean };
+    const ids = [...new Set((body.ids ?? []).map(Number).filter((id) => Number.isInteger(id) && id > 0))].slice(0, 500);
+    if (!ids.length) return c.json(badRequest('ids array required'), 400);
+    const enabled = body.enabled !== false;
+    const placeholders = ids.map(() => '?').join(',');
+    if (!enabled) {
+      const result = await c.env.DB.prepare(`UPDATE leads SET outreach_enabled=0,updated_at=datetime('now') WHERE id IN (${placeholders}) AND deleted_at IS NULL`).bind(...ids).run();
+      return c.json({ updated: Number(result.meta.changes ?? 0), enabled: false, capacityRemaining: null });
+    }
+    const settings = await readSettings(c.env.DB);
+    const maxActive = Math.max(1, Number((settings.discovery as Record<string, unknown>).maxActiveOutreach ?? 100));
+    const active = await c.env.DB.prepare("SELECT COUNT(*) n FROM leads WHERE deleted_at IS NULL AND outreach_enabled=1 AND pipeline_status NOT IN ('booked','archived') AND status IN ('cold','contacted')").first<{ n: number }>();
+    const slots = Math.max(0, maxActive - Number(active?.n ?? 0));
+    const candidates = await c.env.DB.prepare(`SELECT id FROM leads WHERE id IN (${placeholders}) AND deleted_at IS NULL AND COALESCE(outreach_enabled,0)=0 ORDER BY opportunity_score DESC NULLS LAST,id LIMIT ?`).bind(...ids, slots).all<{ id: number }>();
+    if (candidates.results.length) {
+      const selected = candidates.results.map((row) => row.id);
+      await c.env.DB.prepare(`UPDATE leads SET outreach_enabled=1,updated_at=datetime('now') WHERE id IN (${selected.map(() => '?').join(',')})`).bind(...selected).run();
+    }
+    return c.json({ updated: candidates.results.length, enabled: true, capacityRemaining: Math.max(0, slots - candidates.results.length), skippedForCapacity: Math.max(0, ids.length - candidates.results.length) });
+  } catch (err) {
+    log('error', 'leads', 'POST /leads/outreach failed', err);
     return c.json(serverError(), 500);
   }
 });

@@ -6,6 +6,7 @@ export type OutreachChannel = 'text' | 'email';
 function activeOutreachLeadSql(alias: string): string {
   return `
     ${alias}.deleted_at IS NULL
+    AND COALESCE(${alias}.outreach_enabled,1)=1
     AND ${alias}.status IN ('cold','contacted')
     AND ${alias}.pipeline_status NOT IN ('booked','archived')
     AND ${alias}.enrichment_status='enriched'

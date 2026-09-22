@@ -8,6 +8,7 @@ export interface Lead {
   phone_line_type: string | null;
   phone_carrier: string | null;
   phone_route: 'text' | 'call' | 'review' | 'unknown' | null;
+  outreach_enabled: number;
   phone_lookup_error: string | null;
   phone_lookup_at: string | null;
   email: string | null;
@@ -660,14 +661,16 @@ export interface AgencySettings {
     websiteMode: 'no_website';
     phoneRequired: boolean;
     industries: string[];
+    industryProfiles: Array<{ industry: string; keywords: string[] }>;
     locations: string[];
+    locationGroups: Array<{ name: string; enabled: boolean; locations: string[] }>;
     runDays: string[];
     localRunHour: number;
     maxCandidatesPerRun: number;
-    inboxLimit: number;
     scoreFloor: number;
     suppressionDays: number;
     expirationDays: number;
+    maxActiveOutreach: number;
   };
   research: {
     seedTemplates: string[];
@@ -773,13 +776,13 @@ export interface ProspectCandidate {
 export interface ProspectInboxSummary {
   pending: number; newToday: number; approvedThisWeek: number; rejected: number;
   lastRun: {
-    id: number; status: string; trigger_type: 'scheduled' | 'manual'; industry: string; search_location: string;
+    id: number; status: string; trigger_type: 'scheduled' | 'manual'; industry: string; search_keyword: string | null; search_location: string;
     started_at: string; results_found: number; new_candidates: number; refreshed_candidates: number;
     skipped_existing: number; skipped_ineligible: number; error_message: string | null;
   } | null;
   schedule: {
     enabled: boolean; localRunHour: number; timezone: string;
-    upcoming: Array<{ industry: string; location: string; date: string | null; weekday: string | null }>;
+    upcoming: Array<{ industry: string; keyword: string; location: string; date: string | null; weekday: string | null }>;
   } | null;
 }
 

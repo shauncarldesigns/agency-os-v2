@@ -303,8 +303,10 @@ researchRouter.get('/geo-targets', async (c) => {
     if (q.length < 2) return c.json({ targets: [] });
     const targets = await c.env.DB.prepare(`
       SELECT criteria_id, name, canonical_name, state FROM geo_targets
-      WHERE name LIKE ? ORDER BY name ASC LIMIT 12
-    `).bind(`${q}%`).all();
+      WHERE name LIKE ?
+      ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 WHEN lower(name) LIKE lower(?) THEN 1 ELSE 2 END,
+               length(name), name ASC LIMIT 12
+    `).bind(`%${q}%`, q, `${q}%`).all();
     return c.json({ targets: targets.results });
   } catch (err) {
     log('error', 'research', 'GET /geo-targets failed', err);
