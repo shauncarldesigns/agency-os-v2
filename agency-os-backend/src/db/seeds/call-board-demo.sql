@@ -803,7 +803,7 @@ FROM leads WHERE company = 'Calendar Preview - Awaiting Booking';
 UPDATE leads SET
   contact = 'Chad',
   owner_names = '["Chad"]',
-  email = 'no-reply-preview@example.com',
+  email = NULL,
   industry = 'roofer',
   city = 'Green Bay',
   state = 'WI',
@@ -812,7 +812,13 @@ UPDATE leads SET
   google_rating = 4.6,
   google_review_count = 36,
   has_website = 0,
-  phone_route = 'text',
+  phone_route = CASE
+    WHEN company IN (
+      'No Reply Preview - Call Last Chance',
+      'No Reply Preview - Stale Archive'
+    ) THEN 'call'
+    ELSE 'text'
+  END,
   phone_line_type = 'mobile',
   opportunity_score = 88,
   opportunity_reasoning = 'Local-only seed card for previewing the Sent — No Reply sequence.',
@@ -821,7 +827,13 @@ UPDATE leads SET
   status = 'contacted',
   outcome = NULL,
   followup = NULL,
-  notes = 'Sent — No Reply button preview seed data.',
+  notes = CASE
+    WHEN company IN (
+      'No Reply Preview - Call Last Chance',
+      'No Reply Preview - Stale Archive'
+    ) THEN '[Text outreach completed — no response] Intro, reminder, and final nudge sent. Moved to Email Outreach → To Call to capture an email address.'
+    ELSE 'Sent — No Reply button preview seed data.'
+  END,
   pipeline_status = 'sent_no_reply',
   site_url = 'https://no-reply-preview.agcy.dev/?utm_source=sms&utm_medium=text&utm_campaign=no-reply-preview',
   site_url_raw = 'https://no-reply-preview.agcy.dev/',
@@ -861,6 +873,24 @@ SELECT id, 'followed_up', 'sent_no_reply', 'sent_no_reply',
 FROM leads WHERE company IN (
   'No Reply Preview - Call Last Chance',
   'No Reply Preview - Stale Archive'
+);
+
+INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
+SELECT id, 'text_outreach_handoff', 'sent_no_reply', 'sent_no_reply',
+       '{"reason":"no_text_engagement","previous_phone_route":"text","seeded":true}',
+       CASE company
+         WHEN 'No Reply Preview - Stale Archive' THEN datetime('now', '-15 days')
+         ELSE datetime('now', '-2 days')
+       END
+FROM leads
+WHERE company IN (
+  'No Reply Preview - Call Last Chance',
+  'No Reply Preview - Stale Archive'
+)
+AND NOT EXISTS (
+  SELECT 1 FROM lead_activity
+   WHERE lead_activity.lead_id = leads.id
+     AND lead_activity.action = 'text_outreach_handoff'
 );
 
 INSERT INTO lead_activity (lead_id, action, from_status, to_status, meta, created_at)
