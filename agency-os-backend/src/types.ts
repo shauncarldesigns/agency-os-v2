@@ -60,6 +60,7 @@ export interface Lead {
   phone_line_type: string | null;
   phone_carrier: string | null;
   phone_route: string | null;
+  outreach_enabled: number;
   phone_lookup_error: string | null;
   phone_lookup_at: string | null;
   email: string | null;

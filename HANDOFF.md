@@ -315,10 +315,23 @@ test passwordless login for `info@shauncarldesigns.com`, then switch to
 - Lead Finder now has a durable `prospect_candidates` review inbox and
   `prospect_search_runs` audit history. Migration:
   `2026-08-03-automated-lead-finder.sql`.
-- Targeting is intentionally locked to businesses without a website and a
-  server-curated home-services list. Settings controls enabled state, M/W/F-style
+- Targeting is intentionally locked to businesses without a website. Industries
+  use a searchable tag editor with curated suggestions plus custom values; cities
+  use the seeded geo-target lookup for autocomplete. Settings controls enabled state, M/W/F-style
   schedule, local hour, industries, locations, phone requirement, score floor,
-  run/inbox limits, rejection suppression, and candidate expiration.
+  per-search candidate limits, rejection suppression, and candidate expiration.
+- Locations can be organized into enabled regional groups; scheduled discovery
+  rotates over their de-duplicated city lists. Approved Lead Finder candidates
+  enter Leads with `outreach_enabled=0`, and the operator admits them to call or
+  text outreach individually or in bulk subject to the configured active limit.
+  `phone_route` still selects the channel. Known businesses are filtered across
+  active, archived, and deleted leads by Place ID, normalized phone, then
+  company + city/state. Migration: `2026-09-22-regional-lead-discovery.sql`.
+- Discovery industries are parent labels with editable Google search phrases.
+  The catalog in `data/industrySearchCatalog.ts` is seeded from the operator's
+  home-services matrix. Scheduled rotation is industry × phrase × city; search
+  results retain the parent industry, while `prospect_search_runs.search_keyword`
+  records the actual phrase. Migration: `2026-09-22-industry-search-profiles.sql`.
 - The existing hourly Worker trigger checks the configured local weekday/hour;
   scheduled keys make retries idempotent and the profile rotation advances only
   after completed scheduled runs. Discovery is disabled by default.

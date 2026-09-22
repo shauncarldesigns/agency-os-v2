@@ -86,6 +86,7 @@ export async function composeLeads(
     `status IN ('cold', 'contacted')`,
     `recommended_tier IS NOT NULL`,
     `deleted_at IS NULL`,
+    `COALESCE(outreach_enabled, 1) = 1`,
     `industry = ?`,
     `(opportunity_score IS NULL OR opportunity_score >= ?)`,
   ];

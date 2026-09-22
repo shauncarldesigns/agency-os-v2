@@ -363,6 +363,10 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ route }),
       }),
+    setOutreach: (ids: number[], enabled: boolean) =>
+      apiFetch<{ updated: number; enabled: boolean; capacityRemaining: number | null; skippedForCapacity?: number }>('/api/leads/outreach', {
+        method: 'POST', body: JSON.stringify({ ids, enabled }),
+      }),
     classifyPhones: (input: { ids?: number[]; limit?: number; force?: boolean } = {}) =>
       apiFetch<PhoneClassificationBatchResponse>('/api/leads/phone-classify', {
         method: 'POST',
@@ -447,7 +451,7 @@ export const api = {
   },
   prospect: {
     search: (input: { location: string; industry: string; radius?: number; pageToken?: string | null; maxPages?: number }) =>
-      apiFetch<{ results: ProspectResult[]; total: number; nextPageToken: string | null; pagesFetched: number }>('/api/prospect/search', {
+      apiFetch<{ results: ProspectResult[]; total: number; nextPageToken: string | null; pagesFetched: number; filteredExisting: number }>('/api/prospect/search', {
         method: 'POST',
         body: JSON.stringify(input),
       }),

@@ -347,6 +347,24 @@ function LeadRow({
       <td><Badge color={stage.color}>{stage.label}</Badge></td>
       <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
+          {!lead.deleted_at && lead.pipeline_status !== 'archived' && !lead.outreach_enabled && (
+            <Button
+              variant="primary"
+              size="xs"
+              onClick={async () => {
+                try {
+                  const result = await api.leads.setOutreach([lead.id], true);
+                  if (result.updated) showToast(`${lead.company} added to outreach`, 'success');
+                  else showToast('Active outreach limit reached', 'default');
+                  onLeadUpdated();
+                } catch (err) {
+                  showToast(`Could not add to outreach: ${(err as Error).message}`, 'error');
+                }
+              }}
+            >
+              Add to Outreach
+            </Button>
+          )}
           {lead.enrichment_status === 'enriched'
             && lead.status !== 'qualified'
             && lead.status !== 'client'
@@ -701,6 +719,7 @@ function routePresentation(lead: Lead): SignalPresentation {
 }
 
 function outreachPresentation(lead: Lead): SignalPresentation {
+  if (!lead.outreach_enabled && lead.pipeline_status !== 'archived') return { label: 'Waiting', sub: 'Add to outreach when ready', tone: 'gray' };
   const map: Record<Lead['pipeline_status'], SignalPresentation> = {
     awaiting_build: { label: 'Site needed', sub: 'Not ready to send', tone: 'gray' },
     built_needs_review: { label: 'Built needs review', sub: 'Approval required', tone: 'yellow' },
@@ -760,6 +779,7 @@ function nextActionPresentation(lead: Lead): SignalPresentation {
   if (lead.status === 'qualified' || lead.pipeline_status === 'booked') return { label: 'Prepare demo', sub: lead.demo_scheduled_for ? shortDate(lead.demo_scheduled_for) : 'Demo booked', tone: 'green' };
   if (lead.status === 'dead' || lead.pipeline_status === 'archived') return { label: 'No action', sub: 'Closed', tone: 'gray' };
   if (lead.status === 'not_interested') return { label: 'Archive', sub: 'If outreach is complete', tone: 'gray' };
+  if (!lead.outreach_enabled) return { label: 'Add to outreach', sub: 'Currently held', tone: 'gray' };
   if (lead.phone_route === 'review') return { label: 'Review route', sub: 'Confirm text or call', tone: 'yellow' };
   if (lead.followup) return { label: 'Callback', sub: shortDate(lead.followup), tone: 'yellow' };
   if (lead.pipeline_status === 'engaged') {

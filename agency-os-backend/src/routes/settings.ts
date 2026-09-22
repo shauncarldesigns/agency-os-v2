@@ -4,6 +4,7 @@ import { log, serverError } from '../utils/errors';
 import { syncClarityEngagement } from '../services/clarity';
 import { hasUsableGooglePlacesKey } from '../services/places';
 import { isGoogleAdsConfigured } from '../services/googleAds';
+import { INDUSTRY_SEARCH_CATALOG } from '../data/industrySearchCatalog';
 
 export const settingsRouter = new Hono<{ Bindings: Env }>();
 
@@ -16,13 +17,7 @@ interface SettingsRow {
   updated_at: string;
 }
 
-export const HOME_SERVICE_INDUSTRIES = [
-  'Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting',
-  'Landscaping', 'Painting', 'Flooring', 'Concrete and Masonry', 'Siding',
-  'Gutters', 'Garage Doors', 'Fencing', 'Remodeling',
-  'Kitchen and Bathroom Remodeling', 'Water Damage Restoration',
-  'Pest Control', 'Tree Services', 'Septic Services', 'Drain and Sewer Services',
-] as const;
+export const HOME_SERVICE_INDUSTRIES = INDUSTRY_SEARCH_CATALOG.map((profile) => profile.industry);
 
 const DEFAULTS = {
   general: {
@@ -50,14 +45,16 @@ const DEFAULTS = {
     websiteMode: 'no_website',
     phoneRequired: true,
     industries: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting'],
+    industryProfiles: INDUSTRY_SEARCH_CATALOG,
     locations: ['Green Bay, WI', 'Appleton, WI'],
+    locationGroups: [] as Array<{ name: string; enabled: boolean; locations: string[] }>,
     runDays: ['monday', 'wednesday', 'friday'],
     localRunHour: 8,
     maxCandidatesPerRun: 20,
-    inboxLimit: 50,
     scoreFloor: 0,
     suppressionDays: 90,
     expirationDays: 30,
+    maxActiveOutreach: 100,
   },
   research: {
     // Templates expand against the market's industry term and city. Keyword
@@ -126,11 +123,20 @@ export async function readSettings(db: D1Database) {
     ...storedResearch,
     industryTerms: { ...DEFAULTS.research.industryTerms, ...objectValue(storedResearch.industryTerms) },
   };
+  const storedDiscovery = parseObject(row?.discovery_json ?? '{}');
+  const storedProfiles = Array.isArray(storedDiscovery.industryProfiles) ? storedDiscovery.industryProfiles : [];
+  const profileMap = new Map(INDUSTRY_SEARCH_CATALOG.map((profile) => [profile.industry, profile]));
+  for (const raw of storedProfiles) {
+    const profile = objectValue(raw);
+    if (typeof profile.industry === 'string' && Array.isArray(profile.keywords)) {
+      profileMap.set(profile.industry, { industry: profile.industry, keywords: profile.keywords.filter((value): value is string => typeof value === 'string') });
+    }
+  }
   return {
     general: { ...DEFAULTS.general, ...parseObject(row?.general_json ?? '{}') },
     outreach: { ...DEFAULTS.outreach, ...parseObject(row?.outreach_json ?? '{}') },
     defaults: { ...DEFAULTS.defaults, ...parseObject(row?.defaults_json ?? '{}') },
-    discovery: { ...DEFAULTS.discovery, ...parseObject(row?.discovery_json ?? '{}') },
+    discovery: { ...DEFAULTS.discovery, ...storedDiscovery, industryProfiles: [...profileMap.values()] },
     research,
     updatedAt: row?.updated_at ?? null,
   };
@@ -165,27 +171,43 @@ settingsRouter.put('/', async (c) => {
     if (typeof general.operatorEmail !== 'string' || !general.operatorEmail.includes('@')) {
       return c.json({ error: 'Enter a valid operator email' }, 400);
     }
-    const industries = Array.isArray(discovery.industries) ? discovery.industries.filter((value): value is string => typeof value === 'string') : [];
+    const industries = Array.isArray(discovery.industries)
+      ? [...new Set(discovery.industries.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+      : [];
     const locations = Array.isArray(discovery.locations) ? discovery.locations.filter((value): value is string => typeof value === 'string' && value.trim().length > 0) : [];
-    if (industries.length === 0 || industries.some((industry) => !(HOME_SERVICE_INDUSTRIES as readonly string[]).includes(industry))) {
-      return c.json({ error: 'Lead Discovery industries must use the home-services list' }, 400);
+    const locationGroups = Array.isArray(discovery.locationGroups) ? discovery.locationGroups.flatMap((raw) => {
+      const group = objectValue(raw);
+      const name = typeof group.name === 'string' ? group.name.trim() : '';
+      const groupLocations = Array.isArray(group.locations)
+        ? group.locations.filter((value): value is string => typeof value === 'string' && value.trim().length > 0).map((value) => value.trim())
+        : [];
+      return name && groupLocations.length ? [{ name, enabled: group.enabled !== false, locations: [...new Set(groupLocations)] }] : [];
+    }) : [];
+    const incomingProfiles = Array.isArray(discovery.industryProfiles) ? discovery.industryProfiles : [];
+    const industryProfiles = industries.map((industry) => {
+      const raw = incomingProfiles.find((value) => objectValue(value).industry === industry);
+      const profile = objectValue(raw);
+      const keywords = Array.isArray(profile.keywords)
+        ? [...new Set(profile.keywords.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+        : [];
+      return { industry, keywords: keywords.length ? keywords.slice(0, 12) : [industry] };
+    });
+    if (industries.length === 0 || industries.some((industry) => industry.length > 80)) return c.json({ error: 'Lead Discovery needs at least one valid industry' }, 400);
+    if ((locationGroups.length > 0 && !locationGroups.some((group) => group.enabled)) || (locationGroups.length === 0 && locations.length === 0)) {
+      return c.json({ error: 'Lead Discovery needs at least one enabled search location' }, 400);
     }
-    if (locations.length === 0) return c.json({ error: 'Lead Discovery needs at least one search location' }, 400);
     const maxCandidates = Number(discovery.maxCandidatesPerRun);
-    const inboxLimit = Number(discovery.inboxLimit);
     const localRunHour = Number(discovery.localRunHour);
     const discoveryScoreFloor = Number(discovery.scoreFloor);
     const suppressionDays = Number(discovery.suppressionDays);
     const expirationDays = Number(discovery.expirationDays);
+    const maxActiveOutreach = Number(discovery.maxActiveOutreach);
     const allowedRunDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     const runDays = Array.isArray(discovery.runDays)
       ? discovery.runDays.filter((value): value is string => typeof value === 'string')
       : [];
     if (!Number.isFinite(maxCandidates) || maxCandidates < 1 || maxCandidates > 60) {
       return c.json({ error: 'Candidates per run must be between 1 and 60' }, 400);
-    }
-    if (!Number.isFinite(inboxLimit) || inboxLimit < 10 || inboxLimit > 500) {
-      return c.json({ error: 'Pending inbox limit must be between 10 and 500' }, 400);
     }
     if (!Number.isInteger(localRunHour) || localRunHour < 0 || localRunHour > 23) {
       return c.json({ error: 'Lead Discovery run hour must be between 0 and 23' }, 400);
@@ -202,14 +224,20 @@ settingsRouter.put('/', async (c) => {
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 180) {
       return c.json({ error: 'Unreviewed expiration must be between 1 and 180 days' }, 400);
     }
+    if (!Number.isInteger(maxActiveOutreach) || maxActiveOutreach < 1 || maxActiveOutreach > 1000) {
+      return c.json({ error: 'Maximum active outreach leads must be between 1 and 1000' }, 400);
+    }
     discovery.websiteMode = 'no_website';
     discovery.industries = industries;
+    discovery.industryProfiles = industryProfiles;
     discovery.locations = locations;
+    discovery.locationGroups = locationGroups;
     discovery.runDays = runDays;
     discovery.localRunHour = localRunHour;
     discovery.scoreFloor = discoveryScoreFloor;
     discovery.suppressionDays = suppressionDays;
     discovery.expirationDays = expirationDays;
+    discovery.maxActiveOutreach = maxActiveOutreach;
 
     // Market research config
     const seedTemplates = Array.isArray(research.seedTemplates)

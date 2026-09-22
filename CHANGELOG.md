@@ -9,6 +9,11 @@ when a manual deploy was needed.
 
 ## 2026-08
 
+### Regional Lead Finder expansion and outreach staging (backend + dashboard)
+
+- **Lead Finder now rotates parent industries through curated Google search phrases and reusable regional city groups**, supports fuzzy industry/city setup, filters previously known businesses, and leaves the pending candidate inbox uncapped.
+- **Approved discoveries are staged before outreach**, with individual and bulk admission controls plus an active-outreach safety limit so new regional inventory does not flood call and text workflows.
+
 ### Text Outreach board flow order (dashboard)
 
 - **No engagement — last chance now appears as the final board column**, after Engaged, so exhausted outreach is visually separated at the end of the workflow.

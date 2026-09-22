@@ -22,6 +22,17 @@ const sections: Array<{ id: Section; label: string; icon: typeof Building2 }> = 
 
 const timezones = ['America/Chicago', 'America/New_York', 'America/Denver', 'America/Los_Angeles'];
 
+async function loadCitySuggestions(query: string): Promise<string[]> {
+  const result = await api.research.geoTargets(query);
+  return result.targets.map((target) => `${target.name}, ${target.state}`);
+}
+
+const locationGroupPresets: AgencySettings['discovery']['locationGroups'] = [
+  { name: 'Northeast Wisconsin', enabled: true, locations: ['Green Bay, WI', 'Appleton, WI', 'De Pere, WI', 'Oshkosh, WI', 'Fond du Lac, WI'] },
+  { name: 'Lakeshore', enabled: true, locations: ['Manitowoc, WI', 'Two Rivers, WI', 'Sheboygan, WI', 'Port Washington, WI'] },
+  { name: 'Central Wisconsin', enabled: true, locations: ['Wausau, WI', 'Stevens Point, WI', 'Wisconsin Rapids, WI', 'Marshfield, WI'] },
+];
+
 export function SettingsPage({ showToast, onProfileChanged }: { showToast: ShowToast; onProfileChanged: (general: AgencySettings['general']) => void }) {
   const [active, setActive] = useState<Section>('general');
   const [settings, setSettings] = useState<AgencySettings | null>(null);
@@ -188,20 +199,17 @@ function Outreach({ settings: s, patch }: { settings: AgencySettings; patch: Pat
   </div>;
 }
 
-const homeServiceIndustries = [
-  'Plumbing', 'HVAC', 'Electrical', 'Roofing', 'General Contracting',
-  'Landscaping', 'Painting', 'Flooring', 'Concrete and Masonry', 'Siding',
-  'Gutters', 'Garage Doors', 'Fencing', 'Remodeling',
-  'Kitchen and Bathroom Remodeling', 'Water Damage Restoration',
-  'Pest Control', 'Tree Services', 'Septic Services', 'Drain and Sewer Services',
-];
-
 function Discovery({ settings: s, patch }: { settings: AgencySettings; patch: Patch }) {
   const d = s.discovery;
+  const setIndustries = (industries: string[]) => {
+    const profiles = [...d.industryProfiles];
+    for (const industry of industries) if (!profiles.some((profile) => profile.industry.toLocaleLowerCase() === industry.toLocaleLowerCase())) profiles.push({ industry, keywords: [industry] });
+    patch('discovery', { industries, industryProfiles: profiles });
+  };
   return <div>
     <Heading title="Lead discovery" sub="Control the automated no-website home-services prospect inbox. Changes apply without a deployment." />
     <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div><h4 className="text-sm font-semibold text-slate-800">Automated discovery</h4><p className="mt-1 text-xs leading-5 text-slate-500">Runs only on the selected days and pauses automatically when the pending inbox is full. Click Save changes after switching this on.</p></div>
+      <div><h4 className="text-sm font-semibold text-slate-800">Automated discovery</h4><p className="mt-1 text-xs leading-5 text-slate-500">Runs at the configured local hour on the selected days. Discovery does not stop because of pending inbox size. Click Save changes after switching this on.</p></div>
       <button type="button" role="switch" aria-checked={d.enabled} onClick={() => patch('discovery', { enabled: !d.enabled })} className={`relative h-6 w-11 shrink-0 rounded-full transition ${d.enabled ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${d.enabled ? 'left-6' : 'left-1'}`} /></button>
     </div>
     <Divider />
@@ -212,15 +220,37 @@ function Discovery({ settings: s, patch }: { settings: AgencySettings; patch: Pa
     <Grid>
       <Field label="Local run hour"><Select value={String(d.localRunHour)} options={Array.from({ length: 12 }, (_, i) => String(i + 6))} onChange={v => patch('discovery', { localRunHour: Number(v) })} /></Field>
       <Field label="Candidates per run"><NumberInput value={d.maxCandidatesPerRun} min={1} max={60} onChange={v => patch('discovery', { maxCandidatesPerRun: v })} /></Field>
-      <Field label="Pending inbox maximum"><NumberInput value={d.inboxLimit} min={10} max={500} onChange={v => patch('discovery', { inboxLimit: v })} /></Field>
       <Field label="Minimum opportunity score"><NumberInput value={d.scoreFloor} min={0} max={100} onChange={v => patch('discovery', { scoreFloor: v })} /></Field>
+      <Field label="Maximum active outreach leads"><NumberInput value={d.maxActiveOutreach} min={1} max={1000} onChange={v => patch('discovery', { maxActiveOutreach: v })} /></Field>
       <Field label="Rejected suppression (days)"><NumberInput value={d.suppressionDays} min={1} max={365} onChange={v => patch('discovery', { suppressionDays: v })} /></Field>
       <Field label="Unreviewed expiration (days)"><NumberInput value={d.expirationDays} min={1} max={180} onChange={v => patch('discovery', { expirationDays: v })} /></Field>
     </Grid>
     <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3"><input type="checkbox" checked={d.phoneRequired} onChange={e => patch('discovery', { phoneRequired: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-blue-600" /><span><span className="block text-sm font-medium text-slate-700">Require a phone number</span><span className="block text-xs text-slate-500">Recommended so every approved lead is immediately actionable.</span></span></label>
     <Divider />
-    <TagEditor label="Search locations" value={d.locations} placeholder="Add city, state" onChange={v => patch('discovery', { locations: v })} />
-    <div className="mt-6"><ChoiceGroup label="Allowed home-service industries" options={homeServiceIndustries} value={d.industries} onChange={v => patch('discovery', { industries: v })} /></div>
+    <LocationGroupsEditor
+      groups={d.locationGroups}
+      legacyLocations={d.locations}
+      onChange={(locationGroups) => patch('discovery', { locationGroups })}
+    />
+    <div className="mt-6"><AutocompleteTagEditor label="Allowed home-service industries" value={d.industries} placeholder="Start typing an industry" suggestions={d.industryProfiles.map((profile) => profile.industry)} onChange={setIndustries} help="Choose the parent industry. Its Google search variations run automatically in the background." /></div>
+  </div>;
+}
+
+function LocationGroupsEditor({ groups, legacyLocations, onChange }: {
+  groups: AgencySettings['discovery']['locationGroups'];
+  legacyLocations: string[];
+  onChange: (groups: AgencySettings['discovery']['locationGroups']) => void;
+}) {
+  const effective = groups.length ? groups : [{ name: 'Primary region', enabled: true, locations: legacyLocations }];
+  const update = (index: number, values: Partial<(typeof effective)[number]>) => onChange(effective.map((group, i) => i === index ? { ...group, ...values } : group));
+  const unusedPresets = locationGroupPresets.filter((preset) => !effective.some((group) => group.name.toLocaleLowerCase() === preset.name.toLocaleLowerCase()));
+  return <div>
+    <div className="mb-3 flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-slate-800">Regional search groups</h4><p className="mt-1 text-xs text-slate-500">Enabled regions are combined into the automatic search rotation.</p></div><button type="button" onClick={() => onChange([...effective, { name: `Region ${effective.length + 1}`, enabled: true, locations: [] }])} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50">Add region</button></div>
+    {unusedPresets.length > 0 && <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="text-xs font-semibold text-blue-900">Quick-add Wisconsin regions</p><div className="mt-2 flex flex-wrap gap-2">{unusedPresets.map((preset) => <button type="button" key={preset.name} onClick={() => onChange([...effective, { ...preset, locations: [...preset.locations] }])} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100">+ {preset.name} <span className="font-normal text-blue-500">({preset.locations.length} cities)</span></button>)}</div></div>}
+    <div className="space-y-3">{effective.map((group, index) => <div key={`${group.name}-${index}`} className="rounded-xl border border-slate-200 p-4">
+      <div className="mb-3 flex items-center gap-3"><input value={group.name} onChange={(event) => update(index, { name: event.target.value })} className={inputClass} aria-label="Region name" /><label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={group.enabled} onChange={(event) => update(index, { enabled: event.target.checked })} /> Enabled</label><button type="button" onClick={() => onChange(effective.filter((_, i) => i !== index))} className="text-xs font-semibold text-rose-600">Remove</button></div>
+      <AutocompleteTagEditor label="Cities" value={group.locations} placeholder="Find a Wisconsin city" onChange={(locations) => update(index, { locations })} loadSuggestions={loadCitySuggestions} />
+    </div>)}</div>
   </div>;
 }
 
@@ -366,6 +396,43 @@ function TagEditor({ label, value, onChange, placeholder = 'Type and press Enter
   const [draft, setDraft] = useState('');
   function add() { const v = draft.trim(); if (v && !value.includes(v)) onChange([...value, v]); setDraft(''); }
   return <div><span className="mb-2 block text-xs font-semibold text-slate-600">{label}</span><div className="flex flex-wrap gap-2">{value.map((v, i) => <span key={`${v}-${i}`} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700">{v}<button type="button" onClick={() => onChange(value.filter((_, x) => x !== i))} className="ml-1 text-slate-400 hover:text-rose-500">×</button></span>)}</div><input value={draft} placeholder={placeholder} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } }} onBlur={add} className={`${inputClass} mt-2`} /></div>;
+}
+function AutocompleteTagEditor({ label, value, onChange, placeholder, suggestions = [], loadSuggestions, help = 'Search suggestions or type a custom value and press Enter.' }: {
+  label: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+  placeholder: string;
+  suggestions?: readonly string[];
+  loadSuggestions?: (query: string) => Promise<string[]>;
+  help?: string;
+}) {
+  const [draft, setDraft] = useState('');
+  const [remote, setRemote] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const query = draft.trim();
+    if (!loadSuggestions || query.length < 2) { setRemote([]); return; }
+    let cancelled = false;
+    const timer = window.setTimeout(() => void loadSuggestions(query).then((items) => { if (!cancelled) setRemote(items); }).catch(() => { if (!cancelled) setRemote([]); }), 180);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [draft, loadSuggestions]);
+  const query = draft.trim();
+  const pool = loadSuggestions ? remote : suggestions.filter((item) => fuzzyMatch(item, query));
+  const options = pool.filter((item) => !value.some((selected) => selected.toLocaleLowerCase() === item.toLocaleLowerCase())).slice(0, 8);
+  function add(raw: string) {
+    const item = raw.trim();
+    if (item && !value.some((selected) => selected.toLocaleLowerCase() === item.toLocaleLowerCase())) onChange([...value, item]);
+    setDraft(''); setRemote([]); setOpen(false);
+  }
+  return <div className="relative"><span className="mb-2 block text-xs font-semibold text-slate-600">{label}</span><div className="flex flex-wrap gap-2">{value.map((item, index) => <span key={`${item}-${index}`} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700">{item}<button type="button" onClick={() => onChange(value.filter((_, i) => i !== index))} className="ml-1 text-slate-400 hover:text-rose-500">×</button></span>)}</div><div className="relative"><input value={draft} placeholder={placeholder} onFocus={() => setOpen(true)} onChange={(event) => { setDraft(event.target.value); setOpen(true); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); add(options[0] ?? draft); } else if (event.key === 'Escape') setOpen(false); }} className={`${inputClass} mt-2`} />{open && query.length > 0 && options.length > 0 && <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">{options.map((option) => <button type="button" key={option} onMouseDown={(event) => event.preventDefault()} onClick={() => add(option)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700">{option}</button>)}</div>}</div><p className="mt-1.5 text-[11px] text-slate-400">{help}</p></div>;
+}
+function fuzzyMatch(candidate: string, query: string): boolean {
+  const haystack = candidate.toLocaleLowerCase();
+  const needle = query.toLocaleLowerCase().trim();
+  if (!needle || haystack.includes(needle)) return true;
+  let index = 0;
+  for (const character of haystack) if (character === needle[index]) index++;
+  return index === needle.length;
 }
 function StatusRow({ label, value, good }: { label: string; value: string; good?: boolean }) { return <div className="flex items-center justify-between border-b border-slate-100 pb-3 text-sm last:border-0"><span className="text-slate-500">{label}</span><span className={`font-semibold ${good ? 'text-emerald-600' : 'text-slate-700'}`}>{value}</span></div>; }
 function ChoiceGroup({ label, options, value, onChange }: { label: string; options: string[]; value: string[]; onChange: (value: string[]) => void }) {

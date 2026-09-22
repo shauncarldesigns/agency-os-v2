@@ -2,17 +2,19 @@ import type { Env } from '../types';
 import { calculateOpportunityScore } from './scoring';
 import { getPlaceDetails, searchPlaces, type PlaceResult } from './places';
 import { readSettings } from '../routes/settings';
+import { findKnownLeads } from './knownLead';
 
 export interface DiscoverySettings {
   enabled: boolean;
   websiteMode: 'no_website';
   phoneRequired: boolean;
   industries: string[];
+  industryProfiles?: Array<{ industry: string; keywords: string[] }>;
   locations: string[];
+  locationGroups?: Array<{ name: string; enabled: boolean; locations: string[] }>;
   runDays: string[];
   localRunHour: number;
   maxCandidatesPerRun: number;
-  inboxLimit: number;
   scoreFloor: number;
   suppressionDays: number;
   expirationDays: number;
@@ -62,22 +64,23 @@ async function insertRun(
   env: Env,
   triggerType: 'scheduled' | 'manual',
   industry: string,
+  searchKeyword: string,
   location: string,
   scheduledKey?: string,
 ): Promise<number | null> {
   if (scheduledKey) {
     const result = await env.DB.prepare(`
       INSERT OR IGNORE INTO prospect_search_runs
-        (trigger_type, industry, search_location, scheduled_key)
-      VALUES (?, ?, ?, ?)
-    `).bind(triggerType, industry, location, scheduledKey).run();
+        (trigger_type, industry, search_keyword, search_location, scheduled_key)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(triggerType, industry, searchKeyword, location, scheduledKey).run();
     if (!result.meta.changes) return null;
     return Number(result.meta.last_row_id);
   }
   const result = await env.DB.prepare(`
-    INSERT INTO prospect_search_runs (trigger_type, industry, search_location)
-    VALUES (?, ?, ?)
-  `).bind(triggerType, industry, location).run();
+    INSERT INTO prospect_search_runs (trigger_type, industry, search_keyword, search_location)
+    VALUES (?, ?, ?, ?)
+  `).bind(triggerType, industry, searchKeyword, location).run();
   return Number(result.meta.last_row_id);
 }
 
@@ -85,46 +88,31 @@ export async function discoverCandidates(
   env: Env,
   input: {
     industry: string;
+    searchKeyword?: string;
     location: string;
     triggerType: 'scheduled' | 'manual';
     settings: DiscoverySettings;
     scheduledKey?: string;
   },
 ): Promise<DiscoveryRunResult> {
-  const pending = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM prospect_candidates WHERE status = 'pending'",
-  ).first<{ n: number }>();
-  const remainingCapacity = Math.max(0, input.settings.inboxLimit - Number(pending?.n ?? 0));
-  if (remainingCapacity === 0) {
-    return { runId: null, status: 'skipped', reason: 'inbox_limit', resultsFound: 0, newCandidates: 0, refreshedCandidates: 0, skippedExisting: 0, skippedIneligible: 0 };
-  }
-
-  const runId = await insertRun(env, input.triggerType, input.industry, input.location, input.scheduledKey);
+  const runId = await insertRun(env, input.triggerType, input.industry, input.searchKeyword ?? input.industry, input.location, input.scheduledKey);
   if (runId === null) {
     return { runId: null, status: 'skipped', reason: 'already_ran', resultsFound: 0, newCandidates: 0, refreshedCandidates: 0, skippedExisting: 0, skippedIneligible: 0 };
   }
 
   try {
-    const search = await searchPlaces(env.GOOGLE_PLACES_API_KEY, input.industry, input.location, { maxPages: 3 });
-    const placeIds = search.places.map((place) => place.placeId);
-    const existingLeadIds = new Set<string>();
-    if (placeIds.length) {
-      const placeholders = placeIds.map(() => '?').join(',');
-      const existing = await env.DB.prepare(
-        `SELECT place_id FROM leads WHERE place_id IN (${placeholders}) AND deleted_at IS NULL`,
-      ).bind(...placeIds).all<{ place_id: string }>();
-      existing.results.forEach((row) => existingLeadIds.add(row.place_id));
-    }
+    const search = await searchPlaces(env.GOOGLE_PLACES_API_KEY, input.searchKeyword ?? input.industry, input.location, { maxPages: 3 });
+    const knownLeads = await findKnownLeads(env.DB, search.places);
 
-    const candidateLimit = Math.min(input.settings.maxCandidatesPerRun, remainingCapacity);
+    const candidateLimit = input.settings.maxCandidatesPerRun;
     let newCandidates = 0;
     let refreshedCandidates = 0;
     let skippedExisting = 0;
     let skippedIneligible = 0;
 
-    for (const place of search.places) {
+    for (const [placeIndex, place] of search.places.entries()) {
       if (newCandidates >= candidateLimit) break;
-      if (existingLeadIds.has(place.placeId)) { skippedExisting++; continue; }
+      if (knownLeads.has(placeIndex)) { skippedExisting++; continue; }
       const score = scorePlace(place);
       const ineligible = Boolean(place.website)
         || (input.settings.phoneRequired && !place.phone)
@@ -210,11 +198,10 @@ export async function approveCandidates(env: Env, candidateIds: number[]) {
         skipped++;
         continue;
       }
-      const dupe = await env.DB.prepare('SELECT id FROM leads WHERE place_id = ? AND deleted_at IS NULL')
-        .bind(details.placeId).first<{ id: number }>();
+      const dupe = (await findKnownLeads(env.DB, [details])).get(0);
       if (dupe) {
         await env.DB.prepare("UPDATE prospect_candidates SET status='approved', lead_id=?, approved_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
-          .bind(dupe.id, id).run();
+          .bind(dupe.leadId, id).run();
         skipped++;
         continue;
       }
@@ -223,8 +210,9 @@ export async function approveCandidates(env: Env, candidateIds: number[]) {
           company, phone, website, has_website, address, city, state, industry,
           place_id, gbp_claimed, gbp_photos_count, gbp_hours, google_rating,
           google_review_count, google_reviews, reviews_fetched_at, opportunity_score,
-          opportunity_reasoning, recommended_tier, source, status, enrichment_status
-        ) VALUES (?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, 'prospect_inbox', 'cold', 'pending')
+          opportunity_reasoning, recommended_tier, source, status, enrichment_status,
+          outreach_enabled
+        ) VALUES (?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, 'prospect_inbox', 'cold', 'pending', 0)
       `).bind(
         details.name, details.phone, details.address, details.city, details.state, candidate.industry,
         details.placeId, details.claimed ? 1 : 0, details.photoCount,
@@ -243,12 +231,20 @@ export async function approveCandidates(env: Env, candidateIds: number[]) {
   return { added, skipped, errors: errors.slice(0, 10) };
 }
 
-export function discoveryCombinations(discovery: DiscoverySettings): Array<{ industry: string; location: string }> {
-  return discovery.industries.flatMap((industry) => discovery.locations.map((location) => ({ industry, location })));
+export function discoveryCombinations(discovery: DiscoverySettings): Array<{ industry: string; keyword: string; location: string }> {
+  const groups = discovery.locationGroups ?? [];
+  const configured = groups.length ? groups.filter((group) => group.enabled).flatMap((group) => group.locations) : discovery.locations;
+  const locations = [...new Set(configured.map((value) => value.trim()).filter(Boolean))];
+  return discovery.industries.flatMap((industry) => {
+    const profile = discovery.industryProfiles?.find((candidate) => candidate.industry === industry);
+    const keywords = profile?.keywords?.length ? profile.keywords : [industry];
+    return keywords.flatMap((keyword) => locations.map((location) => ({ industry, keyword, location })));
+  });
 }
 
 export interface UpcomingScheduledSearch {
   industry: string;
+  keyword: string;
   location: string;
   date: string | null; // YYYY-MM-DD in the operator's timezone
   weekday: string | null;
@@ -330,7 +326,7 @@ export async function runScheduledDiscovery(env: Env, scheduledTime: number): Pr
   const selected = combinations[Number(completed?.n ?? 0) % combinations.length];
   const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: String(settings.general.timezone || 'America/Chicago'), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(scheduledTime));
   return discoverCandidates(env, {
-    ...selected, triggerType: 'scheduled', settings: discovery,
+    industry: selected.industry, location: selected.location, searchKeyword: selected.keyword, triggerType: 'scheduled', settings: discovery,
     scheduledKey: `scheduled:${dayKey}`,
   });
 }

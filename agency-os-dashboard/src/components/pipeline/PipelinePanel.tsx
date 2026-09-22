@@ -27,6 +27,7 @@ type TierFilter = 'all' | '1' | '2' | '3';
 type WebsiteFilter = 'all' | 'has' | 'none';
 type DemoSiteFilter = 'all' | 'cleanup_needed' | 'live' | 'deleted' | 'none';
 type PhoneFilter = 'all' | 'review';
+type OutreachFilter = 'all' | 'waiting' | 'enabled';
 // Enrichment status filter. Mirrors lead.enrichment_status's four values so
 // the operator can quickly slice to "leads still pending enrichment" or
 // "leads that failed and need a retry" without scrolling.
@@ -45,6 +46,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
   const [website, setWebsite] = useState<WebsiteFilter>('all');
   const [demoSite, setDemoSite] = useState<DemoSiteFilter>('all');
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>('all');
+  const [outreachFilter, setOutreachFilter] = useState<OutreachFilter>('all');
   const [enrichment, setEnrichment] = useState<EnrichmentFilter>('all');
   const [sort, setSort] = useState<SortMode>('default');
   const [industry, setIndustry] = useState<string>('');
@@ -134,6 +136,8 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
     if (stage !== 'all') list = list.filter(l => l.status === stage);
     if (tier !== 'all') list = list.filter(l => l.recommended_tier === parseInt(tier, 10));
     if (view === 'active' && phoneFilter === 'review') list = list.filter(l => l.phone_route === 'review');
+    if (view === 'active' && outreachFilter === 'waiting') list = list.filter(l => !l.outreach_enabled);
+    if (view === 'active' && outreachFilter === 'enabled') list = list.filter(l => !!l.outreach_enabled);
     if (enrichment !== 'all') list = list.filter(l => l.enrichment_status === enrichment);
     // Website presence is only known after enrichment, so both filters scope to
     // enriched leads — this keeps the filtered set in sync with what the
@@ -171,7 +175,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
       });
     }
     return list;
-  }, [leads, activeLeads, view, stage, tier, phoneFilter, enrichment, website, demoSite, search, sort]);
+  }, [leads, activeLeads, view, stage, tier, phoneFilter, outreachFilter, enrichment, website, demoSite, search, sort]);
 
   return (
     <>
@@ -226,6 +230,8 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
             onComplete={() => { loadLeads(); setSelectedIds(new Set()); }}
           />
 
+          {selectedIds.size > 0 && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3"><p className="text-xs font-semibold text-blue-900">{selectedIds.size} selected</p><div className="flex gap-2"><button type="button" onClick={async () => { const result = await api.leads.setOutreach(Array.from(selectedIds), true); showToast(`${result.updated} lead${result.updated === 1 ? '' : 's'} added to outreach${result.skippedForCapacity ? `; ${result.skippedForCapacity} held by the active limit` : ''}`, 'success'); setSelectedIds(new Set()); void loadLeads(); }} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Add to Outreach</button><button type="button" onClick={async () => { const result = await api.leads.setOutreach(Array.from(selectedIds), false); showToast(`${result.updated} lead${result.updated === 1 ? '' : 's'} removed from outreach`, 'success'); setSelectedIds(new Set()); void loadLeads(); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700">Remove from Outreach</button></div></div>}
+
           <StageFunnel leads={activeLeads} active={stage} onChange={setStage} />
 
           <TierStats leads={activeLeads} />
@@ -269,6 +275,13 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
           <option value="">All Industries</option>
           {industries.map((i) => <option key={i} value={i}>{i}</option>)}
         </select>
+        {view === 'active' && (
+          <select className="fsel" value={outreachFilter} onChange={e => setOutreachFilter(e.target.value as OutreachFilter)}>
+            <option value="all">All Outreach</option>
+            <option value="waiting">Waiting for Outreach</option>
+            <option value="enabled">In Outreach</option>
+          </select>
+        )}
         {view === 'active' && (
           <select className="fsel" value={tier} onChange={e => setTier(e.target.value as TierFilter)}>
             <option value="all">All Tiers</option>
