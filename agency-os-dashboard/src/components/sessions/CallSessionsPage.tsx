@@ -3675,6 +3675,7 @@ function buildColumns(
     { id: 'awaiting-build', title: 'Awaiting Build', description: 'Site not built—queued for Builder', icon: Mail, tone: 'amber', items: [] },
     { id: 'built-needs-review', title: 'Built Needs Review', description: 'Open and approve the finished site', icon: Eye, tone: 'amber', items: [] },
     { id: 'to-call', title: 'To Call', description: 'Site built—call to capture email', icon: PhoneCall, tone: 'blue', items: [] },
+    { id: 'call-follow-up', title: 'Follow Up', description: 'Called—try them again', icon: RotateCcw, tone: 'amber', items: [] },
     { id: 'ready-to-send', title: 'Ready to Send', description: 'Site built, email ready next', icon: Send, tone: 'emerald', items: [] },
     { id: 'sent-no-reply', title: 'Sent — No Reply', description: 'Email sent, awaiting response', icon: Clock, tone: 'slate', items: [] },
     { id: 'final-review', title: 'Final Review', description: 'Sequence complete, operator decision needed', icon: AlertCircle, tone: 'amber', items: [] },
@@ -3741,12 +3742,16 @@ function buildColumns(
     }
 
     if (!hasUsableEmail) {
-      byId['to-call'].items.push(leadItem(lead, {
-        eyebrow: lead.status === 'contacted' ? 'Call again' : 'Site ready',
+      const wasCalled = Boolean(lead.last_called_at);
+      const targetColumn = wasCalled ? 'call-follow-up' : 'to-call';
+      byId[targetColumn].items.push(leadItem(lead, {
+        eyebrow: wasCalled ? 'Follow up' : 'Site ready',
         detail: lead.site_url_raw || lead.site_url || 'Demo site complete',
-        note: 'Call to capture a valid email address for this finished demo',
-        activityLabel: lead.last_called_at ? 'Retry call' : 'Ready to call',
-        tone: 'blue',
+        note: wasCalled
+          ? 'Previous call did not capture an email—follow up when ready'
+          : 'Call to capture a valid email address for this finished demo',
+        activityLabel: wasCalled ? 'Follow-up needed' : 'Ready to call',
+        tone: wasCalled ? 'amber' : 'blue',
         sortAt: lead.last_called_at ?? lead.updated_at,
       }));
       return;
@@ -3876,6 +3881,7 @@ function buildColumns(
 
 function emailBoardActionLabel(columnId: string, item: BoardItem): string {
   if (columnId === 'to-call') return 'Open call';
+  if (columnId === 'call-follow-up') return 'Follow up';
   if (columnId === 'awaiting-build') return 'Copy brief';
   if (columnId === 'built-needs-review') return 'Approve site';
   if (columnId === 'ready-to-send') {
@@ -3930,6 +3936,7 @@ function leadItem(
     followupStep: lead.pipeline_followup_step ?? 0,
     emailOutreachStarted: overrides.emailOutreachStarted ?? false,
     lastActionAt: lead.pipeline_last_action_at
+      ?? lead.last_called_at
       ?? (lead.outcome === 'Email Captured' ? lead.updated_at : null),
     lastAction: emailLastActionLabel(lead),
     pipelineStatus: lead.pipeline_status,
@@ -3989,12 +3996,12 @@ function KanbanColumn({
             <BoardCard
               key={item.id}
               item={item}
-              showCallOutcome={column.id === 'to-call'}
+              showCallOutcome={column.id === 'to-call' || column.id === 'call-follow-up'}
               primaryLabel={
                 emailBoardActionLabel(column.id, item)
               }
               onOpen={() => {
-                if (column.id === 'to-call') onOpenLead(item.leadId);
+                if (column.id === 'to-call' || column.id === 'call-follow-up') onOpenLead(item.leadId);
                 else if (column.id === 'awaiting-build') onOpenBuild(item.leadId);
                 else if (column.id === 'built-needs-review') onApproveSite(item.leadId);
                 else if (column.id === 'final-review') onOpenLead(item.leadId);
@@ -4229,7 +4236,8 @@ function EmailSequencePanel({ item }: { item: BoardItem }) {
 
 function EmailLastTouchIndicator({ item }: { item: BoardItem }) {
   const followupCount = Math.max(item.followupStep, item.noReplyStep);
-  if (!item.emailOutreachStarted || !item.lastActionAt) {
+  const isCallTouch = !item.emailOutreachStarted && Boolean(item.outcomeLabel && item.lastActionAt);
+  if ((!item.emailOutreachStarted && !isCallTouch) || !item.lastActionAt) {
     return (
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-600">
         <div className="flex items-center gap-2">
@@ -4251,6 +4259,7 @@ function EmailLastTouchIndicator({ item }: { item: BoardItem }) {
   }
 
   const ageHours = Math.max(0, Date.now() - new Date(item.lastActionAt).getTime()) / 3_600_000;
+  const touchLabel = isCallTouch ? item.outcomeLabel! : item.lastAction;
   const decay =
     ageHours < 24
       ? { active: 1, pill: 'border-emerald-200 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', bar: 'bg-emerald-400' }
@@ -4263,13 +4272,13 @@ function EmailLastTouchIndicator({ item }: { item: BoardItem }) {
   return (
     <div
       className={`rounded-lg border px-2 py-1.5 ${decay.pill}`}
-      title={`Last email outreach activity: ${item.lastAction}`}
+      title={isCallTouch ? `Last call: ${touchLabel}` : `Last email outreach activity: ${touchLabel}`}
     >
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${decay.dot}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[10px] font-semibold">{item.lastAction}</span>
+            <span className="truncate text-[10px] font-semibold">{touchLabel}</span>
             <div className="flex shrink-0 items-center gap-1.5">
               {followupCount > 0 && (
                 <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[8px] font-semibold">
