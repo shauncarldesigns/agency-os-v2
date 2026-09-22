@@ -1442,20 +1442,19 @@ function QuestionPathButton({ label, onClick }: { label: string; onClick: () => 
   return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
 }
 
-type GapPath = 'opening' | 'referral_lookup' | 'offer' | 'capacity' | 'overflow' | 'missed_call_offer' | 'accept' | 'concern' | 'calls_interest' | 'calls' | 'website_no' | 'final_no';
+type GapPath = 'opening' | 'referral_lookup' | 'offer' | 'capacity' | 'more_work_offer' | 'busy_offer' | 'priority' | 'overflow' | 'missed_call_offer' | 'accept' | 'final_no';
 
 const GAP_PATH_LABELS: Record<GapPath, string> = {
   opening: 'opening',
   referral_lookup: 'referral lookup',
   offer: 'website offer',
   capacity: 'capacity question',
+  more_work_offer: 'more-work website offer',
+  busy_offer: 'busy-business website offer',
+  priority: 'priority question',
   overflow: 'overflow question',
   missed_call_offer: 'missed-call opportunity',
   accept: 'email capture',
-  concern: 'objection question',
-  calls_interest: 'receptionist question',
-  calls: 'receptionist pivot',
-  website_no: 'low-risk offer',
   final_no: 'website closeout',
 };
 
@@ -1495,7 +1494,7 @@ function GapBasedEmailScript({
   const [path, setPath] = useState<GapPath>('opening');
   const [pathHistory, setPathHistory] = useState<GapPath[]>([]);
   const websiteOffer = path === 'accept';
-  const receptionistOffer = path === 'calls' || path === 'missed_call_offer';
+  const receptionistOffer = path === 'missed_call_offer';
   const previousPath = pathHistory[pathHistory.length - 1];
   const navigate = (nextPath: GapPath) => {
     setPathHistory((history) => [...history, path]);
@@ -1527,8 +1526,8 @@ function GapBasedEmailScript({
       <GapPathButton label="They hesitate or say no" onClick={() => navigate('capacity')} />
     </GapScriptBranch>}
 
-    {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body="That actually might be the bigger problem to solve here. Have you ever thought about an automated answering service that filters out calls like this while still catching your customer calls?">
-      <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
+    {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body="That might actually be the bigger problem to solve. When you miss a call, you could be losing a job. Have you ever thought about an automated answering service that answers when you can’t?">
+      <p className="mt-3 text-[17px] leading-8 text-slate-800">That’s something we specialize in. I can set up a demo so you can try it yourself. If you have another minute, we can try it together right now—or I can email it to you to try later if you prefer.</p>
     </GapScriptBranch>}
 
     {path === 'offer' && <GapScriptBranch label="Make the offer" body="Got it. That’s actually why I called. I put together a sample website so your business looks as professional online as your reviews suggest. Would you be open to taking a look?">
@@ -1536,37 +1535,33 @@ function GapBasedEmailScript({
       <GapPathButton label="They hesitate or say no" onClick={() => navigate('capacity')} />
     </GapScriptBranch>}
 
-    {path === 'capacity' && <GapScriptBranch label="Find out whether capacity is the real issue" body="Totally fair. Are you already too busy to take on more work, or would you still take on more of the right jobs if they came in?">
-      <GapPathButton label="They’re already too busy" onClick={() => navigate('overflow')} />
-      <GapPathButton label="They would take on the right work" onClick={() => navigate('concern')} />
+    {path === 'capacity' && <GapScriptBranch label="Find out whether capacity is the real issue" body="Totally fair. Are you already too busy to take on more work, or would you still want to take on more jobs right now?">
+      <GapPathButton label="They’re already too busy" onClick={() => navigate('busy_offer')} />
+      <GapPathButton label="They want to take on more work" onClick={() => navigate('more_work_offer')} />
     </GapScriptBranch>}
 
-    {path === 'concern' && <GapScriptBranch label="Clarify the real objection" body="Got it. Is it more that you don’t think you need a website, or that you get too many calls like this?">
-      <GapPathButton label="They get too many calls" onClick={() => navigate('calls_interest')} />
-      <GapPathButton label="They don’t need a website" onClick={() => navigate('website_no')} />
+    {path === 'more_work_offer' && <GapScriptBranch label="Connect the website to more work" body="Got it. That’s where the website can help. When someone hears about your business and looks you up, it gives them a reason to feel confident calling you instead of moving on to someone else. Since I already put together a sample, would you be open to taking a quick look?">
+      <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
+      <GapPathButton label="They’re not interested in the website" onClick={() => navigate('priority')} />
     </GapScriptBranch>}
 
-    {path === 'calls_interest' && <GapScriptBranch label="Test interest in call screening" body="Sounds like you get these calls all the time. Would it be useful to have an answering service that screens them out for you?">
-      <GapPathButton label="Yes—explain the receptionist" onClick={() => navigate('calls')} />
-      <GapPathButton label="No—not interested" onClick={() => navigate('final_no')} />
+    {path === 'busy_offer' && <GapScriptBranch label="Connect the website to better-fit work" body="Got it. Even if you don’t need more calls, a website can help the right customers trust your business and understand what you do before they call. Since I already put together a sample, would you be open to taking a quick look?">
+      <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
+      <GapPathButton label="They’re not interested in the website" onClick={() => navigate('priority')} />
     </GapScriptBranch>}
 
-    {path === 'overflow' && <GapScriptBranch label="Ask how they handle overflow" body="Got it. Then I’m not going to pretend a website should be your biggest priority then. I’m curious though—when you’re busy working and can’t answer the phone, does someone else pick it up, or does it usually go to voicemail?">
+    {path === 'priority' && <GapScriptBranch label="Identify the bigger priority" body="Understood. Is the bigger problem that you’re missing customer calls when you can’t answer, or are you all set there too?">
+      <GapPathButton label="Missed calls are the bigger problem" onClick={() => navigate('overflow')} />
+      <GapPathButton label="They’re all set there too" onClick={() => navigate('final_no')} />
+    </GapScriptBranch>}
+
+    {path === 'overflow' && <GapScriptBranch label="Ask how they handle missed calls" body="I’m curious, though—when you’re busy working and can’t answer the phone, does someone else pick it up, or does it usually go to voicemail?">
       <GapPathButton label="Calls are missed or go to voicemail" onClick={() => navigate('missed_call_offer')} />
       <GapPathButton label="Someone handles the overflow" onClick={() => navigate('final_no')} />
     </GapScriptBranch>}
 
-    {path === 'website_no' && <GapScriptBranch label="One last low-risk offer" body="Listen, there’s no cost to take a look. Worst case scenario, you hate it and tell me to go pound sand. Best case scenario, you like it, we can move forward, and you can turn these cold calls into customer calls.">
-      <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
-      <GapPathButton label="Still not interested" onClick={() => navigate('final_no')} />
-    </GapScriptBranch>}
-
     {path === 'final_no' && <GapScriptBranch label="Close the website opportunity" body="No problem at all. I appreciate your time. Have a good one.">
       <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">Record why they declined</button>
-    </GapScriptBranch>}
-
-    {path === 'calls' && <GapScriptBranch label="Pivot to the receptionist" body="That’s something we specialize in—an automated receptionist that captures customer details and filters out sales calls. I can set up a quick version for your business.">
-      <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
     </GapScriptBranch>}
 
     {websiteOffer && <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
