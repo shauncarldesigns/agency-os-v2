@@ -441,6 +441,7 @@ export const api = {
     delete: (id: number) =>
       apiFetch<{ success: boolean }>(`/api/calls/${id}`, { method: 'DELETE' }),
     intelligenceReport: (id: number) => apiFetch<import('./types').CallIntelligenceReport>(`/api/call-intelligence/calls/${id}/report`),
+    swapIntelligenceSpeakers: (id: number) => apiFetch<{ job_id:number; status:string; shaun_speaker:number }>(`/api/call-intelligence/calls/${id}/swap-speakers`, { method: 'POST' }),
     removeIntelligence: (id: number, deleteRecording = false) => apiFetch<{ removed:boolean; recording_deleted:boolean }>(`/api/call-intelligence/calls/${id}/report`, { method: 'DELETE', body: JSON.stringify({ delete_recording: deleteRecording }) }),
     process: (id: number, force = false) => apiFetch<{ job_id:number; status:string }>(`/api/call-intelligence/calls/${id}/process`, { method: 'POST', body: JSON.stringify({ force }) }),
     retry: (id: number) => apiFetch<{ status:string }>(`/api/call-intelligence/calls/${id}/retry`, { method: 'POST' }),

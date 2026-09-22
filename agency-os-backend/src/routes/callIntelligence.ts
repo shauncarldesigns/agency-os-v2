@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound, serverError } from '../utils/errors';
-import { enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs } from '../services/callIntelligence';
+import { enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs, renderSpeakerTranscript } from '../services/callIntelligence';
 import { recordingKeyFromValue, recordingResponseUrl } from '../utils/recordings';
 
 export const callIntelligenceRouter = new Hono<{ Bindings: Env }>();
@@ -63,6 +63,22 @@ callIntelligenceRouter.get('/calls/:id/report', async c => {
   const transcript = await c.env.DB.prepare(`SELECT provider,model,language,duration_seconds,shaun_speaker,transcript_json,transcript_text,updated_at FROM call_transcripts WHERE call_id=?`).bind(callId).first<Record<string, unknown>>();
   const analysis = await c.env.DB.prepare(`SELECT id,provider,model,analysis_prompt_version,analysis_schema_version,analysis_json,created_at FROM call_analyses WHERE call_id=? AND superseded_at IS NULL ORDER BY created_at DESC LIMIT 1`).bind(callId).first<Record<string, unknown>>();
   return c.json({ job, transcript: transcript ? { ...transcript, transcript_json: JSON.parse(String(transcript.transcript_json)) } : null, analysis: analysis ? { ...analysis, analysis_json: JSON.parse(String(analysis.analysis_json)) } : null });
+});
+
+callIntelligenceRouter.post('/calls/:id/swap-speakers', async c => {
+  const callId = Number(c.req.param('id'));
+  if (!Number.isInteger(callId) || callId < 1) return c.json(badRequest('Invalid call ID'), 400);
+  const transcript = await c.env.DB.prepare('SELECT shaun_speaker,transcript_json FROM call_transcripts WHERE call_id=?').bind(callId).first<{ shaun_speaker:number; transcript_json:string }>();
+  if (!transcript) return c.json(notFound('Transcript'), 404);
+  const utterances = JSON.parse(transcript.transcript_json) as Array<{ speaker:number; start:number; end:number; transcript:string }>;
+  const nextShaunSpeaker = utterances.find(row => row.speaker !== transcript.shaun_speaker)?.speaker;
+  if (nextShaunSpeaker === undefined) return c.json(badRequest('Transcript does not contain a second speaker'), 400);
+
+  const transcriptText = renderSpeakerTranscript(utterances, nextShaunSpeaker);
+  await c.env.DB.prepare(`UPDATE call_transcripts SET shaun_speaker=?,transcript_text=?,updated_at=datetime('now') WHERE call_id=?`).bind(nextShaunSpeaker, transcriptText, callId).run();
+  const jobId = await enqueueCallAnalysis(c.env.DB, callId, true);
+  c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1, true));
+  return c.json({ job_id: jobId, status: 'queued', shaun_speaker: nextShaunSpeaker }, 202);
 });
 
 callIntelligenceRouter.delete('/calls/:id/report', async c => {
