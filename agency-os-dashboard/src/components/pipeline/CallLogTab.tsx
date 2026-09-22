@@ -5,6 +5,7 @@ import { Badge } from '../shared/Badge';
 import { Button } from '../shared/Button';
 import { formatDateTime, todayIso, outcomeBadge } from '../../lib/format';
 import { AuthenticatedAudioPlayer } from '../shared/AuthenticatedAudioPlayer';
+import { TranscriptCorrectionEditor } from '../shared/TranscriptCorrectionEditor';
 
 interface CallLogTabProps {
   leadId: number;
@@ -249,7 +250,7 @@ function IntelligenceReport({ callId, showToast }: { callId: number; showToast: 
       <div><b>Outcome:</b> {String(analysis.outcome || 'unknown')}</div>
       <div><b>Stated needs:</b> {(analysis.stated_needs as string[] || []).join(', ') || 'None supported'}</div>
       <div><b>Next action:</b> {String(analysis.recommended_next_action || '')}</div>
-      <details><summary className="cursor-pointer font-semibold">Transcript</summary><pre className="mt-2 whitespace-pre-wrap font-sans leading-relaxed">{report?.transcript?.transcript_text}</pre></details>
+      <details><summary className="cursor-pointer font-semibold">Transcript</summary>{report?.transcript && <TranscriptCorrectionEditor callId={callId} transcript={report.transcript} onQueued={load} showToast={showToast} />}</details>
       <details><summary className="cursor-pointer font-semibold">Full structured report</summary><pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[11px]">{JSON.stringify(analysis, null, 2)}</pre></details>
     </div>}
   </div>;

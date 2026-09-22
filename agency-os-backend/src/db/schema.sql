@@ -259,7 +259,7 @@ CREATE TABLE IF NOT EXISTS call_transcripts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   call_id INTEGER NOT NULL UNIQUE REFERENCES call_log(id) ON DELETE CASCADE,
   provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT, duration_seconds REAL, shaun_speaker INTEGER,
-  transcript_json TEXT NOT NULL, transcript_text TEXT NOT NULL,
+  transcript_json TEXT NOT NULL, transcript_text TEXT NOT NULL, corrected_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS call_analyses (

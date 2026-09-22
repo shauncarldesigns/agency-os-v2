@@ -20,6 +20,7 @@ import { buildClaritySnippet, syncClarityEngagement } from '../services/clarity'
 import { scheduleEmailAutomation } from '../services/emailAutomation';
 import { closeLeadBadContact, closeLeadNotInterested, UNABLE_TO_REACH_REASONS } from '../services/leadCloseout';
 import { outreachLeadSql, type OutreachChannel } from '../services/outreachEligibility';
+import { enqueueCallAnalysisIfEligible, processCallIntelligenceJobs } from '../services/callIntelligence';
 
 const BRIEF_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -955,6 +956,10 @@ pipelineRouter.post('/leads/:id/action', async (c) => {
               SET outcome = ?, notes = COALESCE(?, notes), call_approach = ?
             WHERE id = ? AND lead_id = ?`
         ).bind(outcome, notes, callApproach, recordingCallId, id).run();
+        if (c.env.CALL_INTELLIGENCE_ENABLED === 'true') {
+          const jobId = await enqueueCallAnalysisIfEligible(c.env.DB, recordingCallId);
+          if (jobId) c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1));
+        }
       } else {
         // Outcomes without a recording still belong in call history. The old
         // behavior only wrote lead_activity, which made the UI claim a call
