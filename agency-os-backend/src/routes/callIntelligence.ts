@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { badRequest, notFound, serverError } from '../utils/errors';
-import { enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs, renderSpeakerTranscript } from '../services/callIntelligence';
+import { ANALYZABLE_OUTCOME_VALUES, enqueueCallAnalysis, enqueueUnprocessedRecordings, processCallIntelligenceJobs, renderSpeakerTranscript } from '../services/callIntelligence';
 import { recordingKeyFromValue, recordingResponseUrl } from '../utils/recordings';
 
 export const callIntelligenceRouter = new Hono<{ Bindings: Env }>();
@@ -60,7 +60,7 @@ callIntelligenceRouter.post('/calls/:id/retry', async c => {
 callIntelligenceRouter.get('/calls/:id/report', async c => {
   const callId = Number(c.req.param('id'));
   const job = await c.env.DB.prepare(`SELECT status,error,attempt_count,updated_at FROM call_intelligence_jobs WHERE call_id=? ORDER BY id DESC LIMIT 1`).bind(callId).first();
-  const transcript = await c.env.DB.prepare(`SELECT provider,model,language,duration_seconds,shaun_speaker,transcript_json,transcript_text,updated_at FROM call_transcripts WHERE call_id=?`).bind(callId).first<Record<string, unknown>>();
+  const transcript = await c.env.DB.prepare(`SELECT provider,model,language,duration_seconds,shaun_speaker,transcript_json,transcript_text,corrected_at,updated_at FROM call_transcripts WHERE call_id=?`).bind(callId).first<Record<string, unknown>>();
   const analysis = await c.env.DB.prepare(`SELECT id,provider,model,analysis_prompt_version,analysis_schema_version,analysis_json,created_at FROM call_analyses WHERE call_id=? AND superseded_at IS NULL ORDER BY created_at DESC LIMIT 1`).bind(callId).first<Record<string, unknown>>();
   return c.json({ job, transcript: transcript ? { ...transcript, transcript_json: JSON.parse(String(transcript.transcript_json)) } : null, analysis: analysis ? { ...analysis, analysis_json: JSON.parse(String(analysis.analysis_json)) } : null });
 });
@@ -79,6 +79,33 @@ callIntelligenceRouter.post('/calls/:id/swap-speakers', async c => {
   const jobId = await enqueueCallAnalysis(c.env.DB, callId, true);
   c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1, true));
   return c.json({ job_id: jobId, status: 'queued', shaun_speaker: nextShaunSpeaker }, 202);
+});
+
+callIntelligenceRouter.patch('/calls/:id/transcript', async c => {
+  const callId = Number(c.req.param('id'));
+  if (!Number.isInteger(callId) || callId < 1) return c.json(badRequest('Invalid call ID'), 400);
+  const transcript = await c.env.DB.prepare('SELECT shaun_speaker,transcript_json FROM call_transcripts WHERE call_id=?').bind(callId).first<{ shaun_speaker:number; transcript_json:string }>();
+  if (!transcript) return c.json(notFound('Transcript'), 404);
+  const current = JSON.parse(transcript.transcript_json) as Array<{ speaker:number; start:number; end:number; transcript:string }>;
+  const body = await c.req.json().catch(() => ({})) as { utterances?: unknown };
+  if (!Array.isArray(body.utterances) || body.utterances.length !== current.length) {
+    return c.json(badRequest('Every transcript line is required'), 400);
+  }
+  let corrected: Array<{ speaker:number; start:number; end:number; transcript:string }>;
+  try {
+    corrected = body.utterances.map((value, index) => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text || text.length > 5_000) throw new Error(`Transcript line ${index + 1} is invalid`);
+      return { ...current[index], transcript: text };
+    });
+  } catch (error) {
+    return c.json(badRequest((error as Error).message), 400);
+  }
+  const transcriptText = renderSpeakerTranscript(corrected, transcript.shaun_speaker);
+  await c.env.DB.prepare(`UPDATE call_transcripts SET transcript_json=?,transcript_text=?,corrected_at=datetime('now'),updated_at=datetime('now') WHERE call_id=?`).bind(JSON.stringify(corrected), transcriptText, callId).run();
+  const jobId = await enqueueCallAnalysis(c.env.DB, callId, true);
+  c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1, true));
+  return c.json({ job_id: jobId, status: 'queued' }, 202);
 });
 
 callIntelligenceRouter.delete('/calls/:id/report', async c => {
@@ -116,8 +143,9 @@ callIntelligenceRouter.get('/insights', async c => {
   const outcome = c.req.query('outcome');
   const from = c.req.query('from');
   const to = c.req.query('to');
-  const filters: string[] = ['a.superseded_at IS NULL'];
-  const values: unknown[] = [];
+  const outcomePlaceholders = ANALYZABLE_OUTCOME_VALUES.map(() => '?').join(',');
+  const filters: string[] = ['a.superseded_at IS NULL', `LOWER(TRIM(REPLACE(c.outcome,'_',' '))) IN (${outcomePlaceholders})`];
+  const values: unknown[] = [...ANALYZABLE_OUTCOME_VALUES];
   if (callType) { filters.push('a.call_type=?'); values.push(callType); }
   if (industry) { filters.push('l.industry=?'); values.push(industry); }
   if (outcome) { filters.push('a.outcome=?'); values.push(outcome); }
@@ -126,8 +154,8 @@ callIntelligenceRouter.get('/insights', async c => {
   const where = filters.join(' AND ');
   const summary = await c.env.DB.prepare(`SELECT COUNT(*) calls_analyzed, SUM(CASE WHEN a.outcome='meeting_booked' THEN 1 ELSE 0 END) meetings_booked, SUM(CASE WHEN a.outcome='sold' THEN 1 ELSE 0 END) sold, SUM(CASE WHEN a.outcome='rejected' OR LOWER(REPLACE(c.outcome,'_',' '))='not interested' THEN 1 ELSE 0 END) not_interested FROM call_analyses a JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where}`).bind(...values).first();
   const outcomes = await c.env.DB.prepare(`SELECT a.outcome label,COUNT(*) count FROM call_analyses a JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where} GROUP BY a.outcome ORDER BY count DESC`).bind(...values).all();
-  const facts = await c.env.DB.prepare(`SELECT f.fact_type,f.category,f.reaction,COUNT(DISTINCT f.call_id) supporting_calls,ROUND(100.0*COUNT(DISTINCT f.call_id)/(SELECT MAX(1,COUNT(DISTINCT a2.call_id)) FROM call_analyses a2 JOIN call_log c2 ON c2.id=a2.call_id JOIN leads l2 ON l2.id=c2.lead_id WHERE a2.superseded_at IS NULL),1) percentage,MIN(f.call_id) representative_call_id,MIN(f.quote) quote,MIN(f.timestamp) timestamp FROM call_analysis_facts f JOIN call_analyses a ON a.id=f.analysis_id JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where} GROUP BY f.fact_type,f.category,f.reaction ORDER BY supporting_calls DESC LIMIT 100`).bind(...values).all();
-  const jobs = await c.env.DB.prepare(`SELECT j.id,j.call_id,j.status,j.attempt_count,j.error,j.updated_at,l.id lead_id,l.company,c.outcome,c.recording_url,a.analysis_json FROM call_intelligence_jobs j JOIN call_log c ON c.id=j.call_id JOIN leads l ON l.id=c.lead_id LEFT JOIN call_analyses a ON a.call_id=j.call_id AND a.superseded_at IS NULL ORDER BY j.updated_at DESC LIMIT 25`).all<Record<string, unknown>>();
+  const facts = await c.env.DB.prepare(`SELECT f.fact_type,f.category,f.reaction,COUNT(DISTINCT f.call_id) supporting_calls,ROUND(100.0*COUNT(DISTINCT f.call_id)/(SELECT MAX(1,COUNT(DISTINCT a2.call_id)) FROM call_analyses a2 JOIN call_log c2 ON c2.id=a2.call_id JOIN leads l2 ON l2.id=c2.lead_id WHERE a2.superseded_at IS NULL AND LOWER(TRIM(REPLACE(c2.outcome,'_',' '))) IN (${outcomePlaceholders})),1) percentage,MIN(f.call_id) representative_call_id,MIN(f.quote) quote,MIN(f.timestamp) timestamp FROM call_analysis_facts f JOIN call_analyses a ON a.id=f.analysis_id JOIN call_log c ON c.id=a.call_id JOIN leads l ON l.id=c.lead_id WHERE ${where} GROUP BY f.fact_type,f.category,f.reaction ORDER BY supporting_calls DESC LIMIT 100`).bind(...ANALYZABLE_OUTCOME_VALUES, ...values).all();
+  const jobs = await c.env.DB.prepare(`SELECT j.id,j.call_id,j.status,j.attempt_count,j.error,j.updated_at,l.id lead_id,l.company,c.outcome,c.recording_url,a.analysis_json FROM call_intelligence_jobs j JOIN call_log c ON c.id=j.call_id JOIN leads l ON l.id=c.lead_id LEFT JOIN call_analyses a ON a.call_id=j.call_id AND a.superseded_at IS NULL WHERE LOWER(TRIM(REPLACE(c.outcome,'_',' '))) IN (${outcomePlaceholders}) ORDER BY j.updated_at DESC LIMIT 25`).bind(...ANALYZABLE_OUTCOME_VALUES).all<Record<string, unknown>>();
   const jobRows = (jobs.results ?? []).map(row => {
     const analysis = row.analysis_json ? JSON.parse(String(row.analysis_json)) as Record<string, unknown> : null;
     return { ...row, recording_url: recordingResponseUrl(c.req.url, row.recording_url as string | null), analysis, outcome_reconciliation: reconcileOutcome(row.outcome, analysis), analysis_json: undefined };

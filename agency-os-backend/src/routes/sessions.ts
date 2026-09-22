@@ -28,6 +28,7 @@ import {
   INDUSTRY_ROTATION, nextIndustry, composeWithWidening,
   type CompositionFilter,
 } from '../services/sessionComposer';
+import { enqueueCallAnalysisIfEligible, processCallIntelligenceJobs } from '../services/callIntelligence';
 
 export const sessionsRouter = new Hono<{ Bindings: Env }>();
 
@@ -651,6 +652,7 @@ sessionsRouter.post('/:id/outcome', async (c) => {
     booked: 'Demo Booked',
     skipped: '',  // unused; skipped never writes to call_log or lead.outcome
   } as const)[body.outcome];
+  let callLogIdForAnalysis: number | null = null;
   if (body.outcome !== 'skipped') {
     const objectionHits = body.objectionHits?.length ? JSON.stringify(body.objectionHits) : null;
     const recordingUrl = normalizeRecordingStorageValue(body.recordingUrl);
@@ -677,11 +679,18 @@ sessionsRouter.post('/:id/outcome', async (c) => {
                 recording_url = COALESCE(recording_url, ?)
           WHERE id = ? AND lead_id = ?`
       ).bind(friendlyOutcome, callLogNotes, objectionHits, body.callApproach ?? null, recordingUrl, body.recordingCallId, body.leadId).run();
+      callLogIdForAnalysis = body.recordingCallId;
     } else {
-      await c.env.DB.prepare(
+      const insertedCall = await c.env.DB.prepare(
         `INSERT INTO call_log (lead_id, outcome, notes, objection_hits, call_approach, recording_url) VALUES (?, ?, ?, ?, ?, ?)`
       ).bind(body.leadId, friendlyOutcome, callLogNotes, objectionHits, body.callApproach ?? null, recordingUrl).run();
+      if (recordingUrl) callLogIdForAnalysis = Number(insertedCall.meta.last_row_id);
     }
+  }
+
+  if (c.env.CALL_INTELLIGENCE_ENABLED === 'true' && callLogIdForAnalysis) {
+    const jobId = await enqueueCallAnalysisIfEligible(c.env.DB, callLogIdForAnalysis);
+    if (jobId) c.executionCtx.waitUntil(processCallIntelligenceJobs(c.env, 1));
   }
 
   // 2. Update session_leads with the outcome.

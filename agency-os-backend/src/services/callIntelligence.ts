@@ -10,6 +10,22 @@ interface CallContext { id: number; lead_id: number; recording_url: string | nul
 interface Utterance { speaker: number; start: number; end: number; transcript: string }
 interface TranscriptResult { provider: string; model: string; language: string | null; duration: number | null; shaunSpeaker: number; utterances: Utterance[] }
 
+export const ANALYZABLE_OUTCOME_VALUES = [
+  'not interested', 'callback', 'callback requested', 'booked', 'demo booked',
+  'spoke with owner', 'interested', 'qualified for tier', 'busy', 'talk later',
+  'feedback only', 'email captured', 'conversation', 'follow up',
+  'meeting booked', 'sold',
+] as const;
+const ANALYZABLE_OUTCOMES = new Set<string>(ANALYZABLE_OUTCOME_VALUES);
+
+function normalizedOutcome(value: string): string {
+  return value.toLowerCase().replaceAll('_', ' ').trim();
+}
+
+export function isCallOutcomeAnalyzable(outcome: string): boolean {
+  return ANALYZABLE_OUTCOMES.has(normalizedOutcome(outcome));
+}
+
 const MOCK_ANALYSIS: AnalysisRecord = {
   call_summary: 'Safe test-mode call analysis.', call_type: 'cold_call', outcome: 'conversation', outcome_confidence: 0.8,
   prospect_situation: 'The prospect is evaluating visibility options.', stated_needs: ['More calls from Google'],
@@ -109,6 +125,8 @@ async function normalizeFacts(db: D1Database, analysisId: number, callId: number
 }
 
 export async function enqueueCallAnalysis(db: D1Database, callId: number, force = false): Promise<number> {
+  const call = await db.prepare('SELECT outcome FROM call_log WHERE id=?').bind(callId).first<{ outcome:string }>();
+  if (!call || !isCallOutcomeAnalyzable(call.outcome)) throw new Error('Call outcome is not eligible for Sales Intelligence');
   const exclusion = await db.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(callId).first();
   if (exclusion) throw new Error('Call was removed from Sales Intelligence');
   if (force) await db.prepare('DELETE FROM call_intelligence_jobs WHERE call_id = ? AND requested_prompt_version = ?').bind(callId, CALL_ANALYSIS_PROMPT_VERSION).run();
@@ -118,15 +136,25 @@ export async function enqueueCallAnalysis(db: D1Database, callId: number, force 
   return row.id;
 }
 
+export async function enqueueCallAnalysisIfEligible(db: D1Database, callId: number): Promise<number | null> {
+  const call = await db.prepare(`SELECT c.outcome,c.recording_url,
+    EXISTS(SELECT 1 FROM call_intelligence_exclusions x WHERE x.call_id=c.id) excluded
+    FROM call_log c WHERE c.id=?`).bind(callId).first<{ outcome:string; recording_url:string|null; excluded:number }>();
+  if (!call?.recording_url || call.excluded || !isCallOutcomeAnalyzable(call.outcome)) return null;
+  return enqueueCallAnalysis(db, callId);
+}
+
 export async function enqueueUnprocessedRecordings(db: D1Database): Promise<number> {
+  const outcomes = [...ANALYZABLE_OUTCOME_VALUES];
   const result = await db.prepare(`
     INSERT OR IGNORE INTO call_intelligence_jobs (call_id, requested_prompt_version)
     SELECT c.id, ?
       FROM call_log c
      WHERE c.recording_url IS NOT NULL
        AND TRIM(c.recording_url) <> ''
+       AND LOWER(TRIM(REPLACE(c.outcome, '_', ' '))) IN (${outcomes.map(() => '?').join(',')})
        AND NOT EXISTS (SELECT 1 FROM call_intelligence_exclusions x WHERE x.call_id=c.id)
-  `).bind(CALL_ANALYSIS_PROMPT_VERSION).run();
+  `).bind(CALL_ANALYSIS_PROMPT_VERSION, ...outcomes).run();
   return result.meta.changes ?? 0;
 }
 
@@ -146,6 +174,10 @@ export async function processCallIntelligenceJobs(env: Env, limit = 2, allowWhen
       }
       const call = await env.DB.prepare(`SELECT c.*, l.company, l.contact, l.industry, l.city, l.state, l.status, l.pipeline_status FROM call_log c JOIN leads l ON l.id=c.lead_id WHERE c.id=?`).bind(job.call_id).first<CallContext>();
       if (!call) throw new Error('Call or lead not found');
+      if (!isCallOutcomeAnalyzable(call.outcome)) {
+        await env.DB.prepare('DELETE FROM call_intelligence_jobs WHERE id=?').bind(job.id).run();
+        continue;
+      }
       const transcript = await existingTranscript(env.DB, call.id) ?? await transcribe(env, call);
       const text = transcriptText(transcript);
       if (await env.DB.prepare('SELECT call_id FROM call_intelligence_exclusions WHERE call_id=?').bind(call.id).first()) continue;

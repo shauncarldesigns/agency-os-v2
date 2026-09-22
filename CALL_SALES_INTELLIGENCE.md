@@ -11,8 +11,9 @@ separate CRM.
 
 - One local two-speaker test (`Prime Plumbing Engaged`, call 52) completed and
   was manually judged accurate.
-- Every new successful recording upload is automatically queued when
-  `CALL_INTELLIGENCE_ENABLED=true`.
+- Every new successful recording is preserved, but analysis is queued only
+  after an analyzable conversation outcome is saved. No Answer, Voicemail,
+  placeholder Recording, and unable-to-reach outcomes never enter processing.
 - Historical recordings are queued only through the authenticated **Analyze
   existing recordings** action. Do not bulk backfill production until the
   first live-call pilot is reviewed.
@@ -23,8 +24,9 @@ separate CRM.
 ## Architecture
 
 1. `POST /api/recordings` preserves audio in R2 and creates a placeholder
-   `call_log` row.
-2. A unique `(call_id, prompt_version)` D1 job is enqueued.
+   `call_log` row without starting analysis.
+2. Saving a conversational outcome creates a unique `(call_id, prompt_version)`
+   D1 job. Non-conversation outcomes retain audio and call history only.
 3. The request returns without waiting for transcription or analysis.
 4. An immediate `executionCtx.waitUntil()` kick processes the common case.
 5. The existing five-minute cron recovers queued or abandoned work. Locks older
@@ -157,8 +159,9 @@ conclusion, missed objection, incorrect outcome, generic coaching, or UI issue.
 ### Before trusting aggregate conclusions
 
 - Complete and document the 20-call QA set.
-- Add an explicit Reviewed Accurate / Needs Correction control and correction
-  notes so QA status is stored rather than remembered informally.
+- Add an explicit Reviewed Accurate control and QA notes. Timestamped transcript
+  lines can already be corrected and the coaching regenerated from the saved
+  correction.
 - Refine outcome mappings using real operator actions.
 - Verify percentage denominators honor every active Insights filter.
 - Add links from aggregate evidence to the exact call report and timestamp.
@@ -184,6 +187,9 @@ conclusion, missed objection, incorrect outcome, generic coaching, or UI issue.
 - A recording with no detectable speaker segments is shown as **No speech
   detected** and is not offered an endless retry loop.
 - Analysis retries reuse a saved transcript; they do not retranscribe audio.
+- Saving a transcript correction preserves speakers and timestamps, marks the
+  transcript as manually corrected, and regenerates coaching without rerunning
+  transcription or modifying the recording.
 - Reanalysis remains the same call and must not inflate aggregate call counts.
 - Failed jobs retain their error and attempt count. Recordings are never deleted
   because processing failed.
