@@ -1517,16 +1517,17 @@ function GapBasedEmailScript({
 
     {path !== 'opening' && <button type="button" onClick={goToOpening} className="mt-4 text-xs font-semibold text-teal-700 hover:text-teal-900">← Back to opening</button>}
 
-    {path === 'opening' && <GapScriptBranch label="Opening · Find the visibility gap" body={`Hey ${firstName}, I’m looking at your business on Google right now—could you help me with something quick? I’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.`}>
+    {path === 'opening' && <GapScriptBranch label="Opening · Find the visibility gap" body={`Hey ${firstName}, I’m looking at your business on Google right now—could you help me with something quick?\n\nI’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.`}>
       <GapPathButton label="They don’t have anywhere to go—make the offer" onClick={() => navigate('offer')} />
       <GapPathButton label="Their answer is vague or referral-based" onClick={() => navigate('referral_lookup')} />
     </GapScriptBranch>}
 
-    {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap" body="Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?">
-      <GapPathButton label="Connect the sample website" onClick={() => navigate('offer')} />
+    {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap · Make the offer" body={`Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?\n\nThat’s actually why I called. I put together a sample website so your business looks as professional online as your reviews suggest. Would you be open to taking a look?`}>
+      <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
+      <GapPathButton label="They hesitate or say no" onClick={() => navigate('capacity')} />
     </GapScriptBranch>}
 
-    {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body={QUESTION_BASED_COPY.voicemail}>
+    {path === 'missed_call_offer' && <GapScriptBranch label="Pivot to the receptionist" body="That actually might be the bigger problem to solve here. Have you ever thought about an automated answering service that filters out calls like this while still catching your customer calls?">
       <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
     </GapScriptBranch>}
 
@@ -1645,7 +1646,7 @@ function ReceptionistDemoDecision({ lead, leadId, email, recordingOutcome, prepa
 function GapScriptBranch({ label, body, children }: { label: string; body: string; children?: ReactNode }) {
   return <section className="mt-5 border-l-2 border-teal-200 pl-4 sm:pl-5">
     <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-teal-700">{label}</p>
-    <p className="text-[17px] leading-8 text-slate-800">{body}</p>
+    <p className="whitespace-pre-line text-[17px] leading-8 text-slate-800">{body}</p>
     {children && <div className="mt-4 grid gap-2 sm:grid-cols-2">{children}</div>}
   </section>;
 }
