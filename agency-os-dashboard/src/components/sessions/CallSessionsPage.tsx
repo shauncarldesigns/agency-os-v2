@@ -1442,11 +1442,10 @@ function QuestionPathButton({ label, onClick }: { label: string; onClick: () => 
   return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
 }
 
-type GapPath = 'opening' | 'lookup' | 'referral_lookup' | 'offer' | 'capacity' | 'overflow' | 'missed_call_offer' | 'accept' | 'concern' | 'calls_interest' | 'calls' | 'website_no' | 'final_no';
+type GapPath = 'opening' | 'referral_lookup' | 'offer' | 'capacity' | 'overflow' | 'missed_call_offer' | 'accept' | 'concern' | 'calls_interest' | 'calls' | 'website_no' | 'final_no';
 
 const GAP_PATH_LABELS: Record<GapPath, string> = {
   opening: 'opening',
-  lookup: 'visibility-gap question',
   referral_lookup: 'referral lookup',
   offer: 'website offer',
   capacity: 'capacity question',
@@ -1518,14 +1517,9 @@ function GapBasedEmailScript({
 
     {path !== 'opening' && <button type="button" onClick={goToOpening} className="mt-4 text-xs font-semibold text-teal-700 hover:text-teal-900">← Back to opening</button>}
 
-    {path === 'opening' && <GapScriptBranch label="Opening" body={`Hey ${firstName}, I’m looking at your business on Google right now—could you help me with something quick?`}>
-      <GapPathButton label="Continue" onClick={() => navigate('lookup')} />
-    </GapScriptBranch>}
-
-    {path === 'lookup' && <GapScriptBranch label="Find the visibility gap" body="I’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.">
+    {path === 'opening' && <GapScriptBranch label="Opening · Find the visibility gap" body={`Hey ${firstName}, I’m looking at your business on Google right now—could you help me with something quick? I’m not sure if this is even something you handle, but when someone hears about your company and wants to see your work, where do they usually go? I found your reviews, but not much beyond that.`}>
       <GapPathButton label="They don’t have anywhere to go—make the offer" onClick={() => navigate('offer')} />
       <GapPathButton label="Their answer is vague or referral-based" onClick={() => navigate('referral_lookup')} />
-      <GapPathButton label="They rely on customers calling—make the offer" onClick={() => navigate('offer')} />
     </GapScriptBranch>}
 
     {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap" body="Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?">
@@ -1536,7 +1530,7 @@ function GapBasedEmailScript({
       <p className="mt-3 text-[17px] leading-8 text-slate-800">If you have another minute, we can try it together right now—or I can email it to you for later. Which would you prefer?</p>
     </GapScriptBranch>}
 
-    {path === 'offer' && <GapScriptBranch label="Make the offer" body="That’s actually why I called. I put together a sample website so those people have something credible to find. It’s nothing live, and there’s no obligation. Would you be open to taking a look?">
+    {path === 'offer' && <GapScriptBranch label="Make the offer" body="Got it. That’s actually why I called. I put together a sample website so your business looks as professional online as your reviews suggest. Would you be open to taking a look?">
       <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
       <GapPathButton label="They hesitate or say no" onClick={() => navigate('capacity')} />
     </GapScriptBranch>}
