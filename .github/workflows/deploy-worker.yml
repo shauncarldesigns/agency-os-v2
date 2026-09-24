@@ -1,8 +1,9 @@
 name: Deploy Worker
 
 # Auto-deploys the API Worker when backend code lands on main. The dashboard
-# is NOT handled here — it deploys from a local machine via `npm run deploy`
-# (its build needs .env.production values that aren't committed to the repo).
+# is NOT handled here — it deploys from a local machine via `npm run deploy`.
+# Its public production origins are committed in agency-os-dashboard/.env.production;
+# secrets remain in Worker bindings and must never be added to VITE_* variables.
 on:
   push:
     branches: [main]

@@ -57,10 +57,17 @@ cd agency-os-dashboard && npm run deploy
 - After deploying, the apex may serve a **cached** bundle briefly. Verify with a
   cache-bust: `curl -s -H "Cache-Control: no-cache" "https://agency-os-v2-dashboard.pages.dev/?cb=$(date +%s)"`
   then grep the linked `/assets/*.js` for a string you added.
-- `.env.production` (gitignored, local-only) holds the prod API URL + key baked into
-  the build. `.env.development.local` holds `localhost:8788` for `npm run dev` — it's
-  scoped to dev mode so it can't poison production builds. Do NOT rename it back to
-  `.env.local` (that loads in all modes and breaks `npm run build`).
+- `agency-os-dashboard/.env.production` is committed on purpose and contains only
+  the public production API and tracking origins. This makes production builds
+  deterministic in every branch and Git worktree. **Never put an API key, token,
+  password, or other secret in a `VITE_*` variable; Vite embeds it in public JS.**
+- `.env.development.local` holds the localhost API URL and local-only test key for
+  `npm run dev`. It stays ignored and is scoped to development mode, so it cannot
+  poison production builds. Do not rename it to `.env.local`, which loads in every
+  mode.
+- Always deploy the dashboard from the merged `main` commit with `npm run deploy`.
+  Do not deploy a feature-branch build or call `wrangler pages deploy` directly;
+  the guarded npm command validates the exact production origins first.
 
 ### Applying D1 migrations — manual
 Migrations under `agency-os-backend/src/db/migrations/` are not applied automatically.

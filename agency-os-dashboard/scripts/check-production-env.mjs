@@ -4,6 +4,10 @@ import process from 'node:process';
 
 const envPath = path.resolve(process.cwd(), '.env.production');
 const required = ['VITE_API_URL', 'VITE_TRACKING_URL'];
+const expected = new Map([
+  ['VITE_API_URL', 'https://api.shauncarldesigns.com'],
+  ['VITE_TRACKING_URL', 'https://try.shauncarldesigns.com'],
+]);
 
 function parseEnv(contents) {
   const values = new Map();
@@ -34,15 +38,13 @@ if (missing.length > 0) {
   fail(`missing ${missing.join(', ')} in .env.production.`);
 }
 
-const apiUrl = env.get('VITE_API_URL');
-const trackingUrl = env.get('VITE_TRACKING_URL');
-const unsafeValues = [
-  ['VITE_API_URL', apiUrl],
-  ['VITE_TRACKING_URL', trackingUrl],
-].filter(([, value]) => /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(value));
+const mismatched = [...expected].filter(([key, value]) => env.get(key) !== value);
+if (mismatched.length > 0) {
+  fail(`${mismatched.map(([key, value]) => `${key} must be ${value}`).join('; ')}.`);
+}
 
-if (unsafeValues.length > 0) {
-  fail(`${unsafeValues.map(([key]) => key).join(', ')} cannot point at localhost for production deploys.`);
+if (env.get('VITE_API_KEY')) {
+  fail('VITE_API_KEY is forbidden in production. Authentication is provided by Cloudflare Access cookies.');
 }
 
 console.log('Production env check passed.');

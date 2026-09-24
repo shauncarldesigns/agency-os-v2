@@ -17,9 +17,16 @@ import type {
 } from './playbook';
 import { reauthenticateWithAccess } from './accessSession';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
+const configuredApiBase = import.meta.env.VITE_API_URL as string | undefined;
+if (!configuredApiBase && !import.meta.env.DEV) {
+  throw new Error('VITE_API_URL is required for production builds.');
+}
+
+const API_BASE = configuredApiBase ?? 'http://localhost:8788';
 const TRACKING_BASE = (import.meta.env.VITE_TRACKING_URL as string | undefined) ?? API_BASE;
-const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? '';
+const API_KEY = import.meta.env.DEV
+  ? ((import.meta.env.VITE_API_KEY as string | undefined) ?? '')
+  : '';
 
 function authHeaders(): Record<string, string> {
   return API_KEY ? { 'X-API-Key': API_KEY } : {};
