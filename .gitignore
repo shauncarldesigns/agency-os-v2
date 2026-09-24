@@ -20,6 +20,10 @@ build/
 .dev.vars
 wrangler.local.toml
 
+# The dashboard's production Vite config contains public origins only and must
+# travel with every branch/worktree. Never add credentials or VITE_* secrets.
+!agency-os-dashboard/.env.production
+
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
 

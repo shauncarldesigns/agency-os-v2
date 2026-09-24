@@ -1,4 +1,9 @@
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8788';
+const configuredApiBase = import.meta.env.VITE_API_URL as string | undefined;
+if (!configuredApiBase && !import.meta.env.DEV) {
+  throw new Error('VITE_API_URL is required for production builds.');
+}
+
+const API_BASE = configuredApiBase ?? 'http://localhost:8788';
 
 let reauthenticationStarted = false;
 

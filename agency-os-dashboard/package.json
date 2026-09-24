@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "predeploy": "node scripts/check-production-env.mjs",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=agency-os-v2-dashboard --branch=production"
+    "deploy": "node scripts/check-production-env.mjs && npm run build && npx wrangler pages deploy dist --project-name=agency-os-v2-dashboard --branch=production"
   },
   "dependencies": {
     "lucide-react": "^1.25.0",

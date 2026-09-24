@@ -11,7 +11,7 @@ React + Vite frontend for Agency OS v2.
 ```bash
 npm install
 echo 'VITE_API_URL=http://localhost:8788
-VITE_API_KEY=test-key' > .env.local
+VITE_API_KEY=test-key' > .env.development.local
 npm run dev
 ```
 
@@ -65,15 +65,18 @@ Build output lands in `dist/`.
 ## Deploy to Cloudflare Pages
 
 ```bash
-echo "VITE_API_URL=https://agency-os-v2-api.<subdomain>.workers.dev
-VITE_TRACKING_URL=https://try.shauncarldesigns.com
-VITE_API_KEY=<DASHBOARD_API_KEY value>" > .env.production
-npm run build
-wrangler pages project create agency-os-v2-dashboard
-wrangler pages deploy dist --project-name=agency-os-v2-dashboard
+npm ci
+npm run deploy
 ```
 
-You can also set `VITE_API_URL`, `VITE_TRACKING_URL`, and `VITE_API_KEY` as Pages-project environment variables instead of bundling them at build time.
+Run the deploy command from the merged `main` commit. The committed
+`.env.production` contains only the public production origins, so the same build
+works from the primary checkout or any Git worktree. The deploy guard requires the
+protected API domain and rejects `VITE_API_KEY`.
+
+Never place credentials in a `VITE_*` variable. Vite embeds those values in the
+public browser bundle. Production authentication is provided by Cloudflare Access;
+server credentials belong in Worker secret bindings.
 
 ## Conventions
 
