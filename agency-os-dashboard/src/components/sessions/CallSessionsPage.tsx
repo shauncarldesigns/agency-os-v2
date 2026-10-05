@@ -1442,12 +1442,13 @@ function QuestionPathButton({ label, onClick }: { label: string; onClick: () => 
   return <button type="button" onClick={onClick} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-violet-800 transition hover:bg-violet-50">{label}</button>;
 }
 
-type GapPath = 'opening' | 'referral_lookup' | 'offer' | 'objection' | 'outreach_resistance' | 'calls_interest' | 'calls_irony' | 'calls' | 'calls_irony_offer' | 'accept';
+type GapPath = 'opening' | 'referral_lookup' | 'offer' | 'reassurance' | 'objection' | 'outreach_resistance' | 'calls_interest' | 'calls_irony' | 'calls' | 'calls_irony_offer' | 'accept';
 
 const GAP_PATH_LABELS: Record<GapPath, string> = {
   opening: 'opening',
   referral_lookup: 'referral lookup',
   offer: 'website offer',
+  reassurance: 'no-cost reassurance',
   objection: 'objection question',
   outreach_resistance: 'website decision',
   calls_interest: 'receptionist question',
@@ -1522,15 +1523,20 @@ function GapBasedEmailScript({
 
     {path === 'referral_lookup' && <GapScriptBranch label="Reveal the gap · Make the offer" body={`Got it. What happens when someone gets your name from a friend but still wants to look you up before calling?\n\nThat’s actually why I called. I put together a sample website so your business looks as professional online as your reviews suggest. Would you be open to taking a look?`}>
       <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
-      <GapPathButton label="They hesitate or say no" onClick={() => navigate('objection')} />
+      <GapPathButton label="They hesitate or say no" onClick={() => navigate('reassurance')} />
     </GapScriptBranch>}
 
     {path === 'offer' && <GapScriptBranch label="Make the offer" body="Got it. That’s actually why I called. I put together a sample website so your business looks as professional online as your reviews suggest. Would you be open to taking a look?">
       <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
-      <GapPathButton label="They hesitate or say no" onClick={() => navigate('objection')} />
+      <GapPathButton label="They hesitate or say no" onClick={() => navigate('reassurance')} />
     </GapScriptBranch>}
 
-    {path === 'objection' && <GapScriptBranch label="Clarify the real objection" body="Totally understand. Is it more that you’re not looking for a website, or you just get too many calls like this?">
+    {path === 'reassurance' && <GapScriptBranch label="There’s no cost to take a look" body="Listen, there’s no cost to take a look. Worst case scenario, you hate it and you tell me to go pound sand. Best case scenario, you like it and we can move forward and turn the cold calls into customer calls.">
+      <GapPathButton label="They’ll take a look" onClick={() => navigate('accept')} />
+      <GapPathButton label="They still hesitate or say no" onClick={() => navigate('objection')} />
+    </GapScriptBranch>}
+
+    {path === 'objection' && <GapScriptBranch label="Clarify the real objection" body="Totally understand. Is it more that you’re not looking for a website, or is it just that you get too many calls like this?">
       <button type="button" onClick={onArchiveRejection} className="rounded-lg border border-rose-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50">They rule out the website</button>
       <GapPathButton label="The call is the issue—website still possible" onClick={() => navigate('outreach_resistance')} />
       <GapPathButton label="Pivot to the receptionist" onClick={() => navigate('calls_interest')} />

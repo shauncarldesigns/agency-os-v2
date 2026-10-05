@@ -7,6 +7,12 @@ Backend Worker auto-deploys via CI on merge. Dashboard requires manual
 `cd agency-os-dashboard && npm run deploy` — entries below note "dashboard"
 when a manual deploy was needed.
 
+## 2026-10
+
+### Gap-based call reassurance (dashboard)
+
+- Add a no-cost website preview reassurance step after hesitation on either website offer, with acceptance leading to email capture and continued hesitation leading to the objection question.
+
 ## 2026-08
 
 ### Regional Lead Finder expansion and outreach staging (backend + dashboard)
