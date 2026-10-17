@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-10
 
+### Signalhouse local launcher (dashboard + Mac helper)
+
+- The Signalhouse card can open an installed Mac launcher that starts its local server when needed, waits for readiness, and opens the workspace. An ordinary local-browser link remains available.
+
 ### Agency OS favicon (dashboard)
 
 - Restored the browser tab icon using the blue layers mark from the business hub.

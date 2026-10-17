@@ -730,5 +730,5 @@ gate" under Deploy mechanics).
 ## Agency OS business hub (2026-10-17)
 
 - The root dashboard URL opens the business hub. Lead Engine contains the existing agency tools at `/#/lead-engine/<tab>`; `/#/` returns to the hub. Hash routes support refresh and browser history without hosting rewrites.
-- Hub cards live in `agency-os-dashboard/src/components/hub/BusinessHub.tsx`. Signalhouse opens `http://127.0.0.1:3000` in a new tab and requires its local server to be running. AI Dropshipping is Coming soon.
+- Hub cards live in `agency-os-dashboard/src/components/hub/BusinessHub.tsx`. Signalhouse opens `signalhouse://open` through the installed Mac launcher, which starts the loopback-only local server when needed. An ordinary `http://127.0.0.1:3000` link remains as a fallback. Launcher source and installation instructions live in `tools/signalhouse-launcher/`. AI Dropshipping is Coming soon.
 - Authentication, Access policies, backend routes, and database schema are unchanged by the hub. Agency API requests begin when Lead Engine opens. See `docs/business-hub.md`.
