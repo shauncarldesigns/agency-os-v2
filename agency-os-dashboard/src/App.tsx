@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BusinessHub } from './components/hub/BusinessHub';
 import type { AgencySettings, Tab, HeaderStats, NavCounts } from './lib/types';
 import { api } from './lib/api';
 import { AppShell, type NavBadges } from './components/layout/AppShell';
@@ -22,8 +23,41 @@ import { ArchivedLeadsPage } from './components/archive/ArchivedLeadsPage';
 import { SalesIntelligencePage } from './components/intelligence/SalesIntelligencePage';
 import { DesignLibraryPage } from './components/designs/DesignLibraryPage';
 
+const LEAD_ENGINE_TABS: readonly Tab[] = [
+  'dashboard', 'research', 'email-outreach', 'call-center', 'prospect',
+  'pipeline', 'archived-leads', 'automated-pipeline', 'builder',
+  'receptionist-interest', 'sales-intelligence', 'sites', 'design-library',
+  'docs', 'playbook', 'settings',
+];
+
+function readWorkspace(): Tab | null {
+  const match = window.location.hash.match(/^#\/lead-engine(?:\/([^/]+))?\/?$/);
+  if (!match) return null;
+  return LEAD_ENGINE_TABS.find(tab => tab === (match[1] || 'dashboard')) ?? 'dashboard';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setRoute] = useState(readWorkspace);
+  useEffect(() => {
+    const syncRoute = () => setRoute(readWorkspace());
+    window.addEventListener('hashchange', syncRoute);
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
+
+  const navigate = (tab: Tab) => {
+    window.location.hash = `/lead-engine/${tab}`;
+    setRoute(tab);
+  };
+
+  return activeTab === null ? <BusinessHub /> : (
+    <LeadEngineApp activeTab={activeTab} setActiveTab={navigate} />
+  );
+}
+
+function LeadEngineApp({ activeTab, setActiveTab }: {
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
+}) {
   const [stats, setStats] = useState<HeaderStats>({ totalClients: 0, mrrUsd: 0 });
   const [navCounts, setNavCounts] = useState<NavCounts>({ prospect: null, callOutreach: 0, pipeline: 0, sites: 0 });
   const [receptionistInterestCount, setReceptionistInterestCount] = useState(0);

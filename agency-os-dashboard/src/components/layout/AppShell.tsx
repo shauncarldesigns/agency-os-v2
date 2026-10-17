@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard,
+  ArrowLeft,
   Users,
   Mail,
   Headphones,
@@ -130,7 +131,7 @@ function Sidebar({
         </div>
         {!collapsed && (
           <div className="leading-tight">
-            <div className="text-[15px] font-semibold text-slate-900">Agency OS</div>
+            <div className="text-[15px] font-semibold text-slate-900">Lead Engine</div>
             <div className="text-[11px] text-slate-400">{profile.agencyName}</div>
           </div>
         )}
@@ -143,6 +144,11 @@ function Sidebar({
           </button>
         )}
       </div>
+
+      <a href="#/" title="Back to Agency OS hub" className={`mx-3 mb-3 flex items-center rounded-xl border border-slate-200 py-2.5 text-xs font-medium text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 ${collapsed ? 'justify-center' : 'gap-2 px-3'}`}>
+        <ArrowLeft className="h-4 w-4 shrink-0" />
+        {!collapsed && 'Agency OS hub'}
+      </a>
 
       {/* Nav */}
       <nav className={`flex-1 overflow-y-auto py-2 ${collapsed ? 'px-2.5' : 'px-3'}`}>
