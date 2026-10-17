@@ -1,9 +1,16 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-08-10. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-10-17. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
+
+## Business hub release (2026-10-17)
+
+- Three-card business hub at the root: Signalhouse (local), Lead Engine (existing agency workspace), AI Dropshipping (Coming soon).
+- Lead Engine uses bookmarkable hash routes and includes a return-to-hub sidebar link.
+- No authentication, backend, database, or Cloudflare Access configuration changes.
+- User authorized PR, merge, and production dashboard deployment. Build, browser navigation, and responsive layout checked locally. See `docs/business-hub.md` for destinations and routing.
 
 ## State
 

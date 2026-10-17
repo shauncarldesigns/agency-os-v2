@@ -9,6 +9,13 @@ when a manual deploy was needed.
 
 ## 2026-10
 
+### Agency OS business hub (dashboard)
+
+- Agency OS now opens a three-venture hub: Signalhouse links to its local app, Lead Engine contains the existing agency workspace, and AI Dropshipping is marked Coming soon.
+- Lead Engine supports bookmarkable hash routes and a return-to-hub link. Existing authentication and backend settings are unchanged.
+
+## 2026-10
+
 ### Gap-based call reassurance (dashboard)
 
 - Add a no-cost website preview reassurance step after hesitation on either website offer, with acceptance leading to email capture and continued hesitation leading to the objection question.
