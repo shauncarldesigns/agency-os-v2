@@ -2,7 +2,7 @@
 
 Agency OS opens at the business hub. Its three workspaces are:
 
-- **Signalhouse:** normal new-tab link to `http://127.0.0.1:3000`, as documented in the local Signalhouse README. The local server must already be running on the browsing computer. The hub neither starts it nor requests local-server data.
+- **Signalhouse:** opens the installed Mac launcher through `signalhouse://open`. The launcher starts the local server when needed and opens `http://127.0.0.1:3000`. A separate browser link supports an already-running server. See `tools/signalhouse-launcher/README.md` for installation and removal.
 - **Lead Engine:** the existing agency dashboard, including lead generation and website building.
 - **AI Dropshipping:** disabled Coming soon card until the application exists.
 
@@ -18,4 +18,4 @@ Hash routes work with existing static hosting without rewrite changes. Internal 
 
 The Lead Engine sidebar includes an Agency OS hub link, also available in its mobile drawer. Agency API loading begins when Lead Engine is opened. Existing hosting access controls continue to apply.
 
-This change adds no backend endpoints, database migrations, shared authentication, or local application launcher.
+This change adds no backend endpoints, database migrations, shared authentication, or hosted Signalhouse service.

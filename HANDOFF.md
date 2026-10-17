@@ -5,6 +5,14 @@ architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
 
+## Signalhouse launcher release (2026-10-17)
+
+- Installed `~/Applications/Signalhouse Launcher.app` and an on-demand LaunchAgent for the existing Signalhouse checkout. Opens via `signalhouse://open`; no automatic server startup at login.
+- Local hub card now calls the launcher and keeps an ordinary browser fallback.
+- User completed the browser application-open prompt and confirmed Signalhouse opened. Verified the Node server listens only at 127.0.0.1:3000. Native build, launcher configuration, and dashboard production build passed.
+- Browser automation blocks custom-protocol navigation; future first-launch UI tests require the user to click the link.
+- User authorized PR, merge, and deployment of the launcher integration and Signalhouse return link. Agency OS publishes the launcher link; Signalhouse remains local-only. Its Back to hub header link is released through the architecture-lab repository.
+
 ## Business hub release (2026-10-17)
 
 - Three-card business hub at the root: Signalhouse (local), Lead Engine (existing agency workspace), AI Dropshipping (Coming soon).
