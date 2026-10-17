@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-10
 
+### Agency OS favicon (dashboard)
+
+- Restored the browser tab icon using the blue layers mark from the business hub.
+
 ### Agency OS business hub (dashboard)
 
 - Agency OS now opens a three-venture hub: Signalhouse links to its local app, Lead Engine contains the existing agency workspace, and AI Dropshipping is marked Coming soon.
