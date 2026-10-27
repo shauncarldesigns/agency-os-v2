@@ -210,6 +210,7 @@ export interface BuilderStatus {
   nextBatchLeads: Array<{id:number;company:string;email:string|null;phone_route:string|null;crm_status:string;outcome:string|null;has_brief:number}>;
   safetyExcluded: Array<{id:number;company:string;crmStatus:string;outcome:string|null;reason:string}>;
   control: {
+    browser_enabled: number;
     paused: number;
     stop_requested: number;
     active_run_id: number | null;
@@ -892,6 +893,7 @@ export const api = {
       }),
   },
   builder: {
+    setBrowserEnabled: (enabled: boolean) => apiFetch<{enabled:boolean}>('/api/builder/browser', { method: 'POST', body: JSON.stringify({enabled}) }),
     status: (runId?: number) => apiFetch<BuilderStatus>(`/api/builder/status${runId ? `?runId=${runId}` : ''}`),
     start: (leadIds: number[], batchSize = 20) => apiFetch<{ runId: number; queued: number }>('/api/builder/start', {
       method: 'POST', body: JSON.stringify({ leadIds, batchSize }),

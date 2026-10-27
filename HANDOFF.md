@@ -1,9 +1,14 @@
 # Session Handoff — Agency OS v2
 
-_Snapshot: 2026-10-17. Point-in-time notes; goes stale fast. Durable
+_Snapshot: 2026-10-27. Point-in-time notes; goes stale fast. Durable
 architecture, deploy mechanics, and gotchas live in `CLAUDE.md` (auto-read
 every session). Full PR-by-PR log lives in `CHANGELOG.md`. Practice-call
 reference docs live in `docs/`._
+
+## Builder browser switch release (2026-10-27)
+
+- User authorized PR, merge, deployment, and local worker update. Default-off browser switch prevents Chrome startup while preserving queues and profiles.
+- Validation: backend typecheck, dashboard build, and browser lifecycle tests passed. Apply the additive browser_enabled migration before API rollout; restart the installed local worker only when idle.
 
 ## Signalhouse launcher release (2026-10-17)
 

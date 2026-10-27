@@ -732,3 +732,9 @@ gate" under Deploy mechanics).
 - The root dashboard URL opens the business hub. Lead Engine contains the existing agency tools at `/#/lead-engine/<tab>`; `/#/` returns to the hub. Hash routes support refresh and browser history without hosting rewrites.
 - Hub cards live in `agency-os-dashboard/src/components/hub/BusinessHub.tsx`. Signalhouse opens `signalhouse://open` through the installed Mac launcher, which starts the loopback-only local server when needed. An ordinary `http://127.0.0.1:3000` link remains as a fallback. Launcher source and installation instructions live in `tools/signalhouse-launcher/`. AI Dropshipping is Coming soon.
 - Authentication, Access policies, backend routes, and database schema are unchanged by the hub. Agency API requests begin when Lead Engine opens. See `docs/business-hub.md`.
+
+## Builder browser control (2026-10-27)
+
+- `builder_control.browser_enabled` defaults to 0. Migration `2026-10-27-builder-browser-switch.sql` is required before deploying the updated API.
+- Builder Employee UI controls it through `/api/builder/browser`; the authenticated local worker polls `/api/builder-worker/browser-state` and stays browser-free while off. Both claim queues are gated, while in-flight results/heartbeats remain accepted.
+- Deploy API/dashboard and update both `builder-worker/src/index.mjs` and `browser-switch.mjs` on the local host, then restart the service when idle. No profile deletion or Chrome-wide termination.

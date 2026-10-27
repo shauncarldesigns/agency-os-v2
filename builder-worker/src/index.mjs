@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright';
+import { createBrowserSwitch } from './browser-switch.mjs';
 import { mkdirSync, existsSync, openSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -82,6 +83,7 @@ async function api(path, body, retries = 20) {
     try {
       const response = await fetch(`${API_URL}/api/builder-worker${path}`, {
         method: 'POST',
+        ...(path === '/browser-state' ? { signal: AbortSignal.timeout(10_000) } : {}),
         headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body ?? {}),
       });
@@ -115,15 +117,28 @@ async function uploadCaptureAsset(job, kind, buffer, viewport) {
 const waitForPoll = () => new Promise(resolvePromise => setTimeout(resolvePromise, POLL_MS));
 
 let context;
+let authenticatedContext;
+let busyWithTask = false;
+const browserSwitch = createBrowserSwitch({
+  readEnabled: async () => (await api('/browser-state', {}, 0)).enabled,
+  isBusy: () => busyWithTask,
+  closeBrowser: async () => {
+    const closing = context;
+    context = undefined;
+    authenticatedContext = undefined;
+    await closing?.close().catch(() => undefined);
+  },
+});
 async function browserContext() {
   if (context) return context;
+  if (!browserSwitch.isEnabled()) throw new Error('Builder browser is off');
   context = await chromium.launchPersistentContext(PROFILE_DIR, {
     channel: 'chrome',
     headless: false,
     chromiumSandbox: true,
     viewport: { width: 1440, height: 1000 },
   });
-  context.on('close', () => { context = undefined; });
+  context.on('close', () => { context = undefined; authenticatedContext = undefined; });
   return context;
 }
 
@@ -350,13 +365,28 @@ async function captureDesign(job) {
 
 async function main() {
   console.log(`Builder Employee online. Profile: ${PROFILE_DIR}`);
-  const browser = await browserContext();
-  const editorPage = browser.pages().find(page => page.url().startsWith(`${LANDINGSITE_URL}/chat/`));
-  const authPage = editorPage ? await browser.newPage() : browser.pages()[0] ?? await browser.newPage();
-  await waitForAuthentication(authPage);
-  if (editorPage) await authPage.close().catch(() => undefined);
+  // Keep polling while off, without creating or authenticating a browser.
+  const browserPoll = setInterval(() => {
+    void browserSwitch.refresh().catch(error => console.error('Browser control:', error.message));
+  }, 5_000);
+  browserPoll.unref();
   while (true) {
     try {
+      if (!await browserSwitch.refresh()) {
+        await api('/heartbeat', { state: 'paused', message: 'Builder browser is off' }, 0).catch(() => undefined);
+        await waitForPoll();
+        continue;
+      }
+      const browser = await browserContext();
+      if (authenticatedContext !== browser) {
+        const editorPage = browser.pages().find(page => page.url().startsWith(`${LANDINGSITE_URL}/chat/`));
+        const authPage = editorPage ? await browser.newPage() : browser.pages()[0] ?? await browser.newPage();
+        await waitForAuthentication(authPage);
+        if (editorPage) await authPage.close().catch(() => undefined);
+        authenticatedContext = browser;
+      }
+      if (!browserSwitch.isEnabled()) continue;
+      busyWithTask = true;
       const { capture } = await api('/capture-claim');
       if (capture) {
         await captureDesign(capture);
@@ -372,7 +402,10 @@ async function main() {
       }
       else if (job) await build(job);
     } catch (error) {
-      console.error('Queue error:', error instanceof Error ? error.message : error);
+      if (browserSwitch.isEnabled()) console.error('Queue error:', error instanceof Error ? error.message : error);
+    } finally {
+      busyWithTask = false;
+      await browserSwitch.refresh();
     }
     await waitForPoll();
   }

@@ -214,6 +214,7 @@ CREATE INDEX IF NOT EXISTS idx_builder_events_run ON builder_events(run_id, crea
 CREATE INDEX IF NOT EXISTS idx_builder_events_job ON builder_events(job_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS builder_control (
+  browser_enabled INTEGER NOT NULL DEFAULT 0 CHECK (browser_enabled IN (0, 1)),
   id INTEGER PRIMARY KEY CHECK (id = 1),
   paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
   stop_requested INTEGER NOT NULL DEFAULT 0 CHECK (stop_requested IN (0, 1)),

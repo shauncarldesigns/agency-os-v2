@@ -104,6 +104,21 @@ builderWorkerRouter.use('*', async (c, next) => {
   await next();
 });
 
+builderWorkerRouter.post('/browser-state', async c => {
+  const control = await c.env.DB.prepare('SELECT browser_enabled FROM builder_control WHERE id=1').first<{browser_enabled:number}>();
+  return c.json({ enabled: control?.browser_enabled === 1 });
+});
+
+// Gate both build and screenshot queues. Results/heartbeats remain available
+// so work already in progress can finish safely after the browser is disabled.
+builderWorkerRouter.use('*', async (c, next) => {
+  if (c.req.path.endsWith('/claim') || c.req.path.endsWith('/capture-claim')) {
+    const control = await c.env.DB.prepare('SELECT browser_enabled FROM builder_control WHERE id=1').first<{browser_enabled:number}>();
+    if (control?.browser_enabled !== 1) return c.json({ paused: true, browserDisabled: true, job: null, capture: null });
+  }
+  await next();
+});
+
 builderWorkerRouter.post('/claim', async (c) => {
   const control = await c.env.DB.prepare(`SELECT paused, stop_requested, active_run_id FROM builder_control WHERE id=1`).first<{paused:number;stop_requested:number;active_run_id:number|null}>();
   if (control?.active_run_id && control.stop_requested) {
@@ -283,6 +298,14 @@ builderWorkerRouter.post('/generate-design-recipe', async (c) => {
 });
 
 export const builderAdminRouter = new Hono<{ Bindings: Env }>();
+
+builderAdminRouter.post('/browser', async c => {
+  const body = await c.req.json<{enabled?:unknown}>();
+  if (typeof body.enabled !== 'boolean') return c.json({error:'enabled must be a boolean'},400);
+  await c.env.DB.prepare("UPDATE builder_control SET browser_enabled=?,updated_at=datetime('now') WHERE id=1").bind(body.enabled ? 1 : 0).run();
+  return c.json({enabled:body.enabled});
+});
+
 builderAdminRouter.get('/status', async c => {
   const control=await c.env.DB.prepare(`SELECT *,CASE WHEN last_worker_seen_at IS NULL OR last_worker_seen_at<datetime('now','-2 minutes') THEN 'offline' ELSE worker_state END effective_state FROM builder_control WHERE id=1`).first();
   const activeRunId=(control as {active_run_id?:number|null})?.active_run_id;
