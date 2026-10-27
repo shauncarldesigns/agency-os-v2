@@ -9,6 +9,10 @@ when a manual deploy was needed.
 
 ## 2026-10
 
+### Builder browser on/off control (backend + dashboard + local worker)
+
+- Added a persistent, default-off browser switch to Builder Employee. The local worker no longer opens Chrome at startup while disabled; turning off finishes the current task before closing its dedicated window.
+
 ### Signalhouse local launcher (dashboard + Mac helper)
 
 - The Signalhouse card can open an installed Mac launcher that starts its local server when needed, waits for readiness, and opens the workspace. An ordinary local-browser link remains available.

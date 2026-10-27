@@ -145,6 +145,19 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
     building: data?.jobs.find(job => job.status === 'building'),
   }), [data]);
 
+  const toggleBrowser = async () => {
+    if (busy || !data) return;
+    setBusy(true);
+    try {
+      const enabled = !data.control.browser_enabled;
+      await api.builder.setBrowserEnabled(enabled);
+      await load(true);
+      showToast(enabled ? 'Builder browser enabled' : 'Builder browser off — any current task will finish before Chrome closes', 'success');
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : 'Could not change Builder browser setting', 'error');
+    } finally { setBusy(false); }
+  };
+
   const act = async (action: 'start' | 'pause' | 'resume' | 'stop' | 'retry' | 'resumeBuild') => {
     if (busy || !data) return;
     setBusy(true);
@@ -195,7 +208,9 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   const currentCompany = isPreparingBrief
     ? data.control.worker_message?.replace(/^Preparing brief for /, '').replace(/\.$/, '')
     : counts.building?.business_name;
-  const startBlockedReason = data.control.active_run_id
+  const startBlockedReason = !data.control.browser_enabled
+    ? 'Turn on the Builder browser before beginning a run.'
+    : data.control.active_run_id
     ? 'A Builder run is already active.'
     : data.awaitingBuild === 0
       ? 'No eligible leads are awaiting a website build.'
@@ -210,6 +225,15 @@ export function BuilderStatusPanel({ showToast, onChanged }: { showToast: ShowTo
   return <div className="page-container space-y-5">
     {loadError && <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><span><AlertTriangle className="mr-2 inline h-4 w-4" />{loadError}</span><button type="button" onClick={() => void load(false)} className="font-semibold">Retry</button></div>}
 
+    <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div><h2 className="text-sm font-semibold text-slate-900">Builder browser</h2>
+        <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">{data.control.browser_enabled ? 'On — the Builder can open its dedicated Chrome window.' : 'Off — the Builder will keep Chrome closed and leave queued work waiting.'} Turning off finishes the current task before closing the Builder window.</p>
+      </div>
+      <button type="button" role="switch" aria-checked={!!data.control.browser_enabled} aria-label="Builder browser" disabled={busy} onClick={() => void toggleBrowser()} className={`inline-flex items-center gap-3 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50 ${data.control.browser_enabled ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+        <span className={`relative h-5 w-9 rounded-full ${data.control.browser_enabled ? 'bg-blue-400' : 'bg-slate-300'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${data.control.browser_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} /></span>
+        {data.control.browser_enabled ? 'On' : 'Off'}
+      </button>
+    </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-3">

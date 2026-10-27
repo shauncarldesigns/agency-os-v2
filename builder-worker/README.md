@@ -49,3 +49,18 @@ worker version are closed when the next job starts.
 - Failure artifacts older than `BUILDER_ARTIFACT_RETENTION_DAYS` are removed
   when the service starts (30 days by default).
 - The LaunchAgent's lightweight text console output remains under `logs/`.
+
+## Browser on/off switch
+
+Lead Engine → Builder Employee has a persistent **Builder browser** switch.
+It defaults to Off. The local service stays connected without opening Chrome
+until you turn it on. Switching off closes the Builder's dedicated browser
+within the control polling interval when idle or waiting for login. A current
+build/capture finishes before closing; queued work and the login profile remain.
+The switch also gates both build and screenshot claims on the API.
+
+For an upgrade, apply `2026-10-27-builder-browser-switch.sql`, deploy the API and
+dashboard, update `src/index.mjs` and `src/browser-switch.mjs` on the Builder
+host, then restart the local service when no build is active. Missing control
+API or network errors leave Chrome off. Browser settings apply to the shared
+Builder worker, including design captures.
