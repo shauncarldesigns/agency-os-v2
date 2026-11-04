@@ -17,6 +17,7 @@ import { todayIso } from '../../lib/format';
 interface PipelinePanelProps {
   showToast: ShowToast;
   onLeadCountChanged?: () => void;
+  onRedesignBrief?: (lead: Lead) => void;
   /** Called when a signed lead is converted into a project. App-level handler decides
    *  whether to switch to the Sites tab and (for Tier 3) deep-link to the new
    *  project's Brief Studio. */
@@ -38,7 +39,7 @@ type EnrichmentFilter = 'all' | 'enriched' | 'pending' | 'enriching' | 'failed';
 // best opportunity, highest rating = strongest customer signal).
 type SortMode = 'default' | 'reviews' | 'score' | 'rating';
 
-export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: PipelinePanelProps) {
+export function PipelinePanel({ showToast, onLeadCountChanged, onQualified, onRedesignBrief }: PipelinePanelProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<StageFilter>('all');
@@ -339,6 +340,7 @@ export function PipelinePanel({ showToast, onLeadCountChanged, onQualified }: Pi
           onLeadUpdated={handleLeadUpdated}
           onOpenLead={setOpenLeadId}
           onQualify={setQualifyLead}
+          onRedesignBrief={onRedesignBrief}
         />
       )}
 

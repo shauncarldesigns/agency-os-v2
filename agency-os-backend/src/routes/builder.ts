@@ -279,12 +279,12 @@ builderWorkerRouter.post('/capture-result', async (c) => {
   }
   await c.env.DB.prepare("UPDATE design_capture_jobs SET status=?,error=?,completed_at=datetime('now'),lock_token=NULL,updated_at=datetime('now') WHERE id=?")
     .bind(body.success?'completed':'failed',body.success?null:(body.error ?? 'Capture failed').slice(0,2000),body.jobId).run();
-  const design = await c.env.DB.prepare('SELECT status FROM design_references WHERE id=?').bind(job.design_reference_id).first<{status:string}>();
+  const design = await c.env.DB.prepare('SELECT status,purpose FROM design_references WHERE id=?').bind(job.design_reference_id).first<{status:string;purpose:string}>();
   if (body.success && body.technicalAudit && design?.status === 'draft') {
     await c.env.DB.prepare("UPDATE design_references SET technical_tokens=?,notes='Desktop and mobile snapshots plus technical browser audit captured. Review the recipe before marking Ready.',updated_at=datetime('now') WHERE id=?")
       .bind(JSON.stringify(body.technicalAudit),job.design_reference_id).run();
   }
-  return c.json({ok:true,autoGenerate:body.success && design?.status === 'draft',designReferenceId:job.design_reference_id});
+  return c.json({ok:true,autoGenerate:body.success && design?.status === 'draft' && design?.purpose !== 'website_brief',designReferenceId:job.design_reference_id});
 });
 
 builderWorkerRouter.post('/generate-design-recipe', async (c) => {

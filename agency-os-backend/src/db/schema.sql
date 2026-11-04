@@ -376,6 +376,7 @@ CREATE TABLE IF NOT EXISTS design_references (
   style_tags TEXT NOT NULL DEFAULT '[]',
   design_recipe TEXT NOT NULL,
   technical_tokens TEXT NOT NULL DEFAULT '{}',
+  purpose TEXT NOT NULL DEFAULT 'library',
   source_brief_snapshot TEXT,
   recipe_generated_at TEXT,
   recipe_generation_error TEXT,
@@ -1081,3 +1082,19 @@ CREATE TABLE IF NOT EXISTS voice_webhook_events (
   error_message TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_voice_events_status ON voice_webhook_events(processing_status, received_at);
+
+CREATE TABLE IF NOT EXISTS website_briefs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id INTEGER NOT NULL UNIQUE REFERENCES leads(id),
+  source_url TEXT NOT NULL,
+  design_reference_id INTEGER REFERENCES design_references(id),
+  scrape_data TEXT,
+  brand_colors TEXT NOT NULL DEFAULT '',
+  brand_fonts TEXT NOT NULL DEFAULT '',
+  direction TEXT NOT NULL DEFAULT '',
+  brief TEXT NOT NULL DEFAULT '',
+  scanned_at TEXT,
+  generated_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

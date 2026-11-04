@@ -9,7 +9,7 @@ import type {
   Market, MarketListRow, MarketKeyword, MapPackRow, ResearchRun, ResearchRunSummary,
   VoiceAgentSpec, VoiceBusinessProfile, VoiceCall, VoiceClassification, VoiceDemoInvitation, VoiceDemoSession,
   RetellResourceInventory, RetellSetupPackage, VoiceIntake, VoiceLead, VoiceNotification, VoiceOverview, VoiceProfileConfiguration, VoiceQaCase, VoiceQaResult, VoiceQaRun, VoiceReadinessResult, VoiceSimulatorResult, VoiceSimulatorTurn, VoiceWebhookFailure,
-  LeadCounts, CallCenterLead, DesignReference, DesignAsset, DesignCaptureJob,
+  WebsiteBrief, LeadCounts, CallCenterLead, DesignReference, DesignAsset, DesignCaptureJob,
 } from './types';
 import type {
   ScriptSummary, Script, ObjectionsByCategory, Objection, FollowUpSequence,
@@ -350,6 +350,15 @@ export const api = {
       if (!res.ok) throw new ApiError('Could not export leads', res.status);
       return res.blob();
     },
+  },
+  websiteBriefs: {
+    list: () => apiFetch<{briefs: WebsiteBrief[]}>('/api/website-briefs'),
+    create: (leadId: number) => apiFetch<{brief: WebsiteBrief}>('/api/website-briefs', {method:'POST',body:JSON.stringify({leadId})}),
+    importWebsite: (url: string, company: string) => apiFetch<{lead:Lead;existing:boolean}>('/api/website-leads', {method:'POST',body:JSON.stringify({url,company})}),
+    save: (id: number, data: Pick<WebsiteBrief,'brand_colors'|'brand_fonts'|'direction'|'brief'>) => apiFetch<{ok:boolean}>(`/api/website-briefs/${id}`, {method:'PUT',body:JSON.stringify(data)}),
+    scan: (id: number) => apiFetch<{ok:boolean;pages:number}>(`/api/website-briefs/${id}/scan`,{method:'POST'}),
+    capture: (id: number) => apiFetch<{ok:boolean}>(`/api/website-briefs/${id}/capture`,{method:'POST'}),
+    generate: (id: number) => apiFetch<{brief:string}>(`/api/website-briefs/${id}/generate`,{method:'POST'}),
   },
   leads: {
     list: (filters?: { status?: string; pipeline_status?: string; tier?: number; enrichment?: string; search?: string; industry?: string; include_deleted?: boolean; only_deleted?: boolean }) =>

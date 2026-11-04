@@ -16,11 +16,12 @@ interface LeadsTableProps {
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
   onQualify: (lead: Lead) => void;
+  onRedesignBrief?: (lead: Lead) => void;
 }
 
 export function LeadsTable({
   leads, selectedIds, onToggleSelected, onToggleAllVisible,
-  showToast, onLeadUpdated, onOpenLead, onQualify,
+  showToast, onLeadUpdated, onOpenLead, onQualify, onRedesignBrief,
 }: LeadsTableProps) {
   const [tableSort, setTableSort] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   if (leads.length === 0) {
@@ -92,6 +93,7 @@ export function LeadsTable({
               onLeadUpdated={onLeadUpdated}
               onOpenLead={onOpenLead}
               onQualify={onQualify}
+              onRedesignBrief={onRedesignBrief}
             />
           ))}
         </tbody>
@@ -205,10 +207,11 @@ interface LeadRowProps {
   onLeadUpdated: () => void;
   onOpenLead: (id: number) => void;
   onQualify: (lead: Lead) => void;
+  onRedesignBrief?: (lead: Lead) => void;
 }
 
 function LeadRow({
-  lead, selected, onToggleSelected, showToast, onLeadUpdated, onOpenLead, onQualify,
+  lead, selected, onToggleSelected, showToast, onLeadUpdated, onOpenLead, onQualify, onRedesignBrief,
 }: LeadRowProps) {
   const [enriching, setEnriching] = useState(false);
   const [showEnrichmentProgress, setShowEnrichmentProgress] = useState(false);
@@ -347,6 +350,9 @@ function LeadRow({
       <td><Badge color={stage.color}>{stage.label}</Badge></td>
       <td onClick={stop}>
         <div style={{ display: 'flex', gap: 5 }}>
+          {!lead.deleted_at && lead.website?.trim() && onRedesignBrief && (
+            <Button variant="ghost" size="sm" onClick={() => onRedesignBrief(lead)}>Create redesign brief</Button>
+          )}
           {!lead.deleted_at && lead.pipeline_status !== 'archived' && !lead.outreach_enabled && (
             <Button
               variant="primary"

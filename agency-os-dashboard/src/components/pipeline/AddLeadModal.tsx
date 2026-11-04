@@ -17,6 +17,9 @@ interface AddLeadModalProps {
 const DEBOUNCE_MS = 500;
 
 export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModalProps) {
+  const [mode, setMode] = useState<'google' | 'website'>('google');
+  const [website, setWebsite] = useState('');
+  const [company, setCompany] = useState('');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProspectResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,6 +30,7 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
   // Reset on open/close
   useEffect(() => {
     if (open) {
+      setMode('google'); setWebsite(''); setCompany('');
       setQuery('');
       setResults([]);
       setLoading(false);
@@ -37,7 +41,7 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
 
   // Debounced search — split query into "name in city" by looking for 2+ words; otherwise treat whole thing as the name
   useEffect(() => {
-    if (!open) return;
+    if (!open || mode !== 'google') return;
     const trimmed = query.trim();
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     if (trimmed.length < 3) {
@@ -92,7 +96,7 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [query, open, showToast]);
+  }, [query, open, mode, showToast]);
 
   async function handleSelect(r: ProspectResult) {
     if (r.alreadyInPipeline) {
@@ -124,12 +128,27 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
       <div style={{ padding: '20px 22px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', letterSpacing: '2px' }}>Add Lead</div>
-          <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginTop: 2 }}>Search Google Places to find and import a business</div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginTop: 2 }}>Import a Google Business Profile or add a published website</div>
         </div>
         <button className="mclose" onClick={onClose}>✕</button>
       </div>
 
       <div style={{ padding: '18px 22px' }}>
+        <div className="mb-4 flex gap-2" role="group" aria-label="Lead source">
+          <button type="button" onClick={() => setMode('google')} aria-pressed={mode === 'google'} className={`rounded-lg border px-3 py-2 text-sm ${mode === 'google' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`}>Google Business Profile</button>
+          <button type="button" onClick={() => setMode('website')} aria-pressed={mode === 'website'} className={`rounded-lg border px-3 py-2 text-sm ${mode === 'website' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`}>Website URL</button>
+        </div>
+        {mode === 'website' ? <form className="space-y-4" onSubmit={async e => {
+          e.preventDefault(); setAdding('website');
+          try { const res = await api.websiteBriefs.importWebsite(website,company); showToast(res.existing ? 'This website is already in the pipeline' : 'Website lead added. Create its redesign brief from the pipeline.', 'success'); onAdded(); onClose(); }
+          catch (err) { showToast((err as Error).message,'error'); } finally { setAdding(null); }
+        }}>
+          <label className="block text-sm text-slate-700">Published website URL<input required value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://example.com" className="finput mt-2" /></label>
+          <label className="block text-sm text-slate-700">Company name (optional)<input value={company} onChange={e => setCompany(e.target.value)} className="finput mt-2" /></label>
+          <p className="text-xs leading-5 text-slate-500">Adds a website prospect for a redesign brief. Google reviews and business details can be added later.</p>
+          <Button type="submit" disabled={adding !== null}>{adding ? 'Adding…' : 'Add website lead'}</Button>
+        </form> : <>
+
         <div style={{ marginBottom: 14 }}>
           <label className="flabel" style={{ marginBottom: 6, display: 'block' }}>Business name + city</label>
           <div style={{ position: 'relative' }}>
@@ -178,6 +197,7 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>
                     {[r.address, formatPhone(r.phone)].filter(Boolean).join(' · ')}
+                    <span className="mt-1 block">{r.website ? 'Website found · redesign brief available after import' : 'No website listed · new-site prospect'}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
@@ -208,10 +228,11 @@ export function AddLeadModal({ open, onClose, showToast, onAdded }: AddLeadModal
             </div>
           </div>
         )}
+        </>}
       </div>
 
       <div style={{ padding: '13px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>Can't find them? Add manually after import.</div>
+        <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>Use Website URL for businesses with a published site.</div>
         <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
       </div>
     </Modal>
