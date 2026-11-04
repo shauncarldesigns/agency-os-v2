@@ -111,7 +111,7 @@ const NORTHTOWN_TOKENS = JSON.stringify({
 });
 
 async function ensureStarterReference(db: D1Database) {
-  const count = await db.prepare('SELECT COUNT(*) AS count FROM design_references').first<{ count: number }>();
+  const count = await db.prepare('SELECT COUNT(*) AS count FROM design_references WHERE purpose=\'library\'').first<{ count: number }>();
   if (Number(count?.count ?? 0) === 0) {
     await db.prepare(`INSERT INTO design_references
       (name, description, source_url, industry, status, notes, style_tags, design_recipe, technical_tokens)
@@ -137,7 +137,7 @@ async function ensureStarterReference(db: D1Database) {
         AND rtrim(COALESCE(NULLIF(trim(leads.site_url_raw), ''), leads.site_url), '/') = rtrim(design_references.source_url, '/')
       ORDER BY leads.id DESC LIMIT 1
     )
-    WHERE source_lead_id IS NULL AND source_url IS NOT NULL
+    WHERE purpose='library' AND source_lead_id IS NULL AND source_url IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM leads
         WHERE leads.deleted_at IS NULL
@@ -152,7 +152,7 @@ designLibraryRouter.get('/design-references', async (c) => {
       (SELECT a.id FROM design_reference_assets a JOIN design_capture_jobs j ON j.id=a.capture_job_id
        WHERE a.design_reference_id=d.id AND a.kind='desktop_full' AND j.status='completed'
        ORDER BY j.id DESC LIMIT 1) preview_asset_id
-      FROM design_references d ORDER BY
+      FROM design_references d WHERE d.purpose='library' ORDER BY
       CASE status WHEN 'ready' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, updated_at DESC`).all<DesignReference>();
     return c.json({ designs: result.results });
   } catch (err) {

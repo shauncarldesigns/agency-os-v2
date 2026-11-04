@@ -16,6 +16,7 @@
 import { callClaudeJson } from './claude';
 import { buildBrandExtractionPrompt, type ExtractedBrand } from '../prompts/brandExtraction';
 import { log } from '../utils/errors';
+import { websiteUrl } from './websiteUrl';
 
 const USER_AGENT = 'AgencyOSBot/1.0 (+https://agency-os-v2.pages.dev)';
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -33,24 +34,24 @@ const PREFERRED_INTERNAL_PATHS = [
   '/team',
 ];
 
-function isPrivateIpv4(hostname: string): boolean {
-  const parts = hostname.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return a === 0 || a === 10 || a === 127 || a >= 224
-    || (a === 100 && b >= 64 && b <= 127)
-    || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && b === 168);
+function isSafePublicUrl(url: URL): boolean {
+  try { websiteUrl(url.href); return true; } catch { return false; }
 }
 
-function isSafePublicUrl(url: URL): boolean {
-  if (!/^https?:$/.test(url.protocol) || url.username || url.password) return false;
-  if (url.port && !['80', '443'].includes(url.port)) return false;
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpv4(host)) return false;
-  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb')) return false;
-  return true;
+async function fetchPublicPage(url: string): Promise<Response> {
+  let target = websiteUrl(url);
+  for (let hop = 0; hop < 6; hop++) {
+    const response = await fetch(target, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml' },
+      redirect: 'manual', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (![301,302,303,307,308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    await response.body?.cancel();
+    if (!location) throw new Error('Redirect missing location');
+    target = websiteUrl(new URL(location, target).href);
+  }
+  throw new Error('Too many redirects');
 }
 
 export interface ScrapeResult {
@@ -143,16 +144,7 @@ async function fetchPageText(url: string): Promise<{ html: string; text: string 
   try {
     const requestedUrl = new URL(url);
     if (!isSafePublicUrl(requestedUrl)) return null;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
+    const res = await fetchPublicPage(url);
     if (!res.ok) return null;
     if (!isSafePublicUrl(new URL(res.url))) return null;
     const ct = res.headers.get('content-type') ?? '';
@@ -268,10 +260,7 @@ function pickInternalLinks(html: string, origin: URL): string[] {
 async function isDisallowedByRobots(origin: URL): Promise<boolean> {
   try {
     const robotsUrl = new URL('/robots.txt', origin).toString();
-    const res = await fetch(robotsUrl, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(5_000),
-    });
+    const res = await fetchPublicPage(robotsUrl);
     if (!res.ok) return false; // no robots.txt → allowed
     const text = await res.text();
     return robotsForbidsRoot(text);

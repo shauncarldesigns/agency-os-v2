@@ -21,12 +21,13 @@ import { BuilderStatusPanel } from './components/leadpipeline/BuilderStatusPanel
 import { ReceptionistInterestPage } from './components/receptionist/ReceptionistInterestPage';
 import { ArchivedLeadsPage } from './components/archive/ArchivedLeadsPage';
 import { SalesIntelligencePage } from './components/intelligence/SalesIntelligencePage';
+import { WebsiteBriefsPage } from './components/briefs/WebsiteBriefsPage';
 import { DesignLibraryPage } from './components/designs/DesignLibraryPage';
 
 const LEAD_ENGINE_TABS: readonly Tab[] = [
   'dashboard', 'research', 'email-outreach', 'call-center', 'prospect',
   'pipeline', 'archived-leads', 'automated-pipeline', 'builder',
-  'receptionist-interest', 'sales-intelligence', 'sites', 'design-library',
+  'receptionist-interest', 'sales-intelligence', 'sites', 'website-briefs', 'design-library',
   'docs', 'playbook', 'settings',
 ];
 
@@ -69,6 +70,7 @@ function LeadEngineApp({ activeTab, setActiveTab }: {
   // the new project's Brief Studio on the Sites tab. The id sticks around
   // until SitesPanel consumes it (then clears it via the callback).
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState<number | null>(null);
+  const [pendingBriefLeadId, setPendingBriefLeadId] = useState<number | null>(null);
   const [pendingOpenDesignId, setPendingOpenDesignId] = useState<number | null>(null);
   // Since the Phase 3 shell migration, an open calling session renders
   // INSIDE the shell's <main> (sidebar stays visible) instead of taking
@@ -197,6 +199,7 @@ function LeadEngineApp({ activeTab, setActiveTab }: {
                 <PipelinePanel
                   showToast={showToast}
                   onLeadCountChanged={loadStats}
+                  onRedesignBrief={(lead) => { setPendingBriefLeadId(lead.id); setActiveTab('website-briefs'); }}
                   onQualified={(project, tier) => {
                     // T3 → open Brief Studio directly; T1/T2 land on the grid
                     // (no Studio exists for those tiers).
@@ -234,6 +237,7 @@ function LeadEngineApp({ activeTab, setActiveTab }: {
                 />
               </div>
             )}
+            {activeTab === 'website-briefs' && <WebsiteBriefsPage showToast={showToast} initialLeadId={pendingBriefLeadId} onInitialConsumed={() => setPendingBriefLeadId(null)} onLeadAdded={loadStats} />}
             {activeTab === 'design-library' && <DesignLibraryPage showToast={showToast} initialDesignId={pendingOpenDesignId} onInitialDesignConsumed={() => setPendingOpenDesignId(null)} />}
             {activeTab === 'docs' && <DocsPage />}
             {activeTab === 'playbook' && <PlaybookPage showToast={showToast} />}

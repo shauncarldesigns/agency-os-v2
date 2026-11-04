@@ -12,6 +12,7 @@ import { briefsRouter } from './routes/briefs';
 import { brandAttributesRouter } from './routes/brand-attributes';
 import { testimonialsRouter } from './routes/testimonials';
 import { scrapeRouter } from './routes/scrape';
+import { websiteBriefsRouter } from './routes/websiteBriefs';
 import { reportsRouter, refreshTier3Snapshots, refreshTier3PageSpeed } from './routes/reports';
 import { dnsRouter, pollPendingDnsZones } from './routes/dns';
 import { sessionsRouter } from './routes/sessions';
@@ -149,6 +150,7 @@ app.route('/api', briefsRouter);
 app.route('/api', brandAttributesRouter);
 app.route('/api', testimonialsRouter);
 app.route('/api', scrapeRouter);
+app.route('/api', websiteBriefsRouter);
 app.route('/api/reports', reportsRouter);
 // Calling dashboard (Phase 3)
 app.route('/api/sessions', sessionsRouter);

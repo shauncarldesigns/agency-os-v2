@@ -595,6 +595,7 @@ export type Tab =
   | 'receptionist-interest'
   | 'sales-intelligence'
   | 'sites'
+  | 'website-briefs'
   | 'design-library'
   | 'docs'
   | 'playbook'
@@ -1073,4 +1074,14 @@ export interface DemoEvent {
   event_type: 'created' | 'held' | 'no_show' | 'rescheduled';
   event_data: string | null;          // JSON
   created_at: string;
+}
+
+export interface WebsiteBrief {
+  id: number; lead_id: number; company: string; source_url: string;
+  design_reference_id: number | null; scrape_data: string | null;
+  brand_colors: string; brand_fonts: string; direction: string; brief: string;
+  scanned_at: string | null; generated_at: string | null;
+  technical_tokens: string | null;
+  capture_status: 'queued' | 'capturing' | 'completed' | 'failed' | null;
+  capture_error: string | null;
 }

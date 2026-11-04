@@ -332,7 +332,8 @@ async function captureDesign(job) {
               fontFamilies: frequent(styles.map(style => style.fontFamily), 8),
               headingScale: [...document.querySelectorAll('h1,h2,h3')].slice(0, 24).map(element => { const style = getComputedStyle(element); return { tag: element.tagName.toLowerCase(), fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight }; }),
             },
-            colors: { backgrounds: frequent(styles.map(style => style.backgroundColor)), text: frequent(styles.map(style => style.color)) },
+            colors: { backgrounds: frequent(styles.map(style => style.backgroundColor)), text: frequent(styles.map(style => style.color)), accents: frequent(visible.filter(element => element.matches('button,a,[role=button]')).flatMap(element => { const style = getComputedStyle(element); return [style.color, style.backgroundColor]; })) },
+            logos: [...document.querySelectorAll('header img,nav img')].slice(0,8).map(image => ({ url: image.currentSrc || image.src, alt: image.alt })),
             surfaces: { borderRadii: frequent(styles.map(style => style.borderRadius), 10), borders: frequent(styles.map(style => style.borderColor), 10) },
             layout: {
               widestContentPixels: Math.round(Math.max(0, ...mainCandidates.map(element => element.getBoundingClientRect().width))),
